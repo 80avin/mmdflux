@@ -16,7 +16,7 @@ pub use layout::{Layout, LayoutConfig, compute_layout};
 pub use router::{Point, RoutedEdge, Segment, route_all_edges, route_edge};
 pub use shape::{NodeBounds, node_dimensions, render_node};
 
-use crate::graph::Diagram;
+use crate::graph::{Diagram, Direction};
 
 /// Render options for ASCII output.
 #[derive(Debug, Clone, Default)]
@@ -45,8 +45,8 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
         CharSet::unicode()
     };
 
-    // Step 1: Compute layout
-    let config = LayoutConfig::default();
+    // Step 1: Compute layout with direction-aware spacing
+    let config = layout_config_for_diagram(diagram);
     let layout = compute_layout(diagram, &config);
 
     // Step 2: Create canvas
@@ -65,4 +65,36 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
 
     // Step 5: Convert canvas to string
     canvas.to_string()
+}
+
+/// Compute layout configuration appropriate for the diagram.
+///
+/// For LR/RL layouts, we need more horizontal spacing to accommodate edge labels.
+fn layout_config_for_diagram(diagram: &Diagram) -> LayoutConfig {
+    let mut config = LayoutConfig::default();
+
+    // Check if any edges have labels
+    let max_label_len = diagram
+        .edges
+        .iter()
+        .filter_map(|e| e.label.as_ref())
+        .map(|l| l.chars().count())
+        .max()
+        .unwrap_or(0);
+
+    match diagram.direction {
+        Direction::LeftRight | Direction::RightLeft => {
+            // For horizontal layouts, increase h_spacing to fit labels
+            // Minimum spacing of 4, or label length + 2 for padding
+            config.h_spacing = config.h_spacing.max(max_label_len + 2);
+        }
+        Direction::TopDown | Direction::BottomTop => {
+            // For vertical layouts, increase v_spacing to fit labels
+            if max_label_len > 0 {
+                config.v_spacing = config.v_spacing.max(3);
+            }
+        }
+    }
+
+    config
 }

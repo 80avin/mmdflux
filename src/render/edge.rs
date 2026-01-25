@@ -27,33 +27,54 @@ pub fn render_edge(
 
     // Draw label if present
     if let Some(label) = &routed.edge.label {
-        draw_edge_label(canvas, routed, label);
+        draw_edge_label(canvas, routed, label, diagram_direction);
     }
 }
 
-/// Draw a label on an edge at the midpoint of the longest segment.
-fn draw_edge_label(canvas: &mut Canvas, routed: &RoutedEdge, label: &str) {
-    // Find the longest segment
-    let longest = routed
-        .segments
-        .iter()
-        .max_by_key(|seg| segment_length(seg));
+/// Draw a label on an edge at the midpoint of the edge path.
+///
+/// Places the label at the overall midpoint between start and end points.
+/// For backward edges (where end is before start in layout direction),
+/// offsets the label to avoid overlapping with forward edge labels.
+fn draw_edge_label(canvas: &mut Canvas, routed: &RoutedEdge, label: &str, direction: Direction) {
+    let label_len = label.chars().count();
 
-    if let Some(segment) = longest {
-        let (x, y) = segment_midpoint(segment);
-        let label_len = label.chars().count();
+    // Detect if this is a backward edge (going against layout direction)
+    let is_backward = match direction {
+        Direction::LeftRight => routed.end.x < routed.start.x,
+        Direction::RightLeft => routed.end.x > routed.start.x,
+        Direction::TopDown => routed.end.y < routed.start.y,
+        Direction::BottomTop => routed.end.y > routed.start.y,
+    };
 
-        // Center the label on the midpoint
-        let label_x = x.saturating_sub(label_len / 2);
+    // Calculate overall midpoint between start and end
+    let mid_x = (routed.start.x + routed.end.x) / 2;
+    let mid_y = (routed.start.y + routed.end.y) / 2;
 
-        // Clear space for the label and write it
-        for (i, ch) in label.chars().enumerate() {
-            canvas.set(label_x + i, y, ch);
+    // For backward edges, offset the label to avoid collision with forward edges
+    let (label_x, label_y) = if is_backward {
+        match direction {
+            Direction::LeftRight | Direction::RightLeft => {
+                // Offset above the main line
+                (mid_x.saturating_sub(label_len / 2), mid_y.saturating_sub(1))
+            }
+            Direction::TopDown | Direction::BottomTop => {
+                // Offset to the left of the main line
+                (mid_x.saturating_sub(label_len + 1), mid_y)
+            }
         }
+    } else {
+        (mid_x.saturating_sub(label_len / 2), mid_y)
+    };
+
+    // Write the label
+    for (i, ch) in label.chars().enumerate() {
+        canvas.set(label_x + i, label_y, ch);
     }
 }
 
 /// Calculate the length of a segment.
+#[cfg(test)]
 fn segment_length(segment: &Segment) -> usize {
     match segment {
         Segment::Vertical { y_start, y_end, .. } => {
@@ -74,6 +95,7 @@ fn segment_length(segment: &Segment) -> usize {
 }
 
 /// Calculate the midpoint of a segment.
+#[cfg(test)]
 fn segment_midpoint(segment: &Segment) -> (usize, usize) {
     match segment {
         Segment::Vertical { x, y_start, y_end } => {
@@ -159,14 +181,30 @@ fn draw_arrow(canvas: &mut Canvas, point: &Point, direction: Direction, charset:
 }
 
 /// Render all edges onto the canvas.
+///
+/// Draws all segments and arrows first, then all labels, ensuring labels
+/// are not overwritten by later edge segments.
 pub fn render_all_edges(
     canvas: &mut Canvas,
     routed_edges: &[RoutedEdge],
     charset: &CharSet,
     diagram_direction: Direction,
 ) {
+    // First pass: draw all segments and arrows
     for routed in routed_edges {
-        render_edge(canvas, routed, charset, diagram_direction);
+        for segment in &routed.segments {
+            draw_segment(canvas, segment, routed.edge.stroke, charset);
+        }
+        if routed.edge.arrow != Arrow::None {
+            draw_arrow(canvas, &routed.end, diagram_direction, charset);
+        }
+    }
+
+    // Second pass: draw all labels (so they appear on top of segments)
+    for routed in routed_edges {
+        if let Some(label) = &routed.edge.label {
+            draw_edge_label(canvas, routed, label, diagram_direction);
+        }
     }
 }
 
