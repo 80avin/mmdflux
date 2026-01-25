@@ -165,28 +165,27 @@ fn render_round(
     label: &str,
     charset: &CharSet,
 ) {
-    // For ASCII, we use ( ) as the round shape indicators
-    // Top border with rounded appearance
-    canvas.set(x, y, '(');
+    // Top border with rounded corners
+    canvas.set(x, y, charset.round_tl);
     for dx in 1..width - 1 {
         canvas.set(x + dx, y, charset.horizontal);
     }
-    canvas.set(x + width - 1, y, ')');
+    canvas.set(x + width - 1, y, charset.round_tr);
 
     // Middle row with label
     let mid_y = y + height / 2;
-    canvas.set(x, mid_y, '(');
+    canvas.set(x, mid_y, charset.vertical);
     let label_start = x + (width - label.chars().count()) / 2;
     canvas.write_str(label_start, mid_y, label);
-    canvas.set(x + width - 1, mid_y, ')');
+    canvas.set(x + width - 1, mid_y, charset.vertical);
 
-    // Bottom border
+    // Bottom border with rounded corners
     let bot_y = y + height - 1;
-    canvas.set(x, bot_y, '(');
+    canvas.set(x, bot_y, charset.round_bl);
     for dx in 1..width - 1 {
         canvas.set(x + dx, bot_y, charset.horizontal);
     }
-    canvas.set(x + width - 1, bot_y, ')');
+    canvas.set(x + width - 1, bot_y, charset.round_br);
 }
 
 /// Render a diamond shape.
@@ -296,8 +295,9 @@ mod tests {
         render_node(&mut canvas, &node, 2, 1, &charset);
 
         let output = canvas.to_string();
-        assert!(output.contains("(────)"));
-        assert!(output.contains("( Hi )"));
+        assert!(output.contains("╭────╮"));
+        assert!(output.contains("│ Hi │"));
+        assert!(output.contains("╰────╯"));
     }
 
     #[test]

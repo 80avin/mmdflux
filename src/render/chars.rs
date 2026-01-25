@@ -11,11 +11,17 @@ pub struct CharSet {
     pub horizontal: char,
     pub vertical: char,
 
-    // Corners
+    // Corners (sharp)
     pub corner_tl: char, // top-left
     pub corner_tr: char, // top-right
     pub corner_bl: char, // bottom-left
     pub corner_br: char, // bottom-right
+
+    // Corners (rounded)
+    pub round_tl: char, // top-left rounded
+    pub round_tr: char, // top-right rounded
+    pub round_bl: char, // bottom-left rounded
+    pub round_br: char, // bottom-right rounded
 
     // T-junctions
     pub tee_down: char,  // ┬ (connects left, right, down)
@@ -47,6 +53,10 @@ impl CharSet {
             corner_tr: '┐',
             corner_bl: '└',
             corner_br: '┘',
+            round_tl: '╭',
+            round_tr: '╮',
+            round_bl: '╰',
+            round_br: '╯',
             tee_down: '┬',
             tee_up: '┴',
             tee_right: '├',
@@ -70,6 +80,10 @@ impl CharSet {
             corner_tr: '+',
             corner_bl: '+',
             corner_br: '+',
+            round_tl: '(',
+            round_tr: ')',
+            round_bl: '(',
+            round_br: ')',
             tee_down: '+',
             tee_up: '+',
             tee_right: '+',
