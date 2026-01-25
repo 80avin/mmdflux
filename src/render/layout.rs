@@ -58,7 +58,7 @@ impl Default for LayoutConfig {
     fn default() -> Self {
         Self {
             h_spacing: 4,
-            v_spacing: 2,
+            v_spacing: 3,
             padding: 1,
         }
     }
