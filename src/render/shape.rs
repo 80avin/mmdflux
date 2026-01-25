@@ -1,9 +1,8 @@
 //! Node shape rendering.
 
-use crate::graph::{Node, Shape};
-
 use super::canvas::Canvas;
 use super::chars::CharSet;
+use crate::graph::{Node, Shape};
 
 /// Bounding box for a rendered node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -243,7 +242,9 @@ mod tests {
 
     #[test]
     fn test_node_dimensions_round() {
-        let node = Node::new("B").with_label("Process").with_shape(Shape::Round);
+        let node = Node::new("B")
+            .with_label("Process")
+            .with_shape(Shape::Round);
         let (w, h) = node_dimensions(&node);
         // "Process" is 7 chars, +4 = 11 width
         assert_eq!(w, 11);
@@ -322,7 +323,9 @@ mod tests {
     #[test]
     fn test_render_diamond_wide() {
         let mut canvas = Canvas::new(20, 5);
-        let node = Node::new("B").with_label("Decision").with_shape(Shape::Diamond);
+        let node = Node::new("B")
+            .with_label("Decision")
+            .with_shape(Shape::Diamond);
         let charset = CharSet::unicode();
 
         let bounds = render_node(&mut canvas, &node, 1, 1, &charset);
@@ -366,7 +369,11 @@ mod tests {
         for dy in 0..bounds.height {
             for dx in 0..bounds.width {
                 let cell = canvas.get(bounds.x + dx, bounds.y + dy).unwrap();
-                assert!(cell.is_node, "Cell at ({}, {}) should be marked as node", dx, dy);
+                assert!(
+                    cell.is_node,
+                    "Cell at ({}, {}) should be marked as node",
+                    dx, dy
+                );
             }
         }
     }

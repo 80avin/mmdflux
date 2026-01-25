@@ -2,10 +2,9 @@
 //!
 //! Computes paths for edges, avoiding node boundaries.
 
-use crate::graph::{Direction, Edge};
-
 use super::layout::Layout;
 use super::shape::NodeBounds;
+use crate::graph::{Direction, Edge};
 
 /// A point on the canvas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,9 +23,17 @@ impl Point {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Segment {
     /// Vertical line from start to end (same x, different y).
-    Vertical { x: usize, y_start: usize, y_end: usize },
+    Vertical {
+        x: usize,
+        y_start: usize,
+        y_end: usize,
+    },
     /// Horizontal line from start to end (same y, different x).
-    Horizontal { y: usize, x_start: usize, x_end: usize },
+    Horizontal {
+        y: usize,
+        x_start: usize,
+        x_end: usize,
+    },
 }
 
 /// A complete routed path for an edge.
@@ -40,6 +47,8 @@ pub struct RoutedEdge {
     pub end: Point,
     /// Path segments from start to end.
     pub segments: Vec<Segment>,
+    /// Direction from which the edge enters the target node (for arrow drawing).
+    pub entry_direction: AttachDirection,
 }
 
 /// Calculate the attachment point for a node based on direction.
@@ -70,8 +79,8 @@ fn attachment_point(bounds: &NodeBounds, direction: AttachDirection) -> Point {
 }
 
 /// Direction for attachment points.
-#[derive(Debug, Clone, Copy)]
-enum AttachDirection {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttachDirection {
     Top,
     Bottom,
     Left,
@@ -88,6 +97,27 @@ fn attachment_directions(diagram_direction: Direction) -> (AttachDirection, Atta
     }
 }
 
+/// Check if an edge is a backward edge (goes against the layout direction).
+///
+/// In a normal layout, edges flow in the diagram direction (e.g., top to bottom for TD).
+/// A backward edge goes against this flow, typically creating a cycle.
+pub fn is_backward_edge(
+    from_bounds: &NodeBounds,
+    to_bounds: &NodeBounds,
+    direction: Direction,
+) -> bool {
+    match direction {
+        // For TD, backward means target is above source
+        Direction::TopDown => to_bounds.y < from_bounds.y,
+        // For BT, backward means target is below source
+        Direction::BottomTop => to_bounds.y > from_bounds.y,
+        // For LR, backward means target is to the left of source
+        Direction::LeftRight => to_bounds.x < from_bounds.x,
+        // For RL, backward means target is to the right of source
+        Direction::RightLeft => to_bounds.x > from_bounds.x,
+    }
+}
+
 /// Route an edge between two nodes.
 pub fn route_edge(
     edge: &Edge,
@@ -96,6 +126,11 @@ pub fn route_edge(
 ) -> Option<RoutedEdge> {
     let from_bounds = layout.get_bounds(&edge.from)?;
     let to_bounds = layout.get_bounds(&edge.to)?;
+
+    // Check if this is a backward edge
+    if is_backward_edge(from_bounds, to_bounds, diagram_direction) {
+        return route_backward_edge(edge, from_bounds, to_bounds, layout, diagram_direction);
+    }
 
     let (out_dir, in_dir) = attachment_directions(diagram_direction);
 
@@ -110,6 +145,154 @@ pub fn route_edge(
         start,
         end,
         segments,
+        entry_direction: in_dir,
+    })
+}
+
+/// Route a backward edge around the diagram perimeter.
+///
+/// Backward edges (cycles) are routed around the side of the diagram to avoid
+/// passing through intermediate nodes.
+fn route_backward_edge(
+    edge: &Edge,
+    from_bounds: &NodeBounds,
+    to_bounds: &NodeBounds,
+    layout: &Layout,
+    diagram_direction: Direction,
+) -> Option<RoutedEdge> {
+    match diagram_direction {
+        Direction::TopDown | Direction::BottomTop => {
+            route_backward_edge_vertical(edge, from_bounds, to_bounds, layout, diagram_direction)
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            route_backward_edge_horizontal(edge, from_bounds, to_bounds, layout, diagram_direction)
+        }
+    }
+}
+
+/// Route a backward edge for vertical (TD/BT) layouts.
+///
+/// The edge exits from the right side of the source, travels up/down in a
+/// corridor on the right side of the diagram, then enters the target from the right.
+fn route_backward_edge_vertical(
+    edge: &Edge,
+    from_bounds: &NodeBounds,
+    to_bounds: &NodeBounds,
+    layout: &Layout,
+    diagram_direction: Direction,
+) -> Option<RoutedEdge> {
+    // Exit from right side of source
+    let start = attachment_point(from_bounds, AttachDirection::Right);
+    // Enter from right side of target
+    let end = attachment_point(to_bounds, AttachDirection::Right);
+
+    // Get lane assignment for this edge (default to 0 if not found)
+    let lane = layout
+        .backward_edge_lanes
+        .get(&(edge.from.clone(), edge.to.clone()))
+        .copied()
+        .unwrap_or(0);
+
+    // Corridor X position: each lane gets its own corridor space
+    // content_width + (lane * corridor_width) + corridor_width/2
+    let content_width = layout.width - (layout.backward_corridors * layout.corridor_width);
+    let corridor_x = content_width + (lane * layout.corridor_width) + layout.corridor_width / 2;
+
+    let mut segments = Vec::new();
+
+    // Horizontal segment: source right → corridor
+    segments.push(Segment::Horizontal {
+        y: start.y,
+        x_start: start.x,
+        x_end: corridor_x,
+    });
+
+    // Vertical segment in corridor
+    let (y_start, y_end) = if diagram_direction == Direction::TopDown {
+        // TD: backward means going up (from higher y to lower y)
+        (start.y, end.y)
+    } else {
+        // BT: backward means going down (from lower y to higher y)
+        (start.y, end.y)
+    };
+    segments.push(Segment::Vertical {
+        x: corridor_x,
+        y_start,
+        y_end,
+    });
+
+    // Horizontal segment: corridor → target right
+    segments.push(Segment::Horizontal {
+        y: end.y,
+        x_start: corridor_x,
+        x_end: end.x,
+    });
+
+    Some(RoutedEdge {
+        edge: edge.clone(),
+        start,
+        end,
+        segments,
+        entry_direction: AttachDirection::Right,
+    })
+}
+
+/// Route a backward edge for horizontal (LR/RL) layouts.
+///
+/// The edge exits from the bottom side of the source, travels left/right in a
+/// corridor below the diagram, then enters the target from the bottom.
+fn route_backward_edge_horizontal(
+    edge: &Edge,
+    from_bounds: &NodeBounds,
+    to_bounds: &NodeBounds,
+    layout: &Layout,
+    _diagram_direction: Direction,
+) -> Option<RoutedEdge> {
+    // Exit from bottom side of source
+    let start = attachment_point(from_bounds, AttachDirection::Bottom);
+    // Enter from bottom side of target
+    let end = attachment_point(to_bounds, AttachDirection::Bottom);
+
+    // Get lane assignment for this edge (default to 0 if not found)
+    let lane = layout
+        .backward_edge_lanes
+        .get(&(edge.from.clone(), edge.to.clone()))
+        .copied()
+        .unwrap_or(0);
+
+    // Corridor Y position: each lane gets its own corridor space
+    let content_height = layout.height - (layout.backward_corridors * layout.corridor_width);
+    let corridor_y = content_height + (lane * layout.corridor_width) + layout.corridor_width / 2;
+
+    let mut segments = Vec::new();
+
+    // Vertical segment: source bottom → corridor
+    segments.push(Segment::Vertical {
+        x: start.x,
+        y_start: start.y,
+        y_end: corridor_y,
+    });
+
+    // Horizontal segment in corridor
+    segments.push(Segment::Horizontal {
+        y: corridor_y,
+        x_start: start.x,
+        x_end: end.x,
+    });
+
+    // Vertical segment: corridor → target bottom
+    segments.push(Segment::Vertical {
+        x: end.x,
+        y_start: corridor_y,
+        y_end: end.y,
+    });
+
+    Some(RoutedEdge {
+        edge: edge.clone(),
+        start,
+        end,
+        segments,
+        entry_direction: AttachDirection::Bottom,
     })
 }
 
@@ -118,12 +301,8 @@ fn compute_path(start: Point, end: Point, direction: Direction) -> Vec<Segment> 
     // For TD/BT layouts, prefer vertical-first routing
     // For LR/RL layouts, prefer horizontal-first routing
     match direction {
-        Direction::TopDown | Direction::BottomTop => {
-            compute_vertical_first_path(start, end)
-        }
-        Direction::LeftRight | Direction::RightLeft => {
-            compute_horizontal_first_path(start, end)
-        }
+        Direction::TopDown | Direction::BottomTop => compute_vertical_first_path(start, end),
+        Direction::LeftRight | Direction::RightLeft => compute_horizontal_first_path(start, end),
     }
 }
 
@@ -244,10 +423,9 @@ pub fn route_all_edges(
 
 #[cfg(test)]
 mod tests {
-    use crate::graph::{Diagram, Node};
-
     use super::super::layout::{LayoutConfig, compute_layout};
     use super::*;
+    use crate::graph::{Diagram, Node};
 
     fn simple_td_diagram() -> Diagram {
         let mut diagram = Diagram::new(Direction::TopDown);
@@ -360,5 +538,237 @@ mod tests {
         assert!(matches!(segments[0], Segment::Vertical { .. }));
         assert!(matches!(segments[1], Segment::Horizontal { .. }));
         assert!(matches!(segments[2], Segment::Vertical { .. }));
+    }
+
+    // Backward edge detection tests
+
+    fn make_bounds(x: usize, y: usize) -> NodeBounds {
+        NodeBounds {
+            x,
+            y,
+            width: 10,
+            height: 3,
+        }
+    }
+
+    #[test]
+    fn test_is_backward_edge_td_forward() {
+        // In TD layout, source above target is forward
+        let from = make_bounds(10, 0);
+        let to = make_bounds(10, 10);
+        assert!(!is_backward_edge(&from, &to, Direction::TopDown));
+    }
+
+    #[test]
+    fn test_is_backward_edge_td_backward() {
+        // In TD layout, source below target is backward
+        let from = make_bounds(10, 10);
+        let to = make_bounds(10, 0);
+        assert!(is_backward_edge(&from, &to, Direction::TopDown));
+    }
+
+    #[test]
+    fn test_is_backward_edge_bt_forward() {
+        // In BT layout, source below target is forward
+        let from = make_bounds(10, 10);
+        let to = make_bounds(10, 0);
+        assert!(!is_backward_edge(&from, &to, Direction::BottomTop));
+    }
+
+    #[test]
+    fn test_is_backward_edge_bt_backward() {
+        // In BT layout, source above target is backward
+        let from = make_bounds(10, 0);
+        let to = make_bounds(10, 10);
+        assert!(is_backward_edge(&from, &to, Direction::BottomTop));
+    }
+
+    #[test]
+    fn test_is_backward_edge_lr_forward() {
+        // In LR layout, source left of target is forward
+        let from = make_bounds(0, 10);
+        let to = make_bounds(20, 10);
+        assert!(!is_backward_edge(&from, &to, Direction::LeftRight));
+    }
+
+    #[test]
+    fn test_is_backward_edge_lr_backward() {
+        // In LR layout, source right of target is backward
+        let from = make_bounds(20, 10);
+        let to = make_bounds(0, 10);
+        assert!(is_backward_edge(&from, &to, Direction::LeftRight));
+    }
+
+    #[test]
+    fn test_is_backward_edge_rl_forward() {
+        // In RL layout, source right of target is forward
+        let from = make_bounds(20, 10);
+        let to = make_bounds(0, 10);
+        assert!(!is_backward_edge(&from, &to, Direction::RightLeft));
+    }
+
+    #[test]
+    fn test_is_backward_edge_rl_backward() {
+        // In RL layout, source left of target is backward
+        let from = make_bounds(0, 10);
+        let to = make_bounds(20, 10);
+        assert!(is_backward_edge(&from, &to, Direction::RightLeft));
+    }
+
+    #[test]
+    fn test_is_backward_edge_same_position() {
+        // Same position is not backward (edge case)
+        let from = make_bounds(10, 10);
+        let to = make_bounds(10, 10);
+        assert!(!is_backward_edge(&from, &to, Direction::TopDown));
+        assert!(!is_backward_edge(&from, &to, Direction::BottomTop));
+        assert!(!is_backward_edge(&from, &to, Direction::LeftRight));
+        assert!(!is_backward_edge(&from, &to, Direction::RightLeft));
+    }
+
+    // Backward edge routing tests
+
+    #[test]
+    fn test_route_backward_edge_td() {
+        // Create a diagram with a cycle: A -> B -> A
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("Start"));
+        diagram.add_node(Node::new("B").with_label("End"));
+        diagram.add_edge(Edge::new("A", "B")); // Forward
+        diagram.add_edge(Edge::new("B", "A")); // Backward
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        // Route the backward edge
+        let backward_edge = &diagram.edges[1];
+        let routed = route_edge(backward_edge, &layout, Direction::TopDown).unwrap();
+
+        // Backward edge should route around the right side
+        assert_eq!(routed.entry_direction, AttachDirection::Right);
+
+        // Should have 3 segments: horizontal (to corridor), vertical, horizontal (back)
+        assert_eq!(routed.segments.len(), 3);
+        assert!(matches!(routed.segments[0], Segment::Horizontal { .. }));
+        assert!(matches!(routed.segments[1], Segment::Vertical { .. }));
+        assert!(matches!(routed.segments[2], Segment::Horizontal { .. }));
+
+        // The corridor x should be within canvas but in the corridor area
+        let content_width = layout.width - (layout.backward_corridors * layout.corridor_width);
+        if let Segment::Horizontal { x_end, .. } = routed.segments[0] {
+            assert!(
+                x_end > content_width,
+                "Corridor should be beyond content area"
+            );
+            assert!(x_end < layout.width, "Corridor should be within canvas");
+        }
+    }
+
+    #[test]
+    fn test_route_backward_edge_lr() {
+        // Create a horizontal layout with a cycle
+        let mut diagram = Diagram::new(Direction::LeftRight);
+        diagram.add_node(Node::new("A").with_label("Start"));
+        diagram.add_node(Node::new("B").with_label("End"));
+        diagram.add_edge(Edge::new("A", "B")); // Forward
+        diagram.add_edge(Edge::new("B", "A")); // Backward
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        // Route the backward edge
+        let backward_edge = &diagram.edges[1];
+        let routed = route_edge(backward_edge, &layout, Direction::LeftRight).unwrap();
+
+        // Backward edge should route around the bottom
+        assert_eq!(routed.entry_direction, AttachDirection::Bottom);
+
+        // Should have 3 segments: vertical (to corridor), horizontal, vertical (back)
+        assert_eq!(routed.segments.len(), 3);
+        assert!(matches!(routed.segments[0], Segment::Vertical { .. }));
+        assert!(matches!(routed.segments[1], Segment::Horizontal { .. }));
+        assert!(matches!(routed.segments[2], Segment::Vertical { .. }));
+
+        // The corridor y should be within canvas but in the corridor area
+        let content_height = layout.height - (layout.backward_corridors * layout.corridor_width);
+        if let Segment::Vertical { y_end, .. } = routed.segments[0] {
+            assert!(
+                y_end > content_height,
+                "Corridor should be beyond content area"
+            );
+            assert!(y_end < layout.height, "Corridor should be within canvas");
+        }
+    }
+
+    #[test]
+    fn test_forward_edge_entry_direction_td() {
+        // Forward edges should have standard entry direction
+        let diagram = simple_td_diagram();
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        let edge = &diagram.edges[0];
+        let routed = route_edge(edge, &layout, Direction::TopDown).unwrap();
+
+        // TD forward edges enter from Top
+        assert_eq!(routed.entry_direction, AttachDirection::Top);
+    }
+
+    #[test]
+    fn test_forward_edge_entry_direction_lr() {
+        let mut diagram = Diagram::new(Direction::LeftRight);
+        diagram.add_node(Node::new("A").with_label("Start"));
+        diagram.add_node(Node::new("B").with_label("End"));
+        diagram.add_edge(Edge::new("A", "B"));
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        let edge = &diagram.edges[0];
+        let routed = route_edge(edge, &layout, Direction::LeftRight).unwrap();
+
+        // LR forward edges enter from Left
+        assert_eq!(routed.entry_direction, AttachDirection::Left);
+    }
+
+    #[test]
+    fn test_multiple_backward_edges_use_separate_lanes() {
+        // Create diagram with two backward edges going to different targets
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("Top"));
+        diagram.add_node(Node::new("B").with_label("Middle"));
+        diagram.add_node(Node::new("C").with_label("Bottom"));
+        diagram.add_edge(Edge::new("A", "B")); // Forward
+        diagram.add_edge(Edge::new("B", "C")); // Forward
+        diagram.add_edge(Edge::new("C", "A")); // Backward to A
+        diagram.add_edge(Edge::new("C", "B")); // Backward to B
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        // Should have 2 backward corridors
+        assert_eq!(layout.backward_corridors, 2);
+
+        // Route both backward edges
+        let edge_c_to_a = &diagram.edges[2];
+        let edge_c_to_b = &diagram.edges[3];
+        let routed_c_a = route_edge(edge_c_to_a, &layout, Direction::TopDown).unwrap();
+        let routed_c_b = route_edge(edge_c_to_b, &layout, Direction::TopDown).unwrap();
+
+        // Extract corridor X positions from the first horizontal segment
+        let corridor_x_ca = match routed_c_a.segments[0] {
+            Segment::Horizontal { x_end, .. } => x_end,
+            _ => panic!("Expected horizontal segment"),
+        };
+        let corridor_x_cb = match routed_c_b.segments[0] {
+            Segment::Horizontal { x_end, .. } => x_end,
+            _ => panic!("Expected horizontal segment"),
+        };
+
+        // The two backward edges should use different corridor lanes
+        assert_ne!(
+            corridor_x_ca, corridor_x_cb,
+            "Backward edges should use different lanes"
+        );
     }
 }

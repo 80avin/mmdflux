@@ -2,10 +2,11 @@
 //!
 //! These tests verify the full parsing and rendering pipeline using fixture files.
 
-use mmdflux::{build_diagram, parse_flowchart, Direction, Shape};
-use mmdflux::render::{render, RenderOptions};
 use std::fs;
 use std::path::Path;
+
+use mmdflux::render::{RenderOptions, render};
+use mmdflux::{Direction, Shape, build_diagram, parse_flowchart};
 
 /// Helper to load a fixture file.
 fn load_fixture(name: &str) -> String {
@@ -290,7 +291,9 @@ mod rendering {
         assert!(ascii_output.contains("Start"));
 
         // ASCII output should not contain Unicode box-drawing chars
-        let unicode_chars = ['─', '│', '┌', '┐', '└', '┘', '├', '┤', '┬', '┴', '┼', '╭', '╮', '╯', '╰'];
+        let unicode_chars = [
+            '─', '│', '┌', '┐', '└', '┘', '├', '┤', '┬', '┴', '┼', '╭', '╮', '╯', '╰',
+        ];
         for ch in unicode_chars {
             assert!(
                 !ascii_output.contains(ch),

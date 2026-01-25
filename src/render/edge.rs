@@ -1,10 +1,9 @@
 //! Edge rendering on the canvas.
 
-use crate::graph::{Arrow, Direction, Stroke};
-
 use super::canvas::{Canvas, Connections};
 use super::chars::CharSet;
-use super::router::{Point, RoutedEdge, Segment};
+use super::router::{AttachDirection, Point, RoutedEdge, Segment};
+use crate::graph::{Arrow, Direction, Stroke};
 
 /// Render a routed edge onto the canvas.
 pub fn render_edge(
@@ -20,9 +19,9 @@ pub fn render_edge(
         draw_segment(canvas, segment, stroke, charset);
     }
 
-    // Draw arrow at the end point
+    // Draw arrow at the end point using entry direction
     if routed.edge.arrow != Arrow::None {
-        draw_arrow(canvas, &routed.end, diagram_direction, charset);
+        draw_arrow_with_entry(canvas, &routed.end, routed.entry_direction, charset);
     }
 
     // Draw label if present
@@ -168,7 +167,30 @@ fn draw_segment(canvas: &mut Canvas, segment: &Segment, _stroke: Stroke, charset
     }
 }
 
-/// Draw an arrow at the given point.
+/// Draw an arrow at the given point based on entry direction.
+///
+/// The arrow points in the direction the edge is coming from (into the target).
+fn draw_arrow_with_entry(
+    canvas: &mut Canvas,
+    point: &Point,
+    entry_direction: AttachDirection,
+    charset: &CharSet,
+) {
+    // Arrow points in the direction the edge enters FROM
+    // Entry from Top means edge is going down, so arrow points down
+    // Entry from Right means edge is going left, so arrow points left
+    let arrow_char = match entry_direction {
+        AttachDirection::Top => charset.arrow_down,
+        AttachDirection::Bottom => charset.arrow_up,
+        AttachDirection::Left => charset.arrow_right,
+        AttachDirection::Right => charset.arrow_left,
+    };
+
+    canvas.set(point.x, point.y, arrow_char);
+}
+
+/// Draw an arrow at the given point (legacy function for tests).
+#[cfg(test)]
 fn draw_arrow(canvas: &mut Canvas, point: &Point, direction: Direction, charset: &CharSet) {
     let arrow_char = match direction {
         Direction::TopDown => charset.arrow_down,
@@ -196,7 +218,7 @@ pub fn render_all_edges(
             draw_segment(canvas, segment, routed.edge.stroke, charset);
         }
         if routed.edge.arrow != Arrow::None {
-            draw_arrow(canvas, &routed.end, diagram_direction, charset);
+            draw_arrow_with_entry(canvas, &routed.end, routed.entry_direction, charset);
         }
     }
 
@@ -210,12 +232,10 @@ pub fn render_all_edges(
 
 #[cfg(test)]
 mod tests {
-    use crate::graph::Edge;
-
-    use super::super::router::route_edge;
     use super::super::layout::{LayoutConfig, compute_layout};
+    use super::super::router::route_edge;
     use super::*;
-    use crate::graph::{Diagram, Node};
+    use crate::graph::{Diagram, Edge, Node};
 
     fn simple_diagram() -> Diagram {
         let mut diagram = Diagram::new(Direction::TopDown);
@@ -311,15 +331,30 @@ mod tests {
         assert_eq!(canvas.get(1, 1).unwrap().ch, '▼');
 
         let mut canvas = Canvas::new(10, 10);
-        draw_arrow(&mut canvas, &Point::new(1, 1), Direction::BottomTop, &charset);
+        draw_arrow(
+            &mut canvas,
+            &Point::new(1, 1),
+            Direction::BottomTop,
+            &charset,
+        );
         assert_eq!(canvas.get(1, 1).unwrap().ch, '▲');
 
         let mut canvas = Canvas::new(10, 10);
-        draw_arrow(&mut canvas, &Point::new(1, 1), Direction::LeftRight, &charset);
+        draw_arrow(
+            &mut canvas,
+            &Point::new(1, 1),
+            Direction::LeftRight,
+            &charset,
+        );
         assert_eq!(canvas.get(1, 1).unwrap().ch, '►');
 
         let mut canvas = Canvas::new(10, 10);
-        draw_arrow(&mut canvas, &Point::new(1, 1), Direction::RightLeft, &charset);
+        draw_arrow(
+            &mut canvas,
+            &Point::new(1, 1),
+            Direction::RightLeft,
+            &charset,
+        );
         assert_eq!(canvas.get(1, 1).unwrap().ch, '◄');
     }
 
@@ -368,19 +403,35 @@ mod tests {
 
     #[test]
     fn test_segment_length() {
-        let vertical = Segment::Vertical { x: 5, y_start: 10, y_end: 20 };
+        let vertical = Segment::Vertical {
+            x: 5,
+            y_start: 10,
+            y_end: 20,
+        };
         assert_eq!(segment_length(&vertical), 10);
 
-        let horizontal = Segment::Horizontal { y: 5, x_start: 20, x_end: 10 };
+        let horizontal = Segment::Horizontal {
+            y: 5,
+            x_start: 20,
+            x_end: 10,
+        };
         assert_eq!(segment_length(&horizontal), 10);
     }
 
     #[test]
     fn test_segment_midpoint() {
-        let vertical = Segment::Vertical { x: 5, y_start: 10, y_end: 20 };
+        let vertical = Segment::Vertical {
+            x: 5,
+            y_start: 10,
+            y_end: 20,
+        };
         assert_eq!(segment_midpoint(&vertical), (5, 15));
 
-        let horizontal = Segment::Horizontal { y: 5, x_start: 10, x_end: 20 };
+        let horizontal = Segment::Horizontal {
+            y: 5,
+            x_start: 10,
+            x_end: 20,
+        };
         assert_eq!(segment_midpoint(&horizontal), (15, 5));
     }
 }

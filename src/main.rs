@@ -3,7 +3,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use clap::Parser;
-use mmdflux::render::{render, RenderOptions};
+use mmdflux::render::{RenderOptions, render};
 use mmdflux::{build_diagram, parse_flowchart};
 
 #[derive(Parser)]

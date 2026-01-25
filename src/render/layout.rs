@@ -4,9 +4,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use super::shape::{NodeBounds, node_dimensions};
 use crate::graph::{Diagram, Direction};
-
-use super::shape::{node_dimensions, NodeBounds};
 
 /// Grid position of a node (layer/column in abstract grid coordinates).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +33,12 @@ pub struct Layout {
     pub h_spacing: usize,
     /// Spacing between nodes vertically.
     pub v_spacing: usize,
+    /// Number of backward edge corridors needed (for routing cycles).
+    pub backward_corridors: usize,
+    /// Width of each backward edge corridor.
+    pub corridor_width: usize,
+    /// Lane assignments for backward edges: (from, to) -> lane number.
+    pub backward_edge_lanes: HashMap<(String, String), usize>,
 }
 
 impl Layout {
@@ -82,8 +87,13 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
     // Step 4: Compute layer dimensions
     let (layer_widths, layer_heights) = compute_layer_dimensions(&layers, &node_dims);
 
-    // Step 5: Convert grid positions to draw coordinates based on direction
-    let (draw_positions, node_bounds, width, height) = match diagram.direction {
+    // Step 5: Identify backward edges and assign corridor lanes
+    let (backward_corridors, backward_edge_lanes) =
+        assign_backward_edge_lanes(diagram, &grid_positions);
+    let corridor_width = 3; // Space for edge line + padding
+
+    // Step 6: Convert grid positions to draw coordinates based on direction
+    let (draw_positions, node_bounds, mut width, mut height) = match diagram.direction {
         Direction::TopDown | Direction::BottomTop => grid_to_draw_vertical(
             &grid_positions,
             &node_dims,
@@ -102,6 +112,21 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
         ),
     };
 
+    // Step 7: Expand canvas for backward edge corridors
+    if backward_corridors > 0 {
+        let corridor_space = backward_corridors * corridor_width;
+        match diagram.direction {
+            Direction::TopDown | Direction::BottomTop => {
+                // Add space on the right side for vertical layouts
+                width += corridor_space;
+            }
+            Direction::LeftRight | Direction::RightLeft => {
+                // Add space on the bottom for horizontal layouts
+                height += corridor_space;
+            }
+        }
+    }
+
     Layout {
         grid_positions,
         draw_positions,
@@ -110,7 +135,59 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
         height,
         h_spacing: config.h_spacing,
         v_spacing: config.v_spacing,
+        backward_corridors,
+        corridor_width,
+        backward_edge_lanes,
     }
+}
+
+/// Identify backward edges and assign each to a corridor lane.
+///
+/// Returns (count, lane_assignments) where lane_assignments maps (from, to) to lane number.
+/// Lanes are assigned in a deterministic order based on edge source/target positions.
+fn assign_backward_edge_lanes(
+    diagram: &Diagram,
+    grid_positions: &HashMap<String, GridPos>,
+) -> (usize, HashMap<(String, String), usize>) {
+    let mut backward_edges: Vec<_> = diagram
+        .edges
+        .iter()
+        .filter(|edge| {
+            if let (Some(from_pos), Some(to_pos)) =
+                (grid_positions.get(&edge.from), grid_positions.get(&edge.to))
+            {
+                // Backward edge: target is in an earlier layer than source
+                match diagram.direction {
+                    Direction::TopDown | Direction::LeftRight => to_pos.layer < from_pos.layer,
+                    Direction::BottomTop | Direction::RightLeft => to_pos.layer > from_pos.layer,
+                }
+            } else {
+                false
+            }
+        })
+        .collect();
+
+    // Sort backward edges for deterministic lane assignment
+    // Sort by source layer (descending), then by target layer, then by edge names
+    backward_edges.sort_by(|a, b| {
+        let a_from = grid_positions.get(&a.from).map(|p| p.layer).unwrap_or(0);
+        let b_from = grid_positions.get(&b.from).map(|p| p.layer).unwrap_or(0);
+        let a_to = grid_positions.get(&a.to).map(|p| p.layer).unwrap_or(0);
+        let b_to = grid_positions.get(&b.to).map(|p| p.layer).unwrap_or(0);
+
+        b_from
+            .cmp(&a_from) // Edges from later layers get outer lanes
+            .then(a_to.cmp(&b_to))
+            .then(a.from.cmp(&b.from))
+            .then(a.to.cmp(&b.to))
+    });
+
+    let mut lane_assignments = HashMap::new();
+    for (lane, edge) in backward_edges.iter().enumerate() {
+        lane_assignments.insert((edge.from.clone(), edge.to.clone()), lane);
+    }
+
+    (backward_edges.len(), lane_assignments)
 }
 
 /// Perform topological sort and group nodes into layers.
@@ -132,7 +209,10 @@ fn topological_layers(diagram: &Diagram) -> Vec<Vec<String>> {
     for edge in &diagram.edges {
         if diagram.nodes.contains_key(&edge.from) && diagram.nodes.contains_key(&edge.to) {
             *in_degree.get_mut(edge.to.as_str()).unwrap() += 1;
-            successors.get_mut(edge.from.as_str()).unwrap().push(&edge.to);
+            successors
+                .get_mut(edge.from.as_str())
+                .unwrap()
+                .push(&edge.to);
         }
     }
 
@@ -447,9 +527,8 @@ fn grid_to_draw_horizontal(
 
 #[cfg(test)]
 mod tests {
-    use crate::graph::{Direction, Edge, Node};
-
     use super::*;
+    use crate::graph::{Direction, Edge, Node};
 
     fn simple_diagram() -> Diagram {
         let mut diagram = Diagram::new(Direction::TopDown);
@@ -518,18 +597,9 @@ mod tests {
         let layers = topological_layers(&diagram);
         let positions = compute_grid_positions(&layers);
 
-        assert_eq!(
-            positions.get("A"),
-            Some(&GridPos { layer: 0, pos: 0 })
-        );
-        assert_eq!(
-            positions.get("B"),
-            Some(&GridPos { layer: 1, pos: 0 })
-        );
-        assert_eq!(
-            positions.get("C"),
-            Some(&GridPos { layer: 2, pos: 0 })
-        );
+        assert_eq!(positions.get("A"), Some(&GridPos { layer: 0, pos: 0 }));
+        assert_eq!(positions.get("B"), Some(&GridPos { layer: 1, pos: 0 }));
+        assert_eq!(positions.get("C"), Some(&GridPos { layer: 2, pos: 0 }));
     }
 
     #[test]

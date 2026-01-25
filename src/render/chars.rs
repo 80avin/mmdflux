@@ -108,10 +108,10 @@ impl CharSet {
             (true, true, true, true) => self.cross,
 
             // T-junctions (three connections)
-            (true, true, false, true) => self.tee_right,  // ├
-            (true, true, true, false) => self.tee_left,   // ┤
-            (false, true, true, true) => self.tee_down,   // ┬
-            (true, false, true, true) => self.tee_up,     // ┴
+            (true, true, false, true) => self.tee_right, // ├
+            (true, true, true, false) => self.tee_left,  // ┤
+            (false, true, true, true) => self.tee_down,  // ┬
+            (true, false, true, true) => self.tee_up,    // ┴
 
             // Corners (two connections, perpendicular)
             (false, true, false, true) => self.corner_tl, // ┌
