@@ -1,0 +1,97 @@
+// Mermaid Flowchart Grammar
+// Phase 1: Headers
+// Phase 2: Nodes (identifiers, shapes)
+// Phase 3: Edges (arrows, labels)
+// Phase 4: Chains, ampersands, multi-line
+
+WHITESPACE = _{ " " | "\t" }
+
+// Header keywords
+graph_keyword = { ^"graph" }
+flowchart_keyword = { ^"flowchart" }
+
+// Layout directions
+direction = {
+    ^"TD" |  // Top-Down
+    ^"TB" |  // Top-Bottom (synonym for TD)
+    ^"BT" |  // Bottom-Top
+    ^"LR" |  // Left-Right
+    ^"RL"    // Right-Left
+}
+
+// Graph header: "graph TD" or "flowchart LR"
+header = {
+    (graph_keyword | flowchart_keyword) ~ direction
+}
+
+// Node identifiers: alphanumeric with underscores, must start with letter or underscore
+identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Text content inside shapes (any chars except shape delimiters)
+text_rect = @{ (!"]" ~ ANY)+ }
+text_round = @{ (!")" ~ ANY)+ }
+text_diamond = @{ (!"}" ~ ANY)+ }
+
+// Node shapes
+shape_rect = { "[" ~ text_rect ~ "]" }       // Rectangle [text]
+shape_round = { "(" ~ text_round ~ ")" }     // Rounded (text)
+shape_diamond = { "{" ~ text_diamond ~ "}" } // Diamond {text}
+
+shape = { shape_rect | shape_round | shape_diamond }
+
+// Node definition: identifier with optional shape
+node = { identifier ~ shape? }
+
+// Node group: A & B & C (multiple source/target nodes)
+node_group = { node ~ ("&" ~ node)* }
+
+// Edge label text (inside |...|)
+edge_label_text = @{ (!"|" ~ ANY)+ }
+edge_label = { "|" ~ edge_label_text ~ "|" }
+
+// Edge connectors - order matters for parsing (longer matches first)
+// Solid arrows: --> or -->|label|
+arrow_solid_label = { "-->" ~ edge_label }
+arrow_solid = { "-->" }
+
+// Dotted arrows: -.-> or -.->|label|
+arrow_dotted_label = { "-.->" ~ edge_label }
+arrow_dotted = { "-.->" }
+
+// Thick arrows: ==> or ==>|label|
+arrow_thick_label = { "==>" ~ edge_label }
+arrow_thick = { "==>" }
+
+// Open lines (no arrow head): --- or ---|label|
+line_open_label = { "---" ~ edge_label }
+line_open = { "---" }
+
+// All edge types (order: labeled versions first, then plain)
+edge_connector = {
+    arrow_solid_label |
+    arrow_dotted_label |
+    arrow_thick_label |
+    line_open_label |
+    arrow_solid |
+    arrow_dotted |
+    arrow_thick |
+    line_open
+}
+
+// Edge segment: connector followed by node_group
+edge_segment = { edge_connector ~ node_group }
+
+// Vertex statement: node_group optionally followed by chain of edges
+// Supports: A --> B --> C and A & B --> C & D
+vertex_statement = { node_group ~ edge_segment* }
+
+// Statement: vertex statement (which includes single nodes, edges, and chains)
+statement = { vertex_statement }
+
+// Comment line
+comment = { "%%" ~ (!NEWLINE ~ ANY)* }
+
+// Complete flowchart
+flowchart = {
+    SOI ~ header ~ NEWLINE ~ ((statement | comment) ~ NEWLINE?)* ~ EOI
+}
