@@ -64,24 +64,9 @@ Find and resume work on an in-progress implementation plan.
    - [ ] **2.1** First incomplete task
    - [ ] **2.2** Second incomplete task
    - [ ] **2.3** Third incomplete task
-
-   To continue, run `/clear` then paste:
-
-   [continuation prompt code block]
    ```
 
-5. **Use this continuation prompt template:**
-   ````
-   Continue implementing the plan in plans/NNNN-feature-name/
-
-   Read the implementation-plan.md and task-list.md files, then begin with the first incomplete task.
-
-   As you work:
-   - Update task-list.md checkboxes (change `- [ ]` to `- [x]`) when completing tasks
-   - Update .plan-state.json with current_task and progress.completed count
-
-   Before ending the session, update .plan-state.json with last_session_notes about progress and next steps.
-   ````
+5. **Begin implementing the plan**
 
 ## Example Outputs
 
@@ -101,22 +86,6 @@ Find and resume work on an in-progress implementation plan.
 - [ ] **2.1** Implement panic message regex
 - [ ] **2.2** Parse backtrace frame format
 - [ ] **2.3** Handle thread panic variants
-
-To continue, run `/clear` then paste:
-
-```
-Continue implementing the plan in plans/0008-rust-parser/
-
-Read the implementation-plan.md and task-list.md files, then begin with the first incomplete task.
-
-As you work:
-- Update task-list.md checkboxes (change `- [ ]` to `- [x]`) when completing tasks
-- Update .plan-state.json with current_task and progress.completed count
-
-Before ending the session, update .plan-state.json with last_session_notes about progress and next steps.
-
-If you need additional context from the original planning discussion, the planning agent ID is stored in .plan-state.json and can be resumed.
-```
 
 ---
 

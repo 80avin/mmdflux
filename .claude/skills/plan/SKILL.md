@@ -135,7 +135,7 @@ Plan the requested feature or change using the project's planning conventions.
 - [ ] **1.2** Add Rust variant to Language enum
 - [ ] **1.3** Implement panic message regex patterns
 
-To continue with implementation, run `/clear` then paste:
+To continue with implementation, run `/clear` and then `/resume` or paste:
 
 ```
 Continue implementing the plan in plans/0006-rust-parser/
