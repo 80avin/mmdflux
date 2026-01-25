@@ -189,6 +189,13 @@ fn render_round(
 }
 
 /// Render a diamond shape.
+///
+/// Rendered as a rectangle with angle brackets on the sides:
+/// ```text
+/// ┌───────────┐
+/// < Christmas >
+/// └───────────┘
+/// ```
 fn render_diamond(
     canvas: &mut Canvas,
     x: usize,
@@ -196,31 +203,29 @@ fn render_diamond(
     width: usize,
     label_len: usize,
     label: &str,
-    _charset: &CharSet,
+    charset: &CharSet,
 ) {
-    // Diamond rendered as:
-    //   /\
-    //  < X >
-    //   \/
-    // Center the /\ over the middle of the < > span
-    // For width W, the center position for /\ is at x + (W-2)/2
-    let center_x = x + (width - 2) / 2;
+    // Top border
+    canvas.set(x, y, charset.corner_tl);
+    for dx in 1..width - 1 {
+        canvas.set(x + dx, y, charset.horizontal);
+    }
+    canvas.set(x + width - 1, y, charset.corner_tr);
 
-    // Top point
-    canvas.set(center_x, y, '/');
-    canvas.set(center_x + 1, y, '\\');
-
-    // Middle row with label
+    // Middle row with label and angle brackets
     let mid_y = y + 1;
     canvas.set(x, mid_y, '<');
     let label_start = x + (width - label_len) / 2;
     canvas.write_str(label_start, mid_y, label);
     canvas.set(x + width - 1, mid_y, '>');
 
-    // Bottom point
+    // Bottom border
     let bot_y = y + 2;
-    canvas.set(center_x, bot_y, '\\');
-    canvas.set(center_x + 1, bot_y, '/');
+    canvas.set(x, bot_y, charset.corner_bl);
+    for dx in 1..width - 1 {
+        canvas.set(x + dx, bot_y, charset.horizontal);
+    }
+    canvas.set(x + width - 1, bot_y, charset.corner_br);
 }
 
 #[cfg(test)]
@@ -309,9 +314,9 @@ mod tests {
         render_node(&mut canvas, &node, 2, 1, &charset);
 
         let output = canvas.to_string();
-        assert!(output.contains("/\\"));
+        assert!(output.contains("┌───┐"));
         assert!(output.contains("< ? >"));
-        assert!(output.contains("\\/"));
+        assert!(output.contains("└───┘"));
     }
 
     #[test]
@@ -326,9 +331,9 @@ mod tests {
         assert_eq!(bounds.height, 3);
 
         let output = canvas.to_string();
-        assert!(output.contains("/\\"));
+        assert!(output.contains("┌──────────┐"));
         assert!(output.contains("< Decision >"));
-        assert!(output.contains("\\/"));
+        assert!(output.contains("└──────────┘"));
     }
 
     #[test]
