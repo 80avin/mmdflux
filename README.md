@@ -39,24 +39,65 @@ mmdflux diagram.mmd -o output.txt
 mmdflux --debug diagram.mmd
 ```
 
-## Example
+## Examples
 
-Input (`diagram.mmd`):
+### Simple Flow (LR)
 
+Input:
 ```mermaid
-graph TD
-    A[Start] --> B{Decision}
-    B -->|Yes| C[Do something]
-    B -->|No| D[Do something else]
-    C --> E[End]
-    D --> E
+graph LR
+    A[Start] --> B[Process] --> C[End]
 ```
 
 Output:
+```
+ ┌───────┐    ┌─────────┐    ┌─────┐
+ │ Start │───►│ Process │───►│ End │
+ └───────┘    └─────────┘    └─────┘
+```
+
+### Decision Flow (TD)
+
+Input:
+```mermaid
+graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Accept]
+    B -->|No| D[Reject]
+```
+
+Output:
+```
+        ┌───────┐
+        │ Start │
+        └───────┘
+            │
+            ▼
+           /\
+      < Decision >
+           \/
+     ┌─Yes────No───┐
+     ▼             ▼
+ ┌────────┐    ┌────────┐
+ │ Accept │    │ Reject │
+ └────────┘    └────────┘
+```
+
+### ASCII Mode
+
+Use `--ascii` for ASCII-only output (no Unicode box-drawing):
+
+```bash
+echo 'graph LR\nA-->B-->C' | mmdflux --ascii
+```
 
 ```
-Parsed flowchart: 5 nodes, 5 edges (direction: TopDown)
+ +---+    +---+    +---+
+ | A |--->| B |--->| C |
+ +---+    +---+    +---+
 ```
+
+### Debug Mode
 
 Debug output (`--debug`):
 
@@ -165,7 +206,7 @@ use mmdflux::{Diagram, Direction, Node, Shape, Edge, Stroke, Arrow};
 ## Roadmap
 
 - [x] Flowchart parsing (`graph` / `flowchart`)
-- [ ] ASCII rendering
+- [x] ASCII rendering (TD, BT, LR, RL layouts)
 - [ ] Sequence diagrams
 - [ ] Class diagrams
 - [ ] State diagrams

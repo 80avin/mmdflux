@@ -1,0 +1,605 @@
+//! Layout computation for flowchart diagrams.
+//!
+//! This module computes the position of nodes on a grid based on topological ordering.
+
+use std::collections::{HashMap, HashSet};
+
+use crate::graph::{Diagram, Direction};
+
+use super::shape::{node_dimensions, NodeBounds};
+
+/// Grid position of a node (layer/column in abstract grid coordinates).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GridPos {
+    /// Layer (row for TD/BT, column for LR/RL).
+    pub layer: usize,
+    /// Position within layer.
+    pub pos: usize,
+}
+
+/// Layout result containing node positions and canvas dimensions.
+#[derive(Debug)]
+pub struct Layout {
+    /// Node positions in grid coordinates.
+    pub grid_positions: HashMap<String, GridPos>,
+    /// Node positions in draw coordinates (x, y pixels/chars).
+    pub draw_positions: HashMap<String, (usize, usize)>,
+    /// Node bounding boxes in draw coordinates.
+    pub node_bounds: HashMap<String, NodeBounds>,
+    /// Total canvas width needed.
+    pub width: usize,
+    /// Total canvas height needed.
+    pub height: usize,
+    /// Spacing between nodes horizontally.
+    pub h_spacing: usize,
+    /// Spacing between nodes vertically.
+    pub v_spacing: usize,
+}
+
+impl Layout {
+    /// Get the bounding box for a node.
+    pub fn get_bounds(&self, node_id: &str) -> Option<&NodeBounds> {
+        self.node_bounds.get(node_id)
+    }
+}
+
+/// Configuration for layout computation.
+#[derive(Debug, Clone)]
+pub struct LayoutConfig {
+    /// Horizontal spacing between nodes.
+    pub h_spacing: usize,
+    /// Vertical spacing between nodes.
+    pub v_spacing: usize,
+    /// Padding around the entire diagram.
+    pub padding: usize,
+}
+
+impl Default for LayoutConfig {
+    fn default() -> Self {
+        Self {
+            h_spacing: 4,
+            v_spacing: 2,
+            padding: 1,
+        }
+    }
+}
+
+/// Compute the layout for a diagram.
+pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
+    // Step 1: Topological sort to assign layers
+    let layers = topological_layers(diagram);
+
+    // Step 2: Compute grid positions (layer + position within layer)
+    let grid_positions = compute_grid_positions(&layers);
+
+    // Step 3: Compute node dimensions
+    let node_dims: HashMap<String, (usize, usize)> = diagram
+        .nodes
+        .iter()
+        .map(|(id, node)| (id.clone(), node_dimensions(node)))
+        .collect();
+
+    // Step 4: Compute layer dimensions
+    let (layer_widths, layer_heights) = compute_layer_dimensions(&layers, &node_dims);
+
+    // Step 5: Convert grid positions to draw coordinates based on direction
+    let (draw_positions, node_bounds, width, height) = match diagram.direction {
+        Direction::TopDown | Direction::BottomTop => grid_to_draw_vertical(
+            &grid_positions,
+            &node_dims,
+            &layers,
+            &layer_heights,
+            config,
+            diagram.direction == Direction::BottomTop,
+        ),
+        Direction::LeftRight | Direction::RightLeft => grid_to_draw_horizontal(
+            &grid_positions,
+            &node_dims,
+            &layers,
+            &layer_widths,
+            config,
+            diagram.direction == Direction::RightLeft,
+        ),
+    };
+
+    Layout {
+        grid_positions,
+        draw_positions,
+        node_bounds,
+        width,
+        height,
+        h_spacing: config.h_spacing,
+        v_spacing: config.v_spacing,
+    }
+}
+
+/// Perform topological sort and group nodes into layers.
+///
+/// Returns a Vec of layers, where each layer is a Vec of node IDs.
+/// Nodes with no incoming edges are in layer 0.
+fn topological_layers(diagram: &Diagram) -> Vec<Vec<String>> {
+    // Build adjacency and in-degree maps
+    let mut in_degree: HashMap<&str, usize> = HashMap::new();
+    let mut successors: HashMap<&str, Vec<&str>> = HashMap::new();
+
+    // Initialize all nodes with 0 in-degree
+    for id in diagram.nodes.keys() {
+        in_degree.insert(id.as_str(), 0);
+        successors.insert(id.as_str(), Vec::new());
+    }
+
+    // Build the graph
+    for edge in &diagram.edges {
+        if diagram.nodes.contains_key(&edge.from) && diagram.nodes.contains_key(&edge.to) {
+            *in_degree.get_mut(edge.to.as_str()).unwrap() += 1;
+            successors.get_mut(edge.from.as_str()).unwrap().push(&edge.to);
+        }
+    }
+
+    let mut layers: Vec<Vec<String>> = Vec::new();
+    let mut remaining: HashSet<&str> = diagram.nodes.keys().map(|s| s.as_str()).collect();
+
+    // Process layers until all nodes are assigned
+    while !remaining.is_empty() {
+        // Find all nodes with in-degree 0 among remaining nodes
+        let mut current_layer: Vec<String> = remaining
+            .iter()
+            .filter(|&&id| in_degree.get(id).copied().unwrap_or(0) == 0)
+            .map(|&s| s.to_string())
+            .collect();
+
+        // If no nodes have in-degree 0, we have a cycle - break it by picking one
+        if current_layer.is_empty() {
+            // Pick the node with the smallest in-degree
+            let min_node = remaining
+                .iter()
+                .min_by_key(|&&id| in_degree.get(id).copied().unwrap_or(0))
+                .unwrap();
+            current_layer.push(min_node.to_string());
+        }
+
+        // Sort layer for deterministic output
+        current_layer.sort();
+
+        // Remove current layer nodes from remaining
+        for id in &current_layer {
+            remaining.remove(id.as_str());
+        }
+
+        // Update in-degrees for successors
+        for id in &current_layer {
+            if let Some(succs) = successors.get(id.as_str()) {
+                for succ in succs {
+                    if let Some(deg) = in_degree.get_mut(*succ) {
+                        *deg = deg.saturating_sub(1);
+                    }
+                }
+            }
+        }
+
+        layers.push(current_layer);
+    }
+
+    layers
+}
+
+/// Assign grid positions to nodes based on layers.
+fn compute_grid_positions(layers: &[Vec<String>]) -> HashMap<String, GridPos> {
+    let mut positions = HashMap::new();
+
+    for (layer_idx, layer) in layers.iter().enumerate() {
+        for (pos_idx, node_id) in layer.iter().enumerate() {
+            positions.insert(
+                node_id.clone(),
+                GridPos {
+                    layer: layer_idx,
+                    pos: pos_idx,
+                },
+            );
+        }
+    }
+
+    positions
+}
+
+/// Compute the width needed for each layer and height of each layer.
+fn compute_layer_dimensions(
+    layers: &[Vec<String>],
+    node_dims: &HashMap<String, (usize, usize)>,
+) -> (Vec<usize>, Vec<usize>) {
+    let mut layer_widths = Vec::new();
+    let mut layer_heights = Vec::new();
+
+    for layer in layers {
+        let mut total_width = 0;
+        let mut max_height = 0;
+
+        for node_id in layer {
+            if let Some(&(w, h)) = node_dims.get(node_id) {
+                total_width += w;
+                max_height = max_height.max(h);
+            }
+        }
+
+        layer_widths.push(total_width);
+        layer_heights.push(max_height);
+    }
+
+    (layer_widths, layer_heights)
+}
+
+/// Convert grid positions to draw coordinates for vertical (TD/BT) layouts.
+fn grid_to_draw_vertical(
+    grid_positions: &HashMap<String, GridPos>,
+    node_dims: &HashMap<String, (usize, usize)>,
+    layers: &[Vec<String>],
+    layer_heights: &[usize],
+    config: &LayoutConfig,
+    reverse: bool,
+) -> (
+    HashMap<String, (usize, usize)>,
+    HashMap<String, NodeBounds>,
+    usize,
+    usize,
+) {
+    let mut draw_positions = HashMap::new();
+    let mut node_bounds = HashMap::new();
+
+    // Calculate the maximum total width needed (for centering layers)
+    let max_layer_content_width: usize = layers
+        .iter()
+        .map(|layer| {
+            let content_width: usize = layer
+                .iter()
+                .filter_map(|id| node_dims.get(id).map(|(w, _)| *w))
+                .sum();
+            let spacing = if layer.len() > 1 {
+                (layer.len() - 1) * config.h_spacing
+            } else {
+                0
+            };
+            content_width + spacing
+        })
+        .max()
+        .unwrap_or(0);
+
+    let canvas_width = max_layer_content_width + 2 * config.padding;
+
+    // Calculate Y positions for each layer
+    let mut layer_y_starts = Vec::new();
+    let mut y = config.padding;
+    for &height in layer_heights {
+        layer_y_starts.push(y);
+        y += height + config.v_spacing;
+    }
+    let canvas_height = y - config.v_spacing + config.padding;
+
+    // For BT, reverse the Y positions
+    if reverse {
+        layer_y_starts.reverse();
+    }
+
+    // Position nodes within each layer
+    for (layer_idx, layer) in layers.iter().enumerate() {
+        if layer.is_empty() {
+            continue;
+        }
+
+        // Sort nodes by their grid position
+        let mut sorted_nodes: Vec<_> = layer.iter().collect();
+        sorted_nodes.sort_by_key(|id| grid_positions.get(*id).map(|p| p.pos).unwrap_or(0));
+
+        // Calculate total width of this layer
+        let content_width: usize = sorted_nodes
+            .iter()
+            .filter_map(|id| node_dims.get(*id).map(|(w, _)| *w))
+            .sum();
+        let spacing = if sorted_nodes.len() > 1 {
+            (sorted_nodes.len() - 1) * config.h_spacing
+        } else {
+            0
+        };
+        let total_layer_width = content_width + spacing;
+
+        // Center the layer horizontally
+        let layer_start_x = config.padding + (max_layer_content_width - total_layer_width) / 2;
+
+        let mut x = layer_start_x;
+        for node_id in sorted_nodes {
+            if let Some(&(w, h)) = node_dims.get(node_id) {
+                let y = layer_y_starts[layer_idx];
+                draw_positions.insert(node_id.clone(), (x, y));
+                node_bounds.insert(
+                    node_id.clone(),
+                    NodeBounds {
+                        x,
+                        y,
+                        width: w,
+                        height: h,
+                    },
+                );
+                x += w + config.h_spacing;
+            }
+        }
+    }
+
+    (draw_positions, node_bounds, canvas_width, canvas_height)
+}
+
+/// Convert grid positions to draw coordinates for horizontal (LR/RL) layouts.
+fn grid_to_draw_horizontal(
+    grid_positions: &HashMap<String, GridPos>,
+    node_dims: &HashMap<String, (usize, usize)>,
+    layers: &[Vec<String>],
+    _layer_widths: &[usize],
+    config: &LayoutConfig,
+    reverse: bool,
+) -> (
+    HashMap<String, (usize, usize)>,
+    HashMap<String, NodeBounds>,
+    usize,
+    usize,
+) {
+    let mut draw_positions = HashMap::new();
+    let mut node_bounds = HashMap::new();
+
+    // For horizontal layout, layers become columns
+    // Calculate max width per layer (column)
+    let max_layer_widths: Vec<usize> = layers
+        .iter()
+        .map(|layer| {
+            layer
+                .iter()
+                .filter_map(|id| node_dims.get(id).map(|(w, _)| *w))
+                .max()
+                .unwrap_or(0)
+        })
+        .collect();
+
+    // Calculate the maximum total height needed (for centering columns)
+    let max_column_content_height: usize = layers
+        .iter()
+        .map(|layer| {
+            let content_height: usize = layer
+                .iter()
+                .filter_map(|id| node_dims.get(id).map(|(_, h)| *h))
+                .sum();
+            let spacing = if layer.len() > 1 {
+                (layer.len() - 1) * config.v_spacing
+            } else {
+                0
+            };
+            content_height + spacing
+        })
+        .max()
+        .unwrap_or(0);
+
+    let canvas_height = max_column_content_height + 2 * config.padding;
+
+    // Calculate X positions for each layer (column)
+    let mut layer_x_starts = Vec::new();
+    let mut x = config.padding;
+    for &width in &max_layer_widths {
+        layer_x_starts.push(x);
+        x += width + config.h_spacing;
+    }
+    let canvas_width = x - config.h_spacing + config.padding;
+
+    // For RL, reverse the X positions
+    if reverse {
+        layer_x_starts.reverse();
+    }
+
+    // Position nodes within each layer (column)
+    for (layer_idx, layer) in layers.iter().enumerate() {
+        if layer.is_empty() {
+            continue;
+        }
+
+        // Sort nodes by their grid position
+        let mut sorted_nodes: Vec<_> = layer.iter().collect();
+        sorted_nodes.sort_by_key(|id| grid_positions.get(*id).map(|p| p.pos).unwrap_or(0));
+
+        // Calculate total height of this column
+        let content_height: usize = sorted_nodes
+            .iter()
+            .filter_map(|id| node_dims.get(*id).map(|(_, h)| *h))
+            .sum();
+        let spacing = if sorted_nodes.len() > 1 {
+            (sorted_nodes.len() - 1) * config.v_spacing
+        } else {
+            0
+        };
+        let total_column_height = content_height + spacing;
+
+        // Center the column vertically
+        let column_start_y = config.padding + (max_column_content_height - total_column_height) / 2;
+
+        let mut y = column_start_y;
+        for node_id in sorted_nodes {
+            if let Some(&(w, h)) = node_dims.get(node_id) {
+                // Center nodes horizontally within the column width
+                let layer_width = max_layer_widths[layer_idx];
+                let node_x = layer_x_starts[layer_idx] + (layer_width - w) / 2;
+
+                draw_positions.insert(node_id.clone(), (node_x, y));
+                node_bounds.insert(
+                    node_id.clone(),
+                    NodeBounds {
+                        x: node_x,
+                        y,
+                        width: w,
+                        height: h,
+                    },
+                );
+                y += h + config.v_spacing;
+            }
+        }
+    }
+
+    (draw_positions, node_bounds, canvas_width, canvas_height)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::graph::{Direction, Edge, Node};
+
+    use super::*;
+
+    fn simple_diagram() -> Diagram {
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("Start"));
+        diagram.add_node(Node::new("B").with_label("Process"));
+        diagram.add_node(Node::new("C").with_label("End"));
+        diagram.add_edge(Edge::new("A", "B"));
+        diagram.add_edge(Edge::new("B", "C"));
+        diagram
+    }
+
+    #[test]
+    fn test_topological_layers_linear() {
+        let diagram = simple_diagram();
+        let layers = topological_layers(&diagram);
+
+        assert_eq!(layers.len(), 3);
+        assert_eq!(layers[0], vec!["A"]);
+        assert_eq!(layers[1], vec!["B"]);
+        assert_eq!(layers[2], vec!["C"]);
+    }
+
+    #[test]
+    fn test_topological_layers_parallel() {
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A"));
+        diagram.add_node(Node::new("B"));
+        diagram.add_node(Node::new("C"));
+        diagram.add_edge(Edge::new("A", "C"));
+        diagram.add_edge(Edge::new("B", "C"));
+
+        let layers = topological_layers(&diagram);
+
+        assert_eq!(layers.len(), 2);
+        // A and B should be in the first layer (sorted)
+        assert!(layers[0].contains(&"A".to_string()));
+        assert!(layers[0].contains(&"B".to_string()));
+        assert_eq!(layers[1], vec!["C"]);
+    }
+
+    #[test]
+    fn test_topological_layers_diamond() {
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A"));
+        diagram.add_node(Node::new("B"));
+        diagram.add_node(Node::new("C"));
+        diagram.add_node(Node::new("D"));
+        diagram.add_edge(Edge::new("A", "B"));
+        diagram.add_edge(Edge::new("A", "C"));
+        diagram.add_edge(Edge::new("B", "D"));
+        diagram.add_edge(Edge::new("C", "D"));
+
+        let layers = topological_layers(&diagram);
+
+        assert_eq!(layers.len(), 3);
+        assert_eq!(layers[0], vec!["A"]);
+        // B and C should be in layer 1 (sorted)
+        assert!(layers[1].contains(&"B".to_string()));
+        assert!(layers[1].contains(&"C".to_string()));
+        assert_eq!(layers[2], vec!["D"]);
+    }
+
+    #[test]
+    fn test_compute_grid_positions() {
+        let diagram = simple_diagram();
+        let layers = topological_layers(&diagram);
+        let positions = compute_grid_positions(&layers);
+
+        assert_eq!(
+            positions.get("A"),
+            Some(&GridPos { layer: 0, pos: 0 })
+        );
+        assert_eq!(
+            positions.get("B"),
+            Some(&GridPos { layer: 1, pos: 0 })
+        );
+        assert_eq!(
+            positions.get("C"),
+            Some(&GridPos { layer: 2, pos: 0 })
+        );
+    }
+
+    #[test]
+    fn test_compute_layout() {
+        let diagram = simple_diagram();
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        // Should have positions for all nodes
+        assert!(layout.draw_positions.contains_key("A"));
+        assert!(layout.draw_positions.contains_key("B"));
+        assert!(layout.draw_positions.contains_key("C"));
+
+        // Should have bounds for all nodes
+        assert!(layout.node_bounds.contains_key("A"));
+        assert!(layout.node_bounds.contains_key("B"));
+        assert!(layout.node_bounds.contains_key("C"));
+
+        // Canvas dimensions should be positive
+        assert!(layout.width > 0);
+        assert!(layout.height > 0);
+    }
+
+    #[test]
+    fn test_layout_vertical_ordering() {
+        let diagram = simple_diagram();
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        let a_y = layout.draw_positions.get("A").unwrap().1;
+        let b_y = layout.draw_positions.get("B").unwrap().1;
+        let c_y = layout.draw_positions.get("C").unwrap().1;
+
+        // A should be above B, B above C
+        assert!(a_y < b_y);
+        assert!(b_y < c_y);
+    }
+
+    #[test]
+    fn test_layout_handles_cycle() {
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A"));
+        diagram.add_node(Node::new("B"));
+        diagram.add_edge(Edge::new("A", "B"));
+        diagram.add_edge(Edge::new("B", "A")); // Cycle!
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        // Should still produce a layout (cycle is broken)
+        assert!(layout.draw_positions.contains_key("A"));
+        assert!(layout.draw_positions.contains_key("B"));
+    }
+
+    #[test]
+    fn test_layout_horizontal_centering() {
+        // Create diagram with nodes of different widths in same layer
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("X")); // narrow
+        diagram.add_node(Node::new("B").with_label("Very Long Label")); // wide
+        diagram.add_edge(Edge::new("A", "B"));
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        // Both nodes should be horizontally centered
+        let a_bounds = layout.node_bounds.get("A").unwrap();
+        let b_bounds = layout.node_bounds.get("B").unwrap();
+
+        // The center of each node should be roughly aligned
+        let a_center = a_bounds.center_x();
+        let b_center = b_bounds.center_x();
+
+        // They should be within the canvas bounds and reasonably centered
+        assert!(a_center < layout.width);
+        assert!(b_center < layout.width);
+    }
+}

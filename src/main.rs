@@ -3,6 +3,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use clap::Parser;
+use mmdflux::render::{render, RenderOptions};
 use mmdflux::{build_diagram, parse_flowchart};
 
 #[derive(Parser)]
@@ -19,6 +20,10 @@ struct Cli {
     /// Show debug information (AST and graph dump)
     #[arg(long)]
     debug: bool,
+
+    /// Use ASCII-only characters instead of Unicode box-drawing
+    #[arg(long)]
+    ascii: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -33,7 +38,7 @@ fn main() -> io::Result<()> {
         }
     };
 
-    let output = match render(&input, cli.debug) {
+    let output = match render_input(&input, cli.debug, cli.ascii) {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Error: {}", e);
@@ -49,7 +54,7 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn render(input: &str, debug: bool) -> Result<String, String> {
+fn render_input(input: &str, debug: bool, ascii_only: bool) -> Result<String, String> {
     // Parse the flowchart
     let flowchart = parse_flowchart(input).map_err(|e| e.to_string())?;
 
@@ -81,13 +86,7 @@ fn render(input: &str, debug: bool) -> Result<String, String> {
         }
         Ok(output)
     } else {
-        // TODO: Implement ASCII rendering
-        // For now, output a summary
-        Ok(format!(
-            "Parsed flowchart: {} nodes, {} edges (direction: {:?})\n",
-            diagram.nodes.len(),
-            diagram.edges.len(),
-            diagram.direction
-        ))
+        let options = RenderOptions { ascii_only };
+        Ok(render(&diagram, &options))
     }
 }

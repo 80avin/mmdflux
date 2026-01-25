@@ -17,6 +17,7 @@
 
 pub mod graph;
 pub mod parser;
+pub mod render;
 
 // Re-export commonly used items at the crate root
 pub use graph::{Diagram, Direction, Edge, Node, Shape, build_diagram};
