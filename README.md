@@ -11,7 +11,7 @@ cargo install mmdflux
 Or build from source:
 
 ```bash
-git clone https://github.com/yourusername/mmdflux
+git clone https://github.com/kevinswiber/mmdflux
 cd mmdflux
 cargo build --release
 ```
@@ -72,12 +72,14 @@ Output:
         │ Start │
         └───────┘
             │
-            ▼
-           /\
-      < Decision >
-           \/
-     ┌─Yes────No───┐
-     ▼             ▼
+            └┐
+             ▼
+       ┌──────────┐
+       < Decision >
+       └──────────┘
+             │
+      ┌─Yes──┴─No───┐
+      ▼             ▼
  ┌────────┐    ┌────────┐
  │ Accept │    │ Reject │
  └────────┘    └────────┘
@@ -155,22 +157,22 @@ Edges (5):
 
 ### Node Shapes
 
-| Syntax | Shape |
-|--------|-------|
-| `A` | Rectangle (default) |
+| Syntax    | Shape                |
+| --------- | -------------------- |
+| `A`       | Rectangle (default)  |
 | `A[text]` | Rectangle with label |
-| `A(text)` | Rounded rectangle |
-| `A{text}` | Diamond |
+| `A(text)` | Rounded rectangle    |
+| `A{text}` | Diamond              |
 
 ### Edge Types
 
-| Syntax | Description |
-|--------|-------------|
-| `-->` | Solid arrow |
+| Syntax         | Description            |
+| -------------- | ---------------------- |
+| `-->`          | Solid arrow            |
 | `-->\|label\|` | Solid arrow with label |
-| `---` | Open line (no arrow) |
-| `-.->` | Dotted arrow |
-| `==>` | Thick arrow |
+| `---`          | Open line (no arrow)   |
+| `-.->`         | Dotted arrow           |
+| `==>`          | Thick arrow            |
 
 ### Chains and Groups
 
@@ -222,7 +224,8 @@ A[Hello] --> B[World]
 ### Types
 
 ```rust
-use mmdflux::{Diagram, Direction, Node, Shape, Edge, Stroke, Arrow};
+use mmdflux::{Diagram, Direction, Node, Shape, Edge};
+use mmdflux::graph::{Stroke, Arrow};
 
 // Direction: TopDown, BottomTop, LeftRight, RightLeft
 // Shape: Rectangle, Round, Diamond
