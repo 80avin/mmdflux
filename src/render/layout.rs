@@ -150,10 +150,15 @@ fn topological_layers(diagram: &Diagram) -> Vec<Vec<String>> {
 
         // If no nodes have in-degree 0, we have a cycle - break it by picking one
         if current_layer.is_empty() {
-            // Pick the node with the smallest in-degree
+            // Pick the node with the smallest in-degree, using node ID as tie-breaker
+            // for deterministic output
             let min_node = remaining
                 .iter()
-                .min_by_key(|&&id| in_degree.get(id).copied().unwrap_or(0))
+                .min_by(|&&a, &&b| {
+                    let deg_a = in_degree.get(a).copied().unwrap_or(0);
+                    let deg_b = in_degree.get(b).copied().unwrap_or(0);
+                    deg_a.cmp(&deg_b).then_with(|| a.cmp(b))
+                })
                 .unwrap();
             current_layer.push(min_node.to_string());
         }
