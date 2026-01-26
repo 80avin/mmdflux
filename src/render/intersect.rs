@@ -353,4 +353,126 @@ mod tests {
         assert!(src_attach.0 >= source.x && src_attach.0 <= source.x + source.width);
         assert!(tgt_attach.0 >= target.x && tgt_attach.0 <= target.x + target.width);
     }
+
+    #[test]
+    fn test_intersect_diamond_from_above() {
+        let bounds = test_bounds();
+        // Point directly above center
+        let point = FloatPoint::new(15.0, 0.0);
+        let result = intersect_diamond(&bounds, point);
+
+        // Should hit top vertex
+        assert_eq!(result.x.round() as usize, bounds.center_x());
+        // y should be at top vertex
+        assert!(result.y < bounds.center_y() as f64);
+    }
+
+    #[test]
+    fn test_intersect_diamond_from_left() {
+        let bounds = test_bounds();
+        // Point directly to the left
+        let point = FloatPoint::new(0.0, 7.5);
+        let result = intersect_diamond(&bounds, point);
+
+        // Should hit left vertex
+        assert!(result.x < bounds.center_x() as f64);
+        assert_eq!(result.y.round() as usize, bounds.center_y());
+    }
+
+    #[test]
+    fn test_intersect_diamond_diagonal() {
+        let bounds = test_bounds();
+        // Point at a diagonal (bottom-right quadrant)
+        let point = FloatPoint::new(25.0, 15.0);
+        let result = intersect_diamond(&bounds, point);
+
+        // Should be on the diamond boundary
+        // For a diamond, |dx|/w + |dy|/h = 1 at the boundary
+        let center_x = bounds.center_x() as f64;
+        let center_y = bounds.center_y() as f64;
+        let dx = (result.x - center_x).abs();
+        let dy = (result.y - center_y).abs();
+        let w = bounds.width as f64 / 2.0;
+        let h = bounds.height as f64 / 2.0;
+
+        let boundary_check = dx / w + dy / h;
+        assert!(
+            (boundary_check - 1.0).abs() < 0.1,
+            "Point should be on diamond boundary, got {}",
+            boundary_check
+        );
+    }
+
+    #[test]
+    fn test_intersect_rect_point_at_center() {
+        let bounds = test_bounds();
+        // Point exactly at center
+        let point = FloatPoint::new(bounds.center_x() as f64, bounds.center_y() as f64);
+        let result = intersect_rect(&bounds, point);
+
+        // Should return bottom center as default
+        assert_eq!(result.x.round() as usize, bounds.center_x());
+    }
+
+    #[test]
+    fn test_intersect_diamond_point_at_center() {
+        let bounds = test_bounds();
+        // Point exactly at center
+        let point = FloatPoint::new(bounds.center_x() as f64, bounds.center_y() as f64);
+        let result = intersect_diamond(&bounds, point);
+
+        // Should return bottom vertex as default
+        assert_eq!(result.x.round() as usize, bounds.center_x());
+    }
+
+    #[test]
+    fn test_intersect_node_round_uses_rect() {
+        let bounds = test_bounds();
+        let point = (15, 20);
+
+        // Round shape should use rectangle intersection (approximation)
+        let rect_result = intersect_node(&bounds, point, Shape::Rectangle);
+        let round_result = intersect_node(&bounds, point, Shape::Round);
+
+        assert_eq!(rect_result, round_result);
+    }
+
+    #[test]
+    fn test_calculate_attachment_points_diamond_source() {
+        let source = NodeBounds {
+            x: 10,
+            y: 5,
+            width: 10,
+            height: 5,
+        };
+        let target = NodeBounds {
+            x: 10,
+            y: 20,
+            width: 10,
+            height: 3,
+        };
+
+        let (src_attach, tgt_attach) =
+            calculate_attachment_points(&source, Shape::Diamond, &target, Shape::Rectangle, &[]);
+
+        // Source (diamond) should attach at bottom vertex
+        assert_eq!(src_attach.0, source.center_x());
+        // Target should attach at top
+        assert!(tgt_attach.1 < target.y + target.height);
+    }
+
+    #[test]
+    fn test_float_point_to_usize() {
+        let p = FloatPoint::new(10.4, 20.6);
+        let (x, y) = p.to_usize();
+        assert_eq!(x, 10);
+        assert_eq!(y, 21);
+    }
+
+    #[test]
+    fn test_float_point_from_tuple() {
+        let p = FloatPoint::from((15_usize, 25_usize));
+        assert_eq!(p.x, 15.0);
+        assert_eq!(p.y, 25.0);
+    }
 }

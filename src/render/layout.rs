@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::shape::{NodeBounds, node_dimensions};
 use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig};
-use crate::graph::{Diagram, Direction};
+use crate::graph::{Diagram, Direction, Shape};
 
 /// Grid position of a node (layer/column in abstract grid coordinates).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,6 +53,10 @@ pub struct Layout {
     /// Key: (from_id, to_id), Value: (x, y) position for the label center.
     /// Only populated for edges that have labels.
     pub edge_label_positions: HashMap<(String, String), (usize, usize)>,
+
+    /// Node shapes for intersection calculation.
+    /// Maps node ID to its shape for computing dynamic attachment points.
+    pub node_shapes: HashMap<String, Shape>,
 }
 
 impl Layout {
@@ -141,6 +145,13 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
         }
     }
 
+    // Step 8: Collect node shapes
+    let node_shapes: HashMap<String, Shape> = diagram
+        .nodes
+        .iter()
+        .map(|(id, node)| (id.clone(), node.shape))
+        .collect();
+
     Layout {
         grid_positions,
         draw_positions,
@@ -154,6 +165,7 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
         backward_edge_lanes,
         edge_waypoints: HashMap::new(),
         edge_label_positions: HashMap::new(),
+        node_shapes,
     }
 }
 
@@ -385,6 +397,13 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         }
     }
 
+    // Collect node shapes
+    let node_shapes: HashMap<String, Shape> = diagram
+        .nodes
+        .iter()
+        .map(|(id, node)| (id.clone(), node.shape))
+        .collect();
+
     Layout {
         grid_positions,
         draw_positions,
@@ -398,6 +417,7 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         backward_edge_lanes,
         edge_waypoints: edge_waypoints_converted,
         edge_label_positions: edge_label_positions_converted,
+        node_shapes,
     }
 }
 

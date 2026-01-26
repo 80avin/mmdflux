@@ -1,5 +1,7 @@
 //! Edge rendering on the canvas.
 
+use std::collections::HashMap;
+
 use super::canvas::{Canvas, Connections};
 use super::chars::CharSet;
 use super::router::{AttachDirection, Point, RoutedEdge, Segment};
@@ -372,11 +374,35 @@ impl PlacedLabel {
 ///
 /// Draws all segments and arrows first, then all labels, ensuring labels
 /// are not overwritten by later edge segments.
+///
+/// # Arguments
+/// * `canvas` - The canvas to draw on
+/// * `routed_edges` - The edges to render
+/// * `charset` - Character set for drawing
+/// * `diagram_direction` - Layout direction for label positioning
+/// * `label_positions` - Optional pre-computed label positions from normalization
 pub fn render_all_edges(
     canvas: &mut Canvas,
     routed_edges: &[RoutedEdge],
     charset: &CharSet,
     diagram_direction: Direction,
+) {
+    render_all_edges_with_labels(
+        canvas,
+        routed_edges,
+        charset,
+        diagram_direction,
+        &HashMap::new(),
+    )
+}
+
+/// Render all edges with optional pre-computed label positions.
+pub fn render_all_edges_with_labels(
+    canvas: &mut Canvas,
+    routed_edges: &[RoutedEdge],
+    charset: &CharSet,
+    diagram_direction: Direction,
+    label_positions: &HashMap<(String, String), (usize, usize)>,
 ) {
     // First pass: draw all segments and arrows
     for routed in routed_edges {
@@ -393,17 +419,53 @@ pub fn render_all_edges(
     let mut placed_labels: Vec<PlacedLabel> = Vec::new();
     for routed in routed_edges {
         if let Some(label) = &routed.edge.label {
-            if let Some(placed) = draw_edge_label_with_tracking(
-                canvas,
-                routed,
-                label,
-                diagram_direction,
-                &placed_labels,
-            ) {
-                placed_labels.push(placed);
+            // Check for pre-computed label position from normalization
+            let edge_key = (routed.edge.from.clone(), routed.edge.to.clone());
+            let placed = if let Some(&(pre_x, pre_y)) = label_positions.get(&edge_key) {
+                // Use pre-computed position
+                draw_label_at_position(canvas, label, pre_x, pre_y)
+            } else {
+                // Fall back to heuristic placement
+                draw_edge_label_with_tracking(
+                    canvas,
+                    routed,
+                    label,
+                    diagram_direction,
+                    &placed_labels,
+                )
+            };
+
+            if let Some(p) = placed {
+                placed_labels.push(p);
             }
         }
     }
+}
+
+/// Draw a label at a specific pre-computed position.
+fn draw_label_at_position(
+    canvas: &mut Canvas,
+    label: &str,
+    x: usize,
+    y: usize,
+) -> Option<PlacedLabel> {
+    let label_len = label.chars().count();
+    // Center the label on the given position
+    let label_x = x.saturating_sub(label_len / 2);
+
+    // Write the label only to non-node cells
+    for (i, ch) in label.chars().enumerate() {
+        let cell_x = label_x + i;
+        if canvas.get(cell_x, y).is_some_and(|cell| !cell.is_node) {
+            canvas.set(cell_x, y, ch);
+        }
+    }
+
+    Some(PlacedLabel {
+        x: label_x,
+        y,
+        len: label_len,
+    })
 }
 
 #[cfg(test)]

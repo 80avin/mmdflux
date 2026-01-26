@@ -12,7 +12,7 @@ mod shape;
 
 pub use canvas::Canvas;
 pub use chars::CharSet;
-pub use edge::{render_all_edges, render_edge};
+pub use edge::{render_all_edges, render_all_edges_with_labels, render_edge};
 pub use layout::{Layout, LayoutConfig, compute_layout, compute_layout_dagre};
 pub use router::{Point, RoutedEdge, Segment, route_all_edges, route_edge};
 pub use shape::{NodeBounds, node_dimensions, render_node};
@@ -62,7 +62,13 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
 
     // Step 4: Route and render edges
     let routed_edges = route_all_edges(&diagram.edges, &layout, diagram.direction);
-    render_all_edges(&mut canvas, &routed_edges, &charset, diagram.direction);
+    render_all_edges_with_labels(
+        &mut canvas,
+        &routed_edges,
+        &charset,
+        diagram.direction,
+        &layout.edge_label_positions,
+    );
 
     // Step 5: Convert canvas to string
     canvas.to_string()

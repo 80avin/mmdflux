@@ -2,9 +2,10 @@
 //!
 //! Computes paths for edges, avoiding node boundaries.
 
+use super::intersect::calculate_attachment_points;
 use super::layout::Layout;
 use super::shape::NodeBounds;
-use crate::graph::{Direction, Edge};
+use crate::graph::{Direction, Edge, Shape};
 
 /// A point on the canvas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,21 +133,200 @@ pub fn route_edge(
         return route_backward_edge(edge, from_bounds, to_bounds, layout, diagram_direction);
     }
 
-    let (out_dir, in_dir) = attachment_directions(diagram_direction);
+    // Check if we have waypoints for this edge (from normalization)
+    let edge_key = (edge.from.clone(), edge.to.clone());
+    let waypoints = layout.edge_waypoints.get(&edge_key);
 
-    let start = attachment_point(from_bounds, out_dir);
-    let end = attachment_point(to_bounds, in_dir);
+    // Get node shapes for intersection calculation (default to Rectangle if not found)
+    let from_shape = layout
+        .node_shapes
+        .get(&edge.from)
+        .copied()
+        .unwrap_or(Shape::Rectangle);
+    let to_shape = layout
+        .node_shapes
+        .get(&edge.to)
+        .copied()
+        .unwrap_or(Shape::Rectangle);
 
-    // Route based on the relative positions
-    let segments = compute_path(start, end, diagram_direction);
+    if let Some(wps) = waypoints {
+        if !wps.is_empty() {
+            // Use waypoints with dynamic intersection calculation
+            return route_edge_with_waypoints(
+                edge,
+                from_bounds,
+                from_shape,
+                to_bounds,
+                to_shape,
+                wps,
+                diagram_direction,
+            );
+        }
+    }
+
+    // No waypoints: use intersection calculation for direct path
+    route_edge_direct(
+        edge,
+        from_bounds,
+        from_shape,
+        to_bounds,
+        to_shape,
+        diagram_direction,
+    )
+}
+
+/// Route an edge using waypoints from normalization.
+///
+/// Uses dynamic intersection calculation to determine attachment points
+/// based on the approach angle from the first/last waypoint.
+fn route_edge_with_waypoints(
+    edge: &Edge,
+    from_bounds: &NodeBounds,
+    from_shape: Shape,
+    to_bounds: &NodeBounds,
+    to_shape: Shape,
+    waypoints: &[(usize, usize)],
+    direction: Direction,
+) -> Option<RoutedEdge> {
+    // Calculate attachment points based on waypoint positions
+    let (src_attach, tgt_attach) =
+        calculate_attachment_points(from_bounds, from_shape, to_bounds, to_shape, waypoints);
+
+    // Offset attachment points by 1 cell outside the node boundary
+    // This ensures edges don't overlap with node drawings
+    let start = offset_from_boundary(src_attach, from_bounds);
+    let end = offset_from_boundary(tgt_attach, to_bounds);
+
+    // Build orthogonal path through waypoints
+    let segments = build_orthogonal_path(start, waypoints, end, direction);
+
+    // Determine entry direction based on last segment approaching target
+    let entry_direction = determine_entry_direction(&segments, end);
 
     Some(RoutedEdge {
         edge: edge.clone(),
         start,
         end,
         segments,
-        entry_direction: in_dir,
+        entry_direction,
     })
+}
+
+/// Route an edge directly between two nodes (no intermediate waypoints).
+///
+/// Uses intersection calculation to determine attachment points based on
+/// the relative positions of the nodes.
+fn route_edge_direct(
+    edge: &Edge,
+    from_bounds: &NodeBounds,
+    from_shape: Shape,
+    to_bounds: &NodeBounds,
+    to_shape: Shape,
+    direction: Direction,
+) -> Option<RoutedEdge> {
+    // For direct routing, use the other node's center as the "approach point"
+    let empty_waypoints: &[(usize, usize)] = &[];
+    let (src_attach, tgt_attach) = calculate_attachment_points(
+        from_bounds,
+        from_shape,
+        to_bounds,
+        to_shape,
+        empty_waypoints,
+    );
+
+    // Offset attachment points by 1 cell outside the node boundary
+    let start = offset_from_boundary(src_attach, from_bounds);
+    let end = offset_from_boundary(tgt_attach, to_bounds);
+
+    // Build orthogonal path (will use diagonal→orthogonal conversion)
+    let segments = build_orthogonal_path(start, empty_waypoints, end, direction);
+
+    // Determine entry direction based on the path
+    let entry_direction = determine_entry_direction(&segments, end);
+
+    Some(RoutedEdge {
+        edge: edge.clone(),
+        start,
+        end,
+        segments,
+        entry_direction,
+    })
+}
+
+/// Offset an attachment point by 1 cell outside the node boundary.
+///
+/// This ensures edges don't overlap with node drawings. The offset direction
+/// is determined by which edge of the node the point is closest to.
+fn offset_from_boundary(point: (usize, usize), bounds: &NodeBounds) -> Point {
+    let (x, y) = point;
+    let cx = bounds.center_x();
+    let cy = bounds.center_y();
+
+    // Determine which boundary edge the point is on
+    let on_top = y == bounds.y;
+    let on_bottom = y == bounds.y + bounds.height - 1;
+    let on_left = x == bounds.x;
+    let on_right = x == bounds.x + bounds.width - 1;
+
+    // Offset in the appropriate direction
+    if on_top {
+        Point::new(x, y.saturating_sub(1))
+    } else if on_bottom {
+        Point::new(x, y + 1)
+    } else if on_left {
+        Point::new(x.saturating_sub(1), y)
+    } else if on_right {
+        Point::new(x + 1, y)
+    } else {
+        // Point is not on boundary (shouldn't happen with proper intersection)
+        // Fall back to moving away from center
+        let dx = if x > cx {
+            1
+        } else if x < cx {
+            -1_isize
+        } else {
+            0
+        };
+        let dy = if y > cy {
+            1
+        } else if y < cy {
+            -1_isize
+        } else {
+            0
+        };
+        Point::new(
+            (x as isize + dx).max(0) as usize,
+            (y as isize + dy).max(0) as usize,
+        )
+    }
+}
+
+/// Determine the entry direction based on how the path approaches the endpoint.
+fn determine_entry_direction(segments: &[Segment], _end: Point) -> AttachDirection {
+    if let Some(last_segment) = segments.last() {
+        match last_segment {
+            Segment::Vertical { y_start, y_end, .. } => {
+                // Approaching vertically
+                if *y_end > *y_start {
+                    AttachDirection::Top // Approaching from above
+                } else {
+                    AttachDirection::Bottom // Approaching from below
+                }
+            }
+            Segment::Horizontal { x_start, x_end, .. } => {
+                // Approaching horizontally
+                if *x_end > *x_start {
+                    AttachDirection::Left // Approaching from the left
+                } else {
+                    AttachDirection::Right // Approaching from the right
+                }
+            }
+        }
+    } else {
+        // Fallback: determine from endpoint position relative to where we'd expect
+        // This shouldn't normally happen
+        AttachDirection::Top
+    }
 }
 
 /// Route a backward edge around the diagram perimeter.
@@ -425,6 +605,144 @@ fn compute_horizontal_first_path(start: Point, end: Point) -> Vec<Segment> {
     segments
 }
 
+/// Convert a single diagonal segment into orthogonal (axis-aligned) segments.
+///
+/// For diagonal paths (where neither x nor y coordinates match), this creates
+/// a Z-shaped path with a horizontal and vertical component. The direction
+/// preference determines whether we go vertical-first or horizontal-first.
+///
+/// # Arguments
+/// * `from` - Starting point
+/// * `to` - Ending point
+/// * `vertical_first` - If true, prefer vertical-then-horizontal routing (for TD/BT).
+///                      If false, prefer horizontal-then-vertical routing (for LR/RL).
+fn orthogonalize_segment(from: Point, to: Point, vertical_first: bool) -> Vec<Segment> {
+    if from.x == to.x {
+        // Already vertical
+        vec![Segment::Vertical {
+            x: from.x,
+            y_start: from.y,
+            y_end: to.y,
+        }]
+    } else if from.y == to.y {
+        // Already horizontal
+        vec![Segment::Horizontal {
+            y: from.y,
+            x_start: from.x,
+            x_end: to.x,
+        }]
+    } else if vertical_first {
+        // Z-path: vertical → horizontal
+        // Go vertically from `from` to `to.y`, then horizontally to `to.x`
+        vec![
+            Segment::Vertical {
+                x: from.x,
+                y_start: from.y,
+                y_end: to.y,
+            },
+            Segment::Horizontal {
+                y: to.y,
+                x_start: from.x,
+                x_end: to.x,
+            },
+        ]
+    } else {
+        // Z-path: horizontal → vertical
+        // Go horizontally from `from` to `to.x`, then vertically to `to.y`
+        vec![
+            Segment::Horizontal {
+                y: from.y,
+                x_start: from.x,
+                x_end: to.x,
+            },
+            Segment::Vertical {
+                x: to.x,
+                y_start: from.y,
+                y_end: to.y,
+            },
+        ]
+    }
+}
+
+/// Convert a series of waypoints into orthogonal path segments.
+///
+/// Waypoints from dagre's normalization may be at arbitrary positions. This
+/// function converts each consecutive pair of points into axis-aligned segments,
+/// creating Z-paths for any diagonal sections.
+///
+/// # Arguments
+/// * `waypoints` - List of (x, y) coordinates representing the path
+/// * `direction` - Layout direction (determines vertical-first vs horizontal-first preference)
+///
+/// # Returns
+/// A list of orthogonal segments connecting all waypoints.
+pub fn orthogonalize(waypoints: &[(usize, usize)], direction: Direction) -> Vec<Segment> {
+    if waypoints.len() < 2 {
+        return Vec::new();
+    }
+
+    let vertical_first = matches!(direction, Direction::TopDown | Direction::BottomTop);
+    let mut segments = Vec::new();
+
+    for window in waypoints.windows(2) {
+        let from = Point::new(window[0].0, window[0].1);
+        let to = Point::new(window[1].0, window[1].1);
+        segments.extend(orthogonalize_segment(from, to, vertical_first));
+    }
+
+    segments
+}
+
+/// Build a complete orthogonal path from start attachment through waypoints to end attachment.
+///
+/// This is the main entry point for creating routed edge paths that use waypoint
+/// information from normalization and dynamic attachment points from intersection
+/// calculation.
+///
+/// # Arguments
+/// * `start` - Attachment point on the source node boundary
+/// * `waypoints` - Intermediate waypoints from dummy node positions (may be empty)
+/// * `end` - Attachment point on the target node boundary
+/// * `direction` - Layout direction
+///
+/// # Returns
+/// A list of orthogonal segments forming the complete path from start to end.
+pub fn build_orthogonal_path(
+    start: Point,
+    waypoints: &[(usize, usize)],
+    end: Point,
+    direction: Direction,
+) -> Vec<Segment> {
+    let vertical_first = matches!(direction, Direction::TopDown | Direction::BottomTop);
+
+    if waypoints.is_empty() {
+        // No intermediate waypoints: direct path from start to end
+        return orthogonalize_segment(start, end, vertical_first);
+    }
+
+    let mut segments = Vec::new();
+
+    // Start → first waypoint
+    let first_wp = Point::new(waypoints[0].0, waypoints[0].1);
+    segments.extend(orthogonalize_segment(start, first_wp, vertical_first));
+
+    // Through all waypoints
+    for window in waypoints.windows(2) {
+        let from = Point::new(window[0].0, window[0].1);
+        let to = Point::new(window[1].0, window[1].1);
+        segments.extend(orthogonalize_segment(from, to, vertical_first));
+    }
+
+    // Last waypoint → end
+    let last_wp = Point::new(
+        waypoints[waypoints.len() - 1].0,
+        waypoints[waypoints.len() - 1].1,
+    );
+    segments.extend(orthogonalize_segment(last_wp, end, vertical_first));
+
+    segments
+}
+
 /// Route all edges in the layout.
 pub fn route_all_edges(
     edges: &[Edge],
@@ -640,6 +958,200 @@ mod tests {
         assert!(!is_backward_edge(&from, &to, Direction::BottomTop));
         assert!(!is_backward_edge(&from, &to, Direction::LeftRight));
         assert!(!is_backward_edge(&from, &to, Direction::RightLeft));
+    }
+
+    // Orthogonalization tests
+
+    #[test]
+    fn test_orthogonalize_segment_vertical() {
+        // Vertical segment should stay vertical
+        let from = Point::new(10, 5);
+        let to = Point::new(10, 15);
+        let segments = orthogonalize_segment(from, to, true);
+
+        assert_eq!(segments.len(), 1);
+        match segments[0] {
+            Segment::Vertical { x, y_start, y_end } => {
+                assert_eq!(x, 10);
+                assert_eq!(y_start, 5);
+                assert_eq!(y_end, 15);
+            }
+            _ => panic!("Expected vertical segment"),
+        }
+    }
+
+    #[test]
+    fn test_orthogonalize_segment_horizontal() {
+        // Horizontal segment should stay horizontal
+        let from = Point::new(5, 10);
+        let to = Point::new(20, 10);
+        let segments = orthogonalize_segment(from, to, true);
+
+        assert_eq!(segments.len(), 1);
+        match segments[0] {
+            Segment::Horizontal { y, x_start, x_end } => {
+                assert_eq!(y, 10);
+                assert_eq!(x_start, 5);
+                assert_eq!(x_end, 20);
+            }
+            _ => panic!("Expected horizontal segment"),
+        }
+    }
+
+    #[test]
+    fn test_orthogonalize_segment_diagonal_vertical_first() {
+        // Diagonal segment with vertical-first preference
+        let from = Point::new(5, 5);
+        let to = Point::new(15, 20);
+        let segments = orthogonalize_segment(from, to, true);
+
+        assert_eq!(segments.len(), 2);
+        // First: vertical from (5,5) to (5,20)
+        match segments[0] {
+            Segment::Vertical { x, y_start, y_end } => {
+                assert_eq!(x, 5);
+                assert_eq!(y_start, 5);
+                assert_eq!(y_end, 20);
+            }
+            _ => panic!("Expected vertical segment first"),
+        }
+        // Second: horizontal from (5,20) to (15,20)
+        match segments[1] {
+            Segment::Horizontal { y, x_start, x_end } => {
+                assert_eq!(y, 20);
+                assert_eq!(x_start, 5);
+                assert_eq!(x_end, 15);
+            }
+            _ => panic!("Expected horizontal segment second"),
+        }
+    }
+
+    #[test]
+    fn test_orthogonalize_segment_diagonal_horizontal_first() {
+        // Diagonal segment with horizontal-first preference
+        let from = Point::new(5, 5);
+        let to = Point::new(15, 20);
+        let segments = orthogonalize_segment(from, to, false);
+
+        assert_eq!(segments.len(), 2);
+        // First: horizontal from (5,5) to (15,5)
+        match segments[0] {
+            Segment::Horizontal { y, x_start, x_end } => {
+                assert_eq!(y, 5);
+                assert_eq!(x_start, 5);
+                assert_eq!(x_end, 15);
+            }
+            _ => panic!("Expected horizontal segment first"),
+        }
+        // Second: vertical from (15,5) to (15,20)
+        match segments[1] {
+            Segment::Vertical { x, y_start, y_end } => {
+                assert_eq!(x, 15);
+                assert_eq!(y_start, 5);
+                assert_eq!(y_end, 20);
+            }
+            _ => panic!("Expected vertical segment second"),
+        }
+    }
+
+    #[test]
+    fn test_orthogonalize_empty_waypoints() {
+        let waypoints: Vec<(usize, usize)> = vec![];
+        let segments = orthogonalize(&waypoints, Direction::TopDown);
+        assert!(segments.is_empty());
+    }
+
+    #[test]
+    fn test_orthogonalize_single_waypoint() {
+        // Single waypoint = no segments (need at least 2 points)
+        let waypoints = vec![(10, 10)];
+        let segments = orthogonalize(&waypoints, Direction::TopDown);
+        assert!(segments.is_empty());
+    }
+
+    #[test]
+    fn test_orthogonalize_two_waypoints_aligned() {
+        let waypoints = vec![(10, 5), (10, 15)];
+        let segments = orthogonalize(&waypoints, Direction::TopDown);
+
+        assert_eq!(segments.len(), 1);
+        assert!(matches!(segments[0], Segment::Vertical { x: 10, .. }));
+    }
+
+    #[test]
+    fn test_orthogonalize_two_waypoints_diagonal() {
+        let waypoints = vec![(5, 5), (15, 20)];
+        let segments = orthogonalize(&waypoints, Direction::TopDown);
+
+        // TD is vertical-first, so should be 2 segments
+        assert_eq!(segments.len(), 2);
+        assert!(matches!(segments[0], Segment::Vertical { .. }));
+        assert!(matches!(segments[1], Segment::Horizontal { .. }));
+    }
+
+    #[test]
+    fn test_orthogonalize_three_waypoints() {
+        let waypoints = vec![(5, 5), (15, 10), (25, 20)];
+        let segments = orthogonalize(&waypoints, Direction::TopDown);
+
+        // Two diagonal segments → 4 segments total (2 per diagonal)
+        assert_eq!(segments.len(), 4);
+    }
+
+    #[test]
+    fn test_build_orthogonal_path_no_waypoints() {
+        let start = Point::new(10, 5);
+        let end = Point::new(20, 15);
+        let waypoints: Vec<(usize, usize)> = vec![];
+
+        let segments = build_orthogonal_path(start, &waypoints, end, Direction::TopDown);
+
+        // Direct diagonal path → 2 segments (vertical-first for TD)
+        assert_eq!(segments.len(), 2);
+        assert!(matches!(segments[0], Segment::Vertical { .. }));
+        assert!(matches!(segments[1], Segment::Horizontal { .. }));
+    }
+
+    #[test]
+    fn test_build_orthogonal_path_with_waypoints() {
+        let start = Point::new(10, 5);
+        let waypoints = vec![(15, 10), (20, 15)];
+        let end = Point::new(25, 20);
+
+        let segments = build_orthogonal_path(start, &waypoints, end, Direction::TopDown);
+
+        // start→wp1: diagonal (2 segs), wp1→wp2: diagonal (2 segs), wp2→end: diagonal (2 segs)
+        // Total: 6 segments
+        assert_eq!(segments.len(), 6);
+    }
+
+    #[test]
+    fn test_build_orthogonal_path_aligned_waypoints() {
+        let start = Point::new(10, 5);
+        let waypoints = vec![(10, 10), (10, 15)]; // All on same x
+        let end = Point::new(10, 20);
+
+        let segments = build_orthogonal_path(start, &waypoints, end, Direction::TopDown);
+
+        // All aligned vertically → 3 vertical segments
+        assert_eq!(segments.len(), 3);
+        for seg in segments {
+            assert!(matches!(seg, Segment::Vertical { x: 10, .. }));
+        }
+    }
+
+    #[test]
+    fn test_build_orthogonal_path_lr_direction() {
+        let start = Point::new(5, 10);
+        let end = Point::new(20, 15);
+        let waypoints: Vec<(usize, usize)> = vec![];
+
+        let segments = build_orthogonal_path(start, &waypoints, end, Direction::LeftRight);
+
+        // LR uses horizontal-first
+        assert_eq!(segments.len(), 2);
+        assert!(matches!(segments[0], Segment::Horizontal { .. }));
+        assert!(matches!(segments[1], Segment::Vertical { .. }));
     }
 
     // Backward edge routing tests
