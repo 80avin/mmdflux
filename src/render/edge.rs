@@ -26,17 +26,25 @@ pub fn render_edge(
 
     // Draw label if present
     if let Some(label) = &routed.edge.label {
-        draw_edge_label(canvas, routed, label, diagram_direction);
+        draw_edge_label_with_tracking(canvas, routed, label, diagram_direction, &[]);
     }
 }
 
-/// Draw a label on an edge at the midpoint of the edge path.
+/// Draw a label on an edge at the midpoint of the edge path, tracking placement for collision avoidance.
 ///
 /// Places the label at the overall midpoint between start and end points.
 /// For backward edges (where end is before start in layout direction),
 /// offsets the label to avoid overlapping with forward edge labels.
-/// If the label would collide with a node, tries alternative positions.
-fn draw_edge_label(canvas: &mut Canvas, routed: &RoutedEdge, label: &str, direction: Direction) {
+/// If the label would collide with a node or another label, tries alternative positions.
+///
+/// Returns the placed label's bounding box if successfully placed.
+fn draw_edge_label_with_tracking(
+    canvas: &mut Canvas,
+    routed: &RoutedEdge,
+    label: &str,
+    direction: Direction,
+    placed_labels: &[PlacedLabel],
+) -> Option<PlacedLabel> {
     let label_len = label.chars().count();
 
     // Detect if this is a backward edge (going against layout direction)
@@ -67,8 +75,9 @@ fn draw_edge_label(canvas: &mut Canvas, routed: &RoutedEdge, label: &str, direct
         (mid_x.saturating_sub(label_len / 2), mid_y)
     };
 
-    // Try to find a position that doesn't collide with nodes
-    let (label_x, label_y) = find_safe_label_position(canvas, base_x, base_y, label_len, direction);
+    // Try to find a position that doesn't collide with nodes or other labels
+    let (label_x, label_y) =
+        find_safe_label_position(canvas, base_x, base_y, label_len, direction, placed_labels);
 
     // Write the label only to non-node cells
     for (i, ch) in label.chars().enumerate() {
@@ -78,9 +87,15 @@ fn draw_edge_label(canvas: &mut Canvas, routed: &RoutedEdge, label: &str, direct
             canvas.set(x, label_y, ch);
         }
     }
+
+    Some(PlacedLabel {
+        x: label_x,
+        y: label_y,
+        len: label_len,
+    })
 }
 
-/// Find a safe position for an edge label that doesn't collide with nodes.
+/// Find a safe position for an edge label that doesn't collide with nodes or other labels.
 ///
 /// Tries the base position first, then shifts in the appropriate direction
 /// based on the diagram layout until a collision-free position is found.
@@ -90,29 +105,34 @@ fn find_safe_label_position(
     base_y: usize,
     label_len: usize,
     direction: Direction,
+    placed_labels: &[PlacedLabel],
 ) -> (usize, usize) {
     // Check if the base position has any collision
-    if !label_collides_with_node(canvas, base_x, base_y, label_len) {
+    if !label_has_collision(canvas, base_x, base_y, label_len, placed_labels) {
         return (base_x, base_y);
     }
 
     // Try shifting positions based on diagram direction
     let shifts: Vec<(isize, isize)> = match direction {
         Direction::TopDown | Direction::BottomTop => {
-            // For vertical layouts, try left/right shifts
+            // For vertical layouts, try up/down shifts first, then left/right
             vec![
+                (0, -1),
+                (0, 1),
+                (0, -2),
+                (0, 2),
                 (-1, 0),
                 (1, 0),
                 (-2, 0),
                 (2, 0),
-                (0, -1),
-                (0, 1),
+                (0, -3),
+                (0, 3),
                 (-3, 0),
                 (3, 0),
             ]
         }
         Direction::LeftRight | Direction::RightLeft => {
-            // For horizontal layouts, try up/down shifts
+            // For horizontal layouts, try up/down shifts first
             vec![
                 (0, -1),
                 (0, 1),
@@ -131,13 +151,34 @@ fn find_safe_label_position(
         let new_x = (base_x as isize + dx).max(0) as usize;
         let new_y = (base_y as isize + dy).max(0) as usize;
 
-        if !label_collides_with_node(canvas, new_x, new_y, label_len) {
+        if !label_has_collision(canvas, new_x, new_y, label_len, placed_labels) {
             return (new_x, new_y);
         }
     }
 
     // If all shifts fail, return the base position (will skip node cells when writing)
     (base_x, base_y)
+}
+
+/// Check if placing a label at the given position would collide with any node cells or other labels.
+fn label_has_collision(
+    canvas: &Canvas,
+    x: usize,
+    y: usize,
+    label_len: usize,
+    placed_labels: &[PlacedLabel],
+) -> bool {
+    // Check collision with nodes
+    if label_collides_with_node(canvas, x, y, label_len) {
+        return true;
+    }
+    // Check collision with already placed labels
+    for placed in placed_labels {
+        if placed.overlaps(x, y, label_len) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Check if placing a label at the given position would collide with any node cells.
@@ -275,6 +316,29 @@ fn draw_arrow(canvas: &mut Canvas, point: &Point, direction: Direction, charset:
     canvas.set(point.x, point.y, arrow_char);
 }
 
+/// A placed label's bounding box for collision detection.
+#[derive(Debug, Clone)]
+struct PlacedLabel {
+    x: usize,
+    y: usize,
+    len: usize,
+}
+
+impl PlacedLabel {
+    /// Check if this label overlaps with a proposed label position.
+    fn overlaps(&self, x: usize, y: usize, len: usize) -> bool {
+        // Labels only collide if on the same row
+        if self.y != y {
+            return false;
+        }
+        // Check horizontal overlap
+        let self_end = self.x + self.len;
+        let other_end = x + len;
+        // Overlap if ranges intersect
+        x < self_end && self.x < other_end
+    }
+}
+
 /// Render all edges onto the canvas.
 ///
 /// Draws all segments and arrows first, then all labels, ensuring labels
@@ -296,9 +360,19 @@ pub fn render_all_edges(
     }
 
     // Second pass: draw all labels (so they appear on top of segments)
+    // Track placed labels to avoid collisions
+    let mut placed_labels: Vec<PlacedLabel> = Vec::new();
     for routed in routed_edges {
         if let Some(label) = &routed.edge.label {
-            draw_edge_label(canvas, routed, label, diagram_direction);
+            if let Some(placed) = draw_edge_label_with_tracking(
+                canvas,
+                routed,
+                label,
+                diagram_direction,
+                &placed_labels,
+            ) {
+                placed_labels.push(placed);
+            }
         }
     }
 }
