@@ -92,8 +92,11 @@ fn layout_config_for_diagram(diagram: &Diagram) -> LayoutConfig {
     match diagram.direction {
         Direction::LeftRight | Direction::RightLeft => {
             // For horizontal layouts, increase h_spacing to fit labels
-            // Minimum spacing of 4, or label length + 2 for padding
-            config.h_spacing = config.h_spacing.max(max_label_len + 2);
+            // The edge attachment points are 1 cell inside the gap on each side,
+            // so available space for label = h_spacing - 2
+            // We need: label_len + 2 (1 space before, 1 space after arrow)
+            // Therefore: h_spacing = label_len + 4
+            config.h_spacing = config.h_spacing.max(max_label_len + 4);
         }
         Direction::TopDown | Direction::BottomTop => {
             // For vertical layouts, increase v_spacing to fit labels
