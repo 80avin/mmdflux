@@ -12,7 +12,7 @@ mod shape;
 pub use canvas::Canvas;
 pub use chars::CharSet;
 pub use edge::{render_all_edges, render_edge};
-pub use layout::{Layout, LayoutConfig, compute_layout};
+pub use layout::{Layout, LayoutConfig, compute_layout, compute_layout_dagre};
 pub use router::{Point, RoutedEdge, Segment, route_all_edges, route_edge};
 pub use shape::{NodeBounds, node_dimensions, render_node};
 
@@ -47,7 +47,7 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
 
     // Step 1: Compute layout with direction-aware spacing
     let config = layout_config_for_diagram(diagram);
-    let layout = compute_layout(diagram, &config);
+    let layout = compute_layout_dagre(diagram, &config);
 
     // Step 2: Create canvas
     let mut canvas = Canvas::new(layout.width, layout.height);

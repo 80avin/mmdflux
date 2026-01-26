@@ -35,6 +35,7 @@ pub fn render_edge(
 /// Places the label at the overall midpoint between start and end points.
 /// For backward edges (where end is before start in layout direction),
 /// offsets the label to avoid overlapping with forward edge labels.
+/// If the label would collide with a node, tries alternative positions.
 fn draw_edge_label(canvas: &mut Canvas, routed: &RoutedEdge, label: &str, direction: Direction) {
     let label_len = label.chars().count();
 
@@ -51,7 +52,7 @@ fn draw_edge_label(canvas: &mut Canvas, routed: &RoutedEdge, label: &str, direct
     let mid_y = (routed.start.y + routed.end.y) / 2;
 
     // For backward edges, offset the label to avoid collision with forward edges
-    let (label_x, label_y) = if is_backward {
+    let (base_x, base_y) = if is_backward {
         match direction {
             Direction::LeftRight | Direction::RightLeft => {
                 // Offset above the main line
@@ -66,10 +67,82 @@ fn draw_edge_label(canvas: &mut Canvas, routed: &RoutedEdge, label: &str, direct
         (mid_x.saturating_sub(label_len / 2), mid_y)
     };
 
-    // Write the label
+    // Try to find a position that doesn't collide with nodes
+    let (label_x, label_y) = find_safe_label_position(canvas, base_x, base_y, label_len, direction);
+
+    // Write the label only to non-node cells
     for (i, ch) in label.chars().enumerate() {
-        canvas.set(label_x + i, label_y, ch);
+        let x = label_x + i;
+        // Only write if cell is not part of a node
+        if canvas.get(x, label_y).is_some_and(|cell| !cell.is_node) {
+            canvas.set(x, label_y, ch);
+        }
     }
+}
+
+/// Find a safe position for an edge label that doesn't collide with nodes.
+///
+/// Tries the base position first, then shifts in the appropriate direction
+/// based on the diagram layout until a collision-free position is found.
+fn find_safe_label_position(
+    canvas: &Canvas,
+    base_x: usize,
+    base_y: usize,
+    label_len: usize,
+    direction: Direction,
+) -> (usize, usize) {
+    // Check if the base position has any collision
+    if !label_collides_with_node(canvas, base_x, base_y, label_len) {
+        return (base_x, base_y);
+    }
+
+    // Try shifting positions based on diagram direction
+    let shifts: Vec<(isize, isize)> = match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            // For vertical layouts, try left/right shifts
+            vec![
+                (-1, 0),
+                (1, 0),
+                (-2, 0),
+                (2, 0),
+                (0, -1),
+                (0, 1),
+                (-3, 0),
+                (3, 0),
+            ]
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            // For horizontal layouts, try up/down shifts
+            vec![
+                (0, -1),
+                (0, 1),
+                (0, -2),
+                (0, 2),
+                (-1, 0),
+                (1, 0),
+                (0, -3),
+                (0, 3),
+            ]
+        }
+    };
+
+    // Try each shift until we find a collision-free position
+    for (dx, dy) in shifts {
+        let new_x = (base_x as isize + dx).max(0) as usize;
+        let new_y = (base_y as isize + dy).max(0) as usize;
+
+        if !label_collides_with_node(canvas, new_x, new_y, label_len) {
+            return (new_x, new_y);
+        }
+    }
+
+    // If all shifts fail, return the base position (will skip node cells when writing)
+    (base_x, base_y)
+}
+
+/// Check if placing a label at the given position would collide with any node cells.
+fn label_collides_with_node(canvas: &Canvas, x: usize, y: usize, label_len: usize) -> bool {
+    (0..label_len).any(|i| canvas.get(x + i, y).is_some_and(|cell| cell.is_node))
 }
 
 /// Calculate the length of a segment.

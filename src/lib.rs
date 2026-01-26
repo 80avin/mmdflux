@@ -15,6 +15,7 @@
 //! assert_eq!(diagram.edges.len(), 1);
 //! ```
 
+pub mod dagre;
 pub mod graph;
 pub mod parser;
 pub mod render;

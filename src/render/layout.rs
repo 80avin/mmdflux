@@ -1,10 +1,13 @@
 //! Layout computation for flowchart diagrams.
 //!
 //! This module computes the position of nodes on a grid based on topological ordering.
+//! It supports both a built-in algorithm and an optional dagre-based algorithm for
+//! better crossing reduction and cycle handling.
 
 use std::collections::{HashMap, HashSet};
 
 use super::shape::{NodeBounds, node_dimensions};
+use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig};
 use crate::graph::{Diagram, Direction};
 
 /// Grid position of a node (layer/column in abstract grid coordinates).
@@ -124,6 +127,176 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
                 // Add space on the bottom for horizontal layouts
                 height += corridor_space;
             }
+        }
+    }
+
+    Layout {
+        grid_positions,
+        draw_positions,
+        node_bounds,
+        width,
+        height,
+        h_spacing: config.h_spacing,
+        v_spacing: config.v_spacing,
+        backward_corridors,
+        corridor_width,
+        backward_edge_lanes,
+    }
+}
+
+/// Compute the layout using the dagre algorithm.
+///
+/// This uses the Sugiyama framework with:
+/// - Greedy feedback arc set for cycle removal
+/// - Longest-path ranking
+/// - Barycenter heuristic for crossing reduction
+///
+/// The algorithm phases come from dagre, but coordinate assignment uses
+/// the original ASCII-friendly logic for proper character grid alignment.
+pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout {
+    // Convert diagram to dagre graph
+    let mut dgraph = dagre::DiGraph::new();
+
+    // Add nodes with dimensions
+    for (id, node) in &diagram.nodes {
+        let dims = node_dimensions(node);
+        dgraph.add_node(id.as_str(), dims);
+    }
+
+    // Add edges
+    for edge in &diagram.edges {
+        dgraph.add_edge(edge.from.as_str(), edge.to.as_str());
+    }
+
+    // Convert direction
+    let dagre_direction = match diagram.direction {
+        Direction::TopDown => DagreDirection::TopBottom,
+        Direction::BottomTop => DagreDirection::BottomTop,
+        Direction::LeftRight => DagreDirection::LeftRight,
+        Direction::RightLeft => DagreDirection::RightLeft,
+    };
+
+    // Run dagre layout with larger spacing to clearly separate layers/positions
+    let dagre_config = DagreConfig {
+        direction: dagre_direction,
+        node_sep: 50.0, // Large value to clearly distinguish positions
+        rank_sep: 50.0, // Large value to clearly distinguish layers
+        margin: 10.0,
+        acyclic: true,
+    };
+
+    let result = dagre::layout(&dgraph, &dagre_config, |_, dims| {
+        (dims.0 as f64, dims.1 as f64)
+    });
+
+    // Group nodes by their y-coordinate (for TD/BT) or x-coordinate (for LR/RL) to determine layers
+    let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
+
+    // Build list of (node_id, primary_coord, secondary_coord) for grouping
+    let mut layer_coords: Vec<(String, f64, f64)> = result
+        .nodes
+        .iter()
+        .map(|(id, rect)| {
+            let primary = if is_vertical { rect.y } else { rect.x };
+            let secondary = if is_vertical { rect.x } else { rect.y };
+            (id.0.clone(), primary, secondary)
+        })
+        .collect();
+
+    // Sort by primary coordinate to group into layers
+    layer_coords.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    // Group into layers by similar primary coordinate (within rank_sep/2 tolerance)
+    let mut layers: Vec<Vec<String>> = Vec::new();
+    let mut current_layer: Vec<String> = Vec::new();
+    let mut last_primary: Option<f64> = None;
+
+    for (id, primary, _secondary) in &layer_coords {
+        if let Some(last) = last_primary {
+            // New layer if primary coordinate differs significantly
+            if (*primary - last).abs() > 25.0 && !current_layer.is_empty() {
+                layers.push(std::mem::take(&mut current_layer));
+            }
+        }
+        current_layer.push(id.clone());
+        last_primary = Some(*primary);
+    }
+    if !current_layer.is_empty() {
+        layers.push(current_layer);
+    }
+
+    // Sort nodes within each layer by secondary coordinate (dagre's crossing-reduced order)
+    for layer in &mut layers {
+        layer.sort_by(|a, b| {
+            let a_rect = result.nodes.get(&dagre::NodeId(a.clone()));
+            let b_rect = result.nodes.get(&dagre::NodeId(b.clone()));
+            let a_sec = a_rect
+                .map(|r| if is_vertical { r.x } else { r.y })
+                .unwrap_or(0.0);
+            let b_sec = b_rect
+                .map(|r| if is_vertical { r.x } else { r.y })
+                .unwrap_or(0.0);
+            a_sec
+                .partial_cmp(&b_sec)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+    }
+
+    // Now use the original ASCII coordinate assignment with these layers
+    let grid_positions = compute_grid_positions(&layers);
+
+    // Compute node dimensions
+    let node_dims: HashMap<String, (usize, usize)> = diagram
+        .nodes
+        .iter()
+        .map(|(id, node)| (id.clone(), node_dimensions(node)))
+        .collect();
+
+    // Compute layer dimensions
+    let (layer_widths, layer_heights) = compute_layer_dimensions(&layers, &node_dims);
+
+    // Identify backward edges from dagre's reversed_edges
+    let backward_edge_lanes: HashMap<(String, String), usize> = result
+        .reversed_edges
+        .iter()
+        .enumerate()
+        .filter_map(|(lane, &edge_idx)| {
+            diagram
+                .edges
+                .get(edge_idx)
+                .map(|edge| ((edge.from.clone(), edge.to.clone()), lane))
+        })
+        .collect();
+
+    let backward_corridors = backward_edge_lanes.len();
+    let corridor_width = 3;
+
+    // Convert grid positions to draw coordinates using original ASCII logic
+    let (draw_positions, node_bounds, mut width, mut height) = match diagram.direction {
+        Direction::TopDown | Direction::BottomTop => grid_to_draw_vertical(
+            &grid_positions,
+            &node_dims,
+            &layers,
+            &layer_heights,
+            config,
+            diagram.direction == Direction::BottomTop,
+        ),
+        Direction::LeftRight | Direction::RightLeft => grid_to_draw_horizontal(
+            &grid_positions,
+            &node_dims,
+            &layers,
+            &layer_widths,
+            config,
+            diagram.direction == Direction::RightLeft,
+        ),
+    };
+
+    // Expand canvas for backward edge corridors
+    if backward_corridors > 0 {
+        let corridor_space = backward_corridors * corridor_width;
+        match diagram.direction {
+            Direction::TopDown | Direction::BottomTop => width += corridor_space,
+            Direction::LeftRight | Direction::RightLeft => height += corridor_space,
         }
     }
 
@@ -676,5 +849,77 @@ mod tests {
         // They should be within the canvas bounds and reasonably centered
         assert!(a_center < layout.width);
         assert!(b_center < layout.width);
+    }
+
+    #[test]
+    fn test_compute_layout_dagre_simple() {
+        let diagram = simple_diagram();
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        // Should have positions for all nodes
+        assert!(layout.draw_positions.contains_key("A"));
+        assert!(layout.draw_positions.contains_key("B"));
+        assert!(layout.draw_positions.contains_key("C"));
+
+        // Should have bounds for all nodes
+        assert!(layout.node_bounds.contains_key("A"));
+        assert!(layout.node_bounds.contains_key("B"));
+        assert!(layout.node_bounds.contains_key("C"));
+
+        // Canvas dimensions should be positive
+        assert!(layout.width > 0);
+        assert!(layout.height > 0);
+    }
+
+    #[test]
+    fn test_compute_layout_dagre_vertical_ordering() {
+        let diagram = simple_diagram();
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        let a_y = layout.draw_positions.get("A").unwrap().1;
+        let b_y = layout.draw_positions.get("B").unwrap().1;
+        let c_y = layout.draw_positions.get("C").unwrap().1;
+
+        // A should be above B, B above C
+        assert!(a_y < b_y, "A ({}) should be above B ({})", a_y, b_y);
+        assert!(b_y < c_y, "B ({}) should be above C ({})", b_y, c_y);
+    }
+
+    #[test]
+    fn test_compute_layout_dagre_handles_cycle() {
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A"));
+        diagram.add_node(Node::new("B"));
+        diagram.add_edge(Edge::new("A", "B"));
+        diagram.add_edge(Edge::new("B", "A")); // Cycle!
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        // Should still produce a layout (cycle is handled)
+        assert!(layout.draw_positions.contains_key("A"));
+        assert!(layout.draw_positions.contains_key("B"));
+
+        // Should have a backward edge
+        assert_eq!(layout.backward_corridors, 1);
+    }
+
+    #[test]
+    fn test_compute_layout_dagre_lr_direction() {
+        let mut diagram = Diagram::new(Direction::LeftRight);
+        diagram.add_node(Node::new("A"));
+        diagram.add_node(Node::new("B"));
+        diagram.add_edge(Edge::new("A", "B"));
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        let a_x = layout.draw_positions.get("A").unwrap().0;
+        let b_x = layout.draw_positions.get("B").unwrap().0;
+
+        // A should be left of B
+        assert!(a_x < b_x, "A ({}) should be left of B ({})", a_x, b_x);
     }
 }
