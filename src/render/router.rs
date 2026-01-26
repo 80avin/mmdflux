@@ -542,35 +542,25 @@ fn route_backward_edge(
 
 /// Route a backward edge for vertical (TD/BT) layouts.
 ///
-/// For TD: exits from TOP of source, travels horizontally to corridor, then up
-/// in corridor, then horizontally to enter target from the right. Exiting from
-/// the top makes the edge origin unambiguous when sibling nodes exist on the
-/// same row.
-///
-/// For BT: exits from BOTTOM of source (mirrored logic).
+/// Exits from the RIGHT side of source, travels horizontally to the corridor,
+/// then vertically in the corridor, then horizontally to enter target from
+/// the right. Exiting from the side avoids overlap with forward edges which
+/// use top/bottom attachment points.
 fn route_backward_edge_vertical(
     edge: &Edge,
     from_bounds: &NodeBounds,
     to_bounds: &NodeBounds,
     layout: &Layout,
-    diagram_direction: Direction,
+    _diagram_direction: Direction,
 ) -> Option<RoutedEdge> {
-    // Exit direction depends on layout: TD exits from top, BT exits from bottom
-    let exit_dir = if diagram_direction == Direction::TopDown {
-        AttachDirection::Top
-    } else {
-        AttachDirection::Bottom
-    };
-    let start = attachment_point(from_bounds, exit_dir);
+    // Exit from RIGHT side (perpendicular to flow direction)
+    // This avoids overlap with forward edges which use top/bottom
+    let start = attachment_point(from_bounds, AttachDirection::Right);
     // Enter from right side of target
     let end = attachment_point(to_bounds, AttachDirection::Right);
 
     // Get the node border point (attachment_point adds 1 cell offset)
-    let (border_x, border_y) = if diagram_direction == Direction::TopDown {
-        from_bounds.top()
-    } else {
-        from_bounds.bottom()
-    };
+    let (border_x, border_y) = from_bounds.right();
 
     // Get lane assignment for this edge (default to 0 if not found)
     let lane = layout
@@ -586,24 +576,18 @@ fn route_backward_edge_vertical(
 
     let mut segments = Vec::new();
 
-    // Vertical segment: connect node border to attachment point (1 cell)
-    segments.push(Segment::Vertical {
-        x: border_x,
-        y_start: border_y,
-        y_end: start.y,
-    });
-
-    // Horizontal segment: attachment point → corridor
+    // Horizontal segment: connect node border to corridor
+    // (combines border→attachment and attachment→corridor since they're at same y)
     segments.push(Segment::Horizontal {
-        y: start.y,
-        x_start: start.x,
+        y: border_y,
+        x_start: border_x,
         x_end: corridor_x,
     });
 
-    // Vertical segment in corridor: from start.y to end.y
+    // Vertical segment in corridor: from source y to target y
     segments.push(Segment::Vertical {
         x: corridor_x,
-        y_start: start.y,
+        y_start: border_y,
         y_end: end.y,
     });
 
@@ -1315,20 +1299,18 @@ mod tests {
         // Backward edge should route around the right side
         assert_eq!(routed.entry_direction, AttachDirection::Right);
 
-        // Should have 4 segments:
-        // 1. vertical (connect node to attachment point)
-        // 2. horizontal (to corridor)
-        // 3. vertical (in corridor)
-        // 4. horizontal (to target)
-        assert_eq!(routed.segments.len(), 4);
-        assert!(matches!(routed.segments[0], Segment::Vertical { .. }));
-        assert!(matches!(routed.segments[1], Segment::Horizontal { .. }));
-        assert!(matches!(routed.segments[2], Segment::Vertical { .. }));
-        assert!(matches!(routed.segments[3], Segment::Horizontal { .. }));
+        // Should have 3 segments:
+        // 1. horizontal (from right side to corridor)
+        // 2. vertical (in corridor)
+        // 3. horizontal (to target)
+        assert_eq!(routed.segments.len(), 3);
+        assert!(matches!(routed.segments[0], Segment::Horizontal { .. }));
+        assert!(matches!(routed.segments[1], Segment::Vertical { .. }));
+        assert!(matches!(routed.segments[2], Segment::Horizontal { .. }));
 
         // The corridor x should be within canvas but in the corridor area
         let content_width = layout.width - (layout.backward_corridors * layout.corridor_width);
-        if let Segment::Horizontal { x_end, .. } = routed.segments[1] {
+        if let Segment::Horizontal { x_end, .. } = routed.segments[0] {
             assert!(
                 x_end > content_width,
                 "Corridor should be beyond content area"
@@ -1428,12 +1410,12 @@ mod tests {
         let routed_c_a = route_edge(edge_c_to_a, &layout, Direction::TopDown).unwrap();
         let routed_c_b = route_edge(edge_c_to_b, &layout, Direction::TopDown).unwrap();
 
-        // Extract corridor X positions from the horizontal segment going to corridor (index 1)
-        let corridor_x_ca = match routed_c_a.segments[1] {
+        // Extract corridor X positions from the first horizontal segment (index 0)
+        let corridor_x_ca = match routed_c_a.segments[0] {
             Segment::Horizontal { x_end, .. } => x_end,
             _ => panic!("Expected horizontal segment"),
         };
-        let corridor_x_cb = match routed_c_b.segments[1] {
+        let corridor_x_cb = match routed_c_b.segments[0] {
             Segment::Horizontal { x_end, .. } => x_end,
             _ => panic!("Expected horizontal segment"),
         };
