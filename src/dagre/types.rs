@@ -119,6 +119,16 @@ pub struct LayoutResult {
 
     /// Total height of the layout.
     pub height: f64,
+
+    /// Waypoints for each edge derived from dummy node positions during normalization.
+    /// Key: original edge index, Value: list of intermediate waypoints.
+    /// Empty for short edges (span 1 rank), populated for long edges.
+    pub edge_waypoints: HashMap<usize, Vec<Point>>,
+
+    /// Pre-computed label positions for edges with labels.
+    /// Key: original edge index, Value: label center position.
+    /// Only populated for edges that have labels.
+    pub label_positions: HashMap<usize, Point>,
 }
 
 /// Layout information for a single edge.

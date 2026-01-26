@@ -42,6 +42,17 @@ pub struct Layout {
     pub corridor_width: usize,
     /// Lane assignments for backward edges: (from, to) -> lane number.
     pub backward_edge_lanes: HashMap<(String, String), usize>,
+
+    // --- Edge routing data from normalization ---
+    /// Waypoints for each edge, derived from dummy node positions.
+    /// Key: (from_id, to_id), Value: list of waypoint coordinates.
+    /// Empty for short edges (span 1 rank), populated for long edges.
+    pub edge_waypoints: HashMap<(String, String), Vec<(usize, usize)>>,
+
+    /// Pre-computed label positions for edges with labels.
+    /// Key: (from_id, to_id), Value: (x, y) position for the label center.
+    /// Only populated for edges that have labels.
+    pub edge_label_positions: HashMap<(String, String), (usize, usize)>,
 }
 
 impl Layout {
@@ -141,6 +152,8 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
         backward_corridors,
         corridor_width,
         backward_edge_lanes,
+        edge_waypoints: HashMap::new(),
+        edge_label_positions: HashMap::new(),
     }
 }
 
@@ -334,6 +347,8 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         backward_corridors,
         corridor_width,
         backward_edge_lanes,
+        edge_waypoints: HashMap::new(),
+        edge_label_positions: HashMap::new(),
     }
 }
 

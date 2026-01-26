@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use petgraph::stable_graph::StableDiGraph;
 
+use super::normalize::{DummyChain, DummyNode};
 use super::types::{NodeId, Point};
 
 /// A directed graph for layout.
@@ -123,6 +124,17 @@ pub(crate) struct LayoutGraph {
 
     /// Node dimensions (width, height).
     pub dimensions: Vec<(f64, f64)>,
+
+    // --- Dummy node tracking (for normalization) ---
+    /// Metadata for dummy nodes, keyed by node ID.
+    pub dummy_nodes: HashMap<NodeId, DummyNode>,
+
+    /// Chains of dummy nodes for each normalized long edge.
+    pub dummy_chains: Vec<DummyChain>,
+
+    /// Number of original edges before normalization.
+    /// Used to distinguish original edges from edges created during normalization.
+    pub original_edge_count: usize,
 }
 
 impl LayoutGraph {
@@ -155,6 +167,7 @@ impl LayoutGraph {
             .collect();
 
         let n = node_ids.len();
+        let edge_count = edges.len();
 
         Self {
             node_ids,
@@ -165,6 +178,9 @@ impl LayoutGraph {
             order: (0..n).collect(),
             positions: vec![Point::default(); n],
             dimensions,
+            dummy_nodes: HashMap::new(),
+            dummy_chains: Vec::new(),
+            original_edge_count: edge_count,
         }
     }
 
@@ -201,6 +217,21 @@ impl LayoutGraph {
                 }
             })
             .collect()
+    }
+
+    /// Check if a node is a dummy node.
+    pub fn is_dummy(&self, node_id: &NodeId) -> bool {
+        self.dummy_nodes.contains_key(node_id)
+    }
+
+    /// Get dummy node metadata if the node is a dummy.
+    pub fn get_dummy(&self, node_id: &NodeId) -> Option<&DummyNode> {
+        self.dummy_nodes.get(node_id)
+    }
+
+    /// Check if a node index corresponds to a dummy node.
+    pub fn is_dummy_index(&self, idx: usize) -> bool {
+        self.node_ids.get(idx).is_some_and(|id| self.is_dummy(id))
     }
 }
 
@@ -294,5 +325,66 @@ mod tests {
 
         assert_eq!(pg.node_count(), 3);
         assert_eq!(pg.edge_count(), 2);
+    }
+
+    #[test]
+    fn test_layout_graph_dummy_tracking() {
+        use crate::dagre::normalize::{DummyNode, LabelPos};
+
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        graph.add_edge("A", "B");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+
+        // Initially no dummies
+        assert!(!lg.is_dummy(&"A".into()));
+        assert!(!lg.is_dummy(&"B".into()));
+        assert!(lg.dummy_chains.is_empty());
+        assert_eq!(lg.original_edge_count, 1);
+
+        // Add a dummy node
+        let dummy_id = NodeId::from("_d0");
+        lg.dummy_nodes.insert(
+            dummy_id.clone(),
+            DummyNode::edge_label(0, 1, 10.0, 5.0, LabelPos::Center),
+        );
+
+        // Now the dummy should be detected
+        assert!(lg.is_dummy(&dummy_id));
+        assert!(!lg.is_dummy(&"A".into()));
+
+        // get_dummy should return the metadata
+        let dummy = lg.get_dummy(&dummy_id).unwrap();
+        assert!(dummy.is_label());
+        assert_eq!(dummy.edge_index, 0);
+        assert_eq!(dummy.rank, 1);
+    }
+
+    #[test]
+    fn test_layout_graph_is_dummy_index() {
+        use crate::dagre::normalize::DummyNode;
+
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        graph.add_edge("A", "B");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+
+        // No dummies initially
+        assert!(!lg.is_dummy_index(0)); // A
+        assert!(!lg.is_dummy_index(1)); // B
+        assert!(!lg.is_dummy_index(99)); // Out of bounds
+
+        // Add a dummy (simulating normalization adding a node)
+        let dummy_id = NodeId::from("_d0");
+        lg.node_ids.push(dummy_id.clone());
+        lg.dummy_nodes.insert(dummy_id, DummyNode::edge(0, 1));
+
+        // Now index 2 is a dummy
+        assert!(lg.is_dummy_index(2));
+        assert!(!lg.is_dummy_index(0));
     }
 }

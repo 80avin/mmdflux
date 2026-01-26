@@ -33,10 +33,13 @@
 
 mod acyclic;
 mod graph;
+pub mod normalize;
 mod order;
 mod position;
 mod rank;
 pub mod types;
+
+use std::collections::HashMap;
 
 pub use graph::DiGraph;
 use graph::LayoutGraph;
@@ -125,6 +128,8 @@ where
         reversed_edges,
         width,
         height,
+        edge_waypoints: HashMap::new(),
+        label_positions: HashMap::new(),
     }
 }
 
