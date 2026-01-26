@@ -1,0 +1,85 @@
+---
+name: archive
+description: Archive a completed implementation plan. Moves the plan to archive/ and updates its status to COMPLETE.
+---
+
+# Archive Skill
+
+Archive a completed implementation plan after successful implementation.
+
+## Process
+
+1. **Identify the plan to archive:**
+   - If the user specifies a plan number/name, use that
+   - Otherwise, scan `plans/*/` (exclude `archive/`) for plans that appear complete:
+     - All task checkboxes marked done (`- [x]`)
+     - Or user explicitly states it's complete
+   - If multiple candidates found, ask user to specify which one
+
+2. **Verify completion:**
+   - Read the `task-list.md` and count checkboxes
+   - If not all tasks are complete, ask user to confirm they want to archive anyway
+   - Display: "Plan has X/Y tasks complete. Archive anyway?"
+
+3. **Update plan files:**
+
+   **Update `implementation-plan.md` status header:**
+   ```markdown
+   ## Status: ✅ COMPLETE
+
+   **Completed:** YYYY-MM-DD
+   ```
+
+   **Update `task-list.md` status:**
+   ```markdown
+   ## Status: ✅ COMPLETE
+   ```
+
+   **Update `.plan-state.json`:**
+   ```json
+   {
+     "status": "complete",
+     "completed_at": "2026-01-25T10:30:00Z",
+     "updated_at": "2026-01-25T10:30:00Z",
+     ...existing fields...
+   }
+   ```
+
+4. **Move to archive:**
+   ```bash
+   mv plans/NNNN-feature-name plans/archive/
+   ```
+
+5. **Confirm to user:**
+   ```
+   **Archived:** `plans/archive/NNNN-feature-name/`
+   **Status:** ✅ COMPLETE
+   **Tasks:** X/Y complete
+   **Completed:** YYYY-MM-DD
+   ```
+
+## Example Usage
+
+### Archive a specific plan
+```
+User: /archive 0005
+```
+
+### Archive with auto-detection
+```
+User: /archive
+
+(Claude finds the plan with all tasks complete and archives it)
+```
+
+### Confirm incomplete plan
+```
+User: /archive 0003
+
+Claude: Plan 0003-backward-edge-routing has 8/12 tasks complete.
+Archive as complete anyway? (y/n)
+
+User: yes
+
+(Claude archives with status showing partial completion)
+```

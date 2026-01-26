@@ -65,6 +65,7 @@ Plan the requested feature or change using the project's planning conventions.
 5. **Use this format for .plan-state.json:**
    ```json
    {
+     "status": "in_progress",
      "created_at": "2026-01-24T10:30:00Z",
      "updated_at": "2026-01-24T10:30:00Z",
      "planning_agent_id": "abc-123-def",
@@ -76,6 +77,7 @@ Plan the requested feature or change using the project's planning conventions.
      }
    }
    ```
+   - `status` is always `"in_progress"` for new plans
    - Use the current UTC timestamp for `created_at` and `updated_at`
    - Set `planning_agent_id` to the agentId from the Plan subagent Task result
    - Set `total` to the actual number of tasks in task-list.md
