@@ -215,8 +215,8 @@ fn route_edge_with_waypoints(
         start, waypoints, end, direction,
     ));
 
-    // Use canonical entry direction for the layout
-    let entry_direction = entry_direction_for_layout(direction);
+    // Determine entry direction based on final segment orientation
+    let entry_direction = entry_direction_from_segments(&segments, end);
 
     Some(RoutedEdge {
         edge: edge.clone(),
@@ -278,8 +278,8 @@ fn route_edge_direct(
     // at 'end' which is already at the offset position (1 cell from node).
     // The arrow itself provides the visual connection to the target.
 
-    // Determine entry direction based on diagram flow direction
-    let entry_direction = entry_direction_for_layout(direction);
+    // Determine entry direction based on final segment orientation
+    let entry_direction = entry_direction_from_segments(&segments, end);
 
     Some(RoutedEdge {
         edge: edge.clone(),
@@ -383,29 +383,52 @@ fn add_connector_segment(segments: &mut Vec<Segment>, boundary: (usize, usize), 
     // If neither aligned, skip (shouldn't happen with proper offset)
 }
 
-/// Get the canonical entry direction for edges in a given layout direction.
+/// Determine the entry direction based on the final segment's orientation.
 ///
-/// For forward edges, this is the direction from which edges enter target nodes:
-/// - TD: edges enter from Top (arrow points down)
-/// - BT: edges enter from Bottom (arrow points up)
-/// - LR: edges enter from Left (arrow points right)
-/// - RL: edges enter from Right (arrow points left)
-fn entry_direction_for_layout(direction: Direction) -> AttachDirection {
-    match direction {
-        Direction::TopDown => AttachDirection::Top,
-        Direction::BottomTop => AttachDirection::Bottom,
-        Direction::LeftRight => AttachDirection::Left,
-        Direction::RightLeft => AttachDirection::Right,
+/// With L-shaped paths, the final segment directly represents the approach direction:
+/// - Vertical final segment going down → entry from Top (arrow ▼)
+/// - Vertical final segment going up → entry from Bottom (arrow ▲)
+/// - Horizontal final segment going right → entry from Left (arrow ►)
+/// - Horizontal final segment going left → entry from Right (arrow ◄)
+fn entry_direction_from_segments(segments: &[Segment], _end: Point) -> AttachDirection {
+    if let Some(last_segment) = segments.last() {
+        match last_segment {
+            Segment::Vertical { y_start, y_end, .. } => {
+                if *y_end > *y_start {
+                    // Moving downward: entering from Top (arrow points down ▼)
+                    AttachDirection::Top
+                } else {
+                    // Moving upward: entering from Bottom (arrow points up ▲)
+                    AttachDirection::Bottom
+                }
+            }
+            Segment::Horizontal { x_start, x_end, .. } => {
+                if *x_end > *x_start {
+                    // Moving rightward: entering from Left (arrow points right ►)
+                    AttachDirection::Left
+                } else {
+                    // Moving leftward: entering from Right (arrow points left ◄)
+                    AttachDirection::Right
+                }
+            }
+        }
+    } else {
+        // No segments: shouldn't happen, default to Top
+        AttachDirection::Top
     }
 }
 
-/// Build an orthogonal path that ends with a segment aligned with the layout direction.
+/// Build an orthogonal path that ends with a segment matching the approach direction.
 ///
-/// For TD/BT layouts, paths should end with vertical segments so arrows point down/up.
-/// For LR/RL layouts, paths should end with horizontal segments so arrows point right/left.
+/// The final segment orientation determines the arrow direction:
+/// - Vertical final segment → ▼ or ▲ arrow
+/// - Horizontal final segment → ► or ◄ arrow
 ///
-/// Creates a Z-shaped path (3 segments) when start and end are not aligned, with the
-/// middle segment placed at a position that avoids creating visual artifacts near nodes.
+/// Creates an L-shaped path (2 segments) when start and end are not aligned:
+/// - First segment moves in the primary layout direction
+/// - Second segment moves in the cross direction to reach the target
+///
+/// This ensures the arrow glyph visually matches the line direction entering the target.
 fn build_orthogonal_path_for_direction(
     start: Point,
     end: Point,
@@ -427,52 +450,41 @@ fn build_orthogonal_path_for_direction(
         }];
     }
 
-    // For non-aligned paths, create a Z-shaped path with:
-    // - First segment in the direction of flow
-    // - Middle segment perpendicular at midpoint
-    // - Last segment completing the path to target
+    // For non-aligned paths, create an L-shaped path:
+    // - First segment aligns with the target on the cross-axis
+    // - Second segment goes directly into the target
+    //
+    // The final segment type matches the approach direction for proper arrow display.
     match direction {
         Direction::TopDown | Direction::BottomTop => {
-            // Vertical layouts: vertical-horizontal-vertical (Z-shape)
-            // Place horizontal segment at midpoint y
-            let mid_y = (start.y + end.y) / 2;
+            // Vertical layouts: V-H (vertical first, then horizontal into target)
+            // Final segment is horizontal, so arrow will be ► or ◄
             vec![
                 Segment::Vertical {
                     x: start.x,
-                    y_start: start.y,
-                    y_end: mid_y,
-                },
-                Segment::Horizontal {
-                    y: mid_y,
-                    x_start: start.x,
-                    x_end: end.x,
-                },
-                Segment::Vertical {
-                    x: end.x,
-                    y_start: mid_y,
-                    y_end: end.y,
-                },
-            ]
-        }
-        Direction::LeftRight | Direction::RightLeft => {
-            // Horizontal layouts: horizontal-vertical-horizontal (Z-shape)
-            // Place vertical segment at midpoint x
-            let mid_x = (start.x + end.x) / 2;
-            vec![
-                Segment::Horizontal {
-                    y: start.y,
-                    x_start: start.x,
-                    x_end: mid_x,
-                },
-                Segment::Vertical {
-                    x: mid_x,
                     y_start: start.y,
                     y_end: end.y,
                 },
                 Segment::Horizontal {
                     y: end.y,
-                    x_start: mid_x,
+                    x_start: start.x,
                     x_end: end.x,
+                },
+            ]
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            // Horizontal layouts: H-V (horizontal first, then vertical into target)
+            // Final segment is vertical, so arrow will be ▼ or ▲
+            vec![
+                Segment::Horizontal {
+                    y: start.y,
+                    x_start: start.x,
+                    x_end: end.x,
+                },
+                Segment::Vertical {
+                    x: end.x,
+                    y_start: start.y,
+                    y_end: end.y,
                 },
             ]
         }
