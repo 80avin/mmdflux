@@ -53,8 +53,25 @@ pub fn layout<N, F>(graph: &DiGraph<N>, config: &LayoutConfig, get_dimensions: F
 where
     F: Fn(&NodeId, &N) -> (f64, f64),
 {
+    layout_with_labels(graph, config, get_dimensions, &HashMap::new())
+}
+
+/// Layout computation with edge label support.
+///
+/// This variant allows specifying label dimensions for edges, which will be
+/// used during normalization to create label dummies with appropriate sizes.
+pub fn layout_with_labels<N, F>(
+    graph: &DiGraph<N>,
+    config: &LayoutConfig,
+    get_dimensions: F,
+    edge_labels: &HashMap<usize, normalize::EdgeLabelInfo>,
+) -> LayoutResult
+where
+    F: Fn(&NodeId, &N) -> (f64, f64),
+{
     // Build internal layout graph
     let mut lg = LayoutGraph::from_digraph(graph, get_dimensions);
+    let original_node_count = lg.node_ids.len();
 
     // Phase 1: Make graph acyclic
     if config.acyclic {
@@ -65,20 +82,36 @@ where
     rank::run(&mut lg);
     rank::normalize(&mut lg);
 
-    // Phase 3: Reduce crossings
+    // Phase 2.5: Normalize long edges (insert dummy nodes)
+    normalize::run(&mut lg, edge_labels);
+
+    // Phase 3: Reduce crossings (now includes dummy nodes)
     order::run(&mut lg);
 
     // Phase 4: Assign coordinates
     position::run(&mut lg, config);
 
+    // Extract waypoints from dummy positions
+    let edge_waypoints = normalize::denormalize(&lg);
+
+    // Extract label positions
+    let mut label_positions = HashMap::new();
+    for chain in &lg.dummy_chains {
+        if let Some(pos) = normalize::get_label_position(&lg, chain.edge_index) {
+            label_positions.insert(chain.edge_index, pos);
+        }
+    }
+
     // Build result
     let (width, height) = position::calculate_dimensions(&lg, config);
     let reversed_edges: Vec<usize> = lg.reversed_edges.iter().copied().collect();
 
+    // Only include real nodes (not dummies) in the output
     let nodes = lg
         .node_ids
         .iter()
         .enumerate()
+        .take(original_node_count)
         .map(|(i, id)| {
             let pos = lg.positions[i];
             let (w, h) = lg.dimensions[i];
@@ -94,16 +127,72 @@ where
         })
         .collect();
 
-    let edges = lg
-        .edges
-        .iter()
-        .map(|&(from, to, orig_idx)| {
+    // Build edge layouts, using waypoints for normalized edges
+    let mut edges_by_orig_idx: HashMap<usize, EdgeLayout> = HashMap::new();
+
+    for &(from, to, orig_idx) in &lg.edges {
+        // Skip if this edge is already processed (part of a chain)
+        if edges_by_orig_idx.contains_key(&orig_idx) {
+            continue;
+        }
+
+        // Check if this edge has waypoints (was normalized)
+        if let Some(waypoints) = edge_waypoints.get(&orig_idx) {
+            // Find the original source and target nodes
+            // For normalized edges, we need to find the chain endpoints
+            // The source is the non-dummy node in the first segment
+            // The target is the non-dummy node in the last segment
+            let first_segment = lg
+                .edges
+                .iter()
+                .find(|&&(f, _, idx)| idx == orig_idx && !lg.is_dummy_index(f));
+
+            let last_segment = lg
+                .edges
+                .iter()
+                .rev()
+                .find(|&&(_, t, idx)| idx == orig_idx && !lg.is_dummy_index(t));
+
+            if let (Some(&(src, _, _)), Some(&(_, tgt, _))) = (first_segment, last_segment) {
+                let src_pos = lg.positions[src];
+                let src_dim = lg.dimensions[src];
+                let tgt_pos = lg.positions[tgt];
+                let tgt_dim = lg.dimensions[tgt];
+
+                let mut points = Vec::new();
+
+                // Start point (center of source)
+                points.push(Point {
+                    x: src_pos.x + src_dim.0 / 2.0,
+                    y: src_pos.y + src_dim.1 / 2.0,
+                });
+
+                // Add waypoints
+                points.extend(waypoints.iter().cloned());
+
+                // End point (center of target)
+                points.push(Point {
+                    x: tgt_pos.x + tgt_dim.0 / 2.0,
+                    y: tgt_pos.y + tgt_dim.1 / 2.0,
+                });
+
+                edges_by_orig_idx.insert(
+                    orig_idx,
+                    EdgeLayout {
+                        from: lg.node_ids[src].clone(),
+                        to: lg.node_ids[tgt].clone(),
+                        points,
+                        index: orig_idx,
+                    },
+                );
+            }
+        } else {
+            // Direct edge (not normalized)
             let from_pos = lg.positions[from];
             let to_pos = lg.positions[to];
             let from_dim = lg.dimensions[from];
             let to_dim = lg.dimensions[to];
 
-            // Simple direct path (center to center)
             let from_center = Point {
                 x: from_pos.x + from_dim.0 / 2.0,
                 y: from_pos.y + from_dim.1 / 2.0,
@@ -113,14 +202,21 @@ where
                 y: to_pos.y + to_dim.1 / 2.0,
             };
 
-            EdgeLayout {
-                from: lg.node_ids[from].clone(),
-                to: lg.node_ids[to].clone(),
-                points: vec![from_center, to_center],
-                index: orig_idx,
-            }
-        })
-        .collect();
+            edges_by_orig_idx.insert(
+                orig_idx,
+                EdgeLayout {
+                    from: lg.node_ids[from].clone(),
+                    to: lg.node_ids[to].clone(),
+                    points: vec![from_center, to_center],
+                    index: orig_idx,
+                },
+            );
+        }
+    }
+
+    // Sort edges by original index to maintain consistent ordering
+    let mut edges: Vec<EdgeLayout> = edges_by_orig_idx.into_values().collect();
+    edges.sort_by_key(|e| e.index);
 
     LayoutResult {
         nodes,
@@ -128,8 +224,8 @@ where
         reversed_edges,
         width,
         height,
-        edge_waypoints: HashMap::new(),
-        label_positions: HashMap::new(),
+        edge_waypoints,
+        label_positions,
     }
 }
 
@@ -227,5 +323,83 @@ mod tests {
         assert!(server_y < auth_y, "Server should be above Auth");
         assert!(auth_y < process_y, "Auth should be above Process");
         assert!(process_y < response_y, "Process should be above Response");
+    }
+
+    #[test]
+    fn test_layout_with_long_edge() {
+        // A -> B -> C -> D, and A -> D (long edge spanning 3 ranks)
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        graph.add_node("C", (100.0, 50.0));
+        graph.add_node("D", (100.0, 50.0));
+        graph.add_edge("A", "B");
+        graph.add_edge("B", "C");
+        graph.add_edge("C", "D");
+        graph.add_edge("A", "D"); // Long edge: spans 3 ranks
+
+        let config = LayoutConfig::default();
+        let result = layout(&graph, &config, |_, dims| *dims);
+
+        // Should have 4 nodes
+        assert_eq!(result.nodes.len(), 4);
+
+        // Should have 4 edges
+        assert_eq!(result.edges.len(), 4);
+
+        // The A->D edge should have waypoints
+        let ad_edge = result
+            .edges
+            .iter()
+            .find(|e| e.from.0 == "A" && e.to.0 == "D");
+        assert!(ad_edge.is_some(), "Should have A->D edge");
+
+        let ad_edge = ad_edge.unwrap();
+        // A->D spans 3 ranks (A=0, D=3), needs 2 dummies
+        // So the edge should have: start + 2 waypoints + end = 4 points
+        assert_eq!(
+            ad_edge.points.len(),
+            4,
+            "A->D edge should have 4 points (start + 2 waypoints + end)"
+        );
+
+        // Verify waypoints were extracted
+        assert!(
+            result.edge_waypoints.contains_key(&ad_edge.index),
+            "Should have waypoints for long edge"
+        );
+    }
+
+    #[test]
+    fn test_layout_with_labels() {
+        // A -> B -> C, and A -> C with label
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        graph.add_node("C", (100.0, 50.0));
+        graph.add_edge("A", "B"); // Edge 0
+        graph.add_edge("B", "C"); // Edge 1
+        graph.add_edge("A", "C"); // Edge 2 - long edge with label
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(2, normalize::EdgeLabelInfo::new(50.0, 20.0));
+
+        let config = LayoutConfig::default();
+        let result = layout_with_labels(&graph, &config, |_, dims| *dims, &edge_labels);
+
+        // Should have label position for edge 2
+        assert!(
+            result.label_positions.contains_key(&2),
+            "Should have label position for edge 2"
+        );
+
+        let label_pos = result.label_positions.get(&2).unwrap();
+        // Label should be at an intermediate y position
+        let a_y = result.nodes.get(&"A".into()).unwrap().y;
+        let c_y = result.nodes.get(&"C".into()).unwrap().y;
+        assert!(
+            label_pos.y > a_y && label_pos.y < c_y,
+            "Label should be between A and C"
+        );
     }
 }

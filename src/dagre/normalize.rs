@@ -10,7 +10,10 @@
 //! - Waypoint generation for edge routing
 //! - Label placement on isolated edge segments
 
-use super::types::NodeId;
+use std::collections::HashMap;
+
+use super::graph::LayoutGraph;
+use super::types::{NodeId, Point};
 
 /// The type of dummy node inserted during normalization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,9 +151,339 @@ impl EdgeLabelInfo {
     }
 }
 
+/// Counter for generating unique dummy node IDs.
+static DUMMY_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// Generate a unique dummy node ID.
+fn generate_dummy_id() -> NodeId {
+    let id = DUMMY_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    NodeId::from(format!("_d{}", id))
+}
+
+/// Reset the dummy counter (for testing).
+#[cfg(test)]
+#[allow(dead_code)]
+fn reset_dummy_counter() {
+    DUMMY_COUNTER.store(0, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Normalize long edges by inserting dummy nodes.
+///
+/// This function processes each edge and, if it spans more than one rank,
+/// creates a chain of dummy nodes at intermediate ranks. The original edge
+/// is replaced with a chain of edges connecting source -> dummies -> target.
+///
+/// After normalization, all edges span exactly one rank, which is required
+/// for proper crossing reduction and coordinate assignment.
+///
+/// # Arguments
+/// * `graph` - The layout graph to normalize
+/// * `edge_labels` - Optional label information for edges (keyed by original edge index)
+pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabelInfo>) {
+    // Clear any existing dummy data
+    graph.dummy_nodes.clear();
+    graph.dummy_chains.clear();
+
+    // Get effective edges with reversals applied
+    let effective = graph.effective_edges();
+
+    // Collect edges that need normalization
+    // (from_idx, to_idx, orig_edge_idx, from_rank, to_rank)
+    let mut long_edges: Vec<(usize, usize, usize, i32, i32)> = Vec::new();
+
+    for (edge_idx, &(from_idx, to_idx, orig_edge_idx)) in graph.edges.iter().enumerate() {
+        // Get effective direction (considering reversals)
+        let (eff_from, eff_to) = effective[edge_idx];
+        let from_rank = graph.ranks[eff_from];
+        let to_rank = graph.ranks[eff_to];
+
+        // Only normalize edges that span more than 1 rank
+        // Note: after acyclic phase and ranking, to_rank > from_rank for effective edges
+        if to_rank > from_rank + 1 {
+            long_edges.push((from_idx, to_idx, orig_edge_idx, from_rank, to_rank));
+        }
+    }
+
+    // Process each long edge
+    for (from_idx, to_idx, orig_edge_idx, from_rank, to_rank) in long_edges {
+        normalize_edge(
+            graph,
+            from_idx,
+            to_idx,
+            orig_edge_idx,
+            from_rank,
+            to_rank,
+            edge_labels,
+        );
+    }
+}
+
+/// Normalize a single long edge by inserting dummy nodes.
+fn normalize_edge(
+    graph: &mut LayoutGraph,
+    from_idx: usize,
+    to_idx: usize,
+    orig_edge_idx: usize,
+    from_rank: i32,
+    to_rank: i32,
+    edge_labels: &HashMap<usize, EdgeLabelInfo>,
+) {
+    // Calculate the label rank (midpoint of the edge)
+    let label_rank = if edge_labels.contains_key(&orig_edge_idx) {
+        Some((from_rank + to_rank) / 2)
+    } else {
+        None
+    };
+
+    let label_info = edge_labels.get(&orig_edge_idx);
+
+    // Create a dummy chain to track this edge
+    let mut chain = DummyChain::new(orig_edge_idx);
+
+    // Remove the original edge from the graph
+    // Find and remove it from graph.edges
+    let edge_pos = graph
+        .edges
+        .iter()
+        .position(|&(f, t, idx)| f == from_idx && t == to_idx && idx == orig_edge_idx);
+
+    if let Some(pos) = edge_pos {
+        graph.edges.remove(pos);
+    }
+
+    // Create dummy nodes for each intermediate rank
+    let mut prev_idx = from_idx;
+    for rank in (from_rank + 1)..to_rank {
+        let dummy_id = generate_dummy_id();
+        let dummy_idx = graph.node_ids.len();
+
+        // Determine if this is the label dummy
+        let is_label_dummy = label_rank == Some(rank);
+
+        let (dummy_node, width, height) = if is_label_dummy {
+            let info = label_info.unwrap();
+            (
+                DummyNode::edge_label(orig_edge_idx, rank, info.width, info.height, info.label_pos),
+                info.width,
+                info.height,
+            )
+        } else {
+            (DummyNode::edge(orig_edge_idx, rank), 0.0, 0.0)
+        };
+
+        // Add dummy to the graph
+        graph.node_ids.push(dummy_id.clone());
+        graph.node_index.insert(dummy_id.clone(), dummy_idx);
+        graph.ranks.push(rank);
+        graph.order.push(dummy_idx); // Will be reordered during crossing reduction
+        graph.positions.push(Point::default());
+        graph.dimensions.push((width, height));
+        graph.dummy_nodes.insert(dummy_id.clone(), dummy_node);
+
+        // Track in chain
+        if is_label_dummy {
+            chain.label_dummy_index = Some(chain.dummy_ids.len());
+        }
+        chain.dummy_ids.push(dummy_id);
+
+        // Add edge from previous node to this dummy
+        graph.edges.push((prev_idx, dummy_idx, orig_edge_idx));
+        prev_idx = dummy_idx;
+    }
+
+    // Add final edge from last dummy to target
+    graph.edges.push((prev_idx, to_idx, orig_edge_idx));
+
+    // Store the chain
+    graph.dummy_chains.push(chain);
+}
+
+/// Extract waypoints from dummy node positions after coordinate assignment.
+///
+/// This should be called after the position phase to convert dummy positions
+/// into edge waypoints for routing.
+///
+/// # Returns
+/// A map from original edge index to a list of waypoint coordinates.
+pub(crate) fn denormalize(graph: &LayoutGraph) -> HashMap<usize, Vec<Point>> {
+    let mut waypoints: HashMap<usize, Vec<Point>> = HashMap::new();
+
+    for chain in &graph.dummy_chains {
+        let mut points = Vec::new();
+
+        for dummy_id in &chain.dummy_ids {
+            if let Some(&dummy_idx) = graph.node_index.get(dummy_id) {
+                let pos = graph.positions[dummy_idx];
+                let dims = graph.dimensions[dummy_idx];
+
+                // Use center of dummy (for label dummies with non-zero size)
+                points.push(Point {
+                    x: pos.x + dims.0 / 2.0,
+                    y: pos.y + dims.1 / 2.0,
+                });
+            }
+        }
+
+        waypoints.insert(chain.edge_index, points);
+    }
+
+    waypoints
+}
+
+/// Get the label position for an edge if it has a label dummy.
+///
+/// # Returns
+/// The (x, y) center position of the label, or None if the edge has no label.
+pub(crate) fn get_label_position(graph: &LayoutGraph, edge_index: usize) -> Option<Point> {
+    for chain in &graph.dummy_chains {
+        if chain.edge_index == edge_index {
+            if let Some(label_idx) = chain.label_dummy_index {
+                let dummy_id = &chain.dummy_ids[label_idx];
+                if let Some(&idx) = graph.node_index.get(dummy_id) {
+                    let pos = graph.positions[idx];
+                    let dims = graph.dimensions[idx];
+                    return Some(Point {
+                        x: pos.x + dims.0 / 2.0,
+                        y: pos.y + dims.1 / 2.0,
+                    });
+                }
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dagre::graph::{DiGraph, LayoutGraph};
+    use crate::dagre::{acyclic, rank};
+
+    /// Helper to create a layout graph for testing.
+    fn create_test_graph(nodes: &[&str], edges: &[(&str, &str)]) -> LayoutGraph {
+        let mut graph: DiGraph<()> = DiGraph::new();
+        for node in nodes {
+            graph.add_node(*node, ());
+        }
+        for (from, to) in edges {
+            graph.add_edge(*from, *to);
+        }
+        LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0))
+    }
+
+    #[test]
+    fn test_normalize_short_edge() {
+        reset_dummy_counter();
+        // A -> B (spans 1 rank, should not be normalized)
+        let mut lg = create_test_graph(&["A", "B"], &[("A", "B")]);
+        acyclic::run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        let edge_labels = HashMap::new();
+        run(&mut lg, &edge_labels);
+
+        // No dummies should be created
+        assert!(lg.dummy_chains.is_empty());
+        assert!(lg.dummy_nodes.is_empty());
+        // Original edge should still exist
+        assert_eq!(lg.edges.len(), 1);
+    }
+
+    #[test]
+    fn test_normalize_long_edge() {
+        reset_dummy_counter();
+        // A -> B -> C, but also A -> C (spans 2 ranks)
+        let mut lg = create_test_graph(&["A", "B", "C"], &[("A", "B"), ("B", "C"), ("A", "C")]);
+        acyclic::run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        // Verify ranks: A=0, B=1, C=2
+        let a_idx = lg.node_index[&NodeId::from("A")];
+        let b_idx = lg.node_index[&NodeId::from("B")];
+        let c_idx = lg.node_index[&NodeId::from("C")];
+        assert_eq!(lg.ranks[a_idx], 0);
+        assert_eq!(lg.ranks[b_idx], 1);
+        assert_eq!(lg.ranks[c_idx], 2);
+
+        let edge_labels = HashMap::new();
+        run(&mut lg, &edge_labels);
+
+        // A->C should be normalized (spans 2 ranks, needs 1 dummy)
+        assert_eq!(lg.dummy_chains.len(), 1);
+        assert_eq!(lg.dummy_chains[0].dummy_ids.len(), 1);
+
+        // Should now have 4 nodes (A, B, C, + 1 dummy)
+        assert_eq!(lg.node_ids.len(), 4);
+
+        // The dummy should be at rank 1
+        let dummy_id = &lg.dummy_chains[0].dummy_ids[0];
+        let dummy_idx = lg.node_index[dummy_id];
+        assert_eq!(lg.ranks[dummy_idx], 1);
+    }
+
+    #[test]
+    fn test_normalize_with_label() {
+        reset_dummy_counter();
+        // A -> B -> C -> D, and A -> D (spans 3 ranks, needs 2 dummies)
+        let mut lg = create_test_graph(
+            &["A", "B", "C", "D"],
+            &[("A", "B"), ("B", "C"), ("C", "D"), ("A", "D")],
+        );
+        acyclic::run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        // Create label info for edge A->D (which should be edge index 3)
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(3, EdgeLabelInfo::new(20.0, 10.0));
+
+        run(&mut lg, &edge_labels);
+
+        // A->D needs 2 dummies (rank 1 and rank 2)
+        assert_eq!(lg.dummy_chains.len(), 1);
+        assert_eq!(lg.dummy_chains[0].dummy_ids.len(), 2);
+
+        // Label should be at the midpoint (rank 1 or 2)
+        assert!(lg.dummy_chains[0].label_dummy_index.is_some());
+
+        // Label dummy should have the specified dimensions
+        let label_idx = lg.dummy_chains[0].label_dummy_index.unwrap();
+        let label_dummy_id = &lg.dummy_chains[0].dummy_ids[label_idx];
+        let label_dummy = lg.dummy_nodes.get(label_dummy_id).unwrap();
+        assert!(label_dummy.is_label());
+        assert_eq!(label_dummy.width, 20.0);
+        assert_eq!(label_dummy.height, 10.0);
+    }
+
+    #[test]
+    fn test_denormalize() {
+        reset_dummy_counter();
+        // A -> B -> C, and A -> C
+        let mut lg = create_test_graph(&["A", "B", "C"], &[("A", "B"), ("B", "C"), ("A", "C")]);
+        acyclic::run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        let edge_labels = HashMap::new();
+        run(&mut lg, &edge_labels);
+
+        // Set dummy position manually for testing
+        let dummy_id = &lg.dummy_chains[0].dummy_ids[0];
+        let dummy_idx = lg.node_index[dummy_id];
+        lg.positions[dummy_idx] = Point { x: 50.0, y: 100.0 };
+
+        let waypoints = denormalize(&lg);
+
+        // Should have waypoints for the normalized edge
+        assert!(waypoints.contains_key(&lg.dummy_chains[0].edge_index));
+        let points = &waypoints[&lg.dummy_chains[0].edge_index];
+        assert_eq!(points.len(), 1);
+        // Dummy has zero dimensions, so center is the position itself
+        assert_eq!(points[0].x, 50.0);
+        assert_eq!(points[0].y, 100.0);
+    }
 
     #[test]
     fn test_dummy_node_edge() {

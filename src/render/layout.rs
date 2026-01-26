@@ -199,9 +199,25 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         }
     }
 
-    // Add edges
-    for edge in &diagram.edges {
+    // Add edges and collect label dimensions
+    let mut edge_labels: std::collections::HashMap<usize, dagre::normalize::EdgeLabelInfo> =
+        std::collections::HashMap::new();
+
+    for (edge_idx, edge) in diagram.edges.iter().enumerate() {
         dgraph.add_edge(edge.from.as_str(), edge.to.as_str());
+
+        // If edge has a label, calculate its dimensions
+        if let Some(ref label) = edge.label {
+            // Calculate label dimensions in character coordinates
+            // Label width: label length + 2 for padding
+            // Label height: 1 for single line
+            let label_width = label.len() + 2;
+            let label_height = 1;
+            edge_labels.insert(
+                edge_idx,
+                dagre::normalize::EdgeLabelInfo::new(label_width as f64, label_height as f64),
+            );
+        }
     }
 
     // Convert direction
@@ -221,9 +237,12 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         acyclic: true,
     };
 
-    let result = dagre::layout(&dgraph, &dagre_config, |_, dims| {
-        (dims.0 as f64, dims.1 as f64)
-    });
+    let result = dagre::layout_with_labels(
+        &dgraph,
+        &dagre_config,
+        |_, dims| (dims.0 as f64, dims.1 as f64),
+        &edge_labels,
+    );
 
     // Group nodes by their y-coordinate (for TD/BT) or x-coordinate (for LR/RL) to determine layers
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
@@ -336,6 +355,36 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         }
     }
 
+    // Convert dagre waypoints to Layout format
+    // Note: For now, we don't use the dagre waypoints directly since the render pipeline
+    // uses the draw coordinates. The waypoint information is available in result for
+    // future use when we integrate with the router.
+    let mut edge_waypoints_converted: HashMap<(String, String), Vec<(usize, usize)>> =
+        HashMap::new();
+    let mut edge_label_positions_converted: HashMap<(String, String), (usize, usize)> =
+        HashMap::new();
+
+    // Convert edge_waypoints from edge index to (from, to) key
+    for (edge_idx, waypoints) in &result.edge_waypoints {
+        if let Some(edge) = diagram.edges.get(*edge_idx) {
+            let key = (edge.from.clone(), edge.to.clone());
+            let converted: Vec<(usize, usize)> = waypoints
+                .iter()
+                .map(|p| (p.x.round() as usize, p.y.round() as usize))
+                .collect();
+            edge_waypoints_converted.insert(key, converted);
+        }
+    }
+
+    // Convert label_positions from edge index to (from, to) key
+    for (edge_idx, pos) in &result.label_positions {
+        if let Some(edge) = diagram.edges.get(*edge_idx) {
+            let key = (edge.from.clone(), edge.to.clone());
+            edge_label_positions_converted
+                .insert(key, (pos.x.round() as usize, pos.y.round() as usize));
+        }
+    }
+
     Layout {
         grid_positions,
         draw_positions,
@@ -347,8 +396,8 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         backward_corridors,
         corridor_width,
         backward_edge_lanes,
-        edge_waypoints: HashMap::new(),
-        edge_label_positions: HashMap::new(),
+        edge_waypoints: edge_waypoints_converted,
+        edge_label_positions: edge_label_positions_converted,
     }
 }
 
