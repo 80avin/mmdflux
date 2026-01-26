@@ -112,22 +112,38 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
 
     // Step 6: Convert grid positions to draw coordinates based on direction
     let (draw_positions, node_bounds, mut width, mut height) = match diagram.direction {
-        Direction::TopDown | Direction::BottomTop => grid_to_draw_vertical(
-            &grid_positions,
-            &node_dims,
-            &layers,
-            &layer_heights,
-            config,
-            diagram.direction == Direction::BottomTop,
-        ),
-        Direction::LeftRight | Direction::RightLeft => grid_to_draw_horizontal(
-            &grid_positions,
-            &node_dims,
-            &layers,
-            &layer_widths,
-            config,
-            diagram.direction == Direction::RightLeft,
-        ),
+        Direction::TopDown | Direction::BottomTop => {
+            let result = grid_to_draw_vertical(
+                &grid_positions,
+                &node_dims,
+                &layers,
+                &layer_heights,
+                config,
+                diagram.direction == Direction::BottomTop,
+            );
+            (
+                result.draw_positions,
+                result.node_bounds,
+                result.width,
+                result.height,
+            )
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            let result = grid_to_draw_horizontal(
+                &grid_positions,
+                &node_dims,
+                &layers,
+                &layer_widths,
+                config,
+                diagram.direction == Direction::RightLeft,
+            );
+            (
+                result.draw_positions,
+                result.node_bounds,
+                result.width,
+                result.height,
+            )
+        }
     };
 
     // Step 7: Expand canvas for backward edge corridors
@@ -339,23 +355,43 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
     let corridor_width = 3;
 
     // Convert grid positions to draw coordinates using original ASCII logic
-    let (draw_positions, node_bounds, mut width, mut height) = match diagram.direction {
-        Direction::TopDown | Direction::BottomTop => grid_to_draw_vertical(
-            &grid_positions,
-            &node_dims,
-            &layers,
-            &layer_heights,
-            config,
-            diagram.direction == Direction::BottomTop,
-        ),
-        Direction::LeftRight | Direction::RightLeft => grid_to_draw_horizontal(
-            &grid_positions,
-            &node_dims,
-            &layers,
-            &layer_widths,
-            config,
-            diagram.direction == Direction::RightLeft,
-        ),
+    // Also capture layer positions for waypoint transformation
+    let (draw_positions, node_bounds, mut width, mut height, layer_starts) = match diagram.direction
+    {
+        Direction::TopDown | Direction::BottomTop => {
+            let result = grid_to_draw_vertical(
+                &grid_positions,
+                &node_dims,
+                &layers,
+                &layer_heights,
+                config,
+                diagram.direction == Direction::BottomTop,
+            );
+            (
+                result.draw_positions,
+                result.node_bounds,
+                result.width,
+                result.height,
+                result.layer_y_starts,
+            )
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            let result = grid_to_draw_horizontal(
+                &grid_positions,
+                &node_dims,
+                &layers,
+                &layer_widths,
+                config,
+                diagram.direction == Direction::RightLeft,
+            );
+            (
+                result.draw_positions,
+                result.node_bounds,
+                result.width,
+                result.height,
+                result.layer_x_starts,
+            )
+        }
     };
 
     // Expand canvas for backward edge corridors
@@ -367,24 +403,66 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         }
     }
 
-    // Convert dagre waypoints to Layout format
-    // Note: For now, we don't use the dagre waypoints directly since the render pipeline
-    // uses the draw coordinates. The waypoint information is available in result for
-    // future use when we integrate with the router.
+    // Convert dagre waypoints to Layout format with proper coordinate transformation.
+    // Waypoints are in dagre's internal coordinate space (node_sep=50, rank_sep=50) and
+    // need to be transformed to ASCII draw coordinates using rank information.
     let mut edge_waypoints_converted: HashMap<(String, String), Vec<(usize, usize)>> =
         HashMap::new();
     let mut edge_label_positions_converted: HashMap<(String, String), (usize, usize)> =
         HashMap::new();
 
-    // Convert edge_waypoints from edge index to (from, to) key
+    // Transform edge_waypoints from dagre coordinates to draw coordinates
+    let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
+
     for (edge_idx, waypoints) in &result.edge_waypoints {
         if let Some(edge) = diagram.edges.get(*edge_idx) {
             let key = (edge.from.clone(), edge.to.clone());
-            let converted: Vec<(usize, usize)> = waypoints
-                .iter()
-                .map(|p| (p.x.round() as usize, p.y.round() as usize))
-                .collect();
-            edge_waypoints_converted.insert(key, converted);
+
+            // Get source and target draw positions
+            let source_pos = draw_positions.get(&edge.from);
+            let target_pos = draw_positions.get(&edge.to);
+
+            if let (Some(&(src_x, src_y)), Some(&(tgt_x, tgt_y))) = (source_pos, target_pos) {
+                // Get source and target node dimensions to find centers
+                let src_dims = node_dims.get(&edge.from).unwrap_or(&(0, 0));
+                let tgt_dims = node_dims.get(&edge.to).unwrap_or(&(0, 0));
+                let src_center_x = src_x + src_dims.0 / 2;
+                let tgt_center_x = tgt_x + tgt_dims.0 / 2;
+                let src_center_y = src_y + src_dims.1 / 2;
+                let tgt_center_y = tgt_y + tgt_dims.1 / 2;
+
+                let converted: Vec<(usize, usize)> = waypoints
+                    .iter()
+                    .map(|wp| {
+                        // Use layer_starts to get the primary axis position
+                        // Rank is the layer index (0-based)
+                        let rank_idx = wp.rank as usize;
+
+                        if is_vertical {
+                            // For TD/BT: Y from layer_starts, X interpolated
+                            let y = layer_starts.get(rank_idx).copied().unwrap_or(0);
+                            // Interpolate X based on dagre's relative position
+                            // For simplicity, interpolate linearly between source and target
+                            let total_ranks = waypoints.len() + 1;
+                            let progress = (rank_idx as f64) / (total_ranks as f64);
+                            let x = src_center_x as f64
+                                + (tgt_center_x as f64 - src_center_x as f64) * progress;
+                            (x.round() as usize, y)
+                        } else {
+                            // For LR/RL: X from layer_starts, Y interpolated
+                            let x = layer_starts.get(rank_idx).copied().unwrap_or(0);
+                            // Interpolate Y based on dagre's relative position
+                            let total_ranks = waypoints.len() + 1;
+                            let progress = (rank_idx as f64) / (total_ranks as f64);
+                            let y = src_center_y as f64
+                                + (tgt_center_y as f64 - src_center_y as f64) * progress;
+                            (x, y.round() as usize)
+                        }
+                    })
+                    .collect();
+
+                edge_waypoints_converted.insert(key, converted);
+            }
         }
     }
 
@@ -594,6 +672,16 @@ fn compute_layer_dimensions(
 }
 
 /// Convert grid positions to draw coordinates for vertical (TD/BT) layouts.
+/// Result of grid_to_draw_vertical, including layer position data for waypoint transformation.
+struct VerticalLayoutResult {
+    draw_positions: HashMap<String, (usize, usize)>,
+    node_bounds: HashMap<String, NodeBounds>,
+    width: usize,
+    height: usize,
+    /// Y position where each layer starts (index = layer/rank).
+    layer_y_starts: Vec<usize>,
+}
+
 fn grid_to_draw_vertical(
     grid_positions: &HashMap<String, GridPos>,
     node_dims: &HashMap<String, (usize, usize)>,
@@ -601,12 +689,7 @@ fn grid_to_draw_vertical(
     layer_heights: &[usize],
     config: &LayoutConfig,
     reverse: bool,
-) -> (
-    HashMap<String, (usize, usize)>,
-    HashMap<String, NodeBounds>,
-    usize,
-    usize,
-) {
+) -> VerticalLayoutResult {
     let mut draw_positions = HashMap::new();
     let mut node_bounds = HashMap::new();
 
@@ -688,7 +771,23 @@ fn grid_to_draw_vertical(
         }
     }
 
-    (draw_positions, node_bounds, canvas_width, canvas_height)
+    VerticalLayoutResult {
+        draw_positions,
+        node_bounds,
+        width: canvas_width,
+        height: canvas_height,
+        layer_y_starts,
+    }
+}
+
+/// Result of grid_to_draw_horizontal, including layer position data for waypoint transformation.
+struct HorizontalLayoutResult {
+    draw_positions: HashMap<String, (usize, usize)>,
+    node_bounds: HashMap<String, NodeBounds>,
+    width: usize,
+    height: usize,
+    /// X position where each layer starts (index = layer/rank).
+    layer_x_starts: Vec<usize>,
 }
 
 /// Convert grid positions to draw coordinates for horizontal (LR/RL) layouts.
@@ -699,12 +798,7 @@ fn grid_to_draw_horizontal(
     _layer_widths: &[usize],
     config: &LayoutConfig,
     reverse: bool,
-) -> (
-    HashMap<String, (usize, usize)>,
-    HashMap<String, NodeBounds>,
-    usize,
-    usize,
-) {
+) -> HorizontalLayoutResult {
     let mut draw_positions = HashMap::new();
     let mut node_bounds = HashMap::new();
 
@@ -802,7 +896,13 @@ fn grid_to_draw_horizontal(
         }
     }
 
-    (draw_positions, node_bounds, canvas_width, canvas_height)
+    HorizontalLayoutResult {
+        draw_positions,
+        node_bounds,
+        width: canvas_width,
+        height: canvas_height,
+        layer_x_starts,
+    }
 }
 
 #[cfg(test)]
@@ -1028,5 +1128,126 @@ mod tests {
 
         // A should be left of B
         assert!(a_x < b_x, "A ({}) should be left of B ({})", a_x, b_x);
+    }
+
+    #[test]
+    fn test_waypoint_transformation_vertical() {
+        // Create a diagram with a long edge: A -> B -> C -> D, and A -> D
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("Start"));
+        diagram.add_node(Node::new("B").with_label("Step1"));
+        diagram.add_node(Node::new("C").with_label("Step2"));
+        diagram.add_node(Node::new("D").with_label("End"));
+        diagram.add_edge(Edge::new("A", "B")); // Edge 0
+        diagram.add_edge(Edge::new("B", "C")); // Edge 1
+        diagram.add_edge(Edge::new("C", "D")); // Edge 2
+        diagram.add_edge(Edge::new("A", "D")); // Edge 3 - long edge spanning 3 ranks
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        // The A->D edge should have waypoints
+        let key = ("A".to_string(), "D".to_string());
+        assert!(
+            layout.edge_waypoints.contains_key(&key),
+            "Long edge A->D should have waypoints"
+        );
+
+        let waypoints = layout.edge_waypoints.get(&key).unwrap();
+        // A->D spans 3 ranks, needs 2 dummies (at ranks 1 and 2)
+        assert_eq!(
+            waypoints.len(),
+            2,
+            "Should have 2 waypoints for edge spanning 3 ranks"
+        );
+
+        // Get node positions to verify waypoint positions are reasonable
+        let a_pos = layout.draw_positions.get("A").unwrap();
+        let d_pos = layout.draw_positions.get("D").unwrap();
+
+        // Waypoints should be between A and D vertically
+        for (i, &(wx, wy)) in waypoints.iter().enumerate() {
+            assert!(
+                wy > a_pos.1 && wy < d_pos.1,
+                "Waypoint {} y={} should be between A.y={} and D.y={}",
+                i,
+                wy,
+                a_pos.1,
+                d_pos.1
+            );
+            // Waypoints should be within canvas bounds
+            assert!(
+                wx < layout.width,
+                "Waypoint {} x={} should be within canvas width={}",
+                i,
+                wx,
+                layout.width
+            );
+        }
+
+        // Waypoints should be in increasing y order
+        assert!(
+            waypoints[0].1 < waypoints[1].1,
+            "Waypoints should be in increasing y order"
+        );
+    }
+
+    #[test]
+    fn test_waypoint_transformation_horizontal() {
+        // Create a diagram with a long edge in LR direction
+        let mut diagram = Diagram::new(Direction::LeftRight);
+        diagram.add_node(Node::new("A").with_label("Start"));
+        diagram.add_node(Node::new("B").with_label("Step1"));
+        diagram.add_node(Node::new("C").with_label("Step2"));
+        diagram.add_node(Node::new("D").with_label("End"));
+        diagram.add_edge(Edge::new("A", "B"));
+        diagram.add_edge(Edge::new("B", "C"));
+        diagram.add_edge(Edge::new("C", "D"));
+        diagram.add_edge(Edge::new("A", "D")); // Long edge
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        let key = ("A".to_string(), "D".to_string());
+        assert!(
+            layout.edge_waypoints.contains_key(&key),
+            "Long edge A->D should have waypoints"
+        );
+
+        let waypoints = layout.edge_waypoints.get(&key).unwrap();
+        assert_eq!(
+            waypoints.len(),
+            2,
+            "Should have 2 waypoints for edge spanning 3 ranks"
+        );
+
+        // Get node positions
+        let a_pos = layout.draw_positions.get("A").unwrap();
+        let d_pos = layout.draw_positions.get("D").unwrap();
+
+        // Waypoints should be between A and D horizontally
+        for (i, &(wx, wy)) in waypoints.iter().enumerate() {
+            assert!(
+                wx > a_pos.0 && wx < d_pos.0,
+                "Waypoint {} x={} should be between A.x={} and D.x={}",
+                i,
+                wx,
+                a_pos.0,
+                d_pos.0
+            );
+            assert!(
+                wy < layout.height,
+                "Waypoint {} y={} should be within canvas height={}",
+                i,
+                wy,
+                layout.height
+            );
+        }
+
+        // Waypoints should be in increasing x order
+        assert!(
+            waypoints[0].0 < waypoints[1].0,
+            "Waypoints should be in increasing x order"
+        );
     }
 }

@@ -15,6 +15,16 @@ use std::collections::HashMap;
 use super::graph::LayoutGraph;
 use super::types::{NodeId, Point};
 
+/// A waypoint with its associated rank (layer) information.
+/// Used for coordinate transformation from dagre space to draw space.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct WaypointWithRank {
+    /// The position in dagre's coordinate system.
+    pub point: Point,
+    /// The rank (layer) this waypoint belongs to.
+    pub rank: i32,
+}
+
 /// The type of dummy node inserted during normalization.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DummyType {
@@ -304,9 +314,10 @@ fn normalize_edge(
 /// into edge waypoints for routing.
 ///
 /// # Returns
-/// A map from original edge index to a list of waypoint coordinates.
-pub(crate) fn denormalize(graph: &LayoutGraph) -> HashMap<usize, Vec<Point>> {
-    let mut waypoints: HashMap<usize, Vec<Point>> = HashMap::new();
+/// A map from original edge index to a list of waypoints with rank information.
+/// The rank is needed to transform waypoints from dagre coordinates to draw coordinates.
+pub(crate) fn denormalize(graph: &LayoutGraph) -> HashMap<usize, Vec<WaypointWithRank>> {
+    let mut waypoints: HashMap<usize, Vec<WaypointWithRank>> = HashMap::new();
 
     for chain in &graph.dummy_chains {
         let mut points = Vec::new();
@@ -316,10 +327,20 @@ pub(crate) fn denormalize(graph: &LayoutGraph) -> HashMap<usize, Vec<Point>> {
                 let pos = graph.positions[dummy_idx];
                 let dims = graph.dimensions[dummy_idx];
 
+                // Get the rank from the dummy node metadata
+                let rank = graph
+                    .dummy_nodes
+                    .get(dummy_id)
+                    .map(|d| d.rank)
+                    .unwrap_or(graph.ranks[dummy_idx]);
+
                 // Use center of dummy (for label dummies with non-zero size)
-                points.push(Point {
-                    x: pos.x + dims.0 / 2.0,
-                    y: pos.y + dims.1 / 2.0,
+                points.push(WaypointWithRank {
+                    point: Point {
+                        x: pos.x + dims.0 / 2.0,
+                        y: pos.y + dims.1 / 2.0,
+                    },
+                    rank,
                 });
             }
         }
@@ -481,8 +502,10 @@ mod tests {
         let points = &waypoints[&lg.dummy_chains[0].edge_index];
         assert_eq!(points.len(), 1);
         // Dummy has zero dimensions, so center is the position itself
-        assert_eq!(points[0].x, 50.0);
-        assert_eq!(points[0].y, 100.0);
+        assert_eq!(points[0].point.x, 50.0);
+        assert_eq!(points[0].point.y, 100.0);
+        // Dummy should be at rank 1 (between A=0 and C=2)
+        assert_eq!(points[0].rank, 1);
     }
 
     #[test]

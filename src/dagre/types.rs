@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use super::normalize::WaypointWithRank;
+
 /// Unique identifier for a node.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NodeId(pub String);
@@ -121,9 +123,10 @@ pub struct LayoutResult {
     pub height: f64,
 
     /// Waypoints for each edge derived from dummy node positions during normalization.
-    /// Key: original edge index, Value: list of intermediate waypoints.
+    /// Key: original edge index, Value: list of waypoints with rank information.
     /// Empty for short edges (span 1 rank), populated for long edges.
-    pub edge_waypoints: HashMap<usize, Vec<Point>>,
+    /// The rank information is needed to transform waypoints from dagre coordinates to draw coordinates.
+    pub edge_waypoints: HashMap<usize, Vec<WaypointWithRank>>,
 
     /// Pre-computed label positions for edges with labels.
     /// Key: original edge index, Value: label center position.

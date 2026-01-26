@@ -167,8 +167,8 @@ where
                     y: src_pos.y + src_dim.1 / 2.0,
                 });
 
-                // Add waypoints
-                points.extend(waypoints.iter().cloned());
+                // Add waypoints (extract just the point, not the rank info)
+                points.extend(waypoints.iter().map(|wp| wp.point));
 
                 // End point (center of target)
                 points.push(Point {
