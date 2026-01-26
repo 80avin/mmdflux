@@ -192,16 +192,15 @@ fn route_edge_with_waypoints(
     let (src_attach, tgt_attach) =
         calculate_attachment_points(from_bounds, from_shape, to_bounds, to_shape, waypoints);
 
-    // Offset attachment points by 1 cell outside the node boundary
-    // This ensures edges don't overlap with node drawings
+    // Offset both attachment points by 1 cell outside the node boundaries
     let start = offset_from_boundary(src_attach, from_bounds);
     let end = offset_from_boundary(tgt_attach, to_bounds);
 
-    // Build orthogonal path through waypoints
-    let segments = build_orthogonal_path(start, waypoints, end, direction);
+    // Build orthogonal path through waypoints, ending with appropriate segment
+    let segments = build_orthogonal_path_with_waypoints(start, waypoints, end, direction);
 
-    // Determine entry direction based on last segment approaching target
-    let entry_direction = determine_entry_direction(&segments, end);
+    // Use canonical entry direction for the layout
+    let entry_direction = entry_direction_for_layout(direction);
 
     Some(RoutedEdge {
         edge: edge.clone(),
@@ -234,15 +233,17 @@ fn route_edge_direct(
         empty_waypoints,
     );
 
-    // Offset attachment points by 1 cell outside the node boundary
+    // Offset both attachment points by 1 cell outside the node boundaries
+    // This ensures edges don't overlap with node drawings and arrows are
+    // placed in the gap between nodes
     let start = offset_from_boundary(src_attach, from_bounds);
     let end = offset_from_boundary(tgt_attach, to_bounds);
 
-    // Build orthogonal path (will use diagonal→orthogonal conversion)
-    let segments = build_orthogonal_path(start, empty_waypoints, end, direction);
+    // Build orthogonal path with direction-appropriate segment ordering
+    let segments = build_orthogonal_path_for_direction(start, end, direction);
 
-    // Determine entry direction based on the path
-    let entry_direction = determine_entry_direction(&segments, end);
+    // Determine entry direction based on diagram flow direction
+    let entry_direction = entry_direction_for_layout(direction);
 
     Some(RoutedEdge {
         edge: edge.clone(),
@@ -251,6 +252,28 @@ fn route_edge_direct(
         segments,
         entry_direction,
     })
+}
+
+/// Clamp an attachment point to the actual node boundary.
+///
+/// The intersection calculation may return points slightly outside the
+/// actual boundary cells due to rounding. This function ensures the
+/// point is on a valid boundary cell.
+fn clamp_to_boundary(point: (usize, usize), bounds: &NodeBounds) -> Point {
+    let (x, y) = point;
+
+    // Calculate actual boundary cell coordinates
+    let left = bounds.x;
+    let right = bounds.x + bounds.width - 1;
+    let top = bounds.y;
+    let bottom = bounds.y + bounds.height - 1;
+
+    // Clamp x to boundary
+    let clamped_x = x.clamp(left, right);
+    // Clamp y to boundary
+    let clamped_y = y.clamp(top, bottom);
+
+    Point::new(clamped_x, clamped_y)
 }
 
 /// Offset an attachment point by 1 cell outside the node boundary.
@@ -327,6 +350,142 @@ fn determine_entry_direction(segments: &[Segment], _end: Point) -> AttachDirecti
         // This shouldn't normally happen
         AttachDirection::Top
     }
+}
+
+/// Get the canonical entry direction for edges in a given layout direction.
+///
+/// For forward edges, this is the direction from which edges enter target nodes:
+/// - TD: edges enter from Top (arrow points down)
+/// - BT: edges enter from Bottom (arrow points up)
+/// - LR: edges enter from Left (arrow points right)
+/// - RL: edges enter from Right (arrow points left)
+fn entry_direction_for_layout(direction: Direction) -> AttachDirection {
+    match direction {
+        Direction::TopDown => AttachDirection::Top,
+        Direction::BottomTop => AttachDirection::Bottom,
+        Direction::LeftRight => AttachDirection::Left,
+        Direction::RightLeft => AttachDirection::Right,
+    }
+}
+
+/// Build an orthogonal path that ends with a segment aligned with the layout direction.
+///
+/// For TD/BT layouts, paths should end with vertical segments so arrows point down/up.
+/// For LR/RL layouts, paths should end with horizontal segments so arrows point right/left.
+///
+/// Creates a Z-shaped path (3 segments) when start and end are not aligned, with the
+/// middle segment placed at a position that avoids creating visual artifacts near nodes.
+fn build_orthogonal_path_for_direction(
+    start: Point,
+    end: Point,
+    direction: Direction,
+) -> Vec<Segment> {
+    // If start and end are already aligned, just create a single segment
+    if start.x == end.x {
+        return vec![Segment::Vertical {
+            x: start.x,
+            y_start: start.y,
+            y_end: end.y,
+        }];
+    }
+    if start.y == end.y {
+        return vec![Segment::Horizontal {
+            y: start.y,
+            x_start: start.x,
+            x_end: end.x,
+        }];
+    }
+
+    // For non-aligned paths, create a Z-shaped path with:
+    // - First segment in the direction of flow
+    // - Middle segment perpendicular at midpoint
+    // - Last segment completing the path to target
+    match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            // Vertical layouts: vertical-horizontal-vertical (Z-shape)
+            // Place horizontal segment at midpoint y
+            let mid_y = (start.y + end.y) / 2;
+            vec![
+                Segment::Vertical {
+                    x: start.x,
+                    y_start: start.y,
+                    y_end: mid_y,
+                },
+                Segment::Horizontal {
+                    y: mid_y,
+                    x_start: start.x,
+                    x_end: end.x,
+                },
+                Segment::Vertical {
+                    x: end.x,
+                    y_start: mid_y,
+                    y_end: end.y,
+                },
+            ]
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            // Horizontal layouts: horizontal-vertical-horizontal (Z-shape)
+            // Place vertical segment at midpoint x
+            let mid_x = (start.x + end.x) / 2;
+            vec![
+                Segment::Horizontal {
+                    y: start.y,
+                    x_start: start.x,
+                    x_end: mid_x,
+                },
+                Segment::Vertical {
+                    x: mid_x,
+                    y_start: start.y,
+                    y_end: end.y,
+                },
+                Segment::Horizontal {
+                    y: end.y,
+                    x_start: mid_x,
+                    x_end: end.x,
+                },
+            ]
+        }
+    }
+}
+
+/// Build an orthogonal path through waypoints, ending with appropriate segment for layout.
+///
+/// Similar to build_orthogonal_path but ensures the final segment type matches the
+/// layout direction for proper arrow positioning.
+fn build_orthogonal_path_with_waypoints(
+    start: Point,
+    waypoints: &[(usize, usize)],
+    end: Point,
+    direction: Direction,
+) -> Vec<Segment> {
+    let vertical_first = matches!(direction, Direction::TopDown | Direction::BottomTop);
+
+    if waypoints.is_empty() {
+        // No waypoints: use direction-appropriate path
+        return build_orthogonal_path_for_direction(start, end, direction);
+    }
+
+    let mut segments = Vec::new();
+
+    // Start → first waypoint
+    let first_wp = Point::new(waypoints[0].0, waypoints[0].1);
+    segments.extend(orthogonalize_segment(start, first_wp, !vertical_first));
+
+    // Through all intermediate waypoints
+    for window in waypoints.windows(2) {
+        let from = Point::new(window[0].0, window[0].1);
+        let to = Point::new(window[1].0, window[1].1);
+        segments.extend(orthogonalize_segment(from, to, !vertical_first));
+    }
+
+    // Last waypoint → end: use direction-appropriate final segment
+    let last_wp = Point::new(
+        waypoints[waypoints.len() - 1].0,
+        waypoints[waypoints.len() - 1].1,
+    );
+    segments.extend(build_orthogonal_path_for_direction(last_wp, end, direction));
+
+    segments
 }
 
 /// Route a backward edge around the diagram perimeter.
