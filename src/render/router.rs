@@ -450,30 +450,38 @@ fn build_orthogonal_path_for_direction(
         }];
     }
 
-    // For non-aligned paths, create an L-shaped path:
-    // - First segment aligns with the target on the cross-axis
-    // - Second segment goes directly into the target
+    // For non-aligned paths, the final segment should match the layout's canonical
+    // entry direction so arrows visually connect to the expected side of the target:
+    // - TD/BT: final segment is vertical (arrows ▼/▲ enter from top/bottom)
+    // - LR/RL: final segment is vertical for diagonal approach (arrows ▼/▲)
     //
-    // The final segment type matches the approach direction for proper arrow display.
+    // TD/BT uses Z-shaped paths (V-H-V) to ensure vertical entry.
+    // LR/RL uses L-shaped paths (H-V) since diagonal approaches enter vertically.
     match direction {
         Direction::TopDown | Direction::BottomTop => {
-            // Vertical layouts: V-H (vertical first, then horizontal into target)
-            // Final segment is horizontal, so arrow will be ► or ◄
+            // Vertical layouts: V-H-V (Z-shape) to enter target from top/bottom
+            // Final segment is vertical, so arrow will be ▼ or ▲
+            let mid_y = (start.y + end.y) / 2;
             vec![
                 Segment::Vertical {
                     x: start.x,
                     y_start: start.y,
-                    y_end: end.y,
+                    y_end: mid_y,
                 },
                 Segment::Horizontal {
-                    y: end.y,
+                    y: mid_y,
                     x_start: start.x,
                     x_end: end.x,
+                },
+                Segment::Vertical {
+                    x: end.x,
+                    y_start: mid_y,
+                    y_end: end.y,
                 },
             ]
         }
         Direction::LeftRight | Direction::RightLeft => {
-            // Horizontal layouts: H-V (horizontal first, then vertical into target)
+            // Horizontal layouts: H-V (L-shape) for diagonal approaches
             // Final segment is vertical, so arrow will be ▼ or ▲
             vec![
                 Segment::Horizontal {
