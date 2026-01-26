@@ -134,6 +134,7 @@ pub(crate) struct LayoutGraph {
 
     /// Number of original edges before normalization.
     /// Used to distinguish original edges from edges created during normalization.
+    #[allow(dead_code)]
     pub original_edge_count: usize,
 }
 
@@ -225,6 +226,7 @@ impl LayoutGraph {
     }
 
     /// Get dummy node metadata if the node is a dummy.
+    #[allow(dead_code)]
     pub fn get_dummy(&self, node_id: &NodeId) -> Option<&DummyNode> {
         self.dummy_nodes.get(node_id)
     }

@@ -89,6 +89,7 @@ pub enum AttachDirection {
 }
 
 /// Get the outgoing and incoming attachment directions based on diagram direction.
+#[allow(dead_code)]
 fn attachment_directions(diagram_direction: Direction) -> (AttachDirection, AttachDirection) {
     match diagram_direction {
         Direction::TopDown => (AttachDirection::Bottom, AttachDirection::Top),
@@ -189,8 +190,14 @@ fn route_edge_with_waypoints(
     direction: Direction,
 ) -> Option<RoutedEdge> {
     // Calculate attachment points based on waypoint positions
-    let (src_attach, tgt_attach) =
+    let (src_attach_raw, tgt_attach_raw) =
         calculate_attachment_points(from_bounds, from_shape, to_bounds, to_shape, waypoints);
+
+    // Clamp attachment points to actual node boundaries
+    let src_attach_point = clamp_to_boundary(src_attach_raw, from_bounds);
+    let tgt_attach_point = clamp_to_boundary(tgt_attach_raw, to_bounds);
+    let src_attach = (src_attach_point.x, src_attach_point.y);
+    let tgt_attach = (tgt_attach_point.x, tgt_attach_point.y);
 
     // Offset both attachment points by 1 cell outside the node boundaries
     let start = offset_from_boundary(src_attach, from_bounds);
@@ -234,13 +241,21 @@ fn route_edge_direct(
 ) -> Option<RoutedEdge> {
     // For direct routing, use the other node's center as the "approach point"
     let empty_waypoints: &[(usize, usize)] = &[];
-    let (src_attach, tgt_attach) = calculate_attachment_points(
+    let (src_attach_raw, tgt_attach_raw) = calculate_attachment_points(
         from_bounds,
         from_shape,
         to_bounds,
         to_shape,
         empty_waypoints,
     );
+
+    // Clamp attachment points to actual node boundaries
+    // The intersection calculation may return points slightly outside due to
+    // floating-point rounding (e.g., height/2 doesn't account for discrete cells)
+    let src_attach_point = clamp_to_boundary(src_attach_raw, from_bounds);
+    let tgt_attach_point = clamp_to_boundary(tgt_attach_raw, to_bounds);
+    let src_attach = (src_attach_point.x, src_attach_point.y);
+    let tgt_attach = (tgt_attach_point.x, tgt_attach_point.y);
 
     // Offset both attachment points by 1 cell outside the node boundaries
     // This ensures edges don't overlap with node drawings and arrows are
@@ -369,6 +384,7 @@ fn add_connector_segment(segments: &mut Vec<Segment>, boundary: (usize, usize), 
 }
 
 /// Determine the entry direction based on how the path approaches the endpoint.
+#[allow(dead_code)]
 fn determine_entry_direction(segments: &[Segment], _end: Point) -> AttachDirection {
     if let Some(last_segment) = segments.last() {
         match last_segment {
@@ -696,6 +712,7 @@ fn route_backward_edge_horizontal(
 }
 
 /// Compute the path segments between two points.
+#[allow(dead_code)]
 fn compute_path(start: Point, end: Point, direction: Direction) -> Vec<Segment> {
     // For TD/BT layouts, prefer vertical-first routing
     // For LR/RL layouts, prefer horizontal-first routing
@@ -706,6 +723,7 @@ fn compute_path(start: Point, end: Point, direction: Direction) -> Vec<Segment> 
 }
 
 /// Compute path preferring vertical movement first.
+#[allow(dead_code)]
 fn compute_vertical_first_path(start: Point, end: Point) -> Vec<Segment> {
     let mut segments = Vec::new();
 
@@ -758,6 +776,7 @@ fn compute_vertical_first_path(start: Point, end: Point) -> Vec<Segment> {
 }
 
 /// Compute path preferring horizontal movement first.
+#[allow(dead_code)]
 fn compute_horizontal_first_path(start: Point, end: Point) -> Vec<Segment> {
     let mut segments = Vec::new();
 
@@ -879,6 +898,7 @@ fn orthogonalize_segment(from: Point, to: Point, vertical_first: bool) -> Vec<Se
 ///
 /// # Returns
 /// A list of orthogonal segments connecting all waypoints.
+#[allow(dead_code)]
 pub fn orthogonalize(waypoints: &[(usize, usize)], direction: Direction) -> Vec<Segment> {
     if waypoints.len() < 2 {
         return Vec::new();
@@ -910,6 +930,7 @@ pub fn orthogonalize(waypoints: &[(usize, usize)], direction: Direction) -> Vec<
 ///
 /// # Returns
 /// A list of orthogonal segments forming the complete path from start to end.
+#[allow(dead_code)]
 pub fn build_orthogonal_path(
     start: Point,
     waypoints: &[(usize, usize)],

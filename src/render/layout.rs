@@ -639,10 +639,10 @@ fn grid_to_draw_vertical(
     }
     let canvas_height = y - config.v_spacing + config.padding;
 
-    // For BT, reverse the Y positions
-    if reverse {
-        layer_y_starts.reverse();
-    }
+    // Note: We no longer reverse for BT because dagre's position.rs already
+    // flips y-coordinates for BottomTop direction. Double-reversing would
+    // produce incorrect results.
+    let _ = reverse; // Parameter kept for API compatibility but not used
 
     // Position nodes within each layer
     for (layer_idx, layer) in layers.iter().enumerate() {
@@ -750,10 +750,10 @@ fn grid_to_draw_horizontal(
     }
     let canvas_width = x - config.h_spacing + config.padding;
 
-    // For RL, reverse the X positions
-    if reverse {
-        layer_x_starts.reverse();
-    }
+    // Note: We no longer reverse for RL because dagre's position.rs already
+    // flips x-coordinates for RightLeft direction. Double-reversing would
+    // produce incorrect results.
+    let _ = reverse; // Parameter kept for API compatibility but not used
 
     // Position nodes within each layer (column)
     for (layer_idx, layer) in layers.iter().enumerate() {
