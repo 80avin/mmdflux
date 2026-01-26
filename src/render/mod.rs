@@ -5,6 +5,7 @@
 mod canvas;
 mod chars;
 mod edge;
+pub mod intersect;
 mod layout;
 mod router;
 mod shape;
