@@ -89,7 +89,7 @@ pub enum AttachDirection {
 }
 
 /// Get the outgoing and incoming attachment directions based on diagram direction.
-#[allow(dead_code)]
+#[cfg(test)]
 fn attachment_directions(diagram_direction: Direction) -> (AttachDirection, AttachDirection) {
     match diagram_direction {
         Direction::TopDown => (AttachDirection::Bottom, AttachDirection::Top),
@@ -381,35 +381,6 @@ fn add_connector_segment(segments: &mut Vec<Segment>, boundary: (usize, usize), 
         });
     }
     // If neither aligned, skip (shouldn't happen with proper offset)
-}
-
-/// Determine the entry direction based on how the path approaches the endpoint.
-#[allow(dead_code)]
-fn determine_entry_direction(segments: &[Segment], _end: Point) -> AttachDirection {
-    if let Some(last_segment) = segments.last() {
-        match last_segment {
-            Segment::Vertical { y_start, y_end, .. } => {
-                // Approaching vertically
-                if *y_end > *y_start {
-                    AttachDirection::Top // Approaching from above
-                } else {
-                    AttachDirection::Bottom // Approaching from below
-                }
-            }
-            Segment::Horizontal { x_start, x_end, .. } => {
-                // Approaching horizontally
-                if *x_end > *x_start {
-                    AttachDirection::Left // Approaching from the left
-                } else {
-                    AttachDirection::Right // Approaching from the right
-                }
-            }
-        }
-    } else {
-        // Fallback: determine from endpoint position relative to where we'd expect
-        // This shouldn't normally happen
-        AttachDirection::Top
-    }
 }
 
 /// Get the canonical entry direction for edges in a given layout direction.
@@ -711,19 +682,8 @@ fn route_backward_edge_horizontal(
     })
 }
 
-/// Compute the path segments between two points.
-#[allow(dead_code)]
-fn compute_path(start: Point, end: Point, direction: Direction) -> Vec<Segment> {
-    // For TD/BT layouts, prefer vertical-first routing
-    // For LR/RL layouts, prefer horizontal-first routing
-    match direction {
-        Direction::TopDown | Direction::BottomTop => compute_vertical_first_path(start, end),
-        Direction::LeftRight | Direction::RightLeft => compute_horizontal_first_path(start, end),
-    }
-}
-
-/// Compute path preferring vertical movement first.
-#[allow(dead_code)]
+/// Compute path preferring vertical movement first (used in tests).
+#[cfg(test)]
 fn compute_vertical_first_path(start: Point, end: Point) -> Vec<Segment> {
     let mut segments = Vec::new();
 
@@ -769,58 +729,6 @@ fn compute_vertical_first_path(start: Point, end: Point) -> Vec<Segment> {
             x: end.x,
             y_start: mid_y,
             y_end: end.y,
-        });
-    }
-
-    segments
-}
-
-/// Compute path preferring horizontal movement first.
-#[allow(dead_code)]
-fn compute_horizontal_first_path(start: Point, end: Point) -> Vec<Segment> {
-    let mut segments = Vec::new();
-
-    if start.y == end.y {
-        // Straight horizontal line
-        segments.push(Segment::Horizontal {
-            y: start.y,
-            x_start: start.x,
-            x_end: end.x,
-        });
-    } else if start.x == end.x {
-        // Straight vertical line (shouldn't happen often in LR)
-        segments.push(Segment::Vertical {
-            x: start.x,
-            y_start: start.y,
-            y_end: end.y,
-        });
-    } else {
-        // L-shaped or Z-shaped path
-        let mid_x = if start.x < end.x {
-            start.x + (end.x - start.x) / 2
-        } else {
-            end.x + (start.x - end.x) / 2
-        };
-
-        // Horizontal segment from start to midpoint
-        segments.push(Segment::Horizontal {
-            y: start.y,
-            x_start: start.x,
-            x_end: mid_x,
-        });
-
-        // Vertical segment at midpoint
-        segments.push(Segment::Vertical {
-            x: mid_x,
-            y_start: start.y,
-            y_end: end.y,
-        });
-
-        // Horizontal segment from midpoint to end
-        segments.push(Segment::Horizontal {
-            y: end.y,
-            x_start: mid_x,
-            x_end: end.x,
         });
     }
 
@@ -898,7 +806,7 @@ fn orthogonalize_segment(from: Point, to: Point, vertical_first: bool) -> Vec<Se
 ///
 /// # Returns
 /// A list of orthogonal segments connecting all waypoints.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn orthogonalize(waypoints: &[(usize, usize)], direction: Direction) -> Vec<Segment> {
     if waypoints.len() < 2 {
         return Vec::new();
@@ -930,7 +838,7 @@ pub fn orthogonalize(waypoints: &[(usize, usize)], direction: Direction) -> Vec<
 ///
 /// # Returns
 /// A list of orthogonal segments forming the complete path from start to end.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn build_orthogonal_path(
     start: Point,
     waypoints: &[(usize, usize)],
