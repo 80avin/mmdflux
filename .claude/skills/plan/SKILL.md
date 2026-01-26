@@ -74,7 +74,8 @@ Plan the requested feature or change using the project's planning conventions.
      "progress": {
        "total": 12,
        "completed": 0
-     }
+     },
+     "commits": []
    }
    ```
    - `status` is always `"in_progress"` for new plans
@@ -82,6 +83,7 @@ Plan the requested feature or change using the project's planning conventions.
    - Set `planning_agent_id` to the agentId from the Plan subagent Task result
    - Set `total` to the actual number of tasks in task-list.md
    - `current_task` and `last_session_notes` start as null
+   - `commits` is an array that will accumulate commit SHAs as phases complete
 
 6. **Do not commit the plan files**
 
@@ -118,6 +120,10 @@ Plan the requested feature or change using the project's planning conventions.
    - Update task-list.md checkboxes (change `- [ ]` to `- [x]`) when completing tasks
    - Update .plan-state.json with current_task and progress.completed count
 
+   When completing a phase:
+   - Create a commit with message: "feat(plan-NNNN): Phase N - <phase description>"
+   - Add the commit SHA to the `commits` array in .plan-state.json
+
    Before ending the session, update .plan-state.json with last_session_notes about progress and next steps.
 
    If you need additional context from the original planning discussion, the planning agent ID is stored in .plan-state.json and can be resumed.
@@ -147,6 +153,10 @@ Read the implementation-plan.md and task-list.md files, then begin with the firs
 As you work:
 - Update task-list.md checkboxes (change `- [ ]` to `- [x]`) when completing tasks
 - Update .plan-state.json with current_task and progress.completed count
+
+When completing a phase:
+- Create a commit with message: "feat(plan-0006): Phase N - <phase description>"
+- Add the commit SHA to the `commits` array in .plan-state.json
 
 Before ending the session, update .plan-state.json with last_session_notes about progress and next steps.
 

@@ -28,7 +28,12 @@ Archive a completed implementation plan after successful implementation.
    ## Status: ✅ COMPLETE
 
    **Completed:** YYYY-MM-DD
+
+   **Commits:**
+   - `abc1234` - feat(plan-NNNN): Phase 1 - Description
+   - `def5678` - feat(plan-NNNN): Phase 2 - Description
    ```
+   (Include commits section if the `commits` array in .plan-state.json is non-empty. List each SHA with its commit message.)
 
    **Update `task-list.md` status:**
    ```markdown
@@ -41,9 +46,11 @@ Archive a completed implementation plan after successful implementation.
      "status": "complete",
      "completed_at": "2026-01-25T10:30:00Z",
      "updated_at": "2026-01-25T10:30:00Z",
+     "commits": ["abc1234", "def5678"],
      ...existing fields...
    }
    ```
+   (The `commits` array should already be populated during implementation. Preserve it in the final state.)
 
 4. **Move to archive:**
    ```bash
@@ -56,6 +63,7 @@ Archive a completed implementation plan after successful implementation.
    **Status:** ✅ COMPLETE
    **Tasks:** X/Y complete
    **Completed:** YYYY-MM-DD
+   **Commits:** N commits (list SHAs if present)
    ```
 
 ## Example Usage

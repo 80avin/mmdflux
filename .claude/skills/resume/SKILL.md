@@ -66,7 +66,12 @@ Find and resume work on an in-progress implementation plan.
    - [ ] **2.3** Third incomplete task
    ```
 
-5. **Begin implementing the plan**
+5. **Begin implementing the plan:**
+   - Work through tasks, marking them complete in task-list.md
+   - Update .plan-state.json with current_task and progress.completed
+   - **When completing a phase:** Create a commit with message format:
+     `feat(plan-NNNN): Phase N - <phase description>`
+   - Add each commit SHA to the `commits` array in .plan-state.json
 
 ## Example Outputs
 
