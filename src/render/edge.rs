@@ -30,11 +30,11 @@ pub fn render_edge(
     }
 }
 
-/// Draw a label on an edge at the midpoint of the edge path, tracking placement for collision avoidance.
+/// Draw a label on an edge at an appropriate position along the edge path.
 ///
-/// Places the label at the overall midpoint between start and end points.
-/// For backward edges (where end is before start in layout direction),
-/// offsets the label to avoid overlapping with forward edge labels.
+/// For forward edges, places the label at the midpoint between start and end.
+/// For backward edges (routed around perimeter), places the label along the
+/// actual routed path (typically on the corridor segment).
 /// If the label would collide with a node or another label, tries alternative positions.
 ///
 /// Returns the placed label's bounding box if successfully placed.
@@ -55,23 +55,15 @@ fn draw_edge_label_with_tracking(
         Direction::BottomTop => routed.end.y > routed.start.y,
     };
 
-    // Calculate overall midpoint between start and end
-    let mid_x = (routed.start.x + routed.end.x) / 2;
-    let mid_y = (routed.start.y + routed.end.y) / 2;
-
-    // For backward edges, offset the label to avoid collision with forward edges
-    let (base_x, base_y) = if is_backward {
-        match direction {
-            Direction::LeftRight | Direction::RightLeft => {
-                // Offset above the main line
-                (mid_x.saturating_sub(label_len / 2), mid_y.saturating_sub(1))
-            }
-            Direction::TopDown | Direction::BottomTop => {
-                // Offset to the left of the main line
-                (mid_x.saturating_sub(label_len + 1), mid_y)
-            }
-        }
+    // Calculate base position for label
+    let (base_x, base_y) = if is_backward && routed.segments.len() >= 3 {
+        // For backward edges with 3 segments, place label on the corridor segment (middle segment)
+        // This is the long segment that runs along the diagram perimeter
+        find_label_position_on_segment(&routed.segments[1], label_len, direction)
     } else {
+        // For forward edges, use midpoint between start and end
+        let mid_x = (routed.start.x + routed.end.x) / 2;
+        let mid_y = (routed.start.y + routed.end.y) / 2;
         (mid_x.saturating_sub(label_len / 2), mid_y)
     };
 
@@ -93,6 +85,43 @@ fn draw_edge_label_with_tracking(
         y: label_y,
         len: label_len,
     })
+}
+
+/// Find the label position on a specific segment (for backward edge labels).
+///
+/// Places the label at the midpoint of the segment, offset appropriately
+/// based on segment orientation and diagram direction.
+fn find_label_position_on_segment(
+    segment: &Segment,
+    label_len: usize,
+    direction: Direction,
+) -> (usize, usize) {
+    match segment {
+        Segment::Vertical { x, y_start, y_end } => {
+            // For vertical segments (corridor in LR/RL layouts), place label to the left
+            let mid_y = (*y_start + *y_end) / 2;
+            // Offset label to the left of the vertical line
+            (x.saturating_sub(label_len + 1), mid_y)
+        }
+        Segment::Horizontal { y, x_start, x_end } => {
+            // For horizontal segments (corridor in TD/BT layouts), place label above/below
+            let mid_x = (*x_start + *x_end) / 2;
+            let label_x = mid_x.saturating_sub(label_len / 2);
+            // For TD, corridor is on right side going up, place label to left of line
+            // For BT, similar logic
+            match direction {
+                Direction::TopDown | Direction::BottomTop => {
+                    // Vertical layout: horizontal corridor segment, place above the line
+                    (label_x, y.saturating_sub(1))
+                }
+                Direction::LeftRight | Direction::RightLeft => {
+                    // Horizontal layout: this is the main corridor segment below diagram
+                    // Place label above the line
+                    (label_x, y.saturating_sub(1))
+                }
+            }
+        }
+    }
 }
 
 /// Find a safe position for an edge label that doesn't collide with nodes or other labels.
