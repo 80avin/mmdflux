@@ -187,4 +187,40 @@ mod tests {
         // A should be left of B in LeftRight layout
         assert!(a_rect.x < b_rect.x);
     }
+
+    #[test]
+    fn test_http_request_cycle() {
+        // Simulates http_request.mmd graph
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("Client", (100.0, 50.0));
+        graph.add_node("Server", (100.0, 50.0));
+        graph.add_node("Auth", (100.0, 50.0));
+        graph.add_node("Process", (100.0, 50.0));
+        graph.add_node("Reject", (100.0, 50.0));
+        graph.add_node("Response", (100.0, 50.0));
+
+        // Edges in order from the mmd file
+        graph.add_edge("Client", "Server");
+        graph.add_edge("Server", "Auth");
+        graph.add_edge("Auth", "Process");
+        graph.add_edge("Auth", "Reject");
+        graph.add_edge("Process", "Response");
+        graph.add_edge("Reject", "Response");
+        graph.add_edge("Response", "Client"); // Creates cycle
+
+        let config = LayoutConfig::default();
+        let result = layout(&graph, &config, |_, dims| *dims);
+
+        // Client should be at the top (smallest y)
+        let client_y = result.nodes.get(&"Client".into()).unwrap().y;
+        let server_y = result.nodes.get(&"Server".into()).unwrap().y;
+        let auth_y = result.nodes.get(&"Auth".into()).unwrap().y;
+        let process_y = result.nodes.get(&"Process".into()).unwrap().y;
+        let response_y = result.nodes.get(&"Response".into()).unwrap().y;
+
+        assert!(client_y < server_y, "Client should be above Server");
+        assert!(server_y < auth_y, "Server should be above Auth");
+        assert!(auth_y < process_y, "Auth should be above Process");
+        assert!(process_y < response_y, "Process should be above Response");
+    }
 }

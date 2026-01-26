@@ -157,10 +157,33 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
     // Convert diagram to dagre graph
     let mut dgraph = dagre::DiGraph::new();
 
-    // Add nodes with dimensions
-    for (id, node) in &diagram.nodes {
-        let dims = node_dimensions(node);
-        dgraph.add_node(id.as_str(), dims);
+    // Collect node IDs in declaration order (order they first appear in edges)
+    // This preserves the user's intended flow direction for cycle detection
+    let mut seen_nodes = std::collections::HashSet::new();
+    let mut ordered_node_ids = Vec::new();
+
+    for edge in &diagram.edges {
+        for node_id in [&edge.from, &edge.to] {
+            if !seen_nodes.contains(node_id) {
+                seen_nodes.insert(node_id.clone());
+                ordered_node_ids.push(node_id.clone());
+            }
+        }
+    }
+
+    // Add any remaining nodes that aren't in any edges
+    for id in diagram.nodes.keys() {
+        if !seen_nodes.contains(id) {
+            ordered_node_ids.push(id.clone());
+        }
+    }
+
+    // Add nodes with dimensions in declaration order
+    for id in &ordered_node_ids {
+        if let Some(node) = diagram.nodes.get(id) {
+            let dims = node_dimensions(node);
+            dgraph.add_node(id.as_str(), dims);
+        }
     }
 
     // Add edges

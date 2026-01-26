@@ -169,6 +169,7 @@ impl LayoutGraph {
     }
 
     /// Convert to petgraph StableDiGraph for algorithm use.
+    #[allow(dead_code)] // May be used for future algorithm improvements
     pub fn to_petgraph(&self) -> StableDiGraph<usize, usize> {
         let mut pg = StableDiGraph::new();
 

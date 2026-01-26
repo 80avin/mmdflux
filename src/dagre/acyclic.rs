@@ -1,23 +1,69 @@
 //! Phase 1: Make the graph acyclic by identifying back-edges.
 //!
-//! Uses petgraph's greedy_feedback_arc_set (Eades, Lin, Smyth 1993) -
-//! the same algorithm Dagre uses for Mermaid compatibility.
+//! Uses a DFS-based approach to identify back-edges - edges that point
+//! to ancestors in the DFS tree. This preserves the natural forward flow
+//! of the graph better than minimum feedback arc set algorithms.
 
 use std::collections::HashSet;
-
-use petgraph::algo::greedy_feedback_arc_set;
 
 use super::graph::LayoutGraph;
 
 /// Identify back-edges that need to be reversed for acyclicity.
 /// Marks edges in the LayoutGraph's reversed_edges set.
+///
+/// Uses DFS to find back-edges (edges pointing to ancestors in the DFS tree).
+/// This preserves the natural forward flow of the graph better than
+/// greedy_feedback_arc_set which may reverse arbitrary edges.
 pub fn run(graph: &mut LayoutGraph) {
-    let pg = graph.to_petgraph();
-    let back_edges: HashSet<usize> = greedy_feedback_arc_set(&pg)
-        .map(|edge_ref| *edge_ref.weight())
-        .collect();
+    let n = graph.node_ids.len();
+    if n == 0 {
+        return;
+    }
+
+    // Build adjacency list: node -> [(edge_idx, target_node)]
+    let mut adj: Vec<Vec<(usize, usize)>> = vec![Vec::new(); n];
+    for (edge_idx, &(from, to, _)) in graph.edges.iter().enumerate() {
+        adj[from].push((edge_idx, to));
+    }
+
+    // DFS state
+    let mut visited = vec![false; n];
+    let mut in_stack = vec![false; n]; // Nodes currently in the recursion stack
+    let mut back_edges: HashSet<usize> = HashSet::new();
+
+    // Run DFS from each unvisited node (handles disconnected components)
+    for start in 0..n {
+        if !visited[start] {
+            dfs_find_back_edges(start, &adj, &mut visited, &mut in_stack, &mut back_edges);
+        }
+    }
 
     graph.reversed_edges = back_edges;
+}
+
+/// DFS helper to find back-edges.
+fn dfs_find_back_edges(
+    node: usize,
+    adj: &[Vec<(usize, usize)>],
+    visited: &mut [bool],
+    in_stack: &mut [bool],
+    back_edges: &mut HashSet<usize>,
+) {
+    visited[node] = true;
+    in_stack[node] = true;
+
+    for &(edge_idx, target) in &adj[node] {
+        if !visited[target] {
+            // Tree edge - recurse
+            dfs_find_back_edges(target, adj, visited, in_stack, back_edges);
+        } else if in_stack[target] {
+            // Back edge - target is an ancestor in the current DFS path
+            back_edges.insert(edge_idx);
+        }
+        // Cross edges (visited but not in stack) are fine, don't reverse
+    }
+
+    in_stack[node] = false;
 }
 
 #[cfg(test)]
