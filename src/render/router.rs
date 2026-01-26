@@ -196,8 +196,17 @@ fn route_edge_with_waypoints(
     let start = offset_from_boundary(src_attach, from_bounds);
     let end = offset_from_boundary(tgt_attach, to_bounds);
 
+    let mut segments = Vec::new();
+
+    // Add connector segment from source node boundary to offset start point
+    if src_attach != (start.x, start.y) {
+        add_connector_segment(&mut segments, src_attach, start);
+    }
+
     // Build orthogonal path through waypoints, ending with appropriate segment
-    let segments = build_orthogonal_path_with_waypoints(start, waypoints, end, direction);
+    segments.extend(build_orthogonal_path_with_waypoints(
+        start, waypoints, end, direction,
+    ));
 
     // Use canonical entry direction for the layout
     let entry_direction = entry_direction_for_layout(direction);
@@ -239,8 +248,20 @@ fn route_edge_direct(
     let start = offset_from_boundary(src_attach, from_bounds);
     let end = offset_from_boundary(tgt_attach, to_bounds);
 
+    let mut segments = Vec::new();
+
+    // Add connector segment from source node boundary to offset start point
+    // This ensures the edge visually connects to the node
+    if src_attach != (start.x, start.y) {
+        add_connector_segment(&mut segments, src_attach, start);
+    }
+
     // Build orthogonal path with direction-appropriate segment ordering
-    let segments = build_orthogonal_path_for_direction(start, end, direction);
+    segments.extend(build_orthogonal_path_for_direction(start, end, direction));
+
+    // Note: We don't add a connector to the target because the arrow is drawn
+    // at 'end' which is already at the offset position (1 cell from node).
+    // The arrow itself provides the visual connection to the target.
 
     // Determine entry direction based on diagram flow direction
     let entry_direction = entry_direction_for_layout(direction);
@@ -322,6 +343,29 @@ fn offset_from_boundary(point: (usize, usize), bounds: &NodeBounds) -> Point {
             (y as isize + dy).max(0) as usize,
         )
     }
+}
+
+/// Add a connector segment from a node boundary point to an offset point.
+///
+/// This creates the short segment that visually connects the edge to the node.
+fn add_connector_segment(segments: &mut Vec<Segment>, boundary: (usize, usize), offset: Point) {
+    let (bx, by) = boundary;
+    if bx == offset.x {
+        // Vertical connector
+        segments.push(Segment::Vertical {
+            x: bx,
+            y_start: by,
+            y_end: offset.y,
+        });
+    } else if by == offset.y {
+        // Horizontal connector
+        segments.push(Segment::Horizontal {
+            y: by,
+            x_start: bx,
+            x_end: offset.x,
+        });
+    }
+    // If neither aligned, skip (shouldn't happen with proper offset)
 }
 
 /// Determine the entry direction based on how the path approaches the endpoint.
@@ -940,12 +984,20 @@ mod tests {
         // Should have at least one segment
         assert!(!routed.segments.is_empty());
 
-        // For vertically aligned nodes, should be a single vertical segment
+        // For vertically aligned nodes, should have:
+        // 1. Connector segment from node boundary to offset point
+        // 2. Main vertical segment from offset start to offset end
         if routed.start.x == routed.end.x {
-            assert_eq!(routed.segments.len(), 1);
+            assert_eq!(routed.segments.len(), 2);
+            // First segment: connector from source
             match routed.segments[0] {
                 Segment::Vertical { .. } => {}
-                _ => panic!("Expected vertical segment"),
+                _ => panic!("Expected vertical connector segment"),
+            }
+            // Second segment: main vertical
+            match routed.segments[1] {
+                Segment::Vertical { .. } => {}
+                _ => panic!("Expected vertical main segment"),
             }
         }
     }

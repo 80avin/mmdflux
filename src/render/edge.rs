@@ -58,24 +58,78 @@ fn draw_edge_label_with_tracking(
     };
 
     // Calculate base position for label
-    let (base_x, base_y) = if is_backward && routed.segments.len() >= 3 {
-        // For backward edges with 3 segments, place label on the corridor segment (middle segment)
-        // This is the long segment that runs along the diagram perimeter
+    let (base_x, base_y) = if is_backward && routed.segments.len() >= 4 {
+        // For backward edges with 4 segments (connector + 3 routing segments),
+        // place label on segment[2] which is the long corridor segment
+        find_label_position_on_segment(&routed.segments[2], label_len, direction)
+    } else if is_backward && routed.segments.len() == 3 {
+        // For backward edges with 3 segments, use segment[1] (the corridor)
         find_label_position_on_segment(&routed.segments[1], label_len, direction)
     } else {
         // For forward edges, use midpoint between start and end
         let mid_x = (routed.start.x + routed.end.x) / 2;
         let mid_y = (routed.start.y + routed.end.y) / 2;
-        (mid_x.saturating_sub(label_len / 2), mid_y)
+        let label_x = mid_x.saturating_sub(label_len / 2);
+
+        // For horizontal layouts, ensure label doesn't touch source or target
+        // by leaving at least 1 cell padding on each side when there's room
+        let label_x = match direction {
+            Direction::LeftRight => {
+                // Source connector is at start.x, arrow at end.x
+                // The label should not overlap the arrow, so it must end before end.x
+                let max_label_end = routed.end.x.saturating_sub(1);
+                let min_x = routed.start.x.saturating_add(1);
+
+                // Available space for the label (between source and arrow)
+                let available = max_label_end.saturating_sub(routed.start.x);
+
+                if available >= label_len {
+                    // Enough room - center the label with padding
+                    let centered = routed.start.x + (available - label_len) / 2;
+                    let max_x = max_label_end.saturating_sub(label_len);
+                    centered.max(min_x).min(max_x)
+                } else {
+                    // Not enough room - place at start, accepting overlap
+                    // The label will be clipped when it reaches node cells
+                    min_x
+                }
+            }
+            Direction::RightLeft => {
+                // Source at start.x (high x), arrow at end.x (low x)
+                let max_x = routed.start.x.saturating_sub(label_len + 1);
+                let min_x = routed.end.x.saturating_add(2);
+
+                if max_x < min_x {
+                    // Not enough room, center as best we can
+                    let available = routed.start.x.saturating_sub(routed.end.x);
+                    if available >= label_len {
+                        routed.end.x + (available - label_len) / 2
+                    } else {
+                        routed.end.x
+                    }
+                } else {
+                    label_x.max(min_x).min(max_x)
+                }
+            }
+            _ => label_x,
+        };
+
+        (label_x, mid_y)
     };
 
     // Try to find a position that doesn't collide with nodes or other labels
     let (label_x, label_y) =
         find_safe_label_position(canvas, base_x, base_y, label_len, direction, placed_labels);
 
-    // Write the label only to non-node cells
+    // Write the label only to non-node cells, avoiding the arrow position
+    // For horizontal layouts, don't overwrite the arrow at routed.end
+    let arrow_pos = (routed.end.x, routed.end.y);
     for (i, ch) in label.chars().enumerate() {
         let x = label_x + i;
+        // Skip if this would overwrite the arrow
+        if x == arrow_pos.0 && label_y == arrow_pos.1 {
+            continue;
+        }
         // Only write if cell is not part of a node
         if canvas.get(x, label_y).is_some_and(|cell| !cell.is_node) {
             canvas.set(x, label_y, ch);
@@ -421,9 +475,27 @@ pub fn render_all_edges_with_labels(
         if let Some(label) = &routed.edge.label {
             // Check for pre-computed label position from normalization
             let edge_key = (routed.edge.from.clone(), routed.edge.to.clone());
+            let label_len = label.chars().count();
+
+            // Only use precomputed position if it's within canvas bounds
             let placed = if let Some(&(pre_x, pre_y)) = label_positions.get(&edge_key) {
-                // Use pre-computed position
-                draw_label_at_position(canvas, label, pre_x, pre_y)
+                // Check if position is within canvas bounds
+                if pre_x < canvas.width()
+                    && pre_y < canvas.height()
+                    && pre_x.saturating_add(label_len) <= canvas.width()
+                {
+                    // Use pre-computed position
+                    draw_label_at_position(canvas, label, pre_x, pre_y)
+                } else {
+                    // Pre-computed position is out of bounds, fall back to heuristic
+                    draw_edge_label_with_tracking(
+                        canvas,
+                        routed,
+                        label,
+                        diagram_direction,
+                        &placed_labels,
+                    )
+                }
             } else {
                 // Fall back to heuristic placement
                 draw_edge_label_with_tracking(
