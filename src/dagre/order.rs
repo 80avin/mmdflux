@@ -120,8 +120,6 @@ pub fn run(graph: &mut LayoutGraph) {
             last_best = 0;
             best_cc = cc;
             best_order = graph.order.clone();
-        } else if cc == best_cc {
-            best_order = graph.order.clone();
         }
 
         i += 1;
