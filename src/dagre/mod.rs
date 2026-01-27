@@ -32,6 +32,7 @@
 //! ```
 
 mod acyclic;
+mod bk;
 mod graph;
 pub mod normalize;
 mod order;
