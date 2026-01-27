@@ -83,6 +83,15 @@ where
     rank::run(&mut lg);
     rank::normalize(&mut lg);
 
+    // Capture original edge indices of reversed edges BEFORE normalization,
+    // because normalization removes long edges (and their reversed_edges entries).
+    // The rendering layer needs these to identify backward edges for corridor routing.
+    let reversed_orig_edges: Vec<usize> = lg
+        .reversed_edges
+        .iter()
+        .map(|&pos| lg.edges[pos].2)
+        .collect();
+
     // Phase 2.5: Normalize long edges (insert dummy nodes)
     normalize::run(&mut lg, edge_labels);
 
@@ -105,7 +114,7 @@ where
 
     // Build result
     let (width, height) = position::calculate_dimensions(&lg, config);
-    let reversed_edges: Vec<usize> = lg.reversed_edges.iter().copied().collect();
+    let reversed_edges = reversed_orig_edges;
 
     // Only include real nodes (not dummies) in the output
     let nodes = lg
