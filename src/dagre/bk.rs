@@ -68,19 +68,6 @@ impl BlockAlignment {
         self.root.get(&node).copied().unwrap_or(node)
     }
 
-    /// Align node `v` with node `w`.
-    ///
-    /// This adds `v` to the block containing `w`. The `align` pointer of `v`
-    /// points to `w`, and `v`'s root becomes `w`'s root.
-    #[allow(dead_code)]
-    pub fn align_nodes(&mut self, v: NodeIndex, w: NodeIndex) {
-        // Set alignment: v points to w
-        self.align.insert(v, w);
-        // Set root: v's root becomes w's root
-        let w_root = self.get_root(w);
-        self.root.insert(v, w_root);
-    }
-
     /// Get all nodes in the block containing `node`.
     pub fn get_block_nodes(&self, node: NodeIndex) -> Vec<NodeIndex> {
         let root = self.get_root(node);
@@ -98,12 +85,6 @@ impl BlockAlignment {
         }
 
         nodes
-    }
-
-    /// Check if two nodes are in the same block.
-    #[allow(dead_code)]
-    pub fn same_block(&self, v: NodeIndex, w: NodeIndex) -> bool {
-        self.get_root(v) == self.get_root(w)
     }
 
     /// Get all unique block roots.
@@ -287,45 +268,6 @@ pub fn get_neighbors(graph: &LayoutGraph, node: NodeIndex, downward: bool) -> Ve
     } else {
         get_successors(graph, node)
     }
-}
-
-/// Get the median neighbor of a node.
-///
-/// For odd number of neighbors, returns the true median.
-/// For even number of neighbors, returns either the left-middle or right-middle
-/// depending on `prefer_left`.
-///
-/// Returns `None` if the node has no neighbors in the specified direction.
-#[allow(dead_code)]
-pub fn get_median_neighbor(
-    graph: &LayoutGraph,
-    node: NodeIndex,
-    downward: bool,
-    prefer_left: bool,
-) -> Option<NodeIndex> {
-    let neighbors = get_neighbors(graph, node, downward);
-
-    if neighbors.is_empty() {
-        return None;
-    }
-
-    let len = neighbors.len();
-    if len == 1 {
-        return Some(neighbors[0]);
-    }
-
-    // For even length, choose based on preference
-    let median_idx = if len % 2 == 0 {
-        if prefer_left {
-            len / 2 - 1 // Left-middle
-        } else {
-            len / 2 // Right-middle
-        }
-    } else {
-        len / 2 // True middle for odd length
-    };
-
-    Some(neighbors[median_idx])
 }
 
 /// Get the position (order) of a node within its layer.
@@ -1007,6 +949,11 @@ mod tests {
     use crate::dagre::graph::DiGraph;
     use crate::dagre::rank;
 
+    /// Test helper: check if two nodes are in the same block
+    fn same_block(alignment: &BlockAlignment, v: NodeIndex, w: NodeIndex) -> bool {
+        alignment.get_root(v) == alignment.get_root(w)
+    }
+
     /// Create a diamond-shaped test graph:
     /// ```text
     /// Layer 0:    [A]
@@ -1056,43 +1003,6 @@ mod tests {
             assert_eq!(alignment.get_root(node), node);
             assert_eq!(alignment.align.get(&node), Some(&node));
         }
-    }
-
-    #[test]
-    fn test_block_alignment_align_nodes() {
-        let nodes = vec![0, 1, 2];
-        let mut alignment = BlockAlignment::new(&nodes);
-
-        // Align 0 with 1: node 0 joins node 1's block
-        alignment.align_nodes(0, 1);
-        assert_eq!(alignment.get_root(0), 1);
-        assert_eq!(alignment.align.get(&0), Some(&1));
-
-        // Align 2 with 1: node 2 also joins node 1's block
-        alignment.align_nodes(2, 1);
-        assert_eq!(alignment.get_root(2), 1);
-        assert_eq!(alignment.align.get(&2), Some(&1));
-
-        // Node 1 is still its own root
-        assert_eq!(alignment.get_root(1), 1);
-    }
-
-    #[test]
-    fn test_block_alignment_chain() {
-        let nodes = vec![0, 1, 2, 3];
-        let mut alignment = BlockAlignment::new(&nodes);
-
-        // Build a chain: 0 -> 1 -> 2 -> 3
-        // In downward sweep, we'd align upper nodes with lower nodes
-        alignment.align_nodes(0, 1);
-        alignment.align_nodes(1, 2);
-        alignment.align_nodes(2, 3);
-
-        // All nodes should share the same root (3)
-        assert_eq!(alignment.get_root(0), 1); // Note: root propagation is shallow
-        assert_eq!(alignment.get_root(1), 2);
-        assert_eq!(alignment.get_root(2), 3);
-        assert_eq!(alignment.get_root(3), 3);
     }
 
     #[test]
@@ -1244,49 +1154,6 @@ mod tests {
         assert_eq!(neighbors.len(), 2);
         assert_eq!(neighbors[0], b);
         assert_eq!(neighbors[1], c);
-    }
-
-    #[test]
-    fn test_get_median_neighbor_single() {
-        let lg = make_diamond_graph();
-        let b = lg.node_index[&"B".into()];
-        let d = lg.node_index[&"D".into()];
-
-        // B has single successor D
-        let median = get_median_neighbor(&lg, b, false, true);
-        assert_eq!(median, Some(d));
-    }
-
-    #[test]
-    fn test_get_median_neighbor_even_prefer_left() {
-        let lg = make_diamond_graph();
-        let d = lg.node_index[&"D".into()];
-        let b = lg.node_index[&"B".into()];
-
-        // D has two predecessors [B, C], prefer_left=true should return B
-        let median = get_median_neighbor(&lg, d, true, true);
-        assert_eq!(median, Some(b));
-    }
-
-    #[test]
-    fn test_get_median_neighbor_even_prefer_right() {
-        let lg = make_diamond_graph();
-        let d = lg.node_index[&"D".into()];
-        let c = lg.node_index[&"C".into()];
-
-        // D has two predecessors [B, C], prefer_left=false should return C
-        let median = get_median_neighbor(&lg, d, true, false);
-        assert_eq!(median, Some(c));
-    }
-
-    #[test]
-    fn test_get_median_neighbor_none() {
-        let lg = make_diamond_graph();
-        let a = lg.node_index[&"A".into()];
-
-        // A has no predecessors
-        let median = get_median_neighbor(&lg, a, true, true);
-        assert_eq!(median, None);
     }
 
     #[test]
@@ -1513,15 +1380,15 @@ mod tests {
         // All should be in the same block with A as root
         // (A is processed first, B aligns with A, C aligns with B)
         assert!(
-            alignment.same_block(a, b),
+            same_block(&alignment, a, b),
             "A and B should be in same block"
         );
         assert!(
-            alignment.same_block(b, c),
+            same_block(&alignment, b, c),
             "B and C should be in same block"
         );
         assert!(
-            alignment.same_block(a, c),
+            same_block(&alignment, a, c),
             "A and C should be in same block"
         );
 
@@ -1545,8 +1412,8 @@ mod tests {
 
         // All should be in the same block with C as root
         // (C is processed first when sweeping bottom-to-top)
-        assert!(alignment.same_block(a, b));
-        assert!(alignment.same_block(b, c));
+        assert!(same_block(&alignment, a, b));
+        assert!(same_block(&alignment, b, c));
 
         // C should be the root (it's at the bottom, processed first in upward sweep)
         assert_eq!(alignment.get_root(c), c);
@@ -1576,13 +1443,13 @@ mod tests {
 
         // A and B should be in the same block
         assert!(
-            alignment.same_block(a, b),
+            same_block(&alignment, a, b),
             "A and B should be in same block"
         );
 
         // D should be in the same block as A/B (aligned through B)
         assert!(
-            alignment.same_block(a, d),
+            same_block(&alignment, a, d),
             "A and D should be in same block"
         );
     }
@@ -1638,8 +1505,12 @@ mod tests {
         let mut alignment = BlockAlignment::new(&[0, 1, 2, 3]);
 
         // Create two blocks: {0, 1} and {2, 3}
-        alignment.align_nodes(1, 0);
-        alignment.align_nodes(3, 2);
+        // Block 1: node 1 points to 0, root of 1 is 0
+        alignment.align.insert(1, 0);
+        alignment.root.insert(1, 0);
+        // Block 2: node 3 points to 2, root of 3 is 2
+        alignment.align.insert(3, 2);
+        alignment.root.insert(3, 2);
 
         let roots = alignment.get_all_roots();
         assert_eq!(roots.len(), 2);
