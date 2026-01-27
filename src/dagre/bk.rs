@@ -79,6 +79,38 @@ impl BlockAlignment {
         let w_root = self.get_root(w);
         self.root.insert(v, w_root);
     }
+
+    /// Get all nodes in the block containing `node`.
+    pub fn get_block_nodes(&self, node: NodeIndex) -> Vec<NodeIndex> {
+        let root = self.get_root(node);
+        let mut nodes = Vec::new();
+        let mut current = root;
+
+        // Follow align pointers until we cycle back to root
+        loop {
+            nodes.push(current);
+            let next = self.align.get(&current).copied().unwrap_or(current);
+            if next == root || next == current {
+                break;
+            }
+            current = next;
+        }
+
+        nodes
+    }
+
+    /// Check if two nodes are in the same block.
+    pub fn same_block(&self, v: NodeIndex, w: NodeIndex) -> bool {
+        self.get_root(v) == self.get_root(w)
+    }
+
+    /// Get all unique block roots.
+    pub fn get_all_roots(&self) -> Vec<NodeIndex> {
+        let mut roots: Vec<NodeIndex> = self.root.values().copied().collect();
+        roots.sort();
+        roots.dedup();
+        roots
+    }
 }
 
 /// Result of horizontal compaction for one alignment.
@@ -489,6 +521,144 @@ pub fn has_conflict(conflicts: &ConflictSet, layer: usize, pos1: usize, pos2: us
     }
 
     false
+}
+
+// =============================================================================
+// Vertical Alignment
+// =============================================================================
+
+/// Compute vertical alignment for one direction/bias combination.
+///
+/// Vertical alignment groups nodes into "blocks" that will share the same
+/// x-coordinate. Nodes are aligned with their median neighbor if no conflict
+/// prevents it.
+///
+/// # Arguments
+/// * `graph` - The layered graph
+/// * `conflicts` - Detected conflicts to respect
+/// * `direction` - Which of the 4 alignment directions to use
+///
+/// # Returns
+/// A BlockAlignment with root and align mappings
+pub fn vertical_alignment(
+    graph: &LayoutGraph,
+    conflicts: &ConflictSet,
+    direction: AlignmentDirection,
+) -> BlockAlignment {
+    // Get all node indices
+    let all_nodes: Vec<NodeIndex> = (0..graph.node_ids.len()).collect();
+    let mut alignment = BlockAlignment::new(&all_nodes);
+
+    // Get layer structure
+    let layers = get_layers(graph);
+    let num_layers = layers.len();
+
+    if num_layers < 2 {
+        return alignment;
+    }
+
+    // Get sweep order based on direction
+    let downward = direction.is_downward();
+    let prefer_left = direction.prefers_left();
+    let layer_order = get_layers_in_order(num_layers, downward);
+
+    // Skip first layer in sweep order (no neighbors in sweep direction)
+    for i in 1..layer_order.len() {
+        let layer_idx = layer_order[i];
+        let prev_layer_idx = layer_order[i - 1];
+
+        // Get nodes in current layer
+        let layer_nodes = &layers[layer_idx];
+
+        // Process nodes in appropriate order based on bias
+        let node_order: Vec<NodeIndex> = if prefer_left {
+            layer_nodes.clone()
+        } else {
+            layer_nodes.iter().rev().copied().collect()
+        };
+
+        // Track the boundary position we've aligned to.
+        // This prevents crossing alignments within the same sweep.
+        // For left-to-right processing, r starts at -1 (leftmost boundary)
+        // For right-to-left processing, r starts at usize::MAX (rightmost boundary)
+        let mut r: isize = if prefer_left { -1 } else { isize::MAX };
+
+        for &v in &node_order {
+            // Get median neighbor in the previous layer (in sweep direction)
+            let neighbors = get_neighbors(graph, v, downward);
+            if neighbors.is_empty() {
+                continue;
+            }
+
+            // Get median(s) - for even count, we try both
+            let medians = get_medians(&neighbors, prefer_left);
+
+            for m in medians {
+                // Only align if v isn't already aligned to something else
+                if alignment.align.get(&v) == Some(&v) {
+                    let m_pos = get_position(graph, m) as isize;
+
+                    // Check ordering constraint:
+                    // For left preference: median must be to the right of last aligned position
+                    // For right preference: median must be to the left of last aligned position
+                    let order_ok = if prefer_left { r < m_pos } else { r > m_pos };
+
+                    // Check conflict constraint
+                    let v_pos = get_position(graph, v);
+                    let conflict_free =
+                        !has_conflict(conflicts, prev_layer_idx, v_pos, m_pos as usize);
+
+                    if conflict_free && order_ok {
+                        // Align v with m
+                        // In the paper: align[m] = v, root[v] = root[m], align[v] = root[m]
+                        // This creates a chain from m down to v
+
+                        // m now points to v (m aligns with v)
+                        alignment.align.insert(m, v);
+
+                        // v gets m's root
+                        let m_root = alignment.get_root(m);
+                        alignment.root.insert(v, m_root);
+
+                        // v points back to the root (completing the block chain)
+                        alignment.align.insert(v, m_root);
+
+                        // Update boundary
+                        r = m_pos;
+                    }
+                }
+            }
+        }
+    }
+
+    alignment
+}
+
+/// Get median neighbor(s) from a sorted list of neighbors.
+///
+/// For odd count: returns single true median.
+/// For even count: returns both middle elements, ordered by preference.
+fn get_medians(neighbors: &[NodeIndex], prefer_left: bool) -> Vec<NodeIndex> {
+    let len = neighbors.len();
+    if len == 0 {
+        return vec![];
+    }
+    if len == 1 {
+        return vec![neighbors[0]];
+    }
+
+    let mid = len / 2;
+    if len % 2 == 1 {
+        // Odd: single median
+        vec![neighbors[mid]]
+    } else {
+        // Even: both middle elements, preferred one first
+        if prefer_left {
+            vec![neighbors[mid - 1], neighbors[mid]]
+        } else {
+            vec![neighbors[mid], neighbors[mid - 1]]
+        }
+    }
 }
 
 // =============================================================================
@@ -954,5 +1124,209 @@ mod tests {
         // No dummy nodes means no conflicts
         let conflicts = find_all_conflicts(&lg);
         assert!(conflicts.is_empty());
+    }
+
+    // =========================================================================
+    // Vertical Alignment Tests
+    // =========================================================================
+
+    /// Create a simple chain graph: A -> B -> C
+    fn make_chain_graph() -> LayoutGraph {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        graph.add_node("C", (100.0, 50.0));
+        graph.add_edge("A", "B");
+        graph.add_edge("B", "C");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        // Set order within layers (all alone in their layers)
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+
+        lg.order[a] = 0;
+        lg.order[b] = 0;
+        lg.order[c] = 0;
+
+        lg
+    }
+
+    #[test]
+    fn test_get_medians_single() {
+        let neighbors = vec![5];
+        let medians = get_medians(&neighbors, true);
+        assert_eq!(medians, vec![5]);
+    }
+
+    #[test]
+    fn test_get_medians_odd() {
+        let neighbors = vec![1, 2, 3];
+        let medians = get_medians(&neighbors, true);
+        assert_eq!(medians, vec![2]);
+    }
+
+    #[test]
+    fn test_get_medians_even_prefer_left() {
+        let neighbors = vec![1, 2, 3, 4];
+        let medians = get_medians(&neighbors, true);
+        assert_eq!(medians, vec![2, 3]); // Left median first
+    }
+
+    #[test]
+    fn test_get_medians_even_prefer_right() {
+        let neighbors = vec![1, 2, 3, 4];
+        let medians = get_medians(&neighbors, false);
+        assert_eq!(medians, vec![3, 2]); // Right median first
+    }
+
+    #[test]
+    fn test_vertical_alignment_chain_downward() {
+        let lg = make_chain_graph();
+        let conflicts = ConflictSet::new();
+
+        // UL: sweep top-to-bottom, prefer left
+        let alignment = vertical_alignment(&lg, &conflicts, AlignmentDirection::UL);
+
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+
+        // All should be in the same block with A as root
+        // (A is processed first, B aligns with A, C aligns with B)
+        assert!(
+            alignment.same_block(a, b),
+            "A and B should be in same block"
+        );
+        assert!(
+            alignment.same_block(b, c),
+            "B and C should be in same block"
+        );
+        assert!(
+            alignment.same_block(a, c),
+            "A and C should be in same block"
+        );
+
+        // A should be the root (it's at the top)
+        assert_eq!(alignment.get_root(a), a);
+        assert_eq!(alignment.get_root(b), a);
+        assert_eq!(alignment.get_root(c), a);
+    }
+
+    #[test]
+    fn test_vertical_alignment_chain_upward() {
+        let lg = make_chain_graph();
+        let conflicts = ConflictSet::new();
+
+        // DL: sweep bottom-to-top, prefer left
+        let alignment = vertical_alignment(&lg, &conflicts, AlignmentDirection::DL);
+
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+
+        // All should be in the same block with C as root
+        // (C is processed first when sweeping bottom-to-top)
+        assert!(alignment.same_block(a, b));
+        assert!(alignment.same_block(b, c));
+
+        // C should be the root (it's at the bottom, processed first in upward sweep)
+        assert_eq!(alignment.get_root(c), c);
+    }
+
+    #[test]
+    fn test_vertical_alignment_diamond() {
+        let lg = make_diamond_graph();
+        let conflicts = ConflictSet::new();
+
+        // UL: sweep top-to-bottom, prefer left
+        let alignment = vertical_alignment(&lg, &conflicts, AlignmentDirection::UL);
+
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+        let d = lg.node_index[&"D".into()];
+
+        // In a diamond A -> B,C -> D:
+        // - B and C both have A as median (prefer_left, so B comes first)
+        // - D has B and C as medians (prefer_left, so B comes first)
+        //
+        // Expected for UL:
+        // - A is root of {A, B} (B aligns with A)
+        // - C might form its own block (if order constraint prevents alignment)
+        // - D aligns with B (left median of [B,C])
+
+        // A and B should be in the same block
+        assert!(
+            alignment.same_block(a, b),
+            "A and B should be in same block"
+        );
+
+        // D should be in the same block as A/B (aligned through B)
+        assert!(
+            alignment.same_block(a, d),
+            "A and D should be in same block"
+        );
+    }
+
+    #[test]
+    fn test_vertical_alignment_empty_graph() {
+        let graph: DiGraph<(f64, f64)> = DiGraph::new();
+        let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        let conflicts = ConflictSet::new();
+
+        let alignment = vertical_alignment(&lg, &conflicts, AlignmentDirection::UL);
+
+        // Should handle empty graph gracefully
+        assert!(alignment.root.is_empty());
+    }
+
+    #[test]
+    fn test_vertical_alignment_single_node() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        let conflicts = ConflictSet::new();
+
+        let alignment = vertical_alignment(&lg, &conflicts, AlignmentDirection::UL);
+
+        // Single node should be its own root
+        assert_eq!(alignment.get_root(0), 0);
+    }
+
+    #[test]
+    fn test_block_alignment_get_block_nodes() {
+        let mut alignment = BlockAlignment::new(&[0, 1, 2, 3]);
+
+        // Create block: 0 -> 1 -> 2 (root is 0)
+        alignment.align.insert(0, 1);
+        alignment.align.insert(1, 2);
+        alignment.align.insert(2, 0); // cycle back to root
+        alignment.root.insert(1, 0);
+        alignment.root.insert(2, 0);
+
+        let nodes = alignment.get_block_nodes(1);
+        assert_eq!(nodes.len(), 3);
+        assert!(nodes.contains(&0));
+        assert!(nodes.contains(&1));
+        assert!(nodes.contains(&2));
+    }
+
+    #[test]
+    fn test_block_alignment_get_all_roots() {
+        let mut alignment = BlockAlignment::new(&[0, 1, 2, 3]);
+
+        // Create two blocks: {0, 1} and {2, 3}
+        alignment.align_nodes(1, 0);
+        alignment.align_nodes(3, 2);
+
+        let roots = alignment.get_all_roots();
+        assert_eq!(roots.len(), 2);
     }
 }
