@@ -298,11 +298,13 @@ fn normalize_edge(
 
         // Add edge from previous node to this dummy
         graph.edges.push((prev_idx, dummy_idx, orig_edge_idx));
+        graph.edge_weights.push(1.0);
         prev_idx = dummy_idx;
     }
 
     // Add final edge from last dummy to target
     graph.edges.push((prev_idx, to_idx, orig_edge_idx));
+    graph.edge_weights.push(1.0);
 
     // Store the chain
     graph.dummy_chains.push(chain);

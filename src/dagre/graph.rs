@@ -136,6 +136,9 @@ pub(crate) struct LayoutGraph {
     /// Used to distinguish original edges from edges created during normalization.
     #[allow(dead_code)]
     pub original_edge_count: usize,
+
+    /// Edge weights, indexed by position in `edges` vec. Default 1.0 for all edges.
+    pub edge_weights: Vec<f64>,
 }
 
 impl LayoutGraph {
@@ -170,6 +173,8 @@ impl LayoutGraph {
         let n = node_ids.len();
         let edge_count = edges.len();
 
+        let edge_weights = vec![1.0; edge_count];
+
         Self {
             node_ids,
             edges,
@@ -182,6 +187,7 @@ impl LayoutGraph {
             dummy_nodes: HashMap::new(),
             dummy_chains: Vec::new(),
             original_edge_count: edge_count,
+            edge_weights,
         }
     }
 
@@ -215,6 +221,22 @@ impl LayoutGraph {
                     (to, from)
                 } else {
                     (from, to)
+                }
+            })
+            .collect()
+    }
+
+    /// Get effective edges with weights (with reversals applied).
+    pub fn effective_edges_weighted(&self) -> Vec<(usize, usize, f64)> {
+        self.edges
+            .iter()
+            .enumerate()
+            .map(|(idx, &(from, to, _))| {
+                let weight = self.edge_weights[idx];
+                if self.reversed_edges.contains(&idx) {
+                    (to, from, weight)
+                } else {
+                    (from, to, weight)
                 }
             })
             .collect()

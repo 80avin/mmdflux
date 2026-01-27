@@ -92,7 +92,7 @@ pub fn run(graph: &mut LayoutGraph) {
 
     // Rebuild layers sorted by the new DFS order
     let layers = layers_sorted_by_order(graph);
-    let edges = graph.effective_edges();
+    let edges = graph.effective_edges_weighted();
 
     let mut best_cc = usize::MAX;
     let mut best_order: Vec<usize> = Vec::new();
@@ -135,7 +135,7 @@ pub fn run(graph: &mut LayoutGraph) {
 fn sweep_down(
     graph: &mut LayoutGraph,
     layers: &[Vec<usize>],
-    edges: &[(usize, usize)],
+    edges: &[(usize, usize, f64)],
     bias_right: bool,
 ) {
     for i in 1..layers.len() {
@@ -148,7 +148,7 @@ fn sweep_down(
 fn sweep_up(
     graph: &mut LayoutGraph,
     layers: &[Vec<usize>],
-    edges: &[(usize, usize)],
+    edges: &[(usize, usize, f64)],
     bias_right: bool,
 ) {
     for i in (0..layers.len() - 1).rev() {
@@ -159,64 +159,105 @@ fn sweep_up(
 }
 
 /// Reorder nodes in `free` layer based on barycenter of connections to `fixed` layer.
+///
+/// Uses dagre v0.8.5's partition-and-interleave algorithm: nodes with neighbors
+/// in the fixed layer are "sortable" (sorted by barycenter), while nodes without
+/// neighbors are "unsortable" (interleaved at their original positions).
 fn reorder_layer(
     graph: &mut LayoutGraph,
     fixed: &[usize],
     free: &[usize],
-    edges: &[(usize, usize)],
+    edges: &[(usize, usize, f64)],
     downward: bool,
     bias_right: bool,
 ) {
-    // Calculate barycenter for each node in free layer
-    let mut barycenters: Vec<(usize, f64, usize)> = Vec::new();
+    // Step 1: Compute weighted barycenters, partition into sortable/unsortable
+    let mut sortable: Vec<(usize, f64, usize)> = Vec::new(); // (node, barycenter, original_pos)
+    let mut unsortable: Vec<(usize, usize)> = Vec::new(); // (node, original_pos)
 
     for (original_pos, &node) in free.iter().enumerate() {
-        let neighbors: Vec<usize> = if downward {
-            // Looking at predecessors (nodes in fixed layer that point to this node)
+        let neighbor_weights: Vec<(usize, f64)> = if downward {
             edges
                 .iter()
-                .filter(|&&(_, to)| to == node)
-                .map(|&(from, _)| from)
-                .filter(|n| fixed.contains(n))
+                .filter(|&&(_, to, _)| to == node)
+                .map(|&(from, _, w)| (from, w))
+                .filter(|&(n, _)| fixed.contains(&n))
                 .collect()
         } else {
-            // Looking at successors (nodes in fixed layer that this node points to)
             edges
                 .iter()
-                .filter(|&&(from, _)| from == node)
-                .map(|&(_, to)| to)
-                .filter(|n| fixed.contains(n))
+                .filter(|&&(from, _, _)| from == node)
+                .map(|&(_, to, w)| (to, w))
+                .filter(|&(n, _)| fixed.contains(&n))
                 .collect()
         };
 
-        let barycenter = if neighbors.is_empty() {
-            // Keep current position
-            graph.order[node] as f64
+        if neighbor_weights.is_empty() {
+            unsortable.push((node, original_pos));
         } else {
-            // Average position of neighbors
-            let sum: f64 = neighbors.iter().map(|&n| graph.order[n] as f64).sum();
-            sum / neighbors.len() as f64
-        };
-
-        barycenters.push((node, barycenter, original_pos));
+            let weighted_sum: f64 = neighbor_weights
+                .iter()
+                .map(|&(n, w)| w * graph.order[n] as f64)
+                .sum();
+            let total_weight: f64 = neighbor_weights.iter().map(|&(_, w)| w).sum();
+            let barycenter = weighted_sum / total_weight;
+            sortable.push((node, barycenter, original_pos));
+        }
     }
 
-    // Sort by barycenter with bias-aware tie-breaking
-    barycenters.sort_by(|a, b| {
+    // Step 2: Sort sortable by barycenter with bias-aware tie-breaking
+    sortable.sort_by(|a, b| {
         a.1.partial_cmp(&b.1)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| {
                 if bias_right {
-                    b.2.cmp(&a.2) // Prefer larger original_pos (right bias)
+                    b.2.cmp(&a.2)
                 } else {
-                    a.2.cmp(&b.2) // Prefer smaller original_pos (left bias)
+                    a.2.cmp(&b.2)
                 }
             })
     });
 
-    // Update order
-    for (new_pos, (node, _, _)) in barycenters.iter().enumerate() {
-        graph.order[*node] = new_pos;
+    // Step 3: Sort unsortable by descending original_pos (stack: pop from back)
+    unsortable.sort_by(|a, b| b.1.cmp(&a.1));
+
+    // Step 4: Interleave using consumeUnsortable pattern
+    let mut result: Vec<usize> = Vec::with_capacity(free.len());
+    let mut vs_index: usize = 0;
+
+    // Helper: consume unsortable entries whose original_pos <= vs_index
+    fn consume_unsortable(
+        result: &mut Vec<usize>,
+        unsortable: &mut Vec<(usize, usize)>,
+        vs_index: &mut usize,
+    ) {
+        while let Some(&(_, orig_pos)) = unsortable.last() {
+            if orig_pos <= *vs_index {
+                let (node, _) = unsortable.pop().unwrap();
+                result.push(node);
+                *vs_index += 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    consume_unsortable(&mut result, &mut unsortable, &mut vs_index);
+
+    for &(node, _, _) in &sortable {
+        result.push(node);
+        vs_index += 1;
+        consume_unsortable(&mut result, &mut unsortable, &mut vs_index);
+    }
+
+    // Drain any remaining unsortable entries
+    while let Some((node, _)) = unsortable.pop() {
+        result.push(node);
+    }
+
+    // Step 5: Assign new order positions
+    for (new_pos, &node) in result.iter().enumerate() {
+        graph.order[node] = new_pos;
     }
 }
 
@@ -224,7 +265,7 @@ fn reorder_layer(
 fn count_all_crossings(
     graph: &LayoutGraph,
     layers: &[Vec<usize>],
-    edges: &[(usize, usize)],
+    edges: &[(usize, usize, f64)],
 ) -> usize {
     let mut total = 0;
     for i in 0..layers.len().saturating_sub(1) {
@@ -238,12 +279,12 @@ fn count_crossings_between(
     graph: &LayoutGraph,
     layer1: &[usize],
     layer2: &[usize],
-    edges: &[(usize, usize)],
+    edges: &[(usize, usize, f64)],
 ) -> usize {
     // Collect edges between these layers with their positions
     let mut edge_positions: Vec<(usize, usize)> = Vec::new();
 
-    for &(from, to) in edges {
+    for &(from, to, _) in edges {
         if layer1.contains(&from) && layer2.contains(&to) {
             edge_positions.push((graph.order[from], graph.order[to]));
         } else if layer1.contains(&to) && layer2.contains(&from) {
@@ -301,7 +342,7 @@ mod tests {
 
         // Simple chain should have no crossings
         let layers = rank::by_rank(&lg);
-        let edges = lg.effective_edges();
+        let edges = lg.effective_edges_weighted();
         assert_eq!(count_all_crossings(&lg, &layers, &edges), 0);
     }
 
@@ -327,7 +368,7 @@ mod tests {
 
         // After ordering, crossings should be minimized
         let layers = rank::by_rank(&lg);
-        let edges = lg.effective_edges();
+        let edges = lg.effective_edges_weighted();
         let crossings = count_all_crossings(&lg, &layers, &edges);
         assert_eq!(crossings, 0);
     }
@@ -356,7 +397,7 @@ mod tests {
             }
         }
 
-        let edges = lg.effective_edges();
+        let edges = lg.effective_edges_weighted();
         let fixed = &layers[0]; // [A]
         let free = &layers[1]; // [B, C]
 
@@ -472,7 +513,7 @@ mod tests {
         run(&mut lg);
 
         let layers = rank::by_rank(&lg);
-        let edges = lg.effective_edges();
+        let edges = lg.effective_edges_weighted();
         let crossings = count_all_crossings(&lg, &layers, &edges);
         assert_eq!(
             crossings, 0,
@@ -520,7 +561,7 @@ mod tests {
             );
         }
 
-        let edges = lg.effective_edges();
+        let edges = lg.effective_edges_weighted();
         assert_eq!(count_all_crossings(&lg, &layers, &edges), 0);
     }
 
@@ -555,5 +596,197 @@ mod tests {
         // Should complete without errors
         let layers = rank::by_rank(&lg);
         assert!(!layers.is_empty());
+    }
+
+    #[test]
+    fn test_unsortable_nodes_preserve_position() {
+        // Layer 0: A, B
+        // Layer 1: C (connected to A), D (disconnected), E (connected to B)
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_node("C", ());
+        graph.add_node("D", ());
+        graph.add_node("E", ());
+        graph.add_edge("A", "C");
+        graph.add_edge("B", "E");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        run(&mut lg);
+
+        let d = lg.node_index[&NodeId::from("D")];
+        let c = lg.node_index[&NodeId::from("C")];
+        let e = lg.node_index[&NodeId::from("E")];
+        let mut orders = vec![lg.order[c], lg.order[d], lg.order[e]];
+        orders.sort();
+        assert_eq!(orders, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_all_unsortable_preserves_order() {
+        // Two parallel paths: A->B, C->D
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_node("C", ());
+        graph.add_node("D", ());
+        graph.add_edge("A", "B");
+        graph.add_edge("C", "D");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        run(&mut lg);
+
+        let layers = rank::by_rank(&lg);
+        let edges = lg.effective_edges_weighted();
+        assert_eq!(count_all_crossings(&lg, &layers, &edges), 0);
+    }
+
+    #[test]
+    fn test_all_sortable_unchanged() {
+        // Diamond: all nodes have neighbors — sortable path only
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_node("C", ());
+        graph.add_node("D", ());
+        graph.add_edge("A", "B");
+        graph.add_edge("A", "C");
+        graph.add_edge("B", "D");
+        graph.add_edge("C", "D");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        run(&mut lg);
+
+        let layers = rank::by_rank(&lg);
+        let edges = lg.effective_edges_weighted();
+        assert_eq!(count_all_crossings(&lg, &layers, &edges), 0);
+    }
+
+    #[test]
+    fn test_reorder_layer_unsortable_interleaving() {
+        // Directly test reorder_layer with controlled setup:
+        // Fixed: [X, Y] at positions 0, 1
+        // Free: [A, B, C] where A->X, C->Y, B has no neighbors
+        // B (unsortable, original_pos=1) should stay at position 1
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("X", ());
+        graph.add_node("Y", ());
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_node("C", ());
+        graph.add_edge("X", "A");
+        graph.add_edge("Y", "C");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        let x = lg.node_index[&NodeId::from("X")];
+        let y = lg.node_index[&NodeId::from("Y")];
+        let a = lg.node_index[&NodeId::from("A")];
+        let b = lg.node_index[&NodeId::from("B")];
+        let c = lg.node_index[&NodeId::from("C")];
+
+        lg.order[x] = 0;
+        lg.order[y] = 1;
+        lg.order[a] = 0;
+        lg.order[b] = 1;
+        lg.order[c] = 2;
+
+        let edges = lg.effective_edges_weighted();
+        let fixed = vec![x, y];
+        let free = vec![a, b, c];
+        reorder_layer(&mut lg, &fixed, &free, &edges, true, false);
+
+        assert_eq!(lg.order[a], 0);
+        assert_eq!(lg.order[b], 1);
+        assert_eq!(lg.order[c], 2);
+    }
+
+    #[test]
+    fn test_weighted_barycenter_uniform_weights() {
+        // With all weights = 1.0, weighted barycenter matches unweighted
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_node("C", ());
+        graph.add_edge("A", "B");
+        graph.add_edge("A", "C");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        assert!(lg.edge_weights.iter().all(|&w| w == 1.0));
+
+        run(&mut lg);
+
+        let layers = rank::by_rank(&lg);
+        let edges = lg.effective_edges_weighted();
+        assert_eq!(count_all_crossings(&lg, &layers, &edges), 0);
+    }
+
+    #[test]
+    fn test_weighted_barycenter_nonuniform() {
+        // Layer 0: X(order=0), Y(order=1)
+        // Layer 1: A has edges from X (weight=3) and Y (weight=1)
+        //          B has edge from Y (weight=1)
+        // Weighted barycenter of A = (3*0 + 1*1) / (3+1) = 0.25
+        // A should be before B (barycenter 1.0)
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("X", ());
+        graph.add_node("Y", ());
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_edge("X", "A");
+        graph.add_edge("Y", "A");
+        graph.add_edge("Y", "B");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        // Set non-uniform weight on the X->A edge
+        let x = lg.node_index[&NodeId::from("X")];
+        let a = lg.node_index[&NodeId::from("A")];
+        for (idx, &(from, to, _)) in lg.edges.iter().enumerate() {
+            let (eff_from, eff_to) = if lg.reversed_edges.contains(&idx) {
+                (to, from)
+            } else {
+                (from, to)
+            };
+            if eff_from == x && eff_to == a {
+                lg.edge_weights[idx] = 3.0;
+            }
+        }
+
+        let y = lg.node_index[&NodeId::from("Y")];
+        let b = lg.node_index[&NodeId::from("B")];
+
+        lg.order[x] = 0;
+        lg.order[y] = 1;
+        lg.order[a] = 0;
+        lg.order[b] = 1;
+
+        let edges = lg.effective_edges_weighted();
+        let fixed = vec![x, y];
+        let free = vec![a, b];
+
+        reorder_layer(&mut lg, &fixed, &free, &edges, true, false);
+
+        assert_eq!(
+            lg.order[a], 0,
+            "A (weighted barycenter 0.25) should be first"
+        );
+        assert_eq!(lg.order[b], 1, "B (barycenter 1.0) should be second");
     }
 }
