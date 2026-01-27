@@ -49,24 +49,9 @@ fn draw_edge_label_with_tracking(
 ) -> Option<PlacedLabel> {
     let label_len = label.chars().count();
 
-    // Detect if this is a backward edge (going against layout direction)
-    let is_backward = match direction {
-        Direction::LeftRight => routed.end.x < routed.start.x,
-        Direction::RightLeft => routed.end.x > routed.start.x,
-        Direction::TopDown => routed.end.y < routed.start.y,
-        Direction::BottomTop => routed.end.y > routed.start.y,
-    };
-
     // Calculate base position for label
-    let (base_x, base_y) = if is_backward && routed.segments.len() >= 4 {
-        // For backward edges with 4 segments (connector + 3 routing segments),
-        // place label on segment[2] which is the long corridor segment
-        find_label_position_on_segment(&routed.segments[2], label_len, direction)
-    } else if is_backward && routed.segments.len() == 3 {
-        // For backward edges with 3 segments, use segment[1] (the corridor)
-        find_label_position_on_segment(&routed.segments[1], label_len, direction)
-    } else {
-        // For forward edges, placement depends on layout direction
+    // (backward edges now use the same segment structure as forward edges)
+    let (base_x, base_y) = {
         match direction {
             Direction::TopDown | Direction::BottomTop => {
                 // For vertical layouts with Z-shaped paths (3+ segments),
@@ -177,17 +162,6 @@ fn draw_edge_label_with_tracking(
 
 /// Find the label position on a specific segment (for backward edge labels).
 ///
-/// Places the label at the midpoint of the segment, offset appropriately
-/// based on segment orientation and diagram direction.
-fn find_label_position_on_segment(
-    segment: &Segment,
-    label_len: usize,
-    direction: Direction,
-) -> (usize, usize) {
-    // Default: place label to the left of vertical segments
-    find_label_position_on_segment_with_side(segment, label_len, direction, false)
-}
-
 /// Find the label position on a segment, with control over which side to place it.
 ///
 /// For vertical segments:

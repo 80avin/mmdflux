@@ -36,12 +36,6 @@ pub struct Layout {
     pub h_spacing: usize,
     /// Spacing between nodes vertically.
     pub v_spacing: usize,
-    /// Number of backward edge corridors needed (for routing cycles).
-    pub backward_corridors: usize,
-    /// Width of each backward edge corridor.
-    pub corridor_width: usize,
-    /// Lane assignments for backward edges: (from, to) -> lane number.
-    pub backward_edge_lanes: HashMap<(String, String), usize>,
 
     // --- Edge routing data from normalization ---
     /// Waypoints for each edge, derived from dummy node positions.
@@ -111,13 +105,8 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
     // Step 4: Compute layer dimensions
     let (layer_widths, layer_heights) = compute_layer_dimensions(&layers, &node_dims);
 
-    // Step 5: Identify backward edges and assign corridor lanes
-    let (backward_corridors, backward_edge_lanes) =
-        assign_backward_edge_lanes(diagram, &grid_positions);
-    let corridor_width = 3; // Space for edge line + padding
-
-    // Step 6: Convert grid positions to draw coordinates based on direction
-    let (draw_positions, node_bounds, mut width, mut height) = match diagram.direction {
+    // Step 5: Convert grid positions to draw coordinates based on direction
+    let (draw_positions, node_bounds, width, height) = match diagram.direction {
         Direction::TopDown | Direction::BottomTop => {
             let result = grid_to_draw_vertical(
                 &grid_positions,
@@ -152,22 +141,7 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
         }
     };
 
-    // Step 7: Expand canvas for backward edge corridors
-    if backward_corridors > 0 {
-        let corridor_space = backward_corridors * corridor_width;
-        match diagram.direction {
-            Direction::TopDown | Direction::BottomTop => {
-                // Add space on the right side for vertical layouts
-                width += corridor_space;
-            }
-            Direction::LeftRight | Direction::RightLeft => {
-                // Add space on the bottom for horizontal layouts
-                height += corridor_space;
-            }
-        }
-    }
-
-    // Step 8: Collect node shapes
+    // Step 6: Collect node shapes
     let node_shapes: HashMap<String, Shape> = diagram
         .nodes
         .iter()
@@ -182,9 +156,6 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
         height,
         h_spacing: config.h_spacing,
         v_spacing: config.v_spacing,
-        backward_corridors,
-        corridor_width,
-        backward_edge_lanes,
         edge_waypoints: HashMap::new(),
         edge_label_positions: HashMap::new(),
         node_shapes,
@@ -344,26 +315,9 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
     // Compute layer dimensions
     let (layer_widths, layer_heights) = compute_layer_dimensions(&layers, &node_dims);
 
-    // Identify backward edges from dagre's reversed_edges
-    let backward_edge_lanes: HashMap<(String, String), usize> = result
-        .reversed_edges
-        .iter()
-        .enumerate()
-        .filter_map(|(lane, &edge_idx)| {
-            diagram
-                .edges
-                .get(edge_idx)
-                .map(|edge| ((edge.from.clone(), edge.to.clone()), lane))
-        })
-        .collect();
-
-    let backward_corridors = backward_edge_lanes.len();
-    let corridor_width = 3;
-
     // Convert grid positions to draw coordinates using original ASCII logic
     // Also capture layer positions for waypoint transformation
-    let (draw_positions, node_bounds, mut width, mut height, layer_starts) = match diagram.direction
-    {
+    let (draw_positions, node_bounds, width, height, layer_starts) = match diagram.direction {
         Direction::TopDown | Direction::BottomTop => {
             let result = grid_to_draw_vertical(
                 &grid_positions,
@@ -400,14 +354,38 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         }
     };
 
-    // Expand canvas for backward edge corridors
-    if backward_corridors > 0 {
-        let corridor_space = backward_corridors * corridor_width;
-        match diagram.direction {
-            Direction::TopDown | Direction::BottomTop => width += corridor_space,
-            Direction::LeftRight | Direction::RightLeft => height += corridor_space,
-        }
-    }
+    // Build per-rank anchor mapping from dagre coordinate space to draw coordinate space.
+    // For each rank, collect (dagre_cross_pos, draw_cross_center) pairs from real nodes.
+    // These anchors allow us to map waypoint cross-axis positions accurately instead of
+    // linearly interpolating between source and target.
+    let rank_cross_anchors: Vec<Vec<(f64, f64)>> = layers
+        .iter()
+        .map(|layer| {
+            let mut anchors: Vec<(f64, f64)> = layer
+                .iter()
+                .filter_map(|node_id| {
+                    let dagre_node = result.nodes.get(&dagre::NodeId(node_id.clone()))?;
+                    let &(draw_x, draw_y) = draw_positions.get(node_id)?;
+                    let &(w, h) = node_dims.get(node_id)?;
+
+                    if is_vertical {
+                        // TD/BT: cross-axis is X
+                        let dagre_center_x = dagre_node.x + dagre_node.width / 2.0;
+                        let draw_center_x = (draw_x + w / 2) as f64;
+                        Some((dagre_center_x, draw_center_x))
+                    } else {
+                        // LR/RL: cross-axis is Y
+                        let dagre_center_y = dagre_node.y + dagre_node.height / 2.0;
+                        let draw_center_y = (draw_y + h / 2) as f64;
+                        Some((dagre_center_y, draw_center_y))
+                    }
+                })
+                .collect();
+
+            anchors.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+            anchors
+        })
+        .collect();
 
     // Convert dagre waypoints to Layout format with proper coordinate transformation.
     // Waypoints are in dagre's internal coordinate space (node_sep=50, rank_sep=50) and
@@ -424,50 +402,63 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         if let Some(edge) = diagram.edges.get(*edge_idx) {
             let key = (edge.from.clone(), edge.to.clone());
 
-            // Get source and target draw positions
-            let source_pos = draw_positions.get(&edge.from);
-            let target_pos = draw_positions.get(&edge.to);
+            let canvas_cross_extent = if is_vertical { width } else { height };
 
-            if let (Some(&(src_x, src_y)), Some(&(tgt_x, tgt_y))) = (source_pos, target_pos) {
-                // Get source and target node dimensions to find centers
-                let src_dims = node_dims.get(&edge.from).unwrap_or(&(0, 0));
-                let tgt_dims = node_dims.get(&edge.to).unwrap_or(&(0, 0));
-                let src_center_x = src_x + src_dims.0 / 2;
-                let tgt_center_x = tgt_x + tgt_dims.0 / 2;
-                let src_center_y = src_y + src_dims.1 / 2;
-                let tgt_center_y = tgt_y + tgt_dims.1 / 2;
+            let converted: Vec<(usize, usize)> = waypoints
+                .iter()
+                .map(|wp| {
+                    let rank_idx = wp.rank as usize;
 
-                let converted: Vec<(usize, usize)> = waypoints
-                    .iter()
-                    .map(|wp| {
-                        // Use layer_starts to get the primary axis position
-                        // Rank is the layer index (0-based)
-                        let rank_idx = wp.rank as usize;
+                    if is_vertical {
+                        // TD/BT: primary axis = Y (from layer_starts), cross axis = X (from dagre)
+                        let y = layer_starts.get(rank_idx).copied().unwrap_or(0);
+                        let anchors = rank_cross_anchors
+                            .get(rank_idx)
+                            .map(|a| a.as_slice())
+                            .unwrap_or(&[]);
+                        let x = map_cross_axis(wp.point.x, anchors, canvas_cross_extent);
+                        (x, y)
+                    } else {
+                        // LR/RL: primary axis = X (from layer_starts), cross axis = Y (from dagre)
+                        let x = layer_starts.get(rank_idx).copied().unwrap_or(0);
+                        let anchors = rank_cross_anchors
+                            .get(rank_idx)
+                            .map(|a| a.as_slice())
+                            .unwrap_or(&[]);
+                        let y = map_cross_axis(wp.point.y, anchors, canvas_cross_extent);
+                        (x, y)
+                    }
+                })
+                .collect();
 
-                        if is_vertical {
-                            // For TD/BT: Y from layer_starts, X interpolated
-                            let y = layer_starts.get(rank_idx).copied().unwrap_or(0);
-                            // Interpolate X based on dagre's relative position
-                            // For simplicity, interpolate linearly between source and target
-                            let total_ranks = waypoints.len() + 1;
-                            let progress = (rank_idx as f64) / (total_ranks as f64);
-                            let x = src_center_x as f64
-                                + (tgt_center_x as f64 - src_center_x as f64) * progress;
-                            (x.round() as usize, y)
-                        } else {
-                            // For LR/RL: X from layer_starts, Y interpolated
-                            let x = layer_starts.get(rank_idx).copied().unwrap_or(0);
-                            // Interpolate Y based on dagre's relative position
-                            let total_ranks = waypoints.len() + 1;
-                            let progress = (rank_idx as f64) / (total_ranks as f64);
-                            let y = src_center_y as f64
-                                + (tgt_center_y as f64 - src_center_y as f64) * progress;
-                            (x, y.round() as usize)
-                        }
-                    })
-                    .collect();
+            edge_waypoints_converted.insert(key, converted);
+        }
+    }
 
-                edge_waypoints_converted.insert(key, converted);
+    // Post-process: nudge waypoints that collide with node bounding boxes.
+    // Dagre's ordering should prevent this in most cases, but wide nodes
+    // can occasionally overlap with waypoint positions.
+    for waypoints in edge_waypoints_converted.values_mut() {
+        for wp in waypoints.iter_mut() {
+            for bounds in node_bounds.values() {
+                let (wp_x, wp_y) = *wp;
+
+                // Check if waypoint falls within a node's bounding box
+                let collides = wp_x >= bounds.x
+                    && wp_x < bounds.x + bounds.width
+                    && wp_y >= bounds.y
+                    && wp_y < bounds.y + bounds.height;
+
+                if collides {
+                    // Nudge waypoint to just past the right/bottom edge of the node
+                    if is_vertical {
+                        wp.0 = bounds.x + bounds.width + 1;
+                    } else {
+                        wp.1 = bounds.y + bounds.height + 1;
+                    }
+                    // Only handle first collision per waypoint
+                    break;
+                }
             }
         }
     }
@@ -496,62 +487,10 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         height,
         h_spacing: config.h_spacing,
         v_spacing: config.v_spacing,
-        backward_corridors,
-        corridor_width,
-        backward_edge_lanes,
         edge_waypoints: edge_waypoints_converted,
         edge_label_positions: edge_label_positions_converted,
         node_shapes,
     }
-}
-
-/// Identify backward edges and assign each to a corridor lane.
-///
-/// Returns (count, lane_assignments) where lane_assignments maps (from, to) to lane number.
-/// Lanes are assigned in a deterministic order based on edge source/target positions.
-fn assign_backward_edge_lanes(
-    diagram: &Diagram,
-    grid_positions: &HashMap<String, GridPos>,
-) -> (usize, HashMap<(String, String), usize>) {
-    let mut backward_edges: Vec<_> = diagram
-        .edges
-        .iter()
-        .filter(|edge| {
-            if let (Some(from_pos), Some(to_pos)) =
-                (grid_positions.get(&edge.from), grid_positions.get(&edge.to))
-            {
-                // Backward edge: target is in an earlier layer than source
-                match diagram.direction {
-                    Direction::TopDown | Direction::LeftRight => to_pos.layer < from_pos.layer,
-                    Direction::BottomTop | Direction::RightLeft => to_pos.layer > from_pos.layer,
-                }
-            } else {
-                false
-            }
-        })
-        .collect();
-
-    // Sort backward edges for deterministic lane assignment
-    // Sort by source layer (descending), then by target layer, then by edge names
-    backward_edges.sort_by(|a, b| {
-        let a_from = grid_positions.get(&a.from).map(|p| p.layer).unwrap_or(0);
-        let b_from = grid_positions.get(&b.from).map(|p| p.layer).unwrap_or(0);
-        let a_to = grid_positions.get(&a.to).map(|p| p.layer).unwrap_or(0);
-        let b_to = grid_positions.get(&b.to).map(|p| p.layer).unwrap_or(0);
-
-        b_from
-            .cmp(&a_from) // Edges from later layers get outer lanes
-            .then(a_to.cmp(&b_to))
-            .then(a.from.cmp(&b.from))
-            .then(a.to.cmp(&b.to))
-    });
-
-    let mut lane_assignments = HashMap::new();
-    for (lane, edge) in backward_edges.iter().enumerate() {
-        lane_assignments.insert((edge.from.clone(), edge.to.clone()), lane);
-    }
-
-    (backward_edges.len(), lane_assignments)
 }
 
 /// Perform topological sort and group nodes into layers.
@@ -916,6 +855,88 @@ fn grid_to_draw_horizontal(
     }
 }
 
+/// Map a dagre cross-axis coordinate to draw coordinate using anchor points at a given rank.
+///
+/// Uses piecewise linear interpolation between known node positions.
+/// If the target coordinate is outside the anchor range, extrapolates from the nearest pair.
+/// Falls back to returning the coordinate clamped to canvas bounds if no anchors exist.
+fn map_cross_axis(dagre_pos: f64, anchors: &[(f64, f64)], canvas_extent: usize) -> usize {
+    match anchors.len() {
+        0 => {
+            // No anchors at this rank — clamp to canvas center
+            canvas_extent / 2
+        }
+        1 => {
+            // Single anchor: offset from it
+            let (dagre_anchor, draw_anchor) = anchors[0];
+            let offset = dagre_pos - dagre_anchor;
+            // Scale: dagre uses node_sep=50, draw uses h_spacing≈4-6
+            // Use ratio of ~0.1 as rough scaling factor
+            let scaled_offset = offset * 0.1;
+            let result = draw_anchor + scaled_offset;
+            result
+                .round()
+                .max(0.0)
+                .min(canvas_extent.saturating_sub(1) as f64) as usize
+        }
+        _ => {
+            // Multiple anchors: piecewise linear interpolation
+            // Find the two anchors bracketing dagre_pos
+            if dagre_pos <= anchors[0].0 {
+                // Before first anchor — extrapolate from first two
+                let (d0, w0) = anchors[0];
+                let (d1, w1) = anchors[1];
+                let ratio = if (d1 - d0).abs() > f64::EPSILON {
+                    (dagre_pos - d0) / (d1 - d0)
+                } else {
+                    0.0
+                };
+                let result = w0 + ratio * (w1 - w0);
+                result
+                    .round()
+                    .max(0.0)
+                    .min(canvas_extent.saturating_sub(1) as f64) as usize
+            } else if dagre_pos >= anchors[anchors.len() - 1].0 {
+                // After last anchor — extrapolate from last two
+                let n = anchors.len();
+                let (d0, w0) = anchors[n - 2];
+                let (d1, w1) = anchors[n - 1];
+                let ratio = if (d1 - d0).abs() > f64::EPSILON {
+                    (dagre_pos - d0) / (d1 - d0)
+                } else {
+                    1.0
+                };
+                let result = w0 + ratio * (w1 - w0);
+                result
+                    .round()
+                    .max(0.0)
+                    .min(canvas_extent.saturating_sub(1) as f64) as usize
+            } else {
+                // Between two anchors — interpolate
+                for i in 0..anchors.len() - 1 {
+                    let (d0, w0) = anchors[i];
+                    let (d1, w1) = anchors[i + 1];
+                    if dagre_pos >= d0 && dagre_pos <= d1 {
+                        let ratio = if (d1 - d0).abs() > f64::EPSILON {
+                            (dagre_pos - d0) / (d1 - d0)
+                        } else {
+                            0.5
+                        };
+                        let result = w0 + ratio * (w1 - w0);
+                        return result
+                            .round()
+                            .max(0.0)
+                            .min(canvas_extent.saturating_sub(1) as f64)
+                            as usize;
+                    }
+                }
+                // Shouldn't reach here but fallback
+                canvas_extent / 2
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1119,9 +1140,6 @@ mod tests {
         // Should still produce a layout (cycle is handled)
         assert!(layout.draw_positions.contains_key("A"));
         assert!(layout.draw_positions.contains_key("B"));
-
-        // Should have a backward edge
-        assert_eq!(layout.backward_corridors, 1);
     }
 
     #[test]
