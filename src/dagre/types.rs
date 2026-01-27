@@ -37,9 +37,14 @@ pub enum Direction {
 }
 
 impl Direction {
-    /// Is this a vertical (TB/BT) or horizontal (LR/RL) layout?
+    /// Is this a vertical (TB/BT) layout?
     pub fn is_vertical(&self) -> bool {
         matches!(self, Direction::TopBottom | Direction::BottomTop)
+    }
+
+    /// Is this a horizontal (LR/RL) layout?
+    pub fn is_horizontal(&self) -> bool {
+        matches!(self, Direction::LeftRight | Direction::RightLeft)
     }
 
     /// Is this a reversed direction (BT or RL)?

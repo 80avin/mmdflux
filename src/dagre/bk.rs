@@ -72,6 +72,7 @@ impl BlockAlignment {
     ///
     /// This adds `v` to the block containing `w`. The `align` pointer of `v`
     /// points to `w`, and `v`'s root becomes `w`'s root.
+    #[allow(dead_code)]
     pub fn align_nodes(&mut self, v: NodeIndex, w: NodeIndex) {
         // Set alignment: v points to w
         self.align.insert(v, w);
@@ -100,6 +101,7 @@ impl BlockAlignment {
     }
 
     /// Check if two nodes are in the same block.
+    #[allow(dead_code)]
     pub fn same_block(&self, v: NodeIndex, w: NodeIndex) -> bool {
         self.get_root(v) == self.get_root(w)
     }
@@ -193,7 +195,8 @@ pub struct BKConfig {
     /// Minimum separation between adjacent nodes.
     pub node_sep: f64,
 
-    /// Layout direction (affects which axis is "horizontal").
+    /// Layout direction - determines whether to use node width or height
+    /// for separation calculations. For TD/BT, uses width. For LR/RL, uses height.
     pub direction: Direction,
 }
 
@@ -293,6 +296,7 @@ pub fn get_neighbors(graph: &LayoutGraph, node: NodeIndex, downward: bool) -> Ve
 /// depending on `prefer_left`.
 ///
 /// Returns `None` if the node has no neighbors in the specified direction.
+#[allow(dead_code)]
 pub fn get_median_neighbor(
     graph: &LayoutGraph,
     node: NodeIndex,
@@ -342,10 +346,18 @@ pub fn is_dummy(graph: &LayoutGraph, node: NodeIndex) -> bool {
     graph.is_dummy_index(node)
 }
 
-/// Get the width of a node.
+/// Get the "width" of a node in the coordinate axis being optimized.
+///
+/// For TD/BT layouts, this returns the actual width (x-axis separation).
+/// For LR/RL layouts, this returns the height (y-axis separation).
 #[inline]
-pub fn get_width(graph: &LayoutGraph, node: NodeIndex) -> f64 {
-    graph.dimensions[node].0
+pub fn get_width(graph: &LayoutGraph, node: NodeIndex, direction: Direction) -> f64 {
+    let (w, h) = graph.dimensions[node];
+    if direction.is_horizontal() {
+        h // LR/RL: optimize y-axis, so "width" is height
+    } else {
+        w // TD/BT: optimize x-axis, so "width" is width
+    }
 }
 
 // =============================================================================
@@ -780,8 +792,8 @@ fn place_block(
 
                     // Compute required separation
                     // Distance from center of left node to center of this node
-                    let left_width = get_width(graph, left);
-                    let node_width = get_width(graph, node);
+                    let left_width = get_width(graph, left, config.direction);
+                    let node_width = get_width(graph, node, config.direction);
                     let min_separation = (left_width + node_width) / 2.0 + config.node_sep;
 
                     // Update our position if needed
@@ -800,13 +812,17 @@ fn place_block(
 }
 
 /// Calculate the total width of a compaction result.
-pub fn calculate_width(graph: &LayoutGraph, result: &CompactionResult) -> f64 {
+pub fn calculate_width(
+    graph: &LayoutGraph,
+    result: &CompactionResult,
+    direction: Direction,
+) -> f64 {
     let mut min_x = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
 
     for node in 0..graph.node_ids.len() {
         if let Some(&x) = result.x.get(&node) {
-            let width = get_width(graph, node);
+            let width = get_width(graph, node, direction);
             min_x = min_x.min(x - width / 2.0);
             max_x = max_x.max(x + width / 2.0);
         }
@@ -840,12 +856,13 @@ fn compute_all_alignments(
 fn find_smallest_width(
     graph: &LayoutGraph,
     results: &HashMap<AlignmentDirection, CompactionResult>,
+    direction: Direction,
 ) -> AlignmentDirection {
     let mut best_dir = AlignmentDirection::UL;
     let mut best_width = f64::INFINITY;
 
     for (dir, result) in results {
-        let width = calculate_width(graph, result);
+        let width = calculate_width(graph, result, direction);
         if width < best_width {
             best_width = width;
             best_dir = *dir;
@@ -856,13 +873,13 @@ fn find_smallest_width(
 }
 
 /// Find the bounding box (min_x, max_x) of a compaction result.
-fn find_bounds(graph: &LayoutGraph, result: &CompactionResult) -> (f64, f64) {
+fn find_bounds(graph: &LayoutGraph, result: &CompactionResult, direction: Direction) -> (f64, f64) {
     let mut min_x = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
 
     for node in 0..graph.node_ids.len() {
         if let Some(&x) = result.x.get(&node) {
-            let width = get_width(graph, node);
+            let width = get_width(graph, node, direction);
             min_x = min_x.min(x - width / 2.0);
             max_x = max_x.max(x + width / 2.0);
         }
@@ -879,16 +896,17 @@ fn align_to_smallest(
     graph: &LayoutGraph,
     results: &mut HashMap<AlignmentDirection, CompactionResult>,
     smallest: AlignmentDirection,
+    direction: Direction,
 ) {
     let smallest_result = results.get(&smallest).unwrap();
-    let (target_min, target_max) = find_bounds(graph, smallest_result);
+    let (target_min, target_max) = find_bounds(graph, smallest_result, direction);
 
     for (dir, result) in results.iter_mut() {
         if *dir == smallest {
             continue;
         }
 
-        let (result_min, result_max) = find_bounds(graph, result);
+        let (result_min, result_max) = find_bounds(graph, result, direction);
 
         // Determine shift based on alignment direction's horizontal bias
         let shift = if dir.prefers_left() {
@@ -974,10 +992,10 @@ pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, 
     let mut results = compute_all_alignments(graph, &conflicts, config);
 
     // Step 3: Find smallest width
-    let smallest = find_smallest_width(graph, &results);
+    let smallest = find_smallest_width(graph, &results, config.direction);
 
     // Step 4: Align others to smallest's bounds
-    align_to_smallest(graph, &mut results, smallest);
+    align_to_smallest(graph, &mut results, smallest, config.direction);
 
     // Step 5: Balance (median of all 4)
     balance(graph, &results)
@@ -1298,7 +1316,10 @@ mod tests {
         let lg = make_diamond_graph();
         let a = lg.node_index[&"A".into()];
 
-        assert_eq!(get_width(&lg, a), 100.0);
+        // For TD/BT layouts, get_width returns the actual width
+        assert_eq!(get_width(&lg, a, Direction::TopBottom), 100.0);
+        // For LR/RL layouts, get_width returns the height
+        assert_eq!(get_width(&lg, a, Direction::LeftRight), 50.0);
     }
 
     #[test]
@@ -1541,7 +1562,7 @@ mod tests {
 
         let a = lg.node_index[&"A".into()];
         let b = lg.node_index[&"B".into()];
-        let c = lg.node_index[&"C".into()];
+        let _c = lg.node_index[&"C".into()];
         let d = lg.node_index[&"D".into()];
 
         // In a diamond A -> B,C -> D:
@@ -1749,7 +1770,7 @@ mod tests {
         let config = BKConfig::default();
         let result = horizontal_compaction(&lg, &alignment, &config);
 
-        let width = calculate_width(&lg, &result);
+        let width = calculate_width(&lg, &result, config.direction);
         assert!(width > 0.0, "Width should be positive");
     }
 
@@ -1880,7 +1901,7 @@ mod tests {
         graph.add_node("B", (100.0, 50.0));
         let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
 
-        let (min_x, max_x) = find_bounds(&lg, &result);
+        let (min_x, max_x) = find_bounds(&lg, &result, Direction::TopBottom);
 
         assert_eq!(min_x, 0.0);
         assert_eq!(max_x, 250.0);

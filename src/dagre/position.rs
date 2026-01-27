@@ -1,7 +1,9 @@
 //! Phase 4: Assign x, y coordinates to nodes.
 //!
-//! Implements a simplified coordinate assignment with layer centering.
+//! Implements coordinate assignment using the Brandes-Köpf algorithm for
+//! optimal horizontal positioning, with y-coordinates based on layer rank.
 
+use super::bk::{BKConfig, position_x};
 use super::graph::LayoutGraph;
 use super::rank;
 use super::types::{Direction, LayoutConfig, Point};
@@ -41,34 +43,32 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
         return;
     }
 
-    // Calculate max width per layer for centering
-    let layer_widths: Vec<f64> = layers
-        .iter()
-        .map(|layer| {
-            let content: f64 = layer.iter().map(|&n| graph.dimensions[n].0).sum();
-            let spacing = if layer.len() > 1 {
-                (layer.len() - 1) as f64 * config.node_sep
-            } else {
-                0.0
-            };
-            content + spacing
-        })
-        .collect();
+    // Use Brandes-Köpf algorithm for x-coordinate assignment
+    let bk_config = BKConfig {
+        node_sep: config.node_sep,
+        direction: config.direction,
+    };
+    let x_coords = position_x(graph, &bk_config);
 
-    let max_width = layer_widths.iter().cloned().fold(0.0, f64::max);
+    // Find minimum x to shift everything to start at margin
+    let min_x = x_coords
+        .values()
+        .zip(graph.dimensions.iter())
+        .map(|(&center_x, (w, _))| center_x - w / 2.0)
+        .fold(f64::INFINITY, f64::min);
 
-    // Assign Y based on rank, X based on order within layer
+    let x_shift = config.margin - min_x;
+
+    // Assign Y based on rank, X from BK algorithm
     let mut y = config.margin;
 
-    for (rank, layer) in layers.iter().enumerate() {
-        let layer_width = layer_widths[rank];
-        let start_x = config.margin + (max_width - layer_width) / 2.0;
-
-        let mut x = start_x;
+    for layer in layers.iter() {
         for &node in layer {
             let (w, _h) = graph.dimensions[node];
+            // BK returns center x, convert to top-left corner
+            let center_x = x_coords.get(&node).copied().unwrap_or(0.0);
+            let x = center_x - w / 2.0 + x_shift;
             graph.positions[node] = Point { x, y };
-            x += w + config.node_sep;
         }
 
         // Y advances by max height in this layer
@@ -85,34 +85,33 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
         return;
     }
 
-    // Calculate max height per layer for centering
-    let layer_heights: Vec<f64> = layers
-        .iter()
-        .map(|layer| {
-            let content: f64 = layer.iter().map(|&n| graph.dimensions[n].1).sum();
-            let spacing = if layer.len() > 1 {
-                (layer.len() - 1) as f64 * config.node_sep
-            } else {
-                0.0
-            };
-            content + spacing
-        })
-        .collect();
+    // Use Brandes-Köpf algorithm for y-coordinate assignment (perpendicular to rank)
+    // BK always optimizes the "horizontal" axis (perpendicular to layer direction)
+    let bk_config = BKConfig {
+        node_sep: config.node_sep,
+        direction: config.direction,
+    };
+    let y_coords = position_x(graph, &bk_config);
 
-    let max_height = layer_heights.iter().cloned().fold(0.0, f64::max);
+    // Find minimum y to shift everything to start at margin
+    let min_y = y_coords
+        .values()
+        .zip(graph.dimensions.iter())
+        .map(|(&center_y, (_, h))| center_y - h / 2.0)
+        .fold(f64::INFINITY, f64::min);
 
-    // Assign X based on rank, Y based on order within layer
+    let y_shift = config.margin - min_y;
+
+    // Assign X based on rank, Y from BK algorithm
     let mut x = config.margin;
 
-    for (rank, layer) in layers.iter().enumerate() {
-        let layer_height = layer_heights[rank];
-        let start_y = config.margin + (max_height - layer_height) / 2.0;
-
-        let mut y = start_y;
+    for layer in layers.iter() {
         for &node in layer {
             let (_w, h) = graph.dimensions[node];
+            // BK returns center position, convert to top-left corner
+            let center_y = y_coords.get(&node).copied().unwrap_or(0.0);
+            let y = center_y - h / 2.0 + y_shift;
             graph.positions[node] = Point { x, y };
-            y += h + config.node_sep;
         }
 
         // X advances by max width in this layer
