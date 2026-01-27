@@ -816,13 +816,142 @@ pub fn calculate_width(graph: &LayoutGraph, result: &CompactionResult) -> f64 {
 }
 
 // =============================================================================
+// Balance and Final Coordinate Assignment
+// =============================================================================
+
+/// Compute all four alignment/compaction results.
+fn compute_all_alignments(
+    graph: &LayoutGraph,
+    conflicts: &ConflictSet,
+    config: &BKConfig,
+) -> HashMap<AlignmentDirection, CompactionResult> {
+    let mut results = HashMap::new();
+
+    for direction in AlignmentDirection::all() {
+        let alignment = vertical_alignment(graph, conflicts, direction);
+        let compaction = horizontal_compaction(graph, &alignment, config);
+        results.insert(direction, compaction);
+    }
+
+    results
+}
+
+/// Find the alignment with smallest total width.
+fn find_smallest_width(
+    graph: &LayoutGraph,
+    results: &HashMap<AlignmentDirection, CompactionResult>,
+) -> AlignmentDirection {
+    let mut best_dir = AlignmentDirection::UL;
+    let mut best_width = f64::INFINITY;
+
+    for (dir, result) in results {
+        let width = calculate_width(graph, result);
+        if width < best_width {
+            best_width = width;
+            best_dir = *dir;
+        }
+    }
+
+    best_dir
+}
+
+/// Find the bounding box (min_x, max_x) of a compaction result.
+fn find_bounds(graph: &LayoutGraph, result: &CompactionResult) -> (f64, f64) {
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+
+    for node in 0..graph.node_ids.len() {
+        if let Some(&x) = result.x.get(&node) {
+            let width = get_width(graph, node);
+            min_x = min_x.min(x - width / 2.0);
+            max_x = max_x.max(x + width / 2.0);
+        }
+    }
+
+    (min_x, max_x)
+}
+
+/// Align all results to the smallest width result's bounds.
+///
+/// This shifts each alignment so they share common boundaries,
+/// making the median more meaningful.
+fn align_to_smallest(
+    graph: &LayoutGraph,
+    results: &mut HashMap<AlignmentDirection, CompactionResult>,
+    smallest: AlignmentDirection,
+) {
+    let smallest_result = results.get(&smallest).unwrap();
+    let (target_min, target_max) = find_bounds(graph, smallest_result);
+
+    for (dir, result) in results.iter_mut() {
+        if *dir == smallest {
+            continue;
+        }
+
+        let (result_min, result_max) = find_bounds(graph, result);
+
+        // Determine shift based on alignment direction's horizontal bias
+        let shift = if dir.prefers_left() {
+            target_min - result_min // Align left edges
+        } else {
+            target_max - result_max // Align right edges
+        };
+
+        // Apply shift to all coordinates
+        for x in result.x.values_mut() {
+            *x += shift;
+        }
+    }
+}
+
+/// Compute final x-coordinates as median of all 4 alignments.
+fn balance(
+    graph: &LayoutGraph,
+    results: &HashMap<AlignmentDirection, CompactionResult>,
+) -> HashMap<NodeIndex, f64> {
+    let mut final_x = HashMap::new();
+
+    for node in 0..graph.node_ids.len() {
+        let mut xs: Vec<f64> = results
+            .values()
+            .filter_map(|r| r.x.get(&node).copied())
+            .collect();
+
+        if xs.is_empty() {
+            continue;
+        }
+
+        xs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+        // Median of values
+        let median = if xs.len() == 4 {
+            // For 4 values: average of middle 2
+            (xs[1] + xs[2]) / 2.0
+        } else if xs.len() >= 2 {
+            let mid = xs.len() / 2;
+            if xs.len() % 2 == 0 {
+                (xs[mid - 1] + xs[mid]) / 2.0
+            } else {
+                xs[mid]
+            }
+        } else {
+            xs[0]
+        };
+
+        final_x.insert(node, median);
+    }
+
+    final_x
+}
+
+// =============================================================================
 // Main Algorithm Entry Point
 // =============================================================================
 
 /// Main entry point for Brandes-Köpf coordinate assignment.
 ///
-/// Returns x-coordinates for all nodes in the graph that minimize total
-/// edge length while respecting separation constraints.
+/// Returns x-coordinates (center of node) for all nodes in the graph that
+/// minimize total edge length while respecting separation constraints.
 ///
 /// # Algorithm
 ///
@@ -830,17 +959,28 @@ pub fn calculate_width(graph: &LayoutGraph, result: &CompactionResult) -> f64 {
 /// 2. For each of 4 alignment directions (UL, UR, DL, DR):
 ///    a. Compute vertical alignment (group nodes into blocks)
 ///    b. Compute horizontal compaction (assign x-coordinates)
-/// 3. Select the alignment with smallest width
-/// 4. Balance by taking median of all 4 alignments
-#[allow(unused_variables)] // TODO: Remove when implemented
+/// 3. Find the alignment with smallest width
+/// 4. Align all results to the smallest's bounds
+/// 5. Return median of all 4 alignments for each node
 pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, f64> {
-    // TODO: Implement in subsequent tasks
-    // 1. Find conflicts
-    // 2. Compute 4 alignments
-    // 3. Compact each alignment
-    // 4. Balance and return
+    if graph.node_ids.is_empty() {
+        return HashMap::new();
+    }
 
-    HashMap::new()
+    // Step 1: Find all conflicts
+    let conflicts = find_all_conflicts(graph);
+
+    // Step 2: Compute all 4 alignments
+    let mut results = compute_all_alignments(graph, &conflicts, config);
+
+    // Step 3: Find smallest width
+    let smallest = find_smallest_width(graph, &results);
+
+    // Step 4: Align others to smallest's bounds
+    align_to_smallest(graph, &mut results, smallest);
+
+    // Step 5: Balance (median of all 4)
+    balance(graph, &results)
 }
 
 #[cfg(test)]
@@ -1623,5 +1763,147 @@ mod tests {
         let result = horizontal_compaction(&lg, &alignment, &config);
 
         assert!(result.x.is_empty());
+    }
+
+    // =========================================================================
+    // Balance and Full Algorithm Tests
+    // =========================================================================
+
+    #[test]
+    fn test_balance_produces_median() {
+        // Create mock results with known values
+        let mut results: HashMap<AlignmentDirection, CompactionResult> = HashMap::new();
+
+        let mut ul = CompactionResult::new();
+        ul.x.insert(0, 10.0);
+        results.insert(AlignmentDirection::UL, ul);
+
+        let mut ur = CompactionResult::new();
+        ur.x.insert(0, 20.0);
+        results.insert(AlignmentDirection::UR, ur);
+
+        let mut dl = CompactionResult::new();
+        dl.x.insert(0, 30.0);
+        results.insert(AlignmentDirection::DL, dl);
+
+        let mut dr = CompactionResult::new();
+        dr.x.insert(0, 40.0);
+        results.insert(AlignmentDirection::DR, dr);
+
+        // Create minimal graph with one node
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+
+        let final_x = balance(&lg, &results);
+
+        // Median of [10, 20, 30, 40] = (20 + 30) / 2 = 25
+        assert_eq!(final_x.get(&0), Some(&25.0));
+    }
+
+    #[test]
+    fn test_position_x_chain() {
+        let lg = make_chain_graph();
+        let config = BKConfig::default();
+
+        let x_coords = position_x(&lg, &config);
+
+        // All nodes should have x-coordinates
+        assert_eq!(x_coords.len(), 3);
+
+        // All should have valid (finite) coordinates
+        for &x in x_coords.values() {
+            assert!(x.is_finite());
+        }
+    }
+
+    #[test]
+    fn test_position_x_diamond() {
+        let lg = make_diamond_graph();
+        let config = BKConfig::default();
+
+        let x_coords = position_x(&lg, &config);
+
+        // All nodes should have x-coordinates
+        assert_eq!(x_coords.len(), 4);
+
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+
+        let x_b = x_coords.get(&b).unwrap();
+        let x_c = x_coords.get(&c).unwrap();
+
+        // B and C should have different x-coordinates (they're in the same layer)
+        assert!(
+            (x_b - x_c).abs() > 1.0,
+            "B and C should be separated, got B={}, C={}",
+            x_b,
+            x_c
+        );
+    }
+
+    #[test]
+    fn test_position_x_empty() {
+        let graph: DiGraph<(f64, f64)> = DiGraph::new();
+        let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        let config = BKConfig::default();
+
+        let x_coords = position_x(&lg, &config);
+
+        assert!(x_coords.is_empty());
+    }
+
+    #[test]
+    fn test_position_x_single_node() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        let config = BKConfig::default();
+        let x_coords = position_x(&lg, &config);
+
+        assert_eq!(x_coords.len(), 1);
+        assert!(x_coords.get(&0).unwrap().is_finite());
+    }
+
+    #[test]
+    fn test_find_bounds() {
+        let mut result = CompactionResult::new();
+        result.x.insert(0, 50.0); // center at 50, width 100 -> bounds [0, 100]
+        result.x.insert(1, 200.0); // center at 200, width 100 -> bounds [150, 250]
+
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+
+        let (min_x, max_x) = find_bounds(&lg, &result);
+
+        assert_eq!(min_x, 0.0);
+        assert_eq!(max_x, 250.0);
+    }
+
+    #[test]
+    fn test_compute_all_alignments() {
+        let lg = make_diamond_graph();
+        let conflicts = ConflictSet::new();
+        let config = BKConfig::default();
+
+        let results = compute_all_alignments(&lg, &conflicts, &config);
+
+        // Should have all 4 alignments
+        assert_eq!(results.len(), 4);
+        assert!(results.contains_key(&AlignmentDirection::UL));
+        assert!(results.contains_key(&AlignmentDirection::UR));
+        assert!(results.contains_key(&AlignmentDirection::DL));
+        assert!(results.contains_key(&AlignmentDirection::DR));
+
+        // Each should have coordinates for all 4 nodes
+        for result in results.values() {
+            assert_eq!(result.x.len(), 4);
+        }
     }
 }
