@@ -122,6 +122,7 @@ fn draw_edge_label_with_tracking(
         find_safe_label_position(canvas, base_x, base_y, label_len, direction, placed_labels);
 
     // Write the label only to non-node cells, avoiding the arrow position
+    // Labels can overwrite edge cells since they're drawn after edges and should appear on top
     // For horizontal layouts, don't overwrite the arrow at routed.end
     let arrow_pos = (routed.end.x, routed.end.y);
     for (i, ch) in label.chars().enumerate() {
@@ -130,7 +131,7 @@ fn draw_edge_label_with_tracking(
         if x == arrow_pos.0 && label_y == arrow_pos.1 {
             continue;
         }
-        // Only write if cell is not part of a node
+        // Only write if cell is not part of a node (but edge cells can be overwritten)
         if canvas.get(x, label_y).is_some_and(|cell| !cell.is_node) {
             canvas.set(x, label_y, ch);
         }
@@ -245,7 +246,7 @@ fn find_safe_label_position(
     (base_x, base_y)
 }
 
-/// Check if placing a label at the given position would collide with any node cells or other labels.
+/// Check if placing a label at the given position would collide with any node cells, edge cells, or other labels.
 fn label_has_collision(
     canvas: &Canvas,
     x: usize,
@@ -255,6 +256,10 @@ fn label_has_collision(
 ) -> bool {
     // Check collision with nodes
     if label_collides_with_node(canvas, x, y, label_len) {
+        return true;
+    }
+    // Check collision with edge path characters
+    if label_collides_with_edge(canvas, x, y, label_len) {
         return true;
     }
     // Check collision with already placed labels
@@ -269,6 +274,11 @@ fn label_has_collision(
 /// Check if placing a label at the given position would collide with any node cells.
 fn label_collides_with_node(canvas: &Canvas, x: usize, y: usize, label_len: usize) -> bool {
     (0..label_len).any(|i| canvas.get(x + i, y).is_some_and(|cell| cell.is_node))
+}
+
+/// Check if placing a label at the given position would collide with any edge cells.
+fn label_collides_with_edge(canvas: &Canvas, x: usize, y: usize, label_len: usize) -> bool {
+    (0..label_len).any(|i| canvas.get(x + i, y).is_some_and(|cell| cell.is_edge))
 }
 
 /// Calculate the length of a segment.
@@ -525,7 +535,7 @@ fn draw_label_at_position(
     // Center the label on the given position
     let label_x = x.saturating_sub(label_len / 2);
 
-    // Write the label only to non-node cells
+    // Write the label only to non-node cells (but edge cells can be overwritten)
     for (i, ch) in label.chars().enumerate() {
         let cell_x = label_x + i;
         if canvas.get(cell_x, y).is_some_and(|cell| !cell.is_node) {
@@ -743,5 +753,34 @@ mod tests {
             x_end: 20,
         };
         assert_eq!(segment_midpoint(&horizontal), (15, 5));
+    }
+
+    #[test]
+    fn test_label_collides_with_edge() {
+        let mut canvas = Canvas::new(20, 10);
+        let charset = CharSet::unicode();
+
+        // Draw a horizontal edge segment
+        let connections = Connections {
+            up: false,
+            down: false,
+            left: true,
+            right: true,
+        };
+        for x in 5..15 {
+            canvas.set_with_connection(x, 5, connections, &charset);
+        }
+
+        // Label at y=5 should collide with edge
+        assert!(label_collides_with_edge(&canvas, 7, 5, 5));
+
+        // Label at y=4 should not collide
+        assert!(!label_collides_with_edge(&canvas, 7, 4, 5));
+
+        // Label at y=6 should not collide
+        assert!(!label_collides_with_edge(&canvas, 7, 6, 5));
+
+        // Partial overlap still collides
+        assert!(label_collides_with_edge(&canvas, 3, 5, 5)); // ends at x=7, overlapping edge at x=5-7
     }
 }

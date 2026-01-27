@@ -40,6 +40,8 @@ pub struct Cell {
     pub connections: Connections,
     /// Whether this cell is part of a node (protected from edge overwrite).
     pub is_node: bool,
+    /// Whether this cell is part of an edge path (protected from label overwrite).
+    pub is_edge: bool,
 }
 
 impl Cell {
@@ -49,6 +51,7 @@ impl Cell {
             ch: ' ',
             connections: Connections::none(),
             is_node: false,
+            is_edge: false,
         }
     }
 
@@ -58,6 +61,7 @@ impl Cell {
             ch,
             connections: Connections::none(),
             is_node: false,
+            is_edge: false,
         }
     }
 }
@@ -135,6 +139,7 @@ impl Canvas {
     ///
     /// This merges the new connections with existing ones and uses the
     /// charset to determine the appropriate junction character.
+    /// Also marks the cell as an edge cell (protected from label overwrite).
     ///
     /// Returns `false` if the position is out of bounds or the cell is protected.
     pub fn set_with_connection(
@@ -150,6 +155,7 @@ impl Canvas {
             }
             cell.connections.merge(connections);
             cell.ch = charset.junction(cell.connections);
+            cell.is_edge = true;
             true
         } else {
             false
