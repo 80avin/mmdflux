@@ -101,10 +101,68 @@ fn layout_config_for_diagram(diagram: &Diagram) -> LayoutConfig {
         Direction::TopDown | Direction::BottomTop => {
             // For vertical layouts, increase v_spacing to fit labels
             if max_label_len > 0 {
-                config.v_spacing = config.v_spacing.max(3);
+                // Check if any source node has multiple labeled edges (branching)
+                // These need extra space so labels don't overlap
+                let (has_branching, left_len, right_len) = branching_label_info(diagram);
+                if has_branching {
+                    // Branching edges need more vertical space:
+                    // - 1 row for edge chars leaving source
+                    // - 1 row for horizontal spread
+                    // - 1 row for labels
+                    // - 1 row for arrows/entry
+                    config.v_spacing = config.v_spacing.max(5);
+                    // Also need more horizontal space for labels on each branch
+                    let max_branching_len = left_len.max(right_len);
+                    config.h_spacing = config.h_spacing.max(max_branching_len + 4);
+                    // Asymmetric margins: only add margin where the label extends
+                    config.left_label_margin = left_len;
+                    config.right_label_margin = right_len;
+                } else {
+                    config.v_spacing = config.v_spacing.max(3);
+                }
             }
         }
     }
 
     config
+}
+
+/// Check if the diagram has branching edges with labels and return margin info.
+///
+/// Returns (has_branching, left_label_len, right_label_len) where:
+/// - has_branching is true if any source node has multiple outgoing edges with labels
+/// - left_label_len is the max label length for left branches (first target in declaration order)
+/// - right_label_len is the max label length for right branches (subsequent targets)
+fn branching_label_info(diagram: &Diagram) -> (bool, usize, usize) {
+    use std::collections::HashMap;
+
+    // Group labeled edges by source node, preserving declaration order
+    let mut labeled_edges_per_source: HashMap<&str, Vec<&str>> = HashMap::new();
+    for edge in &diagram.edges {
+        if let Some(ref label) = edge.label {
+            labeled_edges_per_source
+                .entry(&edge.from)
+                .or_default()
+                .push(label);
+        }
+    }
+
+    // Find sources with 2+ labeled edges
+    // First label goes left, rest go right (based on typical layout ordering)
+    let mut has_branching = false;
+    let mut max_left_len = 0;
+    let mut max_right_len = 0;
+    for labels in labeled_edges_per_source.values() {
+        if labels.len() >= 2 {
+            has_branching = true;
+            // First declared target typically ends up on the left
+            max_left_len = max_left_len.max(labels[0].chars().count());
+            // Remaining targets go to the right
+            for label in &labels[1..] {
+                max_right_len = max_right_len.max(label.chars().count());
+            }
+        }
+    }
+
+    (has_branching, max_left_len, max_right_len)
 }

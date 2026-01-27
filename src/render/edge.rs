@@ -66,40 +66,73 @@ fn draw_edge_label_with_tracking(
         // For backward edges with 3 segments, use segment[1] (the corridor)
         find_label_position_on_segment(&routed.segments[1], label_len, direction)
     } else {
-        // For forward edges, use midpoint between start and end
-        let mid_x = (routed.start.x + routed.end.x) / 2;
-        let mid_y = (routed.start.y + routed.end.y) / 2;
-        let label_x = mid_x.saturating_sub(label_len / 2);
-
-        // For horizontal layouts, ensure label doesn't touch source or target
-        // by leaving at least 1 cell padding on each side when there's room
-        let label_x = match direction {
+        // For forward edges, placement depends on layout direction
+        match direction {
+            Direction::TopDown | Direction::BottomTop => {
+                // For vertical layouts with Z-shaped paths (3+ segments),
+                // place label next to the final vertical segment going to target.
+                // This ensures branching edges have labels at different X positions.
+                if routed.segments.len() >= 3 {
+                    // Find the last vertical segment (the one approaching target)
+                    if let Some(last_vert) = routed
+                        .segments
+                        .iter()
+                        .rev()
+                        .find(|s| matches!(s, Segment::Vertical { .. }))
+                    {
+                        // Determine which side to place the label based on target position
+                        // If target is to the right of source, place label to the right
+                        let place_right = routed.end.x > routed.start.x;
+                        find_label_position_on_segment_with_side(
+                            last_vert,
+                            label_len,
+                            direction,
+                            place_right,
+                        )
+                    } else {
+                        // Fallback to midpoint
+                        let mid_y = (routed.start.y + routed.end.y) / 2;
+                        (routed.end.x.saturating_sub(label_len / 2), mid_y)
+                    }
+                } else {
+                    // Simple straight path - place label beside the edge line
+                    let mid_y = (routed.start.y + routed.end.y) / 2;
+                    // Place label to the left of the edge, not centered on it
+                    // This avoids collision with the edge line
+                    let label_x = routed.end.x.saturating_sub(label_len + 1);
+                    (label_x, mid_y)
+                }
+            }
             Direction::LeftRight => {
                 // Source connector is at start.x, arrow at end.x
                 // The label should not overlap the arrow, so it must end before end.x
+                let mid_y = (routed.start.y + routed.end.y) / 2;
                 let max_label_end = routed.end.x.saturating_sub(1);
                 let min_x = routed.start.x.saturating_add(1);
 
                 // Available space for the label (between source and arrow)
                 let available = max_label_end.saturating_sub(routed.start.x);
 
-                if available >= label_len {
+                let label_x = if available >= label_len {
                     // Enough room - center the label with padding
                     let centered = routed.start.x + (available - label_len) / 2;
                     let max_x = max_label_end.saturating_sub(label_len);
                     centered.max(min_x).min(max_x)
                 } else {
                     // Not enough room - place at start, accepting overlap
-                    // The label will be clipped when it reaches node cells
                     min_x
-                }
+                };
+                (label_x, mid_y)
             }
             Direction::RightLeft => {
                 // Source at start.x (high x), arrow at end.x (low x)
+                let mid_y = (routed.start.y + routed.end.y) / 2;
+                let mid_x = (routed.start.x + routed.end.x) / 2;
+                let label_x = mid_x.saturating_sub(label_len / 2);
                 let max_x = routed.start.x.saturating_sub(label_len + 1);
                 let min_x = routed.end.x.saturating_add(2);
 
-                if max_x < min_x {
+                let label_x = if max_x < min_x {
                     // Not enough room, center as best we can
                     let available = routed.start.x.saturating_sub(routed.end.x);
                     if available >= label_len {
@@ -109,12 +142,10 @@ fn draw_edge_label_with_tracking(
                     }
                 } else {
                     label_x.max(min_x).min(max_x)
-                }
+                };
+                (label_x, mid_y)
             }
-            _ => label_x,
-        };
-
-        (label_x, mid_y)
+        }
     };
 
     // Try to find a position that doesn't collide with nodes or other labels
@@ -153,12 +184,38 @@ fn find_label_position_on_segment(
     label_len: usize,
     direction: Direction,
 ) -> (usize, usize) {
+    // Default: place label to the left of vertical segments
+    find_label_position_on_segment_with_side(segment, label_len, direction, false)
+}
+
+/// Find the label position on a segment, with control over which side to place it.
+///
+/// For vertical segments:
+/// - `place_right = false`: label goes to the left of the segment
+/// - `place_right = true`: label goes to the right of the segment
+fn find_label_position_on_segment_with_side(
+    segment: &Segment,
+    label_len: usize,
+    direction: Direction,
+    place_right: bool,
+) -> (usize, usize) {
     match segment {
         Segment::Vertical { x, y_start, y_end } => {
-            // For vertical segments (corridor in LR/RL layouts), place label to the left
             let mid_y = (*y_start + *y_end) / 2;
-            // Offset label to the left of the vertical line
-            (x.saturating_sub(label_len + 1), mid_y)
+            if place_right {
+                // Place label to the right of the vertical line (1-space gap)
+                (*x + 2, mid_y)
+            } else {
+                // Place label to the left of the vertical line
+                // Prefer 1-space gap if there's room, otherwise place adjacent
+                let needed_with_gap = label_len + 1;
+                let label_x = if *x >= needed_with_gap {
+                    x - needed_with_gap // 1-space gap
+                } else {
+                    x.saturating_sub(label_len) // no gap, tight fit
+                };
+                (label_x, mid_y)
+            }
         }
         Segment::Horizontal { y, x_start, x_end } => {
             // For horizontal segments (corridor in TD/BT layouts), place label above/below

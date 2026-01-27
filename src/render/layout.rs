@@ -75,6 +75,10 @@ pub struct LayoutConfig {
     pub v_spacing: usize,
     /// Padding around the entire diagram.
     pub padding: usize,
+    /// Extra left margin for edge labels on left branches.
+    pub left_label_margin: usize,
+    /// Extra right margin for edge labels on right branches.
+    pub right_label_margin: usize,
 }
 
 impl Default for LayoutConfig {
@@ -83,6 +87,8 @@ impl Default for LayoutConfig {
             h_spacing: 4,
             v_spacing: 3,
             padding: 1,
+            left_label_margin: 0,
+            right_label_margin: 0,
         }
     }
 }
@@ -711,7 +717,10 @@ fn grid_to_draw_vertical(
         .max()
         .unwrap_or(0);
 
-    let canvas_width = max_layer_content_width + 2 * config.padding;
+    let canvas_width = max_layer_content_width
+        + 2 * config.padding
+        + config.left_label_margin
+        + config.right_label_margin;
 
     // Calculate Y positions for each layer
     let mut layer_y_starts = Vec::new();
@@ -749,8 +758,10 @@ fn grid_to_draw_vertical(
         };
         let total_layer_width = content_width + spacing;
 
-        // Center the layer horizontally
-        let layer_start_x = config.padding + (max_layer_content_width - total_layer_width) / 2;
+        // Center the layer horizontally, accounting for left label margin
+        let layer_start_x = config.padding
+            + config.left_label_margin
+            + (max_layer_content_width - total_layer_width) / 2;
 
         let mut x = layer_start_x;
         for node_id in sorted_nodes {

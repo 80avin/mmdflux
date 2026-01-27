@@ -235,6 +235,27 @@ mod rendering {
     }
 
     #[test]
+    fn branching_labels_dont_overlap() {
+        // Test that branching edges with labels place them on separate branches
+        let output = render_fixture("label_spacing.mmd");
+
+        // Both labels should be present and complete (not truncated)
+        assert!(output.contains("valid"), "Should contain 'valid' label");
+        assert!(output.contains("invalid"), "Should contain 'invalid' label");
+
+        // The labels should NOT directly overlap (no merged text like "valinvalid")
+        // They can be on the same row as long as they're separated
+        assert!(
+            !output.contains("valinvalid"),
+            "Labels should not merge into 'valinvalid'"
+        );
+        assert!(
+            !output.contains("invalidvalid"),
+            "Labels should not merge into 'invalidvalid'"
+        );
+    }
+
+    #[test]
     fn git_workflow_renders() {
         let output = render_fixture("git_workflow.mmd");
         // In LR layout with labels, some text may overlap
