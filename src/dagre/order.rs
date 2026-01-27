@@ -5,6 +5,32 @@
 use super::graph::LayoutGraph;
 use super::rank;
 
+/// Check if order debug tracing is enabled via MMDFLUX_DEBUG_ORDER=1.
+fn debug_order() -> bool {
+    std::env::var("MMDFLUX_DEBUG_ORDER").is_ok_and(|v| v == "1")
+}
+
+/// Dump per-rank node names and order values.
+fn debug_dump_order(graph: &LayoutGraph, label: &str) {
+    if !debug_order() {
+        return;
+    }
+    let layers = rank::by_rank(graph);
+    eprintln!("[order] {label}");
+    for (rank, layer) in layers.iter().enumerate() {
+        let mut nodes: Vec<(usize, &str)> = layer
+            .iter()
+            .map(|&idx| (graph.order[idx], graph.node_ids[idx].0.as_str()))
+            .collect();
+        nodes.sort_by_key(|&(ord, _)| ord);
+        let names: Vec<String> = nodes
+            .iter()
+            .map(|(ord, name)| format!("{name}={ord}"))
+            .collect();
+        eprintln!("[order]   rank {rank}: [{}]", names.join(", "));
+    }
+}
+
 /// DFS-based initial ordering matching Dagre's initOrder().
 ///
 /// Visits nodes sorted by rank, adding each to its layer in DFS visit order.
@@ -89,6 +115,7 @@ pub fn run(graph: &mut LayoutGraph) {
 
     // DFS-based initial ordering
     init_order(graph);
+    debug_dump_order(graph, "after init_order");
 
     // Rebuild layers sorted by the new DFS order
     let layers = layers_sorted_by_order(graph);
@@ -116,10 +143,21 @@ pub fn run(graph: &mut LayoutGraph) {
 
         let cc = count_all_crossings(graph, &layers, &edges);
 
+        if debug_order() {
+            let dir = if i % 2 == 0 { "up" } else { "down" };
+            eprintln!(
+                "[order] iter {i}: sweep_{dir}, bias_right={bias_right}, cc={cc}, best_cc={best_cc}"
+            );
+            debug_dump_order(graph, &format!("after iter {i}"));
+        }
+
         if cc < best_cc {
             last_best = 0;
             best_cc = cc;
             best_order = graph.order.clone();
+            if debug_order() {
+                eprintln!("[order] iter {i}: NEW BEST cc={cc}");
+            }
         }
 
         i += 1;

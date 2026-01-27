@@ -10,7 +10,7 @@
 //! - Waypoint generation for edge routing
 //! - Label placement on isolated edge segments
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::graph::LayoutGraph;
 use super::types::{NodeId, Point};
@@ -186,6 +186,10 @@ fn reset_dummy_counter() {
 /// After normalization, all edges span exactly one rank, which is required
 /// for proper crossing reduction and coordinate assignment.
 ///
+/// Uses a collect-and-rebuild strategy: long edges are identified and their
+/// chain replacements are computed, then `edges`, `edge_weights`, and
+/// `reversed_edges` are rebuilt in one pass to avoid index corruption.
+///
 /// # Arguments
 /// * `graph` - The layout graph to normalize
 /// * `edge_labels` - Optional label information for edges (keyed by original edge index)
@@ -197,117 +201,123 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
     // Get effective edges with reversals applied
     let effective = graph.effective_edges();
 
-    // Collect edges that need normalization
-    // (from_idx, to_idx, orig_edge_idx, from_rank, to_rank)
-    let mut long_edges: Vec<(usize, usize, usize, i32, i32)> = Vec::new();
+    // Phase 1: Identify long edges and generate chain data without mutating graph.edges
+    let mut edges_to_remove: HashSet<usize> = HashSet::new();
+    // Each chain replacement: Vec of (from_idx, to_idx, orig_edge_idx) edges + weights
+    let mut new_chain_edges: Vec<(usize, usize, usize)> = Vec::new();
+    let mut new_chain_weights: Vec<f64> = Vec::new();
 
-    for (edge_idx, &(from_idx, to_idx, orig_edge_idx)) in graph.edges.iter().enumerate() {
-        // Get effective direction (considering reversals)
-        let (eff_from, eff_to) = effective[edge_idx];
+    for (edge_pos, &(from_idx, to_idx, orig_edge_idx)) in graph.edges.iter().enumerate() {
+        let (eff_from, eff_to) = effective[edge_pos];
         let from_rank = graph.ranks[eff_from];
         let to_rank = graph.ranks[eff_to];
 
-        // Only normalize edges that span more than 1 rank
-        // Note: after acyclic phase and ranking, to_rank > from_rank for effective edges
-        if to_rank > from_rank + 1 {
-            long_edges.push((from_idx, to_idx, orig_edge_idx, from_rank, to_rank));
+        if to_rank <= from_rank + 1 {
+            continue;
         }
-    }
 
-    // Process each long edge
-    for (from_idx, to_idx, orig_edge_idx, from_rank, to_rank) in long_edges {
-        normalize_edge(
-            graph,
-            from_idx,
-            to_idx,
-            orig_edge_idx,
-            from_rank,
-            to_rank,
-            edge_labels,
-        );
-    }
-}
+        edges_to_remove.insert(edge_pos);
 
-/// Normalize a single long edge by inserting dummy nodes.
-fn normalize_edge(
-    graph: &mut LayoutGraph,
-    from_idx: usize,
-    to_idx: usize,
-    orig_edge_idx: usize,
-    from_rank: i32,
-    to_rank: i32,
-    edge_labels: &HashMap<usize, EdgeLabelInfo>,
-) {
-    // Calculate the label rank (midpoint of the edge)
-    let label_rank = if edge_labels.contains_key(&orig_edge_idx) {
-        Some((from_rank + to_rank) / 2)
-    } else {
-        None
-    };
+        let is_reversed = graph.reversed_edges.contains(&edge_pos);
 
-    let label_info = edge_labels.get(&orig_edge_idx);
-
-    // Create a dummy chain to track this edge
-    let mut chain = DummyChain::new(orig_edge_idx);
-
-    // Remove the original edge from the graph
-    // Find and remove it from graph.edges
-    let edge_pos = graph
-        .edges
-        .iter()
-        .position(|&(f, t, idx)| f == from_idx && t == to_idx && idx == orig_edge_idx);
-
-    if let Some(pos) = edge_pos {
-        graph.edges.remove(pos);
-    }
-
-    // Create dummy nodes for each intermediate rank
-    let mut prev_idx = from_idx;
-    for rank in (from_rank + 1)..to_rank {
-        let dummy_id = generate_dummy_id();
-        let dummy_idx = graph.node_ids.len();
-
-        // Determine if this is the label dummy
-        let is_label_dummy = label_rank == Some(rank);
-
-        let (dummy_node, width, height) = if is_label_dummy {
-            let info = label_info.unwrap();
-            (
-                DummyNode::edge_label(orig_edge_idx, rank, info.width, info.height, info.label_pos),
-                info.width,
-                info.height,
-            )
+        // For reversed edges, build chain in effective direction (eff_from -> eff_to)
+        // so chain edges flow from lower rank to higher rank.
+        // For normal edges, use stored direction (same as effective).
+        let (chain_start, chain_end) = if is_reversed {
+            (to_idx, from_idx) // effective direction: to_idx has lower rank
         } else {
-            (DummyNode::edge(orig_edge_idx, rank), 0.0, 0.0)
+            (from_idx, to_idx)
         };
 
-        // Add dummy to the graph
-        graph.node_ids.push(dummy_id.clone());
-        graph.node_index.insert(dummy_id.clone(), dummy_idx);
-        graph.ranks.push(rank);
-        graph.order.push(dummy_idx); // Will be reordered during crossing reduction
-        graph.positions.push(Point::default());
-        graph.dimensions.push((width, height));
-        graph.dummy_nodes.insert(dummy_id.clone(), dummy_node);
+        // Calculate label rank (midpoint)
+        let label_rank = if edge_labels.contains_key(&orig_edge_idx) {
+            Some((from_rank + to_rank) / 2)
+        } else {
+            None
+        };
+        let label_info = edge_labels.get(&orig_edge_idx);
 
-        // Track in chain
-        if is_label_dummy {
-            chain.label_dummy_index = Some(chain.dummy_ids.len());
+        let mut chain = DummyChain::new(orig_edge_idx);
+        let mut prev_idx = chain_start;
+
+        for rank in (from_rank + 1)..to_rank {
+            let dummy_id = generate_dummy_id();
+            let dummy_idx = graph.node_ids.len();
+
+            let is_label_dummy = label_rank == Some(rank);
+
+            let (dummy_node, width, height) = if is_label_dummy {
+                let info = label_info.unwrap();
+                (
+                    DummyNode::edge_label(
+                        orig_edge_idx,
+                        rank,
+                        info.width,
+                        info.height,
+                        info.label_pos,
+                    ),
+                    info.width,
+                    info.height,
+                )
+            } else {
+                (DummyNode::edge(orig_edge_idx, rank), 0.0, 0.0)
+            };
+
+            // Add dummy to the graph (node arrays are append-only, safe to mutate)
+            graph.node_ids.push(dummy_id.clone());
+            graph.node_index.insert(dummy_id.clone(), dummy_idx);
+            graph.ranks.push(rank);
+            graph.order.push(dummy_idx);
+            graph.positions.push(Point::default());
+            graph.dimensions.push((width, height));
+            graph.dummy_nodes.insert(dummy_id.clone(), dummy_node);
+
+            if is_label_dummy {
+                chain.label_dummy_index = Some(chain.dummy_ids.len());
+            }
+            chain.dummy_ids.push(dummy_id);
+
+            // Collect chain edge (NOT reversed — chain flows in effective direction)
+            new_chain_edges.push((prev_idx, dummy_idx, orig_edge_idx));
+            new_chain_weights.push(1.0);
+            prev_idx = dummy_idx;
         }
-        chain.dummy_ids.push(dummy_id);
 
-        // Add edge from previous node to this dummy
-        graph.edges.push((prev_idx, dummy_idx, orig_edge_idx));
-        graph.edge_weights.push(1.0);
-        prev_idx = dummy_idx;
+        // Final edge to chain end
+        new_chain_edges.push((prev_idx, chain_end, orig_edge_idx));
+        new_chain_weights.push(1.0);
+
+        graph.dummy_chains.push(chain);
     }
 
-    // Add final edge from last dummy to target
-    graph.edges.push((prev_idx, to_idx, orig_edge_idx));
-    graph.edge_weights.push(1.0);
+    // Phase 2: Rebuild edges, edge_weights, and reversed_edges
+    if !edges_to_remove.is_empty() {
+        let mut rebuilt_edges = Vec::new();
+        let mut rebuilt_weights = Vec::new();
+        let mut old_to_new: HashMap<usize, usize> = HashMap::new();
 
-    // Store the chain
-    graph.dummy_chains.push(chain);
+        for (old_pos, &edge) in graph.edges.iter().enumerate() {
+            if !edges_to_remove.contains(&old_pos) {
+                old_to_new.insert(old_pos, rebuilt_edges.len());
+                rebuilt_edges.push(edge);
+                rebuilt_weights.push(graph.edge_weights[old_pos]);
+            }
+        }
+
+        // Append chain edges (none are reversed)
+        rebuilt_edges.extend(new_chain_edges);
+        rebuilt_weights.extend(new_chain_weights);
+
+        // Remap reversed_edges: removed edges drop out, surviving edges get new indices
+        graph.reversed_edges = graph
+            .reversed_edges
+            .iter()
+            .filter_map(|&old_pos| old_to_new.get(&old_pos).copied())
+            .collect();
+
+        graph.edges = rebuilt_edges;
+        graph.edge_weights = rebuilt_weights;
+    }
 }
 
 /// Extract waypoints from dummy node positions after coordinate assignment.
