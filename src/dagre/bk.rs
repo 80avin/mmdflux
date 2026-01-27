@@ -662,6 +662,160 @@ fn get_medians(neighbors: &[NodeIndex], prefer_left: bool) -> Vec<NodeIndex> {
 }
 
 // =============================================================================
+// Horizontal Compaction
+// =============================================================================
+
+/// Compute x-coordinates for a single alignment using horizontal compaction.
+///
+/// This assigns x-coordinates to blocks such that:
+/// 1. Nodes in the same block have the same x-coordinate
+/// 2. Adjacent nodes in the same layer have at least `node_sep` separation
+/// 3. The layout is as compact as possible
+///
+/// # Arguments
+/// * `graph` - The layered graph
+/// * `alignment` - The vertical alignment (blocks)
+/// * `config` - Configuration including node separation
+///
+/// # Returns
+/// A CompactionResult with x-coordinates for all nodes
+pub fn horizontal_compaction(
+    graph: &LayoutGraph,
+    alignment: &BlockAlignment,
+    config: &BKConfig,
+) -> CompactionResult {
+    let mut result = CompactionResult::new();
+    let layers = get_layers(graph);
+
+    // Initialize sink and shift for each node
+    let num_nodes = graph.node_ids.len();
+    for node in 0..num_nodes {
+        result.sink.insert(node, node);
+        result.shift.insert(node, f64::INFINITY);
+    }
+
+    // Get all unique block roots
+    let roots = alignment.get_all_roots();
+
+    // Process roots in order: first by layer, then by position
+    let mut sorted_roots = roots.clone();
+    sorted_roots.sort_by(|&a, &b| {
+        let layer_a = get_layer(graph, a);
+        let layer_b = get_layer(graph, b);
+        layer_a
+            .cmp(&layer_b)
+            .then_with(|| get_position(graph, a).cmp(&get_position(graph, b)))
+    });
+
+    // Place each block
+    for &root in &sorted_roots {
+        if !result.x.contains_key(&root) {
+            place_block(graph, alignment, &mut result, root, &layers, config);
+        }
+    }
+
+    // Copy x-coordinate from root to all nodes in each block
+    for node in 0..num_nodes {
+        let root = alignment.get_root(node);
+        if let Some(&root_x) = result.x.get(&root) {
+            result.x.insert(node, root_x);
+        }
+    }
+
+    // Normalize: shift so minimum x is 0
+    let min_x = result.x.values().copied().fold(f64::INFINITY, f64::min);
+    if min_x.is_finite() {
+        for x in result.x.values_mut() {
+            *x -= min_x;
+        }
+    }
+
+    result
+}
+
+/// Place a single block, respecting separation constraints with left neighbors.
+fn place_block(
+    graph: &LayoutGraph,
+    alignment: &BlockAlignment,
+    result: &mut CompactionResult,
+    root: NodeIndex,
+    layers: &[Vec<NodeIndex>],
+    config: &BKConfig,
+) {
+    if result.x.contains_key(&root) {
+        return; // Already placed
+    }
+
+    // Initialize x at 0
+    result.x.insert(root, 0.0);
+
+    // Get all nodes in this block
+    let block_nodes = alignment.get_block_nodes(root);
+
+    // For each node in the block, check its left neighbor and enforce separation
+    for &node in &block_nodes {
+        let layer = get_layer(graph, node);
+        let pos = get_position(graph, node);
+
+        // Get nodes in this layer
+        if layer >= layers.len() {
+            continue;
+        }
+        let layer_nodes = &layers[layer];
+
+        // Find left neighbor (node with position pos-1 in the same layer)
+        if pos > 0 {
+            // Find the node at position pos-1
+            let left_neighbor = layer_nodes
+                .iter()
+                .find(|&&n| get_position(graph, n) == pos - 1);
+
+            if let Some(&left) = left_neighbor {
+                let left_root = alignment.get_root(left);
+
+                // Don't process if left neighbor is in the same block
+                if left_root != root {
+                    // Place left neighbor's block first (recursively)
+                    place_block(graph, alignment, result, left_root, layers, config);
+
+                    // Compute required separation
+                    // Distance from center of left node to center of this node
+                    let left_width = get_width(graph, left);
+                    let node_width = get_width(graph, node);
+                    let min_separation = (left_width + node_width) / 2.0 + config.node_sep;
+
+                    // Update our position if needed
+                    if let Some(&left_x) = result.x.get(&left_root) {
+                        let min_x = left_x + min_separation;
+                        let current_x = result.x.get(&root).copied().unwrap_or(0.0);
+
+                        if min_x > current_x {
+                            result.x.insert(root, min_x);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Calculate the total width of a compaction result.
+pub fn calculate_width(graph: &LayoutGraph, result: &CompactionResult) -> f64 {
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+
+    for node in 0..graph.node_ids.len() {
+        if let Some(&x) = result.x.get(&node) {
+            let width = get_width(graph, node);
+            min_x = min_x.min(x - width / 2.0);
+            max_x = max_x.max(x + width / 2.0);
+        }
+    }
+
+    if max_x > min_x { max_x - min_x } else { 0.0 }
+}
+
+// =============================================================================
 // Main Algorithm Entry Point
 // =============================================================================
 
@@ -1328,5 +1482,146 @@ mod tests {
 
         let roots = alignment.get_all_roots();
         assert_eq!(roots.len(), 2);
+    }
+
+    // =========================================================================
+    // Horizontal Compaction Tests
+    // =========================================================================
+
+    /// Create a two-node layer graph:
+    /// ```text
+    /// Layer 0: [A] [B]
+    /// ```
+    fn make_two_node_layer() -> LayoutGraph {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        // No edges - both in same layer
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        // Both at rank 0
+        lg.ranks[0] = 0;
+        lg.ranks[1] = 0;
+        // A at position 0, B at position 1
+        lg.order[0] = 0;
+        lg.order[1] = 1;
+
+        lg
+    }
+
+    #[test]
+    fn test_horizontal_compaction_chain() {
+        let lg = make_chain_graph();
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+
+        // Create alignment where all are in one block
+        let mut alignment = BlockAlignment::new(&[a, b, c]);
+
+        // Build proper block: a -> b -> c -> a (circular)
+        alignment.root.insert(a, a);
+        alignment.root.insert(b, a);
+        alignment.root.insert(c, a);
+        alignment.align.insert(a, b);
+        alignment.align.insert(b, c);
+        alignment.align.insert(c, a);
+
+        let config = BKConfig::default();
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        // All nodes should have the same x (they're in one block)
+        let x_a = result.x.get(&a).unwrap();
+        let x_b = result.x.get(&b).unwrap();
+        let x_c = result.x.get(&c).unwrap();
+
+        assert_eq!(*x_a, *x_b, "A and B should have same x");
+        assert_eq!(*x_b, *x_c, "B and C should have same x");
+    }
+
+    #[test]
+    fn test_horizontal_compaction_two_nodes_same_layer() {
+        let lg = make_two_node_layer();
+
+        // Separate blocks (each node is its own block)
+        let alignment = BlockAlignment::new(&[0, 1]);
+
+        let config = BKConfig {
+            node_sep: 50.0,
+            ..Default::default()
+        };
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        let x0 = result.x.get(&0).unwrap();
+        let x1 = result.x.get(&1).unwrap();
+
+        // B should be to the right of A
+        assert!(
+            x1 > x0,
+            "B (x={}) should be to the right of A (x={})",
+            x1,
+            x0
+        );
+
+        // Check separation: distance between centers should be at least
+        // (width_A/2 + width_B/2 + node_sep)
+        let min_sep = 100.0 / 2.0 + 100.0 / 2.0 + 50.0; // 150.0
+        let actual_sep = x1 - x0;
+        assert!(
+            actual_sep >= min_sep,
+            "Separation {} should be >= {}",
+            actual_sep,
+            min_sep
+        );
+    }
+
+    #[test]
+    fn test_horizontal_compaction_diamond() {
+        let lg = make_diamond_graph();
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+        let d = lg.node_index[&"D".into()];
+
+        // Separate blocks for all nodes
+        let alignment = BlockAlignment::new(&[a, b, c, d]);
+
+        let config = BKConfig::default();
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        // B and C are in the same layer, B has order 0, C has order 1
+        let x_b = result.x.get(&b).unwrap();
+        let x_c = result.x.get(&c).unwrap();
+
+        // C should be to the right of B
+        assert!(x_c > x_b, "C should be to the right of B");
+    }
+
+    #[test]
+    fn test_calculate_width() {
+        let lg = make_diamond_graph();
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+        let d = lg.node_index[&"D".into()];
+
+        let alignment = BlockAlignment::new(&[a, b, c, d]);
+        let config = BKConfig::default();
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        let width = calculate_width(&lg, &result);
+        assert!(width > 0.0, "Width should be positive");
+    }
+
+    #[test]
+    fn test_horizontal_compaction_empty() {
+        let graph: DiGraph<(f64, f64)> = DiGraph::new();
+        let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        let alignment = BlockAlignment::new(&[]);
+        let config = BKConfig::default();
+
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        assert!(result.x.is_empty());
     }
 }
