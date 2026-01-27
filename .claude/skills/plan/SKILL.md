@@ -16,14 +16,20 @@ Plan the requested feature or change using the project's planning conventions.
    - Find the next plan number by checking both `plans/` and `plans/archive/` for the highest `NNNN-*` prefix
    - Create `plans/NNNN-feature-name/` directory (use lowercase kebab-case)
    - Write `implementation-plan.md` with the full plan
-   - Write `task-list.md` with checkboxes for each task
+   - Write `task-list.md` with checkboxes for each task (each linking to a task file)
+   - Create `tasks/` subdirectory with detailed task files (see format below)
    - Write `.plan-state.json` with initial state (see format below)
+   - Check `research/` at the project root for prior research relevant to this plan and link to it
 
 3. **Use this format for implementation-plan.md:**
    ```markdown
    # Feature Name Implementation Plan
 
    ## Status: 🚧 IN PROGRESS
+
+   **Task List:** [task-list.md](./task-list.md)
+
+   ---
 
    ## Overview
    [Brief description of the feature]
@@ -37,6 +43,17 @@ Plan the requested feature or change using the project's planning conventions.
    ## Files to Modify/Create
    [List of files with descriptions]
 
+   ## Task Details
+
+   | Task | Description | Details |
+   |------|-------------|---------|
+   | 1.1 | Task description | [tasks/1.1-task-name.md](./tasks/1.1-task-name.md) |
+   | 1.2 | Task description | [tasks/1.2-task-name.md](./tasks/1.2-task-name.md) |
+
+   ## Research References
+   [If prior research exists in the project's research/ directory, link to relevant documents here]
+   - [research-doc-name.md](../../research/topic/research-doc-name.md)
+
    ## Testing Strategy
    [How to test the changes]
    ```
@@ -47,12 +64,22 @@ Plan the requested feature or change using the project's planning conventions.
 
    ## Status: 🚧 IN PROGRESS
 
+   **Implementation Plan:** [implementation-plan.md](./implementation-plan.md)
+
+   ---
+
    ## Phase 1: Description
+
    - [ ] **1.1** Task description
+     → [tasks/1.1-task-name.md](./tasks/1.1-task-name.md)
+
    - [ ] **1.2** Another task
+     → [tasks/1.2-task-name.md](./tasks/1.2-task-name.md)
 
    ## Phase 2: Description
+
    - [ ] **2.1** Task description
+     → [tasks/2.1-task-name.md](./tasks/2.1-task-name.md)
 
    ## Progress Tracking
 
@@ -60,9 +87,55 @@ Plan the requested feature or change using the project's planning conventions.
    | -------------- | ----------- | ----- |
    | 1 - Phase Name | Not Started |       |
    | 2 - Phase Name | Not Started |       |
+
+   ## Quick Links
+
+   | Resource | Path |
+   |----------|------|
+   | Implementation Plan | [implementation-plan.md](./implementation-plan.md) |
+   | Research: Topic Name | [research/topic/doc.md](../../research/topic/doc.md) |
    ```
 
-5. **Use this format for .plan-state.json:**
+   Each task item links to a detailed task file in `tasks/`. The Quick Links section at the bottom provides easy access to the implementation plan and any relevant research documents.
+
+5. **Create a `tasks/` subdirectory** with a file for each substantive task. Use the naming convention `{task-number}-{kebab-case-name}.md`. Each task file should include:
+
+   ```markdown
+   # Task 1.1: Short Task Title
+
+   ## Objective
+   [What this task accomplishes]
+
+   ## Location
+   [File(s) to create or modify, e.g. "New file: `src/module/foo.rs`" or "Modify: `src/module/bar.rs`"]
+
+   ## Implementation
+
+   [Code snippets showing the specific code to write or change. Use fenced code blocks with the appropriate language tag.]
+
+   ```rust
+   // Example: the struct/function/code to add
+   pub struct Foo {
+       pub field: Type,
+   }
+   ```
+
+   ## Context
+   [Any additional notes: imports needed, related functions, edge cases to handle.
+   Link to research docs if relevant: see [research-doc.md](../../../research/topic/doc.md)]
+
+   ## Acceptance Criteria
+   - [ ] Criterion 1
+   - [ ] Criterion 2
+   ```
+
+   **Guidelines for task files:**
+   - Include enough code detail that implementation can proceed without re-reading the full codebase
+   - Show specific file paths, function signatures, struct definitions, and key logic
+   - Reference related research documents from `research/` when applicable
+   - Not every task-list item needs a task file — small or self-explanatory tasks (e.g., "run tests") can be described inline in the task list with `*(Covered in X.Y)*` or a brief note
+
+6. **Use this format for .plan-state.json:**
    ```json
    {
      "status": "in_progress",
@@ -85,11 +158,11 @@ Plan the requested feature or change using the project's planning conventions.
    - `current_task` and `last_session_notes` start as null
    - `commits` is an array that will accumulate commit SHAs as phases complete
 
-6. **Do not commit the plan files**
+7. **Do not commit the plan files**
 
-7. **Present the plan** to the user for approval before any implementation begins
+8. **Present the plan** to the user for approval before any implementation begins
 
-8. **Provide enhanced continuation output** after saving the plan:
+9. **Provide enhanced continuation output** after saving the plan:
 
    Output format:
    ```
@@ -110,13 +183,14 @@ Plan the requested feature or change using the project's planning conventions.
    *Plan summary: Brief description of what the plan is about*
    ```
 
-9. **Use this continuation prompt template:**
+10. **Use this continuation prompt template:**
    ````
    Continue implementing the plan in plans/NNNN-feature-name/
 
-   Read the implementation-plan.md and task-list.md files, then begin with the first incomplete task.
+   Read the implementation-plan.md and task-list.md files, then read the detailed task file in tasks/ for the first incomplete task before beginning implementation.
 
    As you work:
+   - Read the task file in tasks/ for each task before starting it
    - Update task-list.md checkboxes (change `- [ ]` to `- [x]`) when completing tasks
    - Update .plan-state.json with current_task and progress.completed count
 
