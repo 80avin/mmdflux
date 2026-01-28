@@ -441,6 +441,23 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
     // Transform edge_waypoints from dagre coordinates to draw coordinates
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
 
+    // Derive global dagre→draw scale from all anchor pairs across ranks.
+    // Used as fallback for single-anchor ranks.
+    let global_scale: f64 = {
+        let all_anchors: Vec<(f64, f64)> = rank_cross_anchors.iter().flatten().copied().collect();
+        if all_anchors.len() >= 2 {
+            let (d0, w0) = all_anchors[0];
+            let (d1, w1) = all_anchors[all_anchors.len() - 1];
+            if (d1 - d0).abs() > f64::EPSILON {
+                (w1 - w0) / (d1 - d0)
+            } else {
+                0.1
+            }
+        } else {
+            0.1 // no stagger, default is fine
+        }
+    };
+
     for (edge_idx, waypoints) in &result.edge_waypoints {
         if let Some(edge) = diagram.edges.get(*edge_idx) {
             let key = (edge.from.clone(), edge.to.clone());
@@ -459,7 +476,8 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
                             .get(rank_idx)
                             .map(|a| a.as_slice())
                             .unwrap_or(&[]);
-                        let x = map_cross_axis(wp.point.x, anchors, canvas_cross_extent);
+                        let x =
+                            map_cross_axis(wp.point.x, anchors, canvas_cross_extent, global_scale);
                         (x, y)
                     } else {
                         // LR/RL: primary axis = X (from layer_starts), cross axis = Y (from dagre)
@@ -468,7 +486,8 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
                             .get(rank_idx)
                             .map(|a| a.as_slice())
                             .unwrap_or(&[]);
-                        let y = map_cross_axis(wp.point.y, anchors, canvas_cross_extent);
+                        let y =
+                            map_cross_axis(wp.point.y, anchors, canvas_cross_extent, global_scale);
                         (x, y)
                     }
                 })
@@ -1116,19 +1135,25 @@ fn compute_stagger_positions(
 /// Uses piecewise linear interpolation between known node positions.
 /// If the target coordinate is outside the anchor range, extrapolates from the nearest pair.
 /// Falls back to returning the coordinate clamped to canvas bounds if no anchors exist.
-fn map_cross_axis(dagre_pos: f64, anchors: &[(f64, f64)], canvas_extent: usize) -> usize {
+///
+/// `global_scale` is the dagre→draw ratio derived from all anchors across ranks,
+/// used as a fallback when only a single anchor is available at this rank.
+fn map_cross_axis(
+    dagre_pos: f64,
+    anchors: &[(f64, f64)],
+    canvas_extent: usize,
+    global_scale: f64,
+) -> usize {
     match anchors.len() {
         0 => {
             // No anchors at this rank — clamp to canvas center
             canvas_extent / 2
         }
         1 => {
-            // Single anchor: offset from it
+            // Single anchor: offset from it using global scale
             let (dagre_anchor, draw_anchor) = anchors[0];
             let offset = dagre_pos - dagre_anchor;
-            // Scale: dagre uses node_sep=50, draw uses h_spacing≈4-6
-            // Use ratio of ~0.1 as rough scaling factor
-            let scaled_offset = offset * 0.1;
+            let scaled_offset = offset * global_scale;
             let result = draw_anchor + scaled_offset;
             result
                 .round()
