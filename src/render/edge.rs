@@ -102,46 +102,78 @@ fn draw_edge_label_with_tracking(
                 }
             }
             Direction::LeftRight => {
-                // Source connector is at start.x, arrow at end.x
-                // The label should not overlap the arrow, so it must end before end.x
-                let mid_y = (routed.start.y + routed.end.y) / 2;
-                let max_label_end = routed.end.x.saturating_sub(1);
-                let min_x = routed.start.x.saturating_add(1);
-
-                // Available space for the label (between source and arrow)
-                let available = max_label_end.saturating_sub(routed.start.x);
-
-                let label_x = if available >= label_len {
-                    // Enough room - center the label with padding
-                    let centered = routed.start.x + (available - label_len) / 2;
-                    let max_x = max_label_end.saturating_sub(label_len);
-                    centered.max(min_x).min(max_x)
-                } else {
-                    // Not enough room - place at start, accepting overlap
-                    min_x
-                };
-                (label_x, mid_y)
-            }
-            Direction::RightLeft => {
-                // Source at start.x (high x), arrow at end.x (low x)
-                let mid_y = (routed.start.y + routed.end.y) / 2;
-                let mid_x = (routed.start.x + routed.end.x) / 2;
-                let label_x = mid_x.saturating_sub(label_len / 2);
-                let max_x = routed.start.x.saturating_sub(label_len + 1);
-                let min_x = routed.end.x.saturating_add(2);
-
-                let label_x = if max_x < min_x {
-                    // Not enough room, center as best we can
-                    let available = routed.start.x.saturating_sub(routed.end.x);
-                    if available >= label_len {
-                        routed.end.x + (available - label_len) / 2
+                if routed.segments.len() >= 3 {
+                    if let Some(Segment::Horizontal { y, x_start, x_end }) =
+                        select_label_segment_horizontal(&routed.segments)
+                    {
+                        let seg_min_x = (*x_start).min(*x_end);
+                        let seg_max_x = (*x_start).max(*x_end);
+                        let seg_len = seg_max_x - seg_min_x;
+                        let label_x = if seg_len >= label_len {
+                            seg_min_x + (seg_len - label_len) / 2
+                        } else {
+                            seg_min_x
+                        };
+                        (label_x, y.saturating_sub(1))
                     } else {
-                        routed.end.x
+                        let mid_y = (routed.start.y + routed.end.y) / 2;
+                        let mid_x = (routed.start.x + routed.end.x) / 2;
+                        (mid_x.saturating_sub(label_len / 2), mid_y)
                     }
                 } else {
-                    label_x.max(min_x).min(max_x)
-                };
-                (label_x, mid_y)
+                    // Short/straight path — keep existing inline placement
+                    let mid_y = (routed.start.y + routed.end.y) / 2;
+                    let max_label_end = routed.end.x.saturating_sub(1);
+                    let min_x = routed.start.x.saturating_add(1);
+                    let available = max_label_end.saturating_sub(routed.start.x);
+                    let label_x = if available >= label_len {
+                        let centered = routed.start.x + (available - label_len) / 2;
+                        let max_x = max_label_end.saturating_sub(label_len);
+                        centered.max(min_x).min(max_x)
+                    } else {
+                        min_x
+                    };
+                    (label_x, mid_y)
+                }
+            }
+            Direction::RightLeft => {
+                if routed.segments.len() >= 3 {
+                    if let Some(Segment::Horizontal { y, x_start, x_end }) =
+                        select_label_segment_horizontal(&routed.segments)
+                    {
+                        let seg_min_x = (*x_start).min(*x_end);
+                        let seg_max_x = (*x_start).max(*x_end);
+                        let seg_len = seg_max_x - seg_min_x;
+                        let label_x = if seg_len >= label_len {
+                            seg_min_x + (seg_len - label_len) / 2
+                        } else {
+                            seg_min_x
+                        };
+                        (label_x, y.saturating_sub(1))
+                    } else {
+                        let mid_y = (routed.start.y + routed.end.y) / 2;
+                        let mid_x = (routed.start.x + routed.end.x) / 2;
+                        (mid_x.saturating_sub(label_len / 2), mid_y)
+                    }
+                } else {
+                    // Short/straight path — keep existing inline placement
+                    let mid_y = (routed.start.y + routed.end.y) / 2;
+                    let mid_x = (routed.start.x + routed.end.x) / 2;
+                    let label_x = mid_x.saturating_sub(label_len / 2);
+                    let max_x = routed.start.x.saturating_sub(label_len + 1);
+                    let min_x = routed.end.x.saturating_add(2);
+                    let label_x = if max_x < min_x {
+                        let available = routed.start.x.saturating_sub(routed.end.x);
+                        if available >= label_len {
+                            routed.end.x + (available - label_len) / 2
+                        } else {
+                            routed.end.x
+                        }
+                    } else {
+                        label_x.max(min_x).min(max_x)
+                    };
+                    (label_x, mid_y)
+                }
             }
         }
     };
@@ -380,6 +412,41 @@ fn select_label_segment(segments: &[Segment]) -> Option<&Segment> {
             .iter()
             .rev()
             .find(|s| matches!(s, Segment::Vertical { .. }))
+    }
+}
+
+/// Select the best horizontal segment for label placement on LR/RL edges.
+///
+/// Analogous to `select_label_segment()` for TD/BT vertical segments.
+/// For long paths (backward edges, 6+ segments), returns the longest inner horizontal segment.
+/// For shorter paths, returns the last horizontal segment.
+fn select_label_segment_horizontal(segments: &[Segment]) -> Option<&Segment> {
+    let is_long_path = segments.len() >= 6;
+
+    if is_long_path {
+        let inner = if segments.len() > 2 {
+            &segments[1..segments.len() - 1]
+        } else {
+            segments
+        };
+        inner
+            .iter()
+            .filter(|s| matches!(s, Segment::Horizontal { .. }))
+            .max_by_key(|s| match s {
+                Segment::Horizontal { x_start, x_end, .. } => x_start.abs_diff(*x_end),
+                _ => 0,
+            })
+            .or_else(|| {
+                segments
+                    .iter()
+                    .rev()
+                    .find(|s| matches!(s, Segment::Horizontal { .. }))
+            })
+    } else {
+        segments
+            .iter()
+            .rev()
+            .find(|s| matches!(s, Segment::Horizontal { .. }))
     }
 }
 
@@ -856,5 +923,156 @@ mod tests {
 
         // Partial overlap still collides
         assert!(label_collides_with_edge(&canvas, 3, 5, 5)); // ends at x=7, overlapping edge at x=5-7
+    }
+
+    #[test]
+    fn test_select_label_segment_horizontal_short_path() {
+        // 3-segment H-V-H forward path
+        let segments = vec![
+            Segment::Horizontal {
+                y: 5,
+                x_start: 10,
+                x_end: 20,
+            },
+            Segment::Vertical {
+                x: 20,
+                y_start: 5,
+                y_end: 10,
+            },
+            Segment::Horizontal {
+                y: 10,
+                x_start: 20,
+                x_end: 30,
+            },
+        ];
+        let chosen = select_label_segment_horizontal(&segments);
+        // For short paths, should return the last horizontal segment
+        match chosen {
+            Some(Segment::Horizontal { y, .. }) => assert_eq!(*y, 10),
+            _ => panic!("Expected last horizontal segment at y=10"),
+        }
+    }
+
+    #[test]
+    fn test_select_label_segment_horizontal_long_path() {
+        // 7-segment backward edge path
+        let segments = vec![
+            Segment::Horizontal {
+                y: 3,
+                x_start: 50,
+                x_end: 55,
+            }, // short exit stub
+            Segment::Vertical {
+                x: 55,
+                y_start: 3,
+                y_end: 12,
+            },
+            Segment::Horizontal {
+                y: 12,
+                x_start: 55,
+                x_end: 5,
+            }, // long bottom run (50 chars)
+            Segment::Vertical {
+                x: 5,
+                y_start: 12,
+                y_end: 3,
+            },
+            Segment::Horizontal {
+                y: 3,
+                x_start: 5,
+                x_end: 10,
+            }, // short entry stub
+            Segment::Vertical {
+                x: 10,
+                y_start: 3,
+                y_end: 5,
+            },
+            Segment::Horizontal {
+                y: 5,
+                x_start: 10,
+                x_end: 15,
+            },
+        ];
+        let chosen = select_label_segment_horizontal(&segments);
+        // For long paths, should return the longest inner horizontal segment (50 chars at y=12)
+        match chosen {
+            Some(Segment::Horizontal { y, .. }) => assert_eq!(*y, 12),
+            _ => panic!("Expected longest inner horizontal segment at y=12"),
+        }
+    }
+
+    #[test]
+    fn test_lr_label_placement_near_edge_segment() {
+        use crate::graph::Direction;
+
+        let mut diagram = Diagram::new(Direction::LeftRight);
+        diagram.add_node(Node::new("A").with_label("Start"));
+        diagram.add_node(Node::new("B").with_label("End"));
+        let mut edge = Edge::new("A", "B");
+        edge.label = Some("test".to_string());
+        diagram.add_edge(edge);
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+        let charset = CharSet::unicode();
+
+        let routed =
+            route_edge(&diagram.edges[0], &layout, Direction::LeftRight, None, None).unwrap();
+
+        // Check that the routed edge has segments
+        assert!(
+            !routed.segments.is_empty(),
+            "Routed edge should have segments"
+        );
+
+        // Render the edge with label
+        let mut canvas = Canvas::new(layout.width, layout.height);
+        render_edge(&mut canvas, &routed, &charset, Direction::LeftRight);
+
+        let output = canvas.to_string();
+        // The label "test" should appear in the output
+        assert!(
+            output.contains("test"),
+            "Label 'test' should appear in output:\n{}",
+            output
+        );
+
+        // Find where "test" appears and where edge chars appear in the output
+        let lines: Vec<&str> = output.lines().collect();
+        let label_line = lines
+            .iter()
+            .position(|l| l.contains("test"))
+            .expect("Label should be on some line");
+
+        // Find lines with edge characters (horizontal segments appear as ─ or -)
+        let edge_lines: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| l.contains('─') || l.contains('►') || l.contains('-'))
+            .map(|(i, _)| i)
+            .collect();
+
+        // The label should be within 1 row of an actual edge line
+        let near_edge = edge_lines.iter().any(|&ey| ey.abs_diff(label_line) <= 1);
+        assert!(
+            near_edge,
+            "Label at line {} should be within 1 row of an edge line (edge lines at {:?})",
+            label_line, edge_lines
+        );
+    }
+
+    #[test]
+    fn test_select_label_segment_horizontal_no_horizontal() {
+        // Edge case: only vertical segments
+        let segments = vec![Segment::Vertical {
+            x: 5,
+            y_start: 0,
+            y_end: 10,
+        }];
+        let chosen = select_label_segment_horizontal(&segments);
+        assert!(
+            chosen.is_none(),
+            "Should return None when no horizontal segments exist"
+        );
     }
 }
