@@ -93,3 +93,10 @@ Integration tests in `tests/integration.rs` verify parsing, building, and render
 
 Use `/plan:create` to create implementation plans and `/plan:resume` to continue in-progress work.
 See `plans/CLAUDE.md` for workflow details and conventions.
+
+## Research
+
+Use `/research:create` to design a research plan with parallel investigation tasks.
+Use `/research:resume` to spawn agents, check progress, or synthesize findings.
+Use `/research:archive` to archive completed research.
+See `research/CLAUDE.md` for workflow details and conventions.

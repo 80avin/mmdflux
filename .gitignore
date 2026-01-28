@@ -1,3 +1,8 @@
 /target
-/plans
-/research
+# Ignore plans and research content (not committed)
+/plans/**
+/research/**
+
+# But keep the CLAUDE.md convention docs
+!/plans/CLAUDE.md
+!/research/CLAUDE.md
