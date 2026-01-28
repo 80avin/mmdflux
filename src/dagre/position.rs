@@ -93,7 +93,32 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
         edge_sep: config.edge_sep,
         direction: config.direction,
     };
-    let y_coords = position_x(graph, &bk_config);
+    let mut y_coords = position_x(graph, &bk_config);
+
+    // Post-BK centering: center layer-0 source nodes among their successors.
+    // BK aligns via predecessors; layer-0 nodes have none, so they may default to
+    // their first child's position instead of being centered.
+    if !layers.is_empty() {
+        for &node in &layers[0] {
+            let has_predecessors = graph.edges.iter().any(|&(_, to, _)| to == node);
+            if has_predecessors {
+                continue;
+            }
+
+            let succ_ys: Vec<f64> = graph
+                .edges
+                .iter()
+                .filter(|&&(from, _, _)| from == node)
+                .filter_map(|&(_, to, _)| y_coords.get(&to).copied())
+                .collect();
+
+            if succ_ys.len() >= 2 {
+                let min_y = succ_ys.iter().copied().fold(f64::INFINITY, f64::min);
+                let max_y = succ_ys.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                y_coords.insert(node, (min_y + max_y) / 2.0);
+            }
+        }
+    }
 
     // Find minimum y to shift everything to start at margin
     let min_y = y_coords

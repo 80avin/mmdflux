@@ -1639,4 +1639,46 @@ mod tests {
             gap_diff
         );
     }
+
+    #[test]
+    fn test_lr_source_centered_among_targets() {
+        use crate::graph::{Diagram, Direction, Edge, Node};
+
+        let mut diagram = Diagram::new(Direction::LeftRight);
+        diagram.add_node(Node::new("A").with_label("A"));
+        diagram.add_node(Node::new("B").with_label("B"));
+        diagram.add_node(Node::new("C").with_label("C"));
+        diagram.add_node(Node::new("D").with_label("D"));
+        diagram.add_edge(Edge::new("A", "B"));
+        diagram.add_edge(Edge::new("A", "C"));
+        diagram.add_edge(Edge::new("A", "D"));
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        let a_pos = layout.draw_positions.get("A").expect("A should exist");
+        let a_bounds = layout.node_bounds.get("A").expect("A bounds should exist");
+        let b_pos = layout.draw_positions.get("B").expect("B should exist");
+        let b_bounds = layout.node_bounds.get("B").expect("B bounds should exist");
+        let d_pos = layout.draw_positions.get("D").expect("D should exist");
+        let d_bounds = layout.node_bounds.get("D").expect("D bounds should exist");
+
+        // Compute vertical centers
+        let a_center = a_pos.1 as f64 + a_bounds.height as f64 / 2.0;
+
+        // The range of targets spans from top of B to bottom of D
+        let targets_top = b_pos.1.min(d_pos.1) as f64;
+        let targets_bottom = (b_pos.1 + b_bounds.height).max(d_pos.1 + d_bounds.height) as f64;
+        let targets_center = (targets_top + targets_bottom) / 2.0;
+
+        // A's center should be within 2 rows of the targets' center
+        let offset = (a_center - targets_center).abs();
+        assert!(
+            offset <= 2.0,
+            "Source A center ({}) should be within 2 rows of targets center ({}), offset={}",
+            a_center,
+            targets_center,
+            offset
+        );
+    }
 }
