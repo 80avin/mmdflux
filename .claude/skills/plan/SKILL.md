@@ -45,10 +45,10 @@ Plan the requested feature or change using the project's planning conventions.
 
    ## Task Details
 
-   | Task | Description | Details |
-   |------|-------------|---------|
-   | 1.1 | Task description | [tasks/1.1-task-name.md](./tasks/1.1-task-name.md) |
-   | 1.2 | Task description | [tasks/1.2-task-name.md](./tasks/1.2-task-name.md) |
+   | Task | Description      | Details                                            |
+   | ---- | ---------------- | -------------------------------------------------- |
+   | 1.1  | Task description | [tasks/1.1-task-name.md](./tasks/1.1-task-name.md) |
+   | 1.2  | Task description | [tasks/1.2-task-name.md](./tasks/1.2-task-name.md) |
 
    ## Research References
    [If prior research exists in the project's research/ directory, link to relevant documents here]
@@ -90,9 +90,9 @@ Plan the requested feature or change using the project's planning conventions.
 
    ## Quick Links
 
-   | Resource | Path |
-   |----------|------|
-   | Implementation Plan | [implementation-plan.md](./implementation-plan.md) |
+   | Resource             | Path                                                 |
+   | -------------------- | ---------------------------------------------------- |
+   | Implementation Plan  | [implementation-plan.md](./implementation-plan.md)   |
    | Research: Topic Name | [research/topic/doc.md](../../research/topic/doc.md) |
    ```
 
@@ -176,7 +176,7 @@ Plan the requested feature or change using the project's planning conventions.
    - [ ] **1.2** Second task description
    - [ ] **1.3** Third task description
 
-   To continue with implementation, run `/clear` then paste:
+   To continue with implementation, run `/clear` then run `/resume` or paste:
 
    [continuation prompt code block]
 
