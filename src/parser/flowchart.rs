@@ -265,37 +265,19 @@ fn parse_node(pair: pest::iterators::Pair<Rule>) -> Vertex {
 
 fn parse_shape(pair: pest::iterators::Pair<Rule>) -> Option<ShapeSpec> {
     for inner in pair.into_inner() {
-        match inner.as_rule() {
-            Rule::shape_rect => {
-                for text in inner.into_inner() {
-                    if text.as_rule() == Rule::text_rect {
-                        return Some(ShapeSpec::Rectangle(text.as_str().to_string()));
-                    }
-                }
+        let (text_rule, constructor): (Rule, fn(String) -> ShapeSpec) = match inner.as_rule() {
+            Rule::shape_rect => (Rule::text_rect, ShapeSpec::Rectangle),
+            Rule::shape_round => (Rule::text_round, ShapeSpec::Round),
+            Rule::shape_diamond => (Rule::text_diamond, ShapeSpec::Diamond),
+            _ => continue,
+        };
+        for text in inner.into_inner() {
+            if text.as_rule() == text_rule {
+                return Some(constructor(text.as_str().to_string()));
             }
-            Rule::shape_round => {
-                for text in inner.into_inner() {
-                    if text.as_rule() == Rule::text_round {
-                        return Some(ShapeSpec::Round(text.as_str().to_string()));
-                    }
-                }
-            }
-            Rule::shape_diamond => {
-                for text in inner.into_inner() {
-                    if text.as_rule() == Rule::text_diamond {
-                        return Some(ShapeSpec::Diamond(text.as_str().to_string()));
-                    }
-                }
-            }
-            _ => {}
         }
     }
     None
-}
-
-/// Parse just the header (for backwards compatibility).
-pub fn parse_header(input: &str) -> Result<Flowchart, ParseError> {
-    parse_flowchart(input)
 }
 
 #[cfg(test)]

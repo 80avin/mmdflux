@@ -288,21 +288,9 @@ fn label_has_collision(
     label_len: usize,
     placed_labels: &[PlacedLabel],
 ) -> bool {
-    // Check collision with nodes
-    if label_collides_with_node(canvas, x, y, label_len) {
-        return true;
-    }
-    // Check collision with edge path characters
-    if label_collides_with_edge(canvas, x, y, label_len) {
-        return true;
-    }
-    // Check collision with already placed labels
-    for placed in placed_labels {
-        if placed.overlaps(x, y, label_len) {
-            return true;
-        }
-    }
-    false
+    label_collides_with_node(canvas, x, y, label_len)
+        || label_collides_with_edge(canvas, x, y, label_len)
+        || placed_labels.iter().any(|p| p.overlaps(x, y, label_len))
 }
 
 /// Check if placing a label at the given position would collide with any node cells.
@@ -399,20 +387,8 @@ fn select_label_segment(segments: &[Segment]) -> Option<&Segment> {
 #[cfg(test)]
 fn segment_length(segment: &Segment) -> usize {
     match segment {
-        Segment::Vertical { y_start, y_end, .. } => {
-            if y_start > y_end {
-                y_start - y_end
-            } else {
-                y_end - y_start
-            }
-        }
-        Segment::Horizontal { x_start, x_end, .. } => {
-            if x_start > x_end {
-                x_start - x_end
-            } else {
-                x_end - x_start
-            }
-        }
+        Segment::Vertical { y_start, y_end, .. } => y_start.abs_diff(*y_end),
+        Segment::Horizontal { x_start, x_end, .. } => x_start.abs_diff(*x_end),
     }
 }
 
@@ -420,22 +396,8 @@ fn segment_length(segment: &Segment) -> usize {
 #[cfg(test)]
 fn segment_midpoint(segment: &Segment) -> (usize, usize) {
     match segment {
-        Segment::Vertical { x, y_start, y_end } => {
-            let mid_y = if y_start < y_end {
-                y_start + (y_end - y_start) / 2
-            } else {
-                y_end + (y_start - y_end) / 2
-            };
-            (*x, mid_y)
-        }
-        Segment::Horizontal { y, x_start, x_end } => {
-            let mid_x = if x_start < x_end {
-                x_start + (x_end - x_start) / 2
-            } else {
-                x_end + (x_start - x_end) / 2
-            };
-            (mid_x, *y)
-        }
+        Segment::Vertical { x, y_start, y_end } => (*x, (*y_start + *y_end) / 2),
+        Segment::Horizontal { y, x_start, x_end } => ((*x_start + *x_end) / 2, *y),
     }
 }
 

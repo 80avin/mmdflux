@@ -46,37 +46,12 @@ impl NodeBounds {
 }
 
 /// Calculate the dimensions needed to render a node.
+///
+/// All shapes use the same formula: width = label_len + 4 (2 for borders/delimiters,
+/// 2 for padding), height = 3 (top border, label row, bottom border).
 pub fn node_dimensions(node: &Node) -> (usize, usize) {
     let label_len = node.label.chars().count();
-
-    match node.shape {
-        Shape::Rectangle => {
-            // +--label--+
-            // |         |
-            // +---------+
-            let width = label_len + 4; // 2 for borders, 2 for padding
-            let height = 3;
-            (width, height)
-        }
-        Shape::Round => {
-            // ( label )
-            // Rendered as: ( label )
-            let width = label_len + 4; // 2 for parens, 2 for padding
-            let height = 3;
-            (width, height)
-        }
-        Shape::Diamond => {
-            //    /\
-            //   /  \
-            //  < lbl >
-            //   \  /
-            //    \/
-            // Width needs to accommodate the label plus the diamond slopes
-            let width = label_len + 4; // 2 for < >, 2 for padding
-            let height = 3;
-            (width, height)
-        }
-    }
+    (label_len + 4, 3)
 }
 
 /// Render a node at the specified position.
@@ -95,10 +70,22 @@ pub fn render_node(
 
     match node.shape {
         Shape::Rectangle => {
-            render_rectangle(canvas, x, y, width, height, label, charset);
+            let corners = (
+                charset.corner_tl,
+                charset.corner_tr,
+                charset.corner_bl,
+                charset.corner_br,
+            );
+            render_box(canvas, x, y, width, height, label, charset, corners);
         }
         Shape::Round => {
-            render_round(canvas, x, y, width, height, label, charset);
+            let corners = (
+                charset.round_tl,
+                charset.round_tr,
+                charset.round_bl,
+                charset.round_br,
+            );
+            render_box(canvas, x, y, width, height, label, charset, corners);
         }
         Shape::Diamond => {
             render_diamond(canvas, x, y, width, label_len, label, charset);
@@ -120,8 +107,12 @@ pub fn render_node(
     }
 }
 
-/// Render a rectangle shape.
-fn render_rectangle(
+/// Render a box shape (rectangle or rounded rectangle).
+///
+/// The only difference between rectangle and rounded shapes is the corner
+/// characters, so this shared function handles both.
+#[allow(clippy::too_many_arguments)]
+fn render_box(
     canvas: &mut Canvas,
     x: usize,
     y: usize,
@@ -129,62 +120,31 @@ fn render_rectangle(
     height: usize,
     label: &str,
     charset: &CharSet,
+    corners: (char, char, char, char),
 ) {
+    let (tl, tr, bl, br) = corners;
+
     // Top border
-    canvas.set(x, y, charset.corner_tl);
+    canvas.set(x, y, tl);
     for dx in 1..width - 1 {
         canvas.set(x + dx, y, charset.horizontal);
     }
-    canvas.set(x + width - 1, y, charset.corner_tr);
+    canvas.set(x + width - 1, y, tr);
 
     // Middle row with label
     let mid_y = y + height / 2;
     canvas.set(x, mid_y, charset.vertical);
-    // Center the label
     let label_start = x + (width - label.chars().count()) / 2;
     canvas.write_str(label_start, mid_y, label);
     canvas.set(x + width - 1, mid_y, charset.vertical);
 
     // Bottom border
     let bot_y = y + height - 1;
-    canvas.set(x, bot_y, charset.corner_bl);
+    canvas.set(x, bot_y, bl);
     for dx in 1..width - 1 {
         canvas.set(x + dx, bot_y, charset.horizontal);
     }
-    canvas.set(x + width - 1, bot_y, charset.corner_br);
-}
-
-/// Render a round (rounded rectangle) shape.
-fn render_round(
-    canvas: &mut Canvas,
-    x: usize,
-    y: usize,
-    width: usize,
-    height: usize,
-    label: &str,
-    charset: &CharSet,
-) {
-    // Top border with rounded corners
-    canvas.set(x, y, charset.round_tl);
-    for dx in 1..width - 1 {
-        canvas.set(x + dx, y, charset.horizontal);
-    }
-    canvas.set(x + width - 1, y, charset.round_tr);
-
-    // Middle row with label
-    let mid_y = y + height / 2;
-    canvas.set(x, mid_y, charset.vertical);
-    let label_start = x + (width - label.chars().count()) / 2;
-    canvas.write_str(label_start, mid_y, label);
-    canvas.set(x + width - 1, mid_y, charset.vertical);
-
-    // Bottom border with rounded corners
-    let bot_y = y + height - 1;
-    canvas.set(x, bot_y, charset.round_bl);
-    for dx in 1..width - 1 {
-        canvas.set(x + dx, bot_y, charset.horizontal);
-    }
-    canvas.set(x + width - 1, bot_y, charset.round_br);
+    canvas.set(x + width - 1, bot_y, br);
 }
 
 /// Render a diamond shape.
