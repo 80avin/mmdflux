@@ -1305,8 +1305,8 @@ mod tests {
     }
 
     #[test]
-    fn test_no_corridor_canvas_expansion() {
-        // Backward edge should NOT expand canvas width
+    fn test_backward_edge_no_canvas_expansion() {
+        // Backward edge waypoints should NOT expand canvas width
         let mut diagram_with_cycle = Diagram::new(Direction::TopDown);
         diagram_with_cycle.add_node(Node::new("A").with_label("Top"));
         diagram_with_cycle.add_node(Node::new("B").with_label("Bottom"));

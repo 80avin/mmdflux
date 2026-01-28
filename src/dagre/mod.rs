@@ -85,7 +85,7 @@ where
 
     // Capture original edge indices of reversed edges BEFORE normalization,
     // because normalization removes long edges (and their reversed_edges entries).
-    // The rendering layer needs these to identify backward edges for corridor routing.
+    // The rendering layer needs these to identify backward edges for waypoint routing.
     let reversed_orig_edges: Vec<usize> = lg
         .reversed_edges
         .iter()

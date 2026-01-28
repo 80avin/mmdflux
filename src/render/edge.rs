@@ -36,7 +36,7 @@ pub fn render_edge(
 ///
 /// For forward edges, places the label at the midpoint between start and end.
 /// For backward edges (routed around perimeter), places the label along the
-/// actual routed path (typically on the corridor segment).
+/// actual routed path (typically on the longest waypoint segment).
 /// If the label would collide with a node or another label, tries alternative positions.
 ///
 /// Returns the placed label's bounding box if successfully placed.
@@ -58,13 +58,14 @@ fn draw_edge_label_with_tracking(
                 // place label next to the final vertical segment going to target.
                 // This ensures branching edges have labels at different X positions.
                 if routed.segments.len() >= 3 {
-                    // Find the last vertical segment (the one approaching target)
-                    if let Some(last_vert) = routed
-                        .segments
-                        .iter()
-                        .rev()
-                        .find(|s| matches!(s, Segment::Vertical { .. }))
-                    {
+                    // Choose the best segment for label placement.
+                    // For backward edges (many segments routing around the diagram),
+                    // prefer the longest vertical segment (the waypoint path) to avoid
+                    // placing the label near the target node where it crowds other labels.
+                    // For forward edges, use the last vertical segment approaching the target.
+                    let chosen_seg = select_label_segment(&routed.segments);
+
+                    if let Some(seg) = chosen_seg {
                         // Determine which side to place the label based on target position
                         // If target is to the right of source, place label to the right
                         let mut place_right = routed.end.x > routed.start.x;
@@ -74,7 +75,7 @@ fn draw_edge_label_with_tracking(
                         // vertical segment and another edge targeting the same node).
                         // If an edge cell exists on the far side of the label, flip sides.
                         let (trial_x, trial_y) = find_label_position_on_segment_with_side(
-                            last_vert,
+                            seg,
                             label_len,
                             direction,
                             place_right,
@@ -90,7 +91,7 @@ fn draw_edge_label_with_tracking(
                         }
 
                         find_label_position_on_segment_with_side(
-                            last_vert,
+                            seg,
                             label_len,
                             direction,
                             place_right,
@@ -213,19 +214,16 @@ fn find_label_position_on_segment_with_side(
             }
         }
         Segment::Horizontal { y, x_start, x_end } => {
-            // For horizontal segments (corridor in TD/BT layouts), place label above/below
+            // For horizontal segments, place label above/below
             let mid_x = (*x_start + *x_end) / 2;
             let label_x = mid_x.saturating_sub(label_len / 2);
-            // For TD, corridor is on right side going up, place label to left of line
-            // For BT, similar logic
             match direction {
                 Direction::TopDown | Direction::BottomTop => {
-                    // Vertical layout: horizontal corridor segment, place above the line
+                    // Vertical layout: place above the horizontal segment
                     (label_x, y.saturating_sub(1))
                 }
                 Direction::LeftRight | Direction::RightLeft => {
-                    // Horizontal layout: this is the main corridor segment below diagram
-                    // Place label above the line
+                    // Horizontal layout: place above the horizontal segment
                     (label_x, y.saturating_sub(1))
                 }
             }
@@ -364,6 +362,52 @@ fn label_adjacent_to_edge_on_far_side(
                 .and_then(|x| canvas.get(x, label_y))
                 .is_some_and(|cell| cell.is_edge)
         })
+    }
+}
+
+/// Select the best segment for placing a label on a multi-segment edge.
+///
+/// For forward edges (few segments), returns the last vertical segment
+/// approaching the target — labels near the target are clear for short paths.
+///
+/// For backward edges (many segments routed via dagre waypoints), returns the
+/// longest vertical segment. This is typically the long waypoint path spanning
+/// multiple ranks, which is isolated from other edges and avoids crowding near
+/// the target node.
+fn select_label_segment<'a>(segments: &'a [Segment]) -> Option<&'a Segment> {
+    // Backward edges routed through dagre waypoints typically have 6+ segments
+    // (exit source, horizontal turns, long vertical spans, horizontal to target,
+    // enter target). Forward Z-paths typically have 3-4 segments.
+    let is_long_path = segments.len() >= 6;
+
+    if is_long_path {
+        // For long paths (backward edges), find the longest vertical segment.
+        // Skip the first and last segments (they're short stubs near nodes).
+        let inner = if segments.len() > 2 {
+            &segments[1..segments.len() - 1]
+        } else {
+            segments
+        };
+        inner
+            .iter()
+            .filter(|s| matches!(s, Segment::Vertical { .. }))
+            .max_by_key(|s| match s {
+                Segment::Vertical { y_start, y_end, .. } => (*y_start).abs_diff(*y_end),
+                _ => 0,
+            })
+            .or_else(|| {
+                // Fallback: last vertical segment
+                segments
+                    .iter()
+                    .rev()
+                    .find(|s| matches!(s, Segment::Vertical { .. }))
+            })
+    } else {
+        // For short paths (forward edges), use the last vertical segment
+        segments
+            .iter()
+            .rev()
+            .find(|s| matches!(s, Segment::Vertical { .. }))
     }
 }
 
