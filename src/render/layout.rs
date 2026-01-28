@@ -236,11 +236,33 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
         Direction::RightLeft => DagreDirection::RightLeft,
     };
 
-    // Run dagre layout with larger spacing to clearly separate layers/positions
+    // Compute direction-aware spacing
+    let (node_sep, edge_sep) = match dagre_direction {
+        DagreDirection::LeftRight | DagreDirection::RightLeft => {
+            // For LR/RL, use spacing based on average node height to avoid
+            // excessive vertical gaps between nodes
+            let total_height: f64 = diagram
+                .nodes
+                .values()
+                .map(|node| {
+                    let (_, h) = node_dimensions(node);
+                    h as f64
+                })
+                .sum();
+            let count = diagram.nodes.len().max(1) as f64;
+            let avg_height = total_height / count;
+            let ns = (avg_height * 2.0).max(6.0);
+            let es = (avg_height * 0.8).max(2.0);
+            (ns, es)
+        }
+        _ => (50.0, 20.0),
+    };
+
     let dagre_config = DagreConfig {
         direction: dagre_direction,
-        node_sep: 50.0, // Large value to clearly distinguish positions
-        rank_sep: 50.0, // Large value to clearly distinguish layers
+        node_sep,
+        edge_sep,
+        rank_sep: 50.0,
         margin: 10.0,
         acyclic: true,
     };
@@ -522,6 +544,9 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
                     break;
                 }
             }
+            // Clamp to canvas bounds
+            wp.0 = wp.0.min(width.saturating_sub(1));
+            wp.1 = wp.1.min(height.saturating_sub(1));
         }
     }
 
@@ -1559,6 +1584,59 @@ mod tests {
         assert!(
             waypoints[0].0 < waypoints[1].0,
             "Waypoints should be in increasing x order"
+        );
+    }
+
+    #[test]
+    fn test_lr_fanout_vertical_spacing() {
+        use crate::graph::{Diagram, Direction, Edge, Node};
+
+        let mut diagram = Diagram::new(Direction::LeftRight);
+        diagram.add_node(Node::new("A").with_label("A"));
+        diagram.add_node(Node::new("B").with_label("B"));
+        diagram.add_node(Node::new("C").with_label("C"));
+        diagram.add_node(Node::new("D").with_label("D"));
+        diagram.add_edge(Edge::new("A", "B"));
+        diagram.add_edge(Edge::new("A", "C"));
+        diagram.add_edge(Edge::new("A", "D"));
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout(&diagram, &config);
+
+        // Get the Y positions of B, C, D
+        let b_pos = layout.draw_positions.get("B").expect("B should exist");
+        let c_pos = layout.draw_positions.get("C").expect("C should exist");
+        let d_pos = layout.draw_positions.get("D").expect("D should exist");
+
+        // Targets should be vertically ordered
+        let mut ys: Vec<usize> = vec![b_pos.1, c_pos.1, d_pos.1];
+        ys.sort();
+
+        // With direction-aware node_sep, vertical gaps should be small.
+        // Node height is 3 (single-char label), so gaps between adjacent targets
+        // should be <= 6 lines (node height + small padding).
+        let gap_01 = ys[1] - ys[0];
+        let gap_12 = ys[2] - ys[1];
+
+        // With direction-aware node_sep, vertical gaps should be small and uniform.
+        assert!(
+            gap_01 <= 6,
+            "Gap between first two targets is {} lines, expected <= 6 with direction-aware spacing",
+            gap_01
+        );
+        assert!(
+            gap_12 <= 6,
+            "Gap between last two targets is {} lines, expected <= 6 with direction-aware spacing",
+            gap_12
+        );
+        // Gaps should be uniform (difference <= 1)
+        let gap_diff = gap_01.abs_diff(gap_12);
+        assert!(
+            gap_diff <= 1,
+            "Gaps should be uniform: gap_01={}, gap_12={}, diff={}",
+            gap_01,
+            gap_12,
+            gap_diff
         );
     }
 }

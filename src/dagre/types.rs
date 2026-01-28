@@ -87,6 +87,9 @@ pub struct LayoutConfig {
     /// Horizontal spacing between nodes (or vertical for LR/RL).
     pub node_sep: f64,
 
+    /// Spacing between dummy nodes (edge segments). Matches dagre.js `edgesep`.
+    pub edge_sep: f64,
+
     /// Vertical spacing between ranks (or horizontal for LR/RL).
     pub rank_sep: f64,
 
@@ -102,6 +105,7 @@ impl Default for LayoutConfig {
         Self {
             direction: Direction::default(),
             node_sep: 50.0,
+            edge_sep: 20.0,
             rank_sep: 50.0,
             margin: 10.0,
             acyclic: true,

@@ -46,6 +46,7 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
     // Use Brandes-Köpf algorithm for x-coordinate assignment
     let bk_config = BKConfig {
         node_sep: config.node_sep,
+        edge_sep: config.edge_sep,
         direction: config.direction,
     };
     let x_coords = position_x(graph, &bk_config);
@@ -89,6 +90,7 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
     // BK always optimizes the "horizontal" axis (perpendicular to layer direction)
     let bk_config = BKConfig {
         node_sep: config.node_sep,
+        edge_sep: config.edge_sep,
         direction: config.direction,
     };
     let y_coords = position_x(graph, &bk_config);

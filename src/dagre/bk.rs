@@ -173,8 +173,11 @@ impl AlignmentDirection {
 /// Configuration for the Brandes-Köpf algorithm.
 #[derive(Debug, Clone)]
 pub struct BKConfig {
-    /// Minimum separation between adjacent nodes.
+    /// Minimum separation between adjacent real nodes.
     pub node_sep: f64,
+
+    /// Minimum separation between adjacent dummy nodes (edge segments).
+    pub edge_sep: f64,
 
     /// Layout direction - determines whether to use node width or height
     /// for separation calculations. For TD/BT, uses width. For LR/RL, uses height.
@@ -185,6 +188,7 @@ impl Default for BKConfig {
     fn default() -> Self {
         Self {
             node_sep: 50.0,
+            edge_sep: 20.0,
             direction: Direction::TopBottom,
         }
     }
@@ -736,7 +740,18 @@ fn place_block(
                     // Distance from center of left node to center of this node
                     let left_width = get_width(graph, left, config.direction);
                     let node_width = get_width(graph, node, config.direction);
-                    let min_separation = (left_width + node_width) / 2.0 + config.node_sep;
+                    let left_sep = if is_dummy(graph, left) {
+                        config.edge_sep
+                    } else {
+                        config.node_sep
+                    };
+                    let node_s = if is_dummy(graph, node) {
+                        config.edge_sep
+                    } else {
+                        config.node_sep
+                    };
+                    let sep = (left_sep + node_s) / 2.0;
+                    let min_separation = (left_width + node_width) / 2.0 + sep;
 
                     // Update our position if needed
                     if let Some(&left_x) = result.x.get(&left_root) {
@@ -947,6 +962,7 @@ pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, 
 mod tests {
     use super::*;
     use crate::dagre::graph::DiGraph;
+    use crate::dagre::normalize::{DummyNode, DummyType, LabelPos};
     use crate::dagre::rank;
 
     /// Test helper: check if two nodes are in the same block
@@ -1797,5 +1813,119 @@ mod tests {
         for result in results.values() {
             assert_eq!(result.x.len(), 4);
         }
+    }
+
+    /// Helper to create a two-node same-layer LayoutGraph, optionally marking nodes as dummy.
+    fn make_two_node_graph(dims: [(f64, f64); 2], dummy_flags: [bool; 2]) -> LayoutGraph {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("N0", dims[0]);
+        graph.add_node("N1", dims[1]);
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, d| *d);
+        lg.ranks = vec![0, 0];
+        lg.order = vec![0, 1];
+
+        for (i, &is_dummy) in dummy_flags.iter().enumerate() {
+            if is_dummy {
+                let id = lg.node_ids[i].clone();
+                lg.dummy_nodes.insert(
+                    id,
+                    DummyNode {
+                        dummy_type: DummyType::Edge,
+                        edge_index: 0,
+                        rank: 0,
+                        width: dims[i].0,
+                        height: dims[i].1,
+                        label_pos: LabelPos::Center,
+                    },
+                );
+            }
+        }
+
+        lg
+    }
+
+    #[test]
+    fn test_edge_sep_for_dummy_nodes() {
+        let lg = make_two_node_graph([(1.0, 1.0), (1.0, 1.0)], [true, true]);
+        let alignment = BlockAlignment::new(&[0, 1]);
+        let config = BKConfig {
+            node_sep: 50.0,
+            edge_sep: 10.0,
+            direction: Direction::TopBottom,
+        };
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        let x0 = result.x.get(&0).unwrap();
+        let x1 = result.x.get(&1).unwrap();
+        let actual_sep = x1 - x0;
+
+        // Two dummy nodes: separation = width/2 + width/2 + edge_sep = 0.5 + 0.5 + 10.0 = 11.0
+        let expected_min = 1.0 / 2.0 + 1.0 / 2.0 + 10.0;
+        assert!(
+            actual_sep >= expected_min - 0.01,
+            "Dummy separation {} should be >= {} (edge_sep=10)",
+            actual_sep,
+            expected_min
+        );
+        // Must NOT use node_sep (would give 51.0)
+        let node_sep_min = 1.0 / 2.0 + 1.0 / 2.0 + 50.0;
+        assert!(
+            actual_sep < node_sep_min,
+            "Dummy separation {} should be < {} (should NOT use node_sep)",
+            actual_sep,
+            node_sep_min
+        );
+    }
+
+    #[test]
+    fn test_real_nodes_still_use_node_sep() {
+        let lg = make_two_node_graph([(100.0, 50.0), (100.0, 50.0)], [false, false]);
+        let alignment = BlockAlignment::new(&[0, 1]);
+        let config = BKConfig {
+            node_sep: 50.0,
+            edge_sep: 10.0,
+            direction: Direction::TopBottom,
+        };
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        let x0 = result.x.get(&0).unwrap();
+        let x1 = result.x.get(&1).unwrap();
+        let actual_sep = x1 - x0;
+
+        // Two real nodes: separation = 50 + 50 + 50 = 150
+        let expected_min = 100.0 / 2.0 + 100.0 / 2.0 + 50.0;
+        assert!(
+            actual_sep >= expected_min - 0.01,
+            "Real node separation {} should be >= {} (node_sep=50)",
+            actual_sep,
+            expected_min
+        );
+    }
+
+    #[test]
+    fn test_mixed_dummy_real_separation() {
+        let lg = make_two_node_graph([(100.0, 50.0), (1.0, 1.0)], [false, true]);
+        let alignment = BlockAlignment::new(&[0, 1]);
+        let config = BKConfig {
+            node_sep: 50.0,
+            edge_sep: 10.0,
+            direction: Direction::TopBottom,
+        };
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        let x_real = result.x.get(&0).unwrap();
+        let x_dummy = result.x.get(&1).unwrap();
+        let actual_sep = x_dummy - x_real;
+
+        // Mixed: sep = (node_sep + edge_sep) / 2 = (50+10)/2 = 30
+        // min_separation = 50 + 0.5 + 30 = 80.5
+        let expected_min = 100.0 / 2.0 + 1.0 / 2.0 + (50.0 + 10.0) / 2.0;
+        assert!(
+            actual_sep >= expected_min - 0.01,
+            "Mixed separation {} should be >= {} (avg of node_sep and edge_sep)",
+            actual_sep,
+            expected_min
+        );
     }
 }
