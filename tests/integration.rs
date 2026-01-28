@@ -439,6 +439,141 @@ mod stagger {
 }
 
 // =============================================================================
+// Attachment Point Spreading Tests
+// =============================================================================
+
+mod spreading {
+    use mmdflux::render::{LayoutConfig, compute_layout_dagre, route_all_edges};
+
+    use super::*;
+
+    fn parse_and_build(name: &str) -> mmdflux::Diagram {
+        let input = load_fixture(name);
+        let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
+        build_diagram(&flowchart)
+    }
+
+    /// Verify that no row has immediately adjacent down-arrows (▼▼).
+    fn assert_no_adjacent_arrows(output: &str, fixture_name: &str) {
+        for (line_num, line) in output.lines().enumerate() {
+            assert!(
+                !line.contains("▼▼"),
+                "{}: line {} has adjacent arrows: {}",
+                fixture_name,
+                line_num + 1,
+                line
+            );
+        }
+    }
+
+    /// Verify that edges arriving at a shared target node have distinct endpoint x-coordinates.
+    fn assert_distinct_arrival_x(fixture_name: &str, target_node: &str) {
+        let diagram = parse_and_build(fixture_name);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+        let routed = route_all_edges(&diagram.edges, &layout, diagram.direction);
+
+        let arrival_xs: Vec<usize> = routed
+            .iter()
+            .filter(|r| r.edge.to == target_node)
+            .map(|r| r.end.x)
+            .collect();
+
+        assert!(
+            arrival_xs.len() >= 2,
+            "{}: expected >=2 edges arriving at {}, got {}",
+            fixture_name,
+            target_node,
+            arrival_xs.len()
+        );
+
+        // Check all pairs are distinct
+        for i in 0..arrival_xs.len() {
+            for j in (i + 1)..arrival_xs.len() {
+                assert_ne!(
+                    arrival_xs[i], arrival_xs[j],
+                    "{}: edges arriving at {} have duplicate x-coordinate {} (all: {:?})",
+                    fixture_name, target_node, arrival_xs[i], arrival_xs
+                );
+            }
+        }
+    }
+
+    // --- Wide-node fixtures: no adjacent arrows ---
+
+    #[test]
+    fn fan_in_no_adjacent_arrows() {
+        let output = render_fixture("fan_in.mmd");
+        assert_no_adjacent_arrows(&output, "fan_in.mmd");
+    }
+
+    #[test]
+    fn fan_out_no_adjacent_arrows() {
+        let output = render_fixture("fan_out.mmd");
+        assert_no_adjacent_arrows(&output, "fan_out.mmd");
+    }
+
+    // --- All target fixtures: distinct arrival x-coordinates ---
+
+    #[test]
+    fn double_skip_distinct_arrivals() {
+        assert_distinct_arrival_x("double_skip.mmd", "D");
+    }
+
+    #[test]
+    fn stacked_fan_in_distinct_arrivals() {
+        assert_distinct_arrival_x("stacked_fan_in.mmd", "C");
+    }
+
+    #[test]
+    fn narrow_fan_in_distinct_arrivals() {
+        assert_distinct_arrival_x("narrow_fan_in.mmd", "D");
+    }
+
+    #[test]
+    fn skip_edge_collision_distinct_arrivals() {
+        assert_distinct_arrival_x("skip_edge_collision.mmd", "D");
+    }
+
+    #[test]
+    fn fan_in_distinct_arrivals() {
+        assert_distinct_arrival_x("fan_in.mmd", "D");
+    }
+
+    #[test]
+    fn five_fan_in_distinct_arrivals() {
+        assert_distinct_arrival_x("five_fan_in.mmd", "F");
+    }
+
+    // --- Departure-side spreading ---
+
+    #[test]
+    fn fan_out_distinct_departures() {
+        let diagram = parse_and_build("fan_out.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+        let routed = route_all_edges(&diagram.edges, &layout, diagram.direction);
+
+        let departure_xs: Vec<usize> = routed
+            .iter()
+            .filter(|r| r.edge.from == "A")
+            .map(|r| r.start.x)
+            .collect();
+
+        assert!(departure_xs.len() >= 2);
+        for i in 0..departure_xs.len() {
+            for j in (i + 1)..departure_xs.len() {
+                assert_ne!(
+                    departure_xs[i], departure_xs[j],
+                    "fan_out.mmd: edges departing A have duplicate x {} (all: {:?})",
+                    departure_xs[i], departure_xs
+                );
+            }
+        }
+    }
+}
+
+// =============================================================================
 // All Fixtures Parse and Render
 // =============================================================================
 
