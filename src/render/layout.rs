@@ -106,6 +106,7 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
     let (layer_widths, layer_heights) = compute_layer_dimensions(&layers, &node_dims);
 
     // Step 5: Convert grid positions to draw coordinates based on direction
+    let no_stagger = HashMap::new();
     let (draw_positions, node_bounds, width, height) = match diagram.direction {
         Direction::TopDown | Direction::BottomTop => {
             let result = grid_to_draw_vertical(
@@ -115,6 +116,7 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
                 &layer_heights,
                 config,
                 diagram.direction == Direction::BottomTop,
+                &no_stagger,
             );
             (
                 result.draw_positions,
@@ -131,6 +133,7 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
                 &layer_widths,
                 config,
                 diagram.direction == Direction::RightLeft,
+                &no_stagger,
             );
             (
                 result.draw_positions,
@@ -315,10 +318,37 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
     // Compute layer dimensions
     let (layer_widths, layer_heights) = compute_layer_dimensions(&layers, &node_dims);
 
+    // Task 1.1: Extract dagre cross-axis positions per node
+    let dagre_cross_positions: HashMap<String, f64> = result
+        .nodes
+        .iter()
+        .map(|(id, rect)| {
+            let cross = if is_vertical {
+                rect.x + rect.width / 2.0 // center_x for TD/BT
+            } else {
+                rect.y + rect.height / 2.0 // center_y for LR/RL
+            };
+            (id.0.clone(), cross)
+        })
+        .collect();
+
+    let nodesep = dagre_config.node_sep;
+
     // Convert grid positions to draw coordinates using original ASCII logic
     // Also capture layer positions for waypoint transformation
     let (draw_positions, node_bounds, width, height, layer_starts) = match diagram.direction {
         Direction::TopDown | Direction::BottomTop => {
+            let stagger_positions = compute_stagger_positions(
+                &layers,
+                &dagre_cross_positions,
+                &node_dims,
+                |d| d.0, // width for TD/BT
+                config.h_spacing,
+                config.padding,
+                config.left_label_margin,
+                nodesep,
+            );
+
             let result = grid_to_draw_vertical(
                 &grid_positions,
                 &node_dims,
@@ -326,6 +356,7 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
                 &layer_heights,
                 config,
                 diagram.direction == Direction::BottomTop,
+                &stagger_positions,
             );
             (
                 result.draw_positions,
@@ -336,6 +367,17 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
             )
         }
         Direction::LeftRight | Direction::RightLeft => {
+            let stagger_positions = compute_stagger_positions(
+                &layers,
+                &dagre_cross_positions,
+                &node_dims,
+                |d| d.1, // height for LR/RL
+                config.v_spacing,
+                config.padding,
+                0, // no label margin on cross axis for LR/RL
+                nodesep,
+            );
+
             let result = grid_to_draw_horizontal(
                 &grid_positions,
                 &node_dims,
@@ -343,6 +385,7 @@ pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout 
                 &layer_widths,
                 config,
                 diagram.direction == Direction::RightLeft,
+                &stagger_positions,
             );
             (
                 result.draw_positions,
@@ -634,6 +677,7 @@ fn grid_to_draw_vertical(
     layer_heights: &[usize],
     config: &LayoutConfig,
     reverse: bool,
+    stagger_centers: &HashMap<String, usize>,
 ) -> VerticalLayoutResult {
     let mut draw_positions = HashMap::new();
     let mut node_bounds = HashMap::new();
@@ -675,6 +719,8 @@ fn grid_to_draw_vertical(
     // produce incorrect results.
     let _ = reverse; // Parameter kept for API compatibility but not used
 
+    let has_stagger = !stagger_centers.is_empty();
+
     // Position nodes within each layer
     for (layer_idx, layer) in layers.iter().enumerate() {
         if layer.is_empty() {
@@ -685,46 +731,88 @@ fn grid_to_draw_vertical(
         let mut sorted_nodes: Vec<_> = layer.iter().collect();
         sorted_nodes.sort_by_key(|id| grid_positions.get(*id).map(|p| p.pos).unwrap_or(0));
 
-        // Calculate total width of this layer
-        let content_width: usize = sorted_nodes
-            .iter()
-            .filter_map(|id| node_dims.get(*id).map(|(w, _)| *w))
-            .sum();
-        let spacing = if sorted_nodes.len() > 1 {
-            (sorted_nodes.len() - 1) * config.h_spacing
+        if has_stagger
+            && sorted_nodes
+                .iter()
+                .any(|id| stagger_centers.contains_key(*id))
+        {
+            // Stagger mode: use dagre-derived cross-axis centers
+            for node_id in &sorted_nodes {
+                if let Some(&(w, h)) = node_dims.get(*node_id) {
+                    let y = layer_y_starts[layer_idx];
+                    let x = stagger_centers
+                        .get(*node_id)
+                        .map(|&center| center.saturating_sub(w / 2))
+                        .unwrap_or_else(|| {
+                            config.padding
+                                + config.left_label_margin
+                                + (max_layer_content_width.saturating_sub(w)) / 2
+                        });
+                    draw_positions.insert((*node_id).clone(), (x, y));
+                    node_bounds.insert(
+                        (*node_id).clone(),
+                        NodeBounds {
+                            x,
+                            y,
+                            width: w,
+                            height: h,
+                        },
+                    );
+                }
+            }
         } else {
-            0
-        };
-        let total_layer_width = content_width + spacing;
+            // Original centering logic (no stagger)
+            let content_width: usize = sorted_nodes
+                .iter()
+                .filter_map(|id| node_dims.get(*id).map(|(w, _)| *w))
+                .sum();
+            let spacing = if sorted_nodes.len() > 1 {
+                (sorted_nodes.len() - 1) * config.h_spacing
+            } else {
+                0
+            };
+            let total_layer_width = content_width + spacing;
 
-        // Center the layer horizontally, accounting for left label margin
-        let layer_start_x = config.padding
-            + config.left_label_margin
-            + (max_layer_content_width - total_layer_width) / 2;
+            let layer_start_x = config.padding
+                + config.left_label_margin
+                + (max_layer_content_width - total_layer_width) / 2;
 
-        let mut x = layer_start_x;
-        for node_id in sorted_nodes {
-            if let Some(&(w, h)) = node_dims.get(node_id) {
-                let y = layer_y_starts[layer_idx];
-                draw_positions.insert(node_id.clone(), (x, y));
-                node_bounds.insert(
-                    node_id.clone(),
-                    NodeBounds {
-                        x,
-                        y,
-                        width: w,
-                        height: h,
-                    },
-                );
-                x += w + config.h_spacing;
+            let mut x = layer_start_x;
+            for node_id in sorted_nodes {
+                if let Some(&(w, h)) = node_dims.get(node_id) {
+                    let y = layer_y_starts[layer_idx];
+                    draw_positions.insert(node_id.clone(), (x, y));
+                    node_bounds.insert(
+                        node_id.clone(),
+                        NodeBounds {
+                            x,
+                            y,
+                            width: w,
+                            height: h,
+                        },
+                    );
+                    x += w + config.h_spacing;
+                }
             }
         }
     }
 
+    // When stagger is active, recalculate canvas width from actual positions
+    let final_width = if has_stagger {
+        let actual_max_x = node_bounds
+            .values()
+            .map(|b| b.x + b.width)
+            .max()
+            .unwrap_or(0);
+        actual_max_x + config.padding + config.right_label_margin
+    } else {
+        canvas_width
+    };
+
     VerticalLayoutResult {
         draw_positions,
         node_bounds,
-        width: canvas_width,
+        width: final_width,
         height: canvas_height,
         layer_y_starts,
     }
@@ -748,6 +836,7 @@ fn grid_to_draw_horizontal(
     _layer_widths: &[usize],
     config: &LayoutConfig,
     reverse: bool,
+    stagger_centers: &HashMap<String, usize>,
 ) -> HorizontalLayoutResult {
     let mut draw_positions = HashMap::new();
     let mut node_bounds = HashMap::new();
@@ -799,6 +888,8 @@ fn grid_to_draw_horizontal(
     // produce incorrect results.
     let _ = reverse; // Parameter kept for API compatibility but not used
 
+    let has_stagger = !stagger_centers.is_empty();
+
     // Position nodes within each layer (column)
     for (layer_idx, layer) in layers.iter().enumerate() {
         if layer.is_empty() {
@@ -809,50 +900,215 @@ fn grid_to_draw_horizontal(
         let mut sorted_nodes: Vec<_> = layer.iter().collect();
         sorted_nodes.sort_by_key(|id| grid_positions.get(*id).map(|p| p.pos).unwrap_or(0));
 
-        // Calculate total height of this column
-        let content_height: usize = sorted_nodes
-            .iter()
-            .filter_map(|id| node_dims.get(*id).map(|(_, h)| *h))
-            .sum();
-        let spacing = if sorted_nodes.len() > 1 {
-            (sorted_nodes.len() - 1) * config.v_spacing
+        if has_stagger
+            && sorted_nodes
+                .iter()
+                .any(|id| stagger_centers.contains_key(*id))
+        {
+            // Stagger mode: use dagre-derived cross-axis Y centers
+            for node_id in &sorted_nodes {
+                if let Some(&(w, h)) = node_dims.get(*node_id) {
+                    let layer_width = max_layer_widths[layer_idx];
+                    let node_x = layer_x_starts[layer_idx] + (layer_width - w) / 2;
+                    let node_y = stagger_centers
+                        .get(*node_id)
+                        .map(|&center| center.saturating_sub(h / 2))
+                        .unwrap_or_else(|| {
+                            config.padding + (max_column_content_height.saturating_sub(h)) / 2
+                        });
+                    draw_positions.insert((*node_id).clone(), (node_x, node_y));
+                    node_bounds.insert(
+                        (*node_id).clone(),
+                        NodeBounds {
+                            x: node_x,
+                            y: node_y,
+                            width: w,
+                            height: h,
+                        },
+                    );
+                }
+            }
         } else {
-            0
-        };
-        let total_column_height = content_height + spacing;
+            // Original centering logic (no stagger)
+            let content_height: usize = sorted_nodes
+                .iter()
+                .filter_map(|id| node_dims.get(*id).map(|(_, h)| *h))
+                .sum();
+            let spacing = if sorted_nodes.len() > 1 {
+                (sorted_nodes.len() - 1) * config.v_spacing
+            } else {
+                0
+            };
+            let total_column_height = content_height + spacing;
 
-        // Center the column vertically
-        let column_start_y = config.padding + (max_column_content_height - total_column_height) / 2;
+            let column_start_y =
+                config.padding + (max_column_content_height - total_column_height) / 2;
 
-        let mut y = column_start_y;
-        for node_id in sorted_nodes {
-            if let Some(&(w, h)) = node_dims.get(node_id) {
-                // Center nodes horizontally within the column width
-                let layer_width = max_layer_widths[layer_idx];
-                let node_x = layer_x_starts[layer_idx] + (layer_width - w) / 2;
+            let mut y = column_start_y;
+            for node_id in sorted_nodes {
+                if let Some(&(w, h)) = node_dims.get(node_id) {
+                    let layer_width = max_layer_widths[layer_idx];
+                    let node_x = layer_x_starts[layer_idx] + (layer_width - w) / 2;
 
-                draw_positions.insert(node_id.clone(), (node_x, y));
-                node_bounds.insert(
-                    node_id.clone(),
-                    NodeBounds {
-                        x: node_x,
-                        y,
-                        width: w,
-                        height: h,
-                    },
-                );
-                y += h + config.v_spacing;
+                    draw_positions.insert(node_id.clone(), (node_x, y));
+                    node_bounds.insert(
+                        node_id.clone(),
+                        NodeBounds {
+                            x: node_x,
+                            y,
+                            width: w,
+                            height: h,
+                        },
+                    );
+                    y += h + config.v_spacing;
+                }
             }
         }
     }
+
+    // When stagger is active, recalculate canvas height from actual positions
+    let final_height = if has_stagger {
+        let actual_max_y = node_bounds
+            .values()
+            .map(|b| b.y + b.height)
+            .max()
+            .unwrap_or(0);
+        actual_max_y + config.padding
+    } else {
+        canvas_height
+    };
 
     HorizontalLayoutResult {
         draw_positions,
         node_bounds,
         width: canvas_width,
-        height: canvas_height,
+        height: final_height,
         layer_x_starts,
     }
+}
+
+/// Compute cross-axis draw positions by scaling dagre coordinates to ASCII space.
+///
+/// For each layer, computes where each node's cross-axis center should be
+/// in draw coordinates, preserving dagre's relative positioning (stagger).
+///
+/// Returns: HashMap<node_id, cross_axis_center_draw_position>.
+/// Returns empty map when no stagger is detected (all nodes at same cross-axis position).
+fn compute_stagger_positions(
+    layers: &[Vec<String>],
+    dagre_cross: &HashMap<String, f64>,
+    node_dims: &HashMap<String, (usize, usize)>,
+    cross_dim_fn: impl Fn(&(usize, usize)) -> usize, // width for TD/BT, height for LR/RL
+    spacing: usize,                                  // h_spacing for TD/BT, v_spacing for LR/RL
+    padding: usize,
+    label_margin_before: usize, // left_label_margin for TD/BT, 0 for LR/RL
+    nodesep: f64,               // dagre nodesep value used in layout
+) -> HashMap<String, usize> {
+    let mut positions = HashMap::new();
+
+    // Step 1: Find the global dagre cross-axis range across ALL layers
+    let all_dagre_vals: Vec<f64> = layers
+        .iter()
+        .flat_map(|layer| layer.iter().filter_map(|id| dagre_cross.get(id).copied()))
+        .collect();
+
+    if all_dagre_vals.is_empty() {
+        return positions;
+    }
+
+    let dagre_min = all_dagre_vals.iter().cloned().fold(f64::INFINITY, f64::min);
+    let dagre_max = all_dagre_vals
+        .iter()
+        .cloned()
+        .fold(f64::NEG_INFINITY, f64::max);
+    let dagre_range = dagre_max - dagre_min;
+
+    // Step 2: For each layer, compute the required content width at grid spacing
+    let max_layer_content: usize = layers
+        .iter()
+        .map(|layer| {
+            let content: usize = layer
+                .iter()
+                .filter_map(|id| node_dims.get(id).map(|d| cross_dim_fn(d)))
+                .sum();
+            let sp = if layer.len() > 1 {
+                (layer.len() - 1) * spacing
+            } else {
+                0
+            };
+            content + sp
+        })
+        .max()
+        .unwrap_or(0);
+
+    // Step 3: No stagger if all dagre cross-axis values are effectively the same
+    if dagre_range < 1.0 {
+        return positions;
+    }
+
+    // Step 4: Compute scale factor
+    // Map dagre_range to a target ASCII range proportional to spacing
+    let max_half_cross: usize = layers
+        .iter()
+        .flat_map(|layer| layer.iter())
+        .filter_map(|id| node_dims.get(id).map(|d| cross_dim_fn(d) / 2))
+        .max()
+        .unwrap_or(0);
+
+    let target_stagger = (dagre_range / nodesep * (spacing as f64 + 2.0))
+        .round()
+        .max(2.0)
+        .min(max_layer_content as f64 / 2.0) as usize;
+
+    let scale = if dagre_range > f64::EPSILON {
+        target_stagger as f64 / dagre_range
+    } else {
+        0.0
+    };
+
+    // Step 5: For each node, compute its cross-axis center position
+    let canvas_content_start = padding + label_margin_before;
+    let total_content_width = max_layer_content.max(target_stagger + max_half_cross * 2);
+    let canvas_center = canvas_content_start + total_content_width / 2;
+
+    let dagre_center = (dagre_min + dagre_max) / 2.0;
+
+    for layer in layers {
+        // Compute stagger centers for all nodes in this layer
+        let mut layer_nodes: Vec<(&String, usize, usize)> = Vec::new();
+        for node_id in layer {
+            if let (Some(&dagre_val), Some(dims)) =
+                (dagre_cross.get(node_id), node_dims.get(node_id))
+            {
+                let offset = (dagre_val - dagre_center) * scale;
+                let cross_center = (canvas_center as f64 + offset)
+                    .round()
+                    .max((canvas_content_start + cross_dim_fn(dims) / 2) as f64)
+                    as usize;
+                let half_dim = cross_dim_fn(dims) / 2;
+                layer_nodes.push((node_id, cross_center, half_dim));
+            }
+        }
+
+        // Enforce minimum spacing between adjacent nodes in multi-node layers
+        if layer_nodes.len() > 1 {
+            layer_nodes.sort_by_key(|&(_, center, _)| center);
+            for i in 1..layer_nodes.len() {
+                let prev_right = layer_nodes[i - 1].1 + layer_nodes[i - 1].2;
+                let curr_left = layer_nodes[i].1.saturating_sub(layer_nodes[i].2);
+                if curr_left < prev_right + spacing {
+                    // Push current node right to maintain minimum spacing
+                    layer_nodes[i].1 = prev_right + spacing + layer_nodes[i].2;
+                }
+            }
+        }
+
+        for (node_id, center, _) in layer_nodes {
+            positions.insert(node_id.clone(), center);
+        }
+    }
+
+    positions
 }
 
 /// Map a dagre cross-axis coordinate to draw coordinate using anchor points at a given rank.
