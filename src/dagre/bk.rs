@@ -468,7 +468,7 @@ pub fn has_conflict(conflicts: &ConflictSet, layer: usize, pos1: usize, pos2: us
 
     // Check if there's a conflict that falls within this range
     // A conflict at (layer, p1, p2) blocks alignments where min_pos <= p1 and p2 <= max_pos
-    for (&(conf_layer, conf_pos1, conf_pos2), _) in conflicts {
+    for &(conf_layer, conf_pos1, conf_pos2) in conflicts.keys() {
         if conf_layer == layer && min_pos <= conf_pos1 && conf_pos2 <= max_pos {
             return true;
         }
@@ -889,7 +889,7 @@ fn balance(
             (xs[1] + xs[2]) / 2.0
         } else if xs.len() >= 2 {
             let mid = xs.len() / 2;
-            if xs.len() % 2 == 0 {
+            if xs.len().is_multiple_of(2) {
                 (xs[mid - 1] + xs[mid]) / 2.0
             } else {
                 xs[mid]

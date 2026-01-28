@@ -374,7 +374,7 @@ fn label_adjacent_to_edge_on_far_side(
 /// longest vertical segment. This is typically the long waypoint path spanning
 /// multiple ranks, which is isolated from other edges and avoids crowding near
 /// the target node.
-fn select_label_segment<'a>(segments: &'a [Segment]) -> Option<&'a Segment> {
+fn select_label_segment(segments: &[Segment]) -> Option<&Segment> {
     // Backward edges routed through dagre waypoints typically have 6+ segments
     // (exit source, horizontal turns, long vertical spans, horizontal to target,
     // enter target). Forward Z-paths typically have 3-4 segments.

@@ -369,17 +369,17 @@ pub(crate) fn denormalize(graph: &LayoutGraph) -> HashMap<usize, Vec<WaypointWit
 /// The (x, y) center position of the label, or None if the edge has no label.
 pub(crate) fn get_label_position(graph: &LayoutGraph, edge_index: usize) -> Option<Point> {
     for chain in &graph.dummy_chains {
-        if chain.edge_index == edge_index {
-            if let Some(label_idx) = chain.label_dummy_index {
-                let dummy_id = &chain.dummy_ids[label_idx];
-                if let Some(&idx) = graph.node_index.get(dummy_id) {
-                    let pos = graph.positions[idx];
-                    let dims = graph.dimensions[idx];
-                    return Some(Point {
-                        x: pos.x + dims.0 / 2.0,
-                        y: pos.y + dims.1 / 2.0,
-                    });
-                }
+        if chain.edge_index == edge_index
+            && let Some(label_idx) = chain.label_dummy_index
+        {
+            let dummy_id = &chain.dummy_ids[label_idx];
+            if let Some(&idx) = graph.node_index.get(dummy_id) {
+                let pos = graph.positions[idx];
+                let dims = graph.dimensions[idx];
+                return Some(Point {
+                    x: pos.x + dims.0 / 2.0,
+                    y: pos.y + dims.1 / 2.0,
+                });
             }
         }
     }

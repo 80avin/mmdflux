@@ -135,7 +135,7 @@ pub fn run(graph: &mut LayoutGraph) {
     while last_best < 4 {
         let bias_right = (i % 4) >= 2;
 
-        if i % 2 == 0 {
+        if i.is_multiple_of(2) {
             sweep_up(graph, &layers, &edges, bias_right);
         } else {
             sweep_down(graph, &layers, &edges, bias_right);
@@ -144,7 +144,7 @@ pub fn run(graph: &mut LayoutGraph) {
         let cc = count_all_crossings(graph, &layers, &edges);
 
         if debug_order() {
-            let dir = if i % 2 == 0 { "up" } else { "down" };
+            let dir = if i.is_multiple_of(2) { "up" } else { "down" };
             eprintln!(
                 "[order] iter {i}: sweep_{dir}, bias_right={bias_right}, cc={cc}, best_cc={best_cc}"
             );

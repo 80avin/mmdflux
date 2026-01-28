@@ -1013,6 +1013,7 @@ fn grid_to_draw_horizontal(
 ///
 /// Returns: HashMap<node_id, cross_axis_center_draw_position>.
 /// Returns empty map when no stagger is detected (all nodes at same cross-axis position).
+#[allow(clippy::too_many_arguments)]
 fn compute_stagger_positions(
     layers: &[Vec<String>],
     dagre_cross: &HashMap<String, f64>,
@@ -1048,7 +1049,7 @@ fn compute_stagger_positions(
         .map(|layer| {
             let content: usize = layer
                 .iter()
-                .filter_map(|id| node_dims.get(id).map(|d| cross_dim_fn(d)))
+                .filter_map(|id| node_dims.get(id).map(&cross_dim_fn))
                 .sum();
             let sp = if layer.len() > 1 {
                 (layer.len() - 1) * spacing

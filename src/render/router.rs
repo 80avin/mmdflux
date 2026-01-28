@@ -578,7 +578,7 @@ fn compute_vertical_first_path(start: Point, end: Point) -> Vec<Segment> {
 /// * `from` - Starting point
 /// * `to` - Ending point
 /// * `vertical_first` - If true, prefer vertical-then-horizontal routing (for TD/BT).
-///                      If false, prefer horizontal-then-vertical routing (for LR/RL).
+///   If false, prefer horizontal-then-vertical routing (for LR/RL).
 fn orthogonalize_segment(from: Point, to: Point, vertical_first: bool) -> Vec<Segment> {
     if from.x == to.x {
         // Already vertical

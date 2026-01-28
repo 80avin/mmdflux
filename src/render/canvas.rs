@@ -1,5 +1,7 @@
 //! Canvas for ASCII rendering with cell-based drawing.
 
+use std::fmt;
+
 use super::chars::CharSet;
 
 /// Tracks connections in four directions for a cell.
@@ -180,12 +182,14 @@ impl Canvas {
             self.set(x + i, y, ch);
         }
     }
+}
 
+impl fmt::Display for Canvas {
     /// Convert the canvas to a string.
     ///
     /// Trailing spaces on each line are trimmed, and common leading whitespace
     /// is stripped from all lines so the diagram is left-aligned.
-    pub fn to_string(&self) -> String {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let lines: Vec<String> = self
             .cells
             .iter()
@@ -204,11 +208,11 @@ impl Canvas {
             .unwrap_or(0);
 
         if min_indent == 0 {
-            return lines.join("\n");
+            return write!(f, "{}", lines.join("\n"));
         }
 
         // Strip common leading whitespace
-        lines
+        let result: String = lines
             .iter()
             .map(|line| {
                 if line.len() > min_indent {
@@ -218,7 +222,9 @@ impl Canvas {
                 }
             })
             .collect::<Vec<_>>()
-            .join("\n")
+            .join("\n");
+
+        write!(f, "{}", result)
     }
 }
 
