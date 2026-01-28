@@ -199,6 +199,14 @@ impl fmt::Display for Canvas {
             })
             .collect();
 
+        // Trim leading and trailing empty rows
+        let first_non_empty = lines.iter().position(|line| !line.is_empty()).unwrap_or(0);
+        let last_non_empty = lines
+            .iter()
+            .rposition(|line| !line.is_empty())
+            .unwrap_or(lines.len().saturating_sub(1));
+        let lines = &lines[first_non_empty..=last_non_empty];
+
         // Find the minimum leading whitespace across all non-empty lines
         let min_indent = lines
             .iter()
@@ -310,6 +318,37 @@ mod tests {
             right: true,
         };
         assert_eq!(c.count(), 3);
+    }
+
+    #[test]
+    fn test_canvas_trims_leading_empty_rows() {
+        let mut canvas = Canvas::new(5, 5);
+        // Content only on rows 2-3, leaving rows 0-1 empty above
+        canvas.write_str(0, 2, "Hello");
+        canvas.write_str(0, 3, "World");
+        let output = canvas.to_string();
+        // First line of output should be content, not blank
+        assert_eq!(output, "Hello\nWorld");
+    }
+
+    #[test]
+    fn test_canvas_trims_trailing_empty_rows() {
+        let mut canvas = Canvas::new(5, 5);
+        // Content on rows 0-1, rows 2-4 empty below
+        canvas.write_str(0, 0, "Hello");
+        canvas.write_str(0, 1, "World");
+        let output = canvas.to_string();
+        assert_eq!(output, "Hello\nWorld");
+    }
+
+    #[test]
+    fn test_canvas_preserves_interior_empty_rows() {
+        let mut canvas = Canvas::new(5, 4);
+        // Content on rows 0 and 2, row 1 empty (interior gap)
+        canvas.set(0, 0, 'A');
+        canvas.set(0, 2, 'B');
+        let output = canvas.to_string();
+        assert_eq!(output, "A\n\nB");
     }
 
     #[test]
