@@ -183,13 +183,39 @@ impl Canvas {
 
     /// Convert the canvas to a string.
     ///
-    /// Trailing spaces on each line are trimmed, but blank lines are preserved.
+    /// Trailing spaces on each line are trimmed, and common leading whitespace
+    /// is stripped from all lines so the diagram is left-aligned.
     pub fn to_string(&self) -> String {
-        self.cells
+        let lines: Vec<String> = self
+            .cells
             .iter()
             .map(|row| {
                 let line: String = row.iter().map(|cell| cell.ch).collect();
                 line.trim_end().to_string()
+            })
+            .collect();
+
+        // Find the minimum leading whitespace across all non-empty lines
+        let min_indent = lines
+            .iter()
+            .filter(|line| !line.is_empty())
+            .map(|line| line.len() - line.trim_start().len())
+            .min()
+            .unwrap_or(0);
+
+        if min_indent == 0 {
+            return lines.join("\n");
+        }
+
+        // Strip common leading whitespace
+        lines
+            .iter()
+            .map(|line| {
+                if line.len() > min_indent {
+                    &line[min_indent..]
+                } else {
+                    line.as_str()
+                }
             })
             .collect::<Vec<_>>()
             .join("\n")
