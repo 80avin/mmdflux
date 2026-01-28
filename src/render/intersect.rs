@@ -11,6 +11,91 @@
 use super::shape::NodeBounds;
 use crate::graph::Shape;
 
+/// Which face of a node an edge attaches to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NodeFace {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+/// Classify which face of a node a line from `approach_point` to the node center
+/// would intersect. Uses the same slope-vs-diagonal comparison as `intersect_rect`.
+///
+/// Since rendered diamonds have rectangular boundaries (angle brackets on middle row),
+/// the same slope logic works for all shapes.
+pub fn classify_face(
+    bounds: &NodeBounds,
+    approach_point: (usize, usize),
+    _shape: Shape,
+) -> NodeFace {
+    let cx = bounds.center_x() as f64;
+    let cy = bounds.center_y() as f64;
+    let dx = approach_point.0 as f64 - cx;
+    let dy = approach_point.1 as f64 - cy;
+
+    if dx.abs() < 0.5 && dy.abs() < 0.5 {
+        return NodeFace::Bottom; // default when approach == center
+    }
+
+    let half_w = bounds.width as f64 / 2.0;
+    let half_h = bounds.height as f64 / 2.0;
+
+    // Same comparison as intersect_rect: steep => top/bottom, shallow => left/right
+    if dy.abs() * half_w > dx.abs() * half_h {
+        if dy < 0.0 {
+            NodeFace::Top
+        } else {
+            NodeFace::Bottom
+        }
+    } else {
+        if dx < 0.0 {
+            NodeFace::Left
+        } else {
+            NodeFace::Right
+        }
+    }
+}
+
+/// Compute N evenly-spaced attachment positions along a face.
+///
+/// Uses N+1 divisions to avoid placing edges at face corners.
+/// For N=1, returns the center of the extent.
+/// Returns (x, y) coordinates.
+pub fn spread_points_on_face(
+    face: NodeFace,
+    fixed_coord: usize,
+    extent: (usize, usize),
+    count: usize,
+) -> Vec<(usize, usize)> {
+    if count == 0 {
+        return vec![];
+    }
+
+    let (start, end) = extent;
+    let range = end.saturating_sub(start);
+
+    if count == 1 {
+        let mid = start + range / 2;
+        return match face {
+            NodeFace::Top | NodeFace::Bottom => vec![(mid, fixed_coord)],
+            NodeFace::Left | NodeFace::Right => vec![(fixed_coord, mid)],
+        };
+    }
+
+    (0..count)
+        .map(|i| {
+            let pos = start + ((i + 1) * range) / (count + 1);
+            let pos = pos.min(end);
+            match face {
+                NodeFace::Top | NodeFace::Bottom => (pos, fixed_coord),
+                NodeFace::Left | NodeFace::Right => (fixed_coord, pos),
+            }
+        })
+        .collect()
+}
+
 /// A point in 2D space with floating-point coordinates.
 ///
 /// Used for intermediate calculations before rounding to integer grid.
@@ -473,5 +558,117 @@ mod tests {
         let p = FloatPoint::from((15_usize, 25_usize));
         assert_eq!(p.x, 15.0);
         assert_eq!(p.y, 25.0);
+    }
+
+    // --- classify_face tests ---
+
+    #[test]
+    fn test_classify_face_from_above() {
+        let bounds = test_bounds(); // x=10, y=5, w=10, h=5, center=(15,7)
+        let result = classify_face(&bounds, (15, 0), Shape::Rectangle);
+        assert_eq!(result, NodeFace::Top);
+    }
+
+    #[test]
+    fn test_classify_face_from_below() {
+        let bounds = test_bounds();
+        let result = classify_face(&bounds, (15, 20), Shape::Rectangle);
+        assert_eq!(result, NodeFace::Bottom);
+    }
+
+    #[test]
+    fn test_classify_face_from_left() {
+        let bounds = test_bounds();
+        let result = classify_face(&bounds, (0, 7), Shape::Rectangle);
+        assert_eq!(result, NodeFace::Left);
+    }
+
+    #[test]
+    fn test_classify_face_from_right() {
+        let bounds = test_bounds();
+        let result = classify_face(&bounds, (30, 7), Shape::Rectangle);
+        assert_eq!(result, NodeFace::Right);
+    }
+
+    #[test]
+    fn test_classify_face_degenerate_center() {
+        let bounds = test_bounds();
+        let result = classify_face(&bounds, (15, 7), Shape::Rectangle);
+        assert_eq!(result, NodeFace::Bottom);
+    }
+
+    #[test]
+    fn test_classify_face_diamond_same_as_rect() {
+        let bounds = test_bounds();
+        assert_eq!(
+            classify_face(&bounds, (15, 0), Shape::Diamond),
+            NodeFace::Top
+        );
+        assert_eq!(
+            classify_face(&bounds, (15, 20), Shape::Diamond),
+            NodeFace::Bottom
+        );
+    }
+
+    // --- spread_points_on_face tests ---
+
+    #[test]
+    fn test_spread_points_count_zero() {
+        let result = spread_points_on_face(NodeFace::Top, 5, (2, 10), 0);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_spread_points_count_one() {
+        // N=1 on range (2, 10) => mid = 2 + (10-2)/2 = 6
+        let result = spread_points_on_face(NodeFace::Bottom, 5, (2, 10), 1);
+        assert_eq!(result, vec![(6, 5)]);
+    }
+
+    #[test]
+    fn test_spread_points_count_two() {
+        // N=2 on range (0, 8) => positions: (1*8)/3=2, (2*8)/3=5
+        let result = spread_points_on_face(NodeFace::Top, 0, (0, 8), 2);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], (2, 0));
+        assert_eq!(result[1], (5, 0));
+    }
+
+    #[test]
+    fn test_spread_points_count_three() {
+        // N=3 on range (0, 8) => positions: (1*8)/4=2, (2*8)/4=4, (3*8)/4=6
+        let result = spread_points_on_face(NodeFace::Bottom, 10, (0, 8), 3);
+        assert_eq!(result, vec![(2, 10), (4, 10), (6, 10)]);
+    }
+
+    #[test]
+    fn test_spread_points_left_right_face() {
+        // For Left/Right faces, coordinates are (fixed, pos)
+        let result = spread_points_on_face(NodeFace::Left, 5, (0, 8), 2);
+        assert_eq!(result[0], (5, 2));
+        assert_eq!(result[1], (5, 5));
+    }
+
+    #[test]
+    fn test_spread_points_narrow_range() {
+        // N=3 on range (0, 2) => positions: (1*2)/4=0, (2*2)/4=1, (3*2)/4=1
+        // All clamped to [0, 2]
+        let result = spread_points_on_face(NodeFace::Top, 0, (0, 2), 3);
+        assert_eq!(result.len(), 3);
+        for (x, _) in &result {
+            assert!(*x <= 2);
+        }
+    }
+
+    #[test]
+    fn test_spread_points_five_on_wide_face() {
+        // N=5 on range (0, 12) => positions: 2, 4, 6, 8, 10
+        let result = spread_points_on_face(NodeFace::Bottom, 0, (0, 12), 5);
+        assert_eq!(result.len(), 5);
+        // All distinct
+        let xs: Vec<_> = result.iter().map(|(x, _)| *x).collect();
+        for i in 0..xs.len() - 1 {
+            assert!(xs[i] < xs[i + 1], "Points should be strictly increasing");
+        }
     }
 }

@@ -2,6 +2,7 @@
 
 use super::canvas::Canvas;
 use super::chars::CharSet;
+use super::intersect::NodeFace;
 use crate::graph::{Node, Shape};
 
 /// Bounding box for a rendered node.
@@ -42,6 +43,32 @@ impl NodeBounds {
     /// Get the right attachment point (center of right edge).
     pub fn right(&self) -> (usize, usize) {
         (self.x + self.width - 1, self.center_y())
+    }
+
+    /// Returns the usable range (start, end) along a face for edge attachment.
+    /// For Top/Bottom: x-range excluding corner cells (border characters).
+    /// For Left/Right: y-range (full height).
+    pub fn face_extent(&self, face: &NodeFace) -> (usize, usize) {
+        match face {
+            NodeFace::Top | NodeFace::Bottom => {
+                // Exclude corner columns (first and last chars are corner/bracket chars)
+                let start = self.x + 1;
+                let end = (self.x + self.width).saturating_sub(2);
+                (start, end.max(start))
+            }
+            NodeFace::Left | NodeFace::Right => (self.y, self.y + self.height.saturating_sub(1)),
+        }
+    }
+
+    /// Returns the fixed coordinate for a face.
+    /// Top/Bottom: the y-coordinate of that edge. Left/Right: the x-coordinate.
+    pub fn face_fixed_coord(&self, face: &NodeFace) -> usize {
+        match face {
+            NodeFace::Top => self.y,
+            NodeFace::Bottom => self.y + self.height.saturating_sub(1),
+            NodeFace::Left => self.x,
+            NodeFace::Right => self.x + self.width.saturating_sub(1),
+        }
     }
 }
 
@@ -315,6 +342,58 @@ mod tests {
         assert_eq!(bounds.bottom(), (14, 7)); // y + height - 1 = 5 + 3 - 1 = 7
         assert_eq!(bounds.left(), (10, 6));
         assert_eq!(bounds.right(), (17, 6)); // x + width - 1 = 10 + 8 - 1 = 17
+    }
+
+    #[test]
+    fn test_face_extent_top_bottom() {
+        let bounds = NodeBounds {
+            x: 5,
+            y: 10,
+            width: 10,
+            height: 3,
+        };
+        // Top/Bottom: exclude corners => x+1 to x+width-2 = 6 to 13
+        assert_eq!(bounds.face_extent(&NodeFace::Top), (6, 13));
+        assert_eq!(bounds.face_extent(&NodeFace::Bottom), (6, 13));
+    }
+
+    #[test]
+    fn test_face_extent_left_right() {
+        let bounds = NodeBounds {
+            x: 5,
+            y: 10,
+            width: 10,
+            height: 3,
+        };
+        // Left/Right: full y-range => 10 to 12
+        assert_eq!(bounds.face_extent(&NodeFace::Left), (10, 12));
+        assert_eq!(bounds.face_extent(&NodeFace::Right), (10, 12));
+    }
+
+    #[test]
+    fn test_face_extent_narrow_node() {
+        let bounds = NodeBounds {
+            x: 0,
+            y: 0,
+            width: 2,
+            height: 1,
+        };
+        // width=2: start=1, end=max(0,1)=1 => (1, 1)
+        assert_eq!(bounds.face_extent(&NodeFace::Top), (1, 1));
+    }
+
+    #[test]
+    fn test_face_fixed_coord() {
+        let bounds = NodeBounds {
+            x: 5,
+            y: 10,
+            width: 10,
+            height: 3,
+        };
+        assert_eq!(bounds.face_fixed_coord(&NodeFace::Top), 10);
+        assert_eq!(bounds.face_fixed_coord(&NodeFace::Bottom), 12);
+        assert_eq!(bounds.face_fixed_coord(&NodeFace::Left), 5);
+        assert_eq!(bounds.face_fixed_coord(&NodeFace::Right), 14);
     }
 
     #[test]
