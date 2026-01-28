@@ -56,7 +56,12 @@ impl NodeBounds {
                 let end = (self.x + self.width).saturating_sub(2);
                 (start, end.max(start))
             }
-            NodeFace::Left | NodeFace::Right => (self.y, self.y + self.height.saturating_sub(1)),
+            NodeFace::Left | NodeFace::Right => {
+                // Exclude corner rows (first and last rows are corner chars)
+                let start = self.y + 1;
+                let end = (self.y + self.height).saturating_sub(2);
+                (start, end.max(start))
+            }
         }
     }
 
@@ -365,9 +370,9 @@ mod tests {
             width: 10,
             height: 3,
         };
-        // Left/Right: full y-range => 10 to 12
-        assert_eq!(bounds.face_extent(&NodeFace::Left), (10, 12));
-        assert_eq!(bounds.face_extent(&NodeFace::Right), (10, 12));
+        // Left/Right: exclude corner rows => 11 to 11 (only middle row)
+        assert_eq!(bounds.face_extent(&NodeFace::Left), (11, 11));
+        assert_eq!(bounds.face_extent(&NodeFace::Right), (11, 11));
     }
 
     #[test]

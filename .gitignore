@@ -2,7 +2,9 @@
 # Ignore plans and research content (not committed)
 /plans/**
 /research/**
+/issues/**
 
 # But keep the CLAUDE.md convention docs
 !/plans/CLAUDE.md
 !/research/CLAUDE.md
+!/issues/CLAUDE.md

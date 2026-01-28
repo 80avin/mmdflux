@@ -186,6 +186,7 @@ fn route_edge_with_waypoints(
         to_bounds,
         to_shape,
         waypoints,
+        direction,
     );
 
     // Clamp attachment points to actual node boundaries
@@ -246,6 +247,7 @@ fn route_edge_direct(
         to_bounds,
         to_shape,
         empty_waypoints,
+        direction,
     );
 
     // Clamp attachment points to actual node boundaries
@@ -261,7 +263,6 @@ fn route_edge_direct(
     // placed in the gap between nodes
     let start = offset_from_boundary(src_attach, from_bounds);
     let end = offset_from_boundary(tgt_attach, to_bounds);
-
     let mut segments = Vec::new();
 
     // Add connector segment from source node boundary to offset start point
@@ -291,6 +292,11 @@ fn route_edge_direct(
 
 /// Resolve attachment points, using overrides when provided, falling back to
 /// `calculate_attachment_points()` for non-overridden sides.
+///
+/// For LR/RL layouts, non-overridden attachment points are forced to the
+/// appropriate side face (right/left for source, left/right for target)
+/// instead of using geometric center-to-center intersection, which can
+/// hit top/bottom faces when nodes aren't horizontally aligned.
 fn resolve_attachment_points(
     src_override: Option<(usize, usize)>,
     tgt_override: Option<(usize, usize)>,
@@ -299,33 +305,45 @@ fn resolve_attachment_points(
     to_bounds: &NodeBounds,
     to_shape: Shape,
     waypoints: &[(usize, usize)],
+    direction: Direction,
 ) -> ((usize, usize), (usize, usize)) {
-    match (src_override, tgt_override) {
-        (Some(src), Some(tgt)) => (src, tgt),
-        (Some(src), None) => {
-            let (_, tgt) = calculate_attachment_points(
-                from_bounds,
-                from_shape,
-                to_bounds,
-                to_shape,
-                waypoints,
-            );
-            (src, tgt)
-        }
-        (None, Some(tgt)) => {
-            let (src, _) = calculate_attachment_points(
-                from_bounds,
-                from_shape,
-                to_bounds,
-                to_shape,
-                waypoints,
-            );
-            (src, tgt)
-        }
-        (None, None) => {
-            calculate_attachment_points(from_bounds, from_shape, to_bounds, to_shape, waypoints)
-        }
-    }
+    let fallback =
+        || calculate_attachment_points(from_bounds, from_shape, to_bounds, to_shape, waypoints);
+
+    let src = match src_override {
+        Some(s) => s,
+        None => match direction {
+            Direction::LeftRight => {
+                // Source exits on right face
+                (
+                    from_bounds.x + from_bounds.width - 1,
+                    from_bounds.center_y(),
+                )
+            }
+            Direction::RightLeft => {
+                // Source exits on left face
+                (from_bounds.x, from_bounds.center_y())
+            }
+            _ => fallback().0,
+        },
+    };
+
+    let tgt = match tgt_override {
+        Some(t) => t,
+        None => match direction {
+            Direction::LeftRight => {
+                // Target entered on left face
+                (to_bounds.x, to_bounds.center_y())
+            }
+            Direction::RightLeft => {
+                // Target entered on right face
+                (to_bounds.x + to_bounds.width - 1, to_bounds.center_y())
+            }
+            _ => fallback().1,
+        },
+    };
+
+    (src, tgt)
 }
 
 /// Clamp an attachment point to the actual node boundary.
@@ -491,10 +509,11 @@ fn build_orthogonal_path_for_direction(
     // For non-aligned paths, the final segment should match the layout's canonical
     // entry direction so arrows visually connect to the expected side of the target:
     // - TD/BT: final segment is vertical (arrows ▼/▲ enter from top/bottom)
-    // - LR/RL: final segment is vertical for diagonal approach (arrows ▼/▲)
+    // - LR/RL: final segment is horizontal (arrows ►/◄ enter from left/right)
     //
-    // TD/BT uses Z-shaped paths (V-H-V) to ensure vertical entry.
-    // LR/RL uses L-shaped paths (H-V) since diagonal approaches enter vertically.
+    // Both use Z-shaped paths to ensure the correct entry direction:
+    // - TD/BT: V-H-V (vertical entry)
+    // - LR/RL: H-V-H (horizontal entry)
     match direction {
         Direction::TopDown | Direction::BottomTop => {
             // Vertical layouts: V-H-V (Z-shape) to enter target from top/bottom
@@ -519,18 +538,24 @@ fn build_orthogonal_path_for_direction(
             ]
         }
         Direction::LeftRight | Direction::RightLeft => {
-            // Horizontal layouts: H-V (L-shape) for diagonal approaches
-            // Final segment is vertical, so arrow will be ▼ or ▲
+            // Horizontal layouts: H-V-H (Z-shape) to enter target from left/right
+            // Final segment is horizontal, so arrow will be ► or ◄
+            let mid_x = (start.x + end.x) / 2;
             vec![
                 Segment::Horizontal {
                     y: start.y,
                     x_start: start.x,
-                    x_end: end.x,
+                    x_end: mid_x,
                 },
                 Segment::Vertical {
-                    x: end.x,
+                    x: mid_x,
                     y_start: start.y,
                     y_end: end.y,
+                },
+                Segment::Horizontal {
+                    y: end.y,
+                    x_start: mid_x,
+                    x_end: end.x,
                 },
             ]
         }
@@ -784,6 +809,7 @@ pub struct AttachmentOverride {
 pub fn compute_attachment_plan(
     edges: &[Edge],
     layout: &Layout,
+    direction: Direction,
 ) -> HashMap<usize, AttachmentOverride> {
     // Step 1: Classify faces and build groups
     // Key: (node_id, face) -> Vec<(edge_index, is_source_side)>
@@ -810,22 +836,32 @@ pub fn compute_attachment_plan(
             .copied()
             .unwrap_or(Shape::Rectangle);
 
-        // Determine approach points using waypoints if available
-        let edge_key = (edge.from.clone(), edge.to.clone());
-        let waypoints = layout.edge_waypoints.get(&edge_key);
+        // For LR/RL layouts, force side faces instead of geometric classification
+        // to ensure edges exit/enter on the correct sides
+        let (src_face, tgt_face) = match direction {
+            Direction::LeftRight => (NodeFace::Right, NodeFace::Left),
+            Direction::RightLeft => (NodeFace::Left, NodeFace::Right),
+            _ => {
+                // Determine approach points using waypoints if available
+                let edge_key = (edge.from.clone(), edge.to.clone());
+                let waypoints = layout.edge_waypoints.get(&edge_key);
 
-        // For source: approach point is first waypoint or target center
-        let src_approach = waypoints
-            .and_then(|wps| wps.first().copied())
-            .unwrap_or((tgt_bounds.center_x(), tgt_bounds.center_y()));
+                // For source: approach point is first waypoint or target center
+                let src_approach = waypoints
+                    .and_then(|wps| wps.first().copied())
+                    .unwrap_or((tgt_bounds.center_x(), tgt_bounds.center_y()));
 
-        // For target: approach point is last waypoint or source center
-        let tgt_approach = waypoints
-            .and_then(|wps| wps.last().copied())
-            .unwrap_or((src_bounds.center_x(), src_bounds.center_y()));
+                // For target: approach point is last waypoint or source center
+                let tgt_approach = waypoints
+                    .and_then(|wps| wps.last().copied())
+                    .unwrap_or((src_bounds.center_x(), src_bounds.center_y()));
 
-        let src_face = classify_face(src_bounds, src_approach, src_shape);
-        let tgt_face = classify_face(tgt_bounds, tgt_approach, tgt_shape);
+                (
+                    classify_face(src_bounds, src_approach, src_shape),
+                    classify_face(tgt_bounds, tgt_approach, tgt_shape),
+                )
+            }
+        };
 
         face_groups
             .entry((edge.from.clone(), src_face))
@@ -905,7 +941,7 @@ pub fn route_all_edges(
     diagram_direction: Direction,
 ) -> Vec<RoutedEdge> {
     // Pre-pass: compute attachment plan for edges sharing a face
-    let plan = compute_attachment_plan(edges, layout);
+    let plan = compute_attachment_plan(edges, layout, diagram_direction);
 
     edges
         .iter()
@@ -1321,7 +1357,9 @@ mod tests {
 
         let segments = build_orthogonal_path(start, &waypoints, end, Direction::LeftRight);
 
-        // LR uses horizontal-first
+        // LR uses horizontal-first but note: build_orthogonal_path uses
+        // orthogonalize_segment (not build_orthogonal_path_for_direction),
+        // so it produces H-V for LR (horizontal-first = !vertical_first)
         assert_eq!(segments.len(), 2);
         assert!(matches!(segments[0], Segment::Horizontal { .. }));
         assert!(matches!(segments[1], Segment::Vertical { .. }));
