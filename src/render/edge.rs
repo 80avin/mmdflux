@@ -67,7 +67,28 @@ fn draw_edge_label_with_tracking(
                     {
                         // Determine which side to place the label based on target position
                         // If target is to the right of source, place label to the right
-                        let place_right = routed.end.x > routed.start.x;
+                        let mut place_right = routed.end.x > routed.start.x;
+
+                        // Check if the proposed position would place the label between
+                        // two attachment ports (i.e., sandwiched between this edge's
+                        // vertical segment and another edge targeting the same node).
+                        // If an edge cell exists on the far side of the label, flip sides.
+                        let (trial_x, trial_y) = find_label_position_on_segment_with_side(
+                            last_vert,
+                            label_len,
+                            direction,
+                            place_right,
+                        );
+                        if label_adjacent_to_edge_on_far_side(
+                            canvas,
+                            trial_x,
+                            trial_y,
+                            label_len,
+                            place_right,
+                        ) {
+                            place_right = !place_right;
+                        }
+
                         find_label_position_on_segment_with_side(
                             last_vert,
                             label_len,
@@ -310,6 +331,40 @@ fn label_collides_with_node(canvas: &Canvas, x: usize, y: usize, label_len: usiz
 /// Check if placing a label at the given position would collide with any edge cells.
 fn label_collides_with_edge(canvas: &Canvas, x: usize, y: usize, label_len: usize) -> bool {
     (0..label_len).any(|i| canvas.get(x + i, y).is_some_and(|cell| cell.is_edge))
+}
+
+/// Check if an edge cell exists on the far side of a proposed label position.
+///
+/// When a label is placed next to a vertical segment, this detects whether
+/// there's another edge nearby on the opposite side, which would mean the
+/// label is sandwiched between two attachment ports (visually ambiguous).
+///
+/// `place_right` indicates the side the label was placed on relative to its segment.
+/// We check the far side (right edge of label if place_right, left edge if !place_right).
+fn label_adjacent_to_edge_on_far_side(
+    canvas: &Canvas,
+    label_x: usize,
+    label_y: usize,
+    label_len: usize,
+    place_right: bool,
+) -> bool {
+    if place_right {
+        // Label is to the right of its segment; check cells just after the label end
+        let check_x = label_x + label_len;
+        (0..=1).any(|offset| {
+            canvas
+                .get(check_x + offset, label_y)
+                .is_some_and(|cell| cell.is_edge)
+        })
+    } else {
+        // Label is to the left of its segment; check cells just before the label start
+        (1..=2).any(|offset| {
+            label_x
+                .checked_sub(offset)
+                .and_then(|x| canvas.get(x, label_y))
+                .is_some_and(|cell| cell.is_edge)
+        })
+    }
 }
 
 /// Calculate the length of a segment.
