@@ -91,5 +91,5 @@ Integration tests in `tests/integration.rs` verify parsing, building, and render
 
 ## Planning and Task Tracking
 
-Use `/plan` to create implementation plans and `/resume` to continue in-progress work.
+Use `/plan:create` to create implementation plans and `/plan:resume` to continue in-progress work.
 See `plans/CLAUDE.md` for workflow details and conventions.

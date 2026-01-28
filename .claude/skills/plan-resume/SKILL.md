@@ -1,5 +1,5 @@
 ---
-name: resume
+name: plan:resume
 description: Resume working on an in-progress implementation plan. Finds incomplete plans and provides context to continue.
 ---
 
@@ -32,7 +32,7 @@ Find and resume work on an in-progress implementation plan.
    ```
    No in-progress plans found in `plans/`.
 
-   To create a new plan, use `/plan <feature description>`.
+   To create a new plan, use `/plan:create <feature description>`.
    ```
 
    **One plan found:**
@@ -115,6 +115,6 @@ No in-progress plans found in `plans/`.
 
 All plans are either completed (in `plans/archive/`) or none exist yet.
 
-To create a new plan, use `/plan <feature description>`.
+To create a new plan, use `/plan:create <feature description>`.
 
 ---
