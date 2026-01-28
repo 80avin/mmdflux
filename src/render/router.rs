@@ -52,33 +52,6 @@ pub struct RoutedEdge {
     pub entry_direction: AttachDirection,
 }
 
-/// Calculate the attachment point for a node based on direction.
-/// The point is placed just outside the node boundary.
-fn attachment_point(bounds: &NodeBounds, direction: AttachDirection) -> Point {
-    match direction {
-        AttachDirection::Top => {
-            let (x, y) = bounds.top();
-            // One cell above the top border
-            Point::new(x, y.saturating_sub(1))
-        }
-        AttachDirection::Bottom => {
-            let (x, y) = bounds.bottom();
-            // One cell below the bottom border
-            Point::new(x, y + 1)
-        }
-        AttachDirection::Left => {
-            let (x, y) = bounds.left();
-            // One cell to the left of the left border
-            Point::new(x.saturating_sub(1), y)
-        }
-        AttachDirection::Right => {
-            let (x, y) = bounds.right();
-            // One cell to the right of the right border
-            Point::new(x + 1, y)
-        }
-    }
-}
-
 /// Direction for attachment points.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttachDirection {
@@ -129,16 +102,7 @@ pub fn route_edge(
     let from_bounds = layout.get_bounds(&edge.from)?;
     let to_bounds = layout.get_bounds(&edge.to)?;
 
-    // Check if this is a backward edge
-    if is_backward_edge(from_bounds, to_bounds, diagram_direction) {
-        return route_backward_edge(edge, from_bounds, to_bounds, layout, diagram_direction);
-    }
-
-    // Check if we have waypoints for this edge (from normalization)
-    let edge_key = (edge.from.clone(), edge.to.clone());
-    let waypoints = layout.edge_waypoints.get(&edge_key);
-
-    // Get node shapes for intersection calculation (default to Rectangle if not found)
+    // Get node shapes for intersection calculation
     let from_shape = layout
         .node_shapes
         .get(&edge.from)
@@ -150,22 +114,34 @@ pub fn route_edge(
         .copied()
         .unwrap_or(Shape::Rectangle);
 
-    if let Some(wps) = waypoints {
-        if !wps.is_empty() {
-            // Use waypoints with dynamic intersection calculation
-            return route_edge_with_waypoints(
-                edge,
-                from_bounds,
-                from_shape,
-                to_bounds,
-                to_shape,
-                wps,
-                diagram_direction,
-            );
-        }
+    // Check for waypoints from normalization — works for both forward and backward long edges
+    let edge_key = (edge.from.clone(), edge.to.clone());
+    if let Some(wps) = layout.edge_waypoints.get(&edge_key)
+        && !wps.is_empty()
+    {
+        let is_backward = is_backward_edge(from_bounds, to_bounds, diagram_direction);
+
+        // For backward edges, reverse waypoints so they go from source to target.
+        // Dagre stores them in effective/forward order (low rank → high rank),
+        // but the backward edge goes from high rank → low rank.
+        let waypoints: Vec<(usize, usize)> = if is_backward {
+            wps.iter().rev().copied().collect()
+        } else {
+            wps.to_vec()
+        };
+
+        return route_edge_with_waypoints(
+            edge,
+            from_bounds,
+            from_shape,
+            to_bounds,
+            to_shape,
+            &waypoints,
+            diagram_direction,
+        );
     }
 
-    // No waypoints: use intersection calculation for direct path
+    // No waypoints: direct routing (works for both forward and short backward edges)
     route_edge_direct(
         edge,
         from_bounds,
@@ -539,153 +515,6 @@ fn build_orthogonal_path_with_waypoints(
     segments
 }
 
-/// Route a backward edge around the diagram perimeter.
-///
-/// Backward edges (cycles) are routed around the side of the diagram to avoid
-/// passing through intermediate nodes.
-fn route_backward_edge(
-    edge: &Edge,
-    from_bounds: &NodeBounds,
-    to_bounds: &NodeBounds,
-    layout: &Layout,
-    diagram_direction: Direction,
-) -> Option<RoutedEdge> {
-    match diagram_direction {
-        Direction::TopDown | Direction::BottomTop => {
-            route_backward_edge_vertical(edge, from_bounds, to_bounds, layout, diagram_direction)
-        }
-        Direction::LeftRight | Direction::RightLeft => {
-            route_backward_edge_horizontal(edge, from_bounds, to_bounds, layout, diagram_direction)
-        }
-    }
-}
-
-/// Route a backward edge for vertical (TD/BT) layouts.
-///
-/// Exits from the RIGHT side of source, travels horizontally to the corridor,
-/// then vertically in the corridor, then horizontally to enter target from
-/// the right. Exiting from the side avoids overlap with forward edges which
-/// use top/bottom attachment points.
-fn route_backward_edge_vertical(
-    edge: &Edge,
-    from_bounds: &NodeBounds,
-    to_bounds: &NodeBounds,
-    layout: &Layout,
-    _diagram_direction: Direction,
-) -> Option<RoutedEdge> {
-    // Exit from RIGHT side (perpendicular to flow direction)
-    // This avoids overlap with forward edges which use top/bottom
-    let start = attachment_point(from_bounds, AttachDirection::Right);
-    // Enter from right side of target
-    let end = attachment_point(to_bounds, AttachDirection::Right);
-
-    // Get the node border point (attachment_point adds 1 cell offset)
-    let (border_x, border_y) = from_bounds.right();
-
-    // Get lane assignment for this edge (default to 0 if not found)
-    let lane = layout
-        .backward_edge_lanes
-        .get(&(edge.from.clone(), edge.to.clone()))
-        .copied()
-        .unwrap_or(0);
-
-    // Corridor X position: each lane gets its own corridor space
-    // content_width + (lane * corridor_width) + corridor_width/2
-    let content_width = layout.width - (layout.backward_corridors * layout.corridor_width);
-    let corridor_x = content_width + (lane * layout.corridor_width) + layout.corridor_width / 2;
-
-    let mut segments = Vec::new();
-
-    // Horizontal segment: connect node border to corridor
-    // (combines border→attachment and attachment→corridor since they're at same y)
-    segments.push(Segment::Horizontal {
-        y: border_y,
-        x_start: border_x,
-        x_end: corridor_x,
-    });
-
-    // Vertical segment in corridor: from source y to target y
-    segments.push(Segment::Vertical {
-        x: corridor_x,
-        y_start: border_y,
-        y_end: end.y,
-    });
-
-    // Horizontal segment: corridor → target right
-    segments.push(Segment::Horizontal {
-        y: end.y,
-        x_start: corridor_x,
-        x_end: end.x,
-    });
-
-    Some(RoutedEdge {
-        edge: edge.clone(),
-        start,
-        end,
-        segments,
-        entry_direction: AttachDirection::Right,
-    })
-}
-
-/// Route a backward edge for horizontal (LR/RL) layouts.
-///
-/// The edge exits from the bottom side of the source, travels left/right in a
-/// corridor below the diagram, then enters the target from the bottom.
-fn route_backward_edge_horizontal(
-    edge: &Edge,
-    from_bounds: &NodeBounds,
-    to_bounds: &NodeBounds,
-    layout: &Layout,
-    _diagram_direction: Direction,
-) -> Option<RoutedEdge> {
-    // Exit from bottom side of source
-    let start = attachment_point(from_bounds, AttachDirection::Bottom);
-    // Enter from bottom side of target
-    let end = attachment_point(to_bounds, AttachDirection::Bottom);
-
-    // Get lane assignment for this edge (default to 0 if not found)
-    let lane = layout
-        .backward_edge_lanes
-        .get(&(edge.from.clone(), edge.to.clone()))
-        .copied()
-        .unwrap_or(0);
-
-    // Corridor Y position: each lane gets its own corridor space
-    let content_height = layout.height - (layout.backward_corridors * layout.corridor_width);
-    let corridor_y = content_height + (lane * layout.corridor_width) + layout.corridor_width / 2;
-
-    let mut segments = Vec::new();
-
-    // Vertical segment: source bottom → corridor
-    segments.push(Segment::Vertical {
-        x: start.x,
-        y_start: start.y,
-        y_end: corridor_y,
-    });
-
-    // Horizontal segment in corridor
-    segments.push(Segment::Horizontal {
-        y: corridor_y,
-        x_start: start.x,
-        x_end: end.x,
-    });
-
-    // Vertical segment: corridor → target bottom
-    segments.push(Segment::Vertical {
-        x: end.x,
-        y_start: corridor_y,
-        y_end: end.y,
-    });
-
-    Some(RoutedEdge {
-        edge: edge.clone(),
-        start,
-        end,
-        segments,
-        entry_direction: AttachDirection::Bottom,
-    })
-}
-
 /// Compute path preferring vertical movement first (used in tests).
 #[cfg(test)]
 fn compute_vertical_first_path(start: Point, end: Point) -> Vec<Segment> {
@@ -893,7 +722,7 @@ pub fn route_all_edges(
 
 #[cfg(test)]
 mod tests {
-    use super::super::layout::{LayoutConfig, compute_layout};
+    use super::super::layout::{LayoutConfig, compute_layout, compute_layout_dagre};
     use super::*;
     use crate::graph::{Diagram, Node};
 
@@ -1316,27 +1145,12 @@ mod tests {
         let backward_edge = &diagram.edges[1];
         let routed = route_edge(backward_edge, &layout, Direction::TopDown).unwrap();
 
-        // Backward edge should route around the right side
-        assert_eq!(routed.entry_direction, AttachDirection::Right);
+        // Backward edge without waypoints uses direct routing.
+        // For TD layout with B above A, the edge goes upward, entering from Bottom.
+        assert_eq!(routed.entry_direction, AttachDirection::Bottom);
 
-        // Should have 3 segments:
-        // 1. horizontal (from right side to corridor)
-        // 2. vertical (in corridor)
-        // 3. horizontal (to target)
-        assert_eq!(routed.segments.len(), 3);
-        assert!(matches!(routed.segments[0], Segment::Horizontal { .. }));
-        assert!(matches!(routed.segments[1], Segment::Vertical { .. }));
-        assert!(matches!(routed.segments[2], Segment::Horizontal { .. }));
-
-        // The corridor x should be within canvas but in the corridor area
-        let content_width = layout.width - (layout.backward_corridors * layout.corridor_width);
-        if let Segment::Horizontal { x_end, .. } = routed.segments[0] {
-            assert!(
-                x_end > content_width,
-                "Corridor should be beyond content area"
-            );
-            assert!(x_end < layout.width, "Corridor should be within canvas");
-        }
+        // Should have segments connecting B to A
+        assert!(!routed.segments.is_empty());
     }
 
     #[test]
@@ -1355,24 +1169,12 @@ mod tests {
         let backward_edge = &diagram.edges[1];
         let routed = route_edge(backward_edge, &layout, Direction::LeftRight).unwrap();
 
-        // Backward edge should route around the bottom
-        assert_eq!(routed.entry_direction, AttachDirection::Bottom);
+        // Backward edge without waypoints uses direct routing.
+        // For LR layout with B to the right of A, the backward edge goes leftward.
+        assert_eq!(routed.entry_direction, AttachDirection::Right);
 
-        // Should have 3 segments: vertical (to corridor), horizontal, vertical (back)
-        assert_eq!(routed.segments.len(), 3);
-        assert!(matches!(routed.segments[0], Segment::Vertical { .. }));
-        assert!(matches!(routed.segments[1], Segment::Horizontal { .. }));
-        assert!(matches!(routed.segments[2], Segment::Vertical { .. }));
-
-        // The corridor y should be within canvas but in the corridor area
-        let content_height = layout.height - (layout.backward_corridors * layout.corridor_width);
-        if let Segment::Vertical { y_end, .. } = routed.segments[0] {
-            assert!(
-                y_end > content_height,
-                "Corridor should be beyond content area"
-            );
-            assert!(y_end < layout.height, "Corridor should be within canvas");
-        }
+        // Should have segments connecting B to A
+        assert!(!routed.segments.is_empty());
     }
 
     #[test]
@@ -1407,7 +1209,7 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_backward_edges_use_separate_lanes() {
+    fn test_multiple_backward_edges_route_successfully() {
         // Create diagram with two backward edges going to different targets
         let mut diagram = Diagram::new(Direction::TopDown);
         diagram.add_node(Node::new("A").with_label("Top"));
@@ -1421,29 +1223,109 @@ mod tests {
         let config = LayoutConfig::default();
         let layout = compute_layout(&diagram, &config);
 
-        // Should have 2 backward corridors
-        assert_eq!(layout.backward_corridors, 2);
-
-        // Route both backward edges
+        // Route both backward edges — they should both produce valid paths
         let edge_c_to_a = &diagram.edges[2];
         let edge_c_to_b = &diagram.edges[3];
-        let routed_c_a = route_edge(edge_c_to_a, &layout, Direction::TopDown).unwrap();
-        let routed_c_b = route_edge(edge_c_to_b, &layout, Direction::TopDown).unwrap();
+        let routed_c_a = route_edge(edge_c_to_a, &layout, Direction::TopDown);
+        let routed_c_b = route_edge(edge_c_to_b, &layout, Direction::TopDown);
 
-        // Extract corridor X positions from the first horizontal segment (index 0)
-        let corridor_x_ca = match routed_c_a.segments[0] {
-            Segment::Horizontal { x_end, .. } => x_end,
-            _ => panic!("Expected horizontal segment"),
-        };
-        let corridor_x_cb = match routed_c_b.segments[0] {
-            Segment::Horizontal { x_end, .. } => x_end,
-            _ => panic!("Expected horizontal segment"),
-        };
+        assert!(routed_c_a.is_some(), "Backward edge C->A should route");
+        assert!(routed_c_b.is_some(), "Backward edge C->B should route");
 
-        // The two backward edges should use different corridor lanes
-        assert_ne!(
-            corridor_x_ca, corridor_x_cb,
-            "Backward edges should use different lanes"
+        // Both should have segments
+        assert!(!routed_c_a.unwrap().segments.is_empty());
+        assert!(!routed_c_b.unwrap().segments.is_empty());
+    }
+
+    // --- Waypoint-based backward edge tests ---
+
+    #[test]
+    fn test_backward_edge_with_waypoints_td() {
+        // Backward edge spanning 2+ ranks should use waypoints
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("Top"));
+        diagram.add_node(Node::new("B").with_label("Middle"));
+        diagram.add_node(Node::new("C").with_label("Bottom"));
+        diagram.add_edge(Edge::new("A", "B"));
+        diagram.add_edge(Edge::new("B", "C"));
+        diagram.add_edge(Edge::new("C", "A")); // Backward spanning 2 ranks
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        let backward_edge = &diagram.edges[2];
+        let routed = route_edge(backward_edge, &layout, Direction::TopDown).unwrap();
+
+        assert!(
+            routed.segments.len() >= 2,
+            "Backward edge should have routing segments, got {}",
+            routed.segments.len()
+        );
+    }
+
+    #[test]
+    fn test_short_backward_edge_no_waypoints() {
+        // B→A backward edge spanning 1 rank — no dummies, no waypoints
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("Top"));
+        diagram.add_node(Node::new("B").with_label("Bottom"));
+        diagram.add_edge(Edge::new("A", "B"));
+        diagram.add_edge(Edge::new("B", "A")); // Backward, 1 rank
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        let backward_edge = &diagram.edges[1];
+        let routed = route_edge(backward_edge, &layout, Direction::TopDown);
+        assert!(
+            routed.is_some(),
+            "Short backward edge should route successfully"
+        );
+    }
+
+    #[test]
+    fn test_backward_edge_lr_with_waypoints() {
+        let mut diagram = Diagram::new(Direction::LeftRight);
+        diagram.add_node(Node::new("A").with_label("Left"));
+        diagram.add_node(Node::new("B").with_label("Mid"));
+        diagram.add_node(Node::new("C").with_label("Right"));
+        diagram.add_edge(Edge::new("A", "B"));
+        diagram.add_edge(Edge::new("B", "C"));
+        diagram.add_edge(Edge::new("C", "A")); // Backward, spans 2 ranks
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        let backward_edge = &diagram.edges[2];
+        let routed = route_edge(backward_edge, &layout, Direction::LeftRight);
+        assert!(
+            routed.is_some(),
+            "LR backward edge should route successfully"
+        );
+    }
+
+    #[test]
+    fn test_no_corridor_canvas_expansion() {
+        // Backward edge should NOT expand canvas width
+        let mut diagram_with_cycle = Diagram::new(Direction::TopDown);
+        diagram_with_cycle.add_node(Node::new("A").with_label("Top"));
+        diagram_with_cycle.add_node(Node::new("B").with_label("Bottom"));
+        diagram_with_cycle.add_edge(Edge::new("A", "B"));
+        diagram_with_cycle.add_edge(Edge::new("B", "A")); // Backward
+
+        let mut diagram_no_cycle = Diagram::new(Direction::TopDown);
+        diagram_no_cycle.add_node(Node::new("A").with_label("Top"));
+        diagram_no_cycle.add_node(Node::new("B").with_label("Bottom"));
+        diagram_no_cycle.add_edge(Edge::new("A", "B"));
+
+        let config = LayoutConfig::default();
+        let layout_cycle = compute_layout_dagre(&diagram_with_cycle, &config);
+        let layout_no_cycle = compute_layout_dagre(&diagram_no_cycle, &config);
+
+        assert_eq!(
+            layout_cycle.width, layout_no_cycle.width,
+            "Backward edge should not expand canvas width. With cycle: {}, without: {}",
+            layout_cycle.width, layout_no_cycle.width
         );
     }
 }
