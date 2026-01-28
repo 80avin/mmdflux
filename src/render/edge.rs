@@ -643,7 +643,8 @@ mod tests {
         let mut canvas = Canvas::new(layout.width, layout.height);
         let charset = CharSet::unicode();
 
-        let routed = route_edge(&diagram.edges[0], &layout, Direction::TopDown).unwrap();
+        let routed =
+            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
         render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
 
         let output = canvas.to_string();
@@ -660,7 +661,8 @@ mod tests {
         let mut canvas = Canvas::new(layout.width, layout.height);
         let charset = CharSet::unicode();
 
-        let routed = route_edge(&diagram.edges[0], &layout, Direction::TopDown).unwrap();
+        let routed =
+            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
         render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
 
         let output = canvas.to_string();
@@ -681,7 +683,8 @@ mod tests {
         let mut canvas = Canvas::new(layout.width, layout.height);
         let charset = CharSet::unicode();
 
-        let routed = route_edge(&diagram.edges[0], &layout, Direction::TopDown).unwrap();
+        let routed =
+            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
         render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
 
         // Dotted edge should be drawn (may or may not be visible depending on layout)
@@ -702,7 +705,8 @@ mod tests {
         let mut canvas = Canvas::new(layout.width, layout.height);
         let charset = CharSet::unicode();
 
-        let routed = route_edge(&diagram.edges[0], &layout, Direction::TopDown).unwrap();
+        let routed =
+            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
         render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
 
         let output = canvas.to_string();
@@ -759,7 +763,7 @@ mod tests {
         let routed_edges: Vec<_> = diagram
             .edges
             .iter()
-            .filter_map(|e| route_edge(e, &layout, Direction::TopDown))
+            .filter_map(|e| route_edge(e, &layout, Direction::TopDown, None, None))
             .collect();
 
         render_all_edges(&mut canvas, &routed_edges, &charset, Direction::TopDown);
@@ -782,7 +786,8 @@ mod tests {
         let mut canvas = Canvas::new(layout.width, layout.height);
         let charset = CharSet::unicode();
 
-        let routed = route_edge(&diagram.edges[0], &layout, Direction::TopDown).unwrap();
+        let routed =
+            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
         render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
 
         let output = canvas.to_string();

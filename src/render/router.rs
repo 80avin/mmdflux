@@ -102,6 +102,8 @@ pub fn route_edge(
     edge: &Edge,
     layout: &Layout,
     diagram_direction: Direction,
+    src_attach_override: Option<(usize, usize)>,
+    tgt_attach_override: Option<(usize, usize)>,
 ) -> Option<RoutedEdge> {
     let from_bounds = layout.get_bounds(&edge.from)?;
     let to_bounds = layout.get_bounds(&edge.to)?;
@@ -142,6 +144,8 @@ pub fn route_edge(
             to_shape,
             &waypoints,
             diagram_direction,
+            src_attach_override,
+            tgt_attach_override,
         );
     }
 
@@ -153,6 +157,8 @@ pub fn route_edge(
         to_bounds,
         to_shape,
         diagram_direction,
+        src_attach_override,
+        tgt_attach_override,
     )
 }
 
@@ -168,10 +174,19 @@ fn route_edge_with_waypoints(
     to_shape: Shape,
     waypoints: &[(usize, usize)],
     direction: Direction,
+    src_attach_override: Option<(usize, usize)>,
+    tgt_attach_override: Option<(usize, usize)>,
 ) -> Option<RoutedEdge> {
-    // Calculate attachment points based on waypoint positions
-    let (src_attach_raw, tgt_attach_raw) =
-        calculate_attachment_points(from_bounds, from_shape, to_bounds, to_shape, waypoints);
+    // Calculate attachment points, using overrides where provided
+    let (src_attach_raw, tgt_attach_raw) = resolve_attachment_points(
+        src_attach_override,
+        tgt_attach_override,
+        from_bounds,
+        from_shape,
+        to_bounds,
+        to_shape,
+        waypoints,
+    );
 
     // Clamp attachment points to actual node boundaries
     let src_attach_point = clamp_to_boundary(src_attach_raw, from_bounds);
@@ -218,10 +233,14 @@ fn route_edge_direct(
     to_bounds: &NodeBounds,
     to_shape: Shape,
     direction: Direction,
+    src_attach_override: Option<(usize, usize)>,
+    tgt_attach_override: Option<(usize, usize)>,
 ) -> Option<RoutedEdge> {
     // For direct routing, use the other node's center as the "approach point"
     let empty_waypoints: &[(usize, usize)] = &[];
-    let (src_attach_raw, tgt_attach_raw) = calculate_attachment_points(
+    let (src_attach_raw, tgt_attach_raw) = resolve_attachment_points(
+        src_attach_override,
+        tgt_attach_override,
         from_bounds,
         from_shape,
         to_bounds,
@@ -268,6 +287,45 @@ fn route_edge_direct(
         segments,
         entry_direction,
     })
+}
+
+/// Resolve attachment points, using overrides when provided, falling back to
+/// `calculate_attachment_points()` for non-overridden sides.
+fn resolve_attachment_points(
+    src_override: Option<(usize, usize)>,
+    tgt_override: Option<(usize, usize)>,
+    from_bounds: &NodeBounds,
+    from_shape: Shape,
+    to_bounds: &NodeBounds,
+    to_shape: Shape,
+    waypoints: &[(usize, usize)],
+) -> ((usize, usize), (usize, usize)) {
+    match (src_override, tgt_override) {
+        (Some(src), Some(tgt)) => (src, tgt),
+        (Some(src), None) => {
+            let (_, tgt) = calculate_attachment_points(
+                from_bounds,
+                from_shape,
+                to_bounds,
+                to_shape,
+                waypoints,
+            );
+            (src, tgt)
+        }
+        (None, Some(tgt)) => {
+            let (src, _) = calculate_attachment_points(
+                from_bounds,
+                from_shape,
+                to_bounds,
+                to_shape,
+                waypoints,
+            );
+            (src, tgt)
+        }
+        (None, None) => {
+            calculate_attachment_points(from_bounds, from_shape, to_bounds, to_shape, waypoints)
+        }
+    }
 }
 
 /// Clamp an attachment point to the actual node boundary.
@@ -846,9 +904,19 @@ pub fn route_all_edges(
     layout: &Layout,
     diagram_direction: Direction,
 ) -> Vec<RoutedEdge> {
+    // Pre-pass: compute attachment plan for edges sharing a face
+    let plan = compute_attachment_plan(edges, layout);
+
     edges
         .iter()
-        .filter_map(|edge| route_edge(edge, layout, diagram_direction))
+        .enumerate()
+        .filter_map(|(i, edge)| {
+            let (src_override, tgt_override) = plan
+                .get(&i)
+                .map(|ov| (ov.source, ov.target))
+                .unwrap_or((None, None));
+            route_edge(edge, layout, diagram_direction, src_override, tgt_override)
+        })
         .collect()
 }
 
@@ -873,7 +941,7 @@ mod tests {
         let layout = compute_layout(&diagram, &config);
 
         let edge = &diagram.edges[0];
-        let routed = route_edge(edge, &layout, Direction::TopDown).unwrap();
+        let routed = route_edge(edge, &layout, Direction::TopDown, None, None).unwrap();
 
         // Should have at least one segment
         assert!(!routed.segments.is_empty());
@@ -910,7 +978,7 @@ mod tests {
 
         // Route edge from A to C (which will be offset horizontally)
         let edge = &diagram.edges[1];
-        let routed = route_edge(edge, &layout, Direction::TopDown).unwrap();
+        let routed = route_edge(edge, &layout, Direction::TopDown, None, None).unwrap();
 
         // If nodes are not aligned, should have multiple segments
         if routed.start.x != routed.end.x {
@@ -1275,7 +1343,7 @@ mod tests {
 
         // Route the backward edge
         let backward_edge = &diagram.edges[1];
-        let routed = route_edge(backward_edge, &layout, Direction::TopDown).unwrap();
+        let routed = route_edge(backward_edge, &layout, Direction::TopDown, None, None).unwrap();
 
         // Backward edge without waypoints uses direct routing.
         // For TD layout with B above A, the edge goes upward, entering from Bottom.
@@ -1299,7 +1367,7 @@ mod tests {
 
         // Route the backward edge
         let backward_edge = &diagram.edges[1];
-        let routed = route_edge(backward_edge, &layout, Direction::LeftRight).unwrap();
+        let routed = route_edge(backward_edge, &layout, Direction::LeftRight, None, None).unwrap();
 
         // Backward edge without waypoints uses direct routing.
         // For LR layout with B to the right of A, the backward edge goes leftward.
@@ -1317,7 +1385,7 @@ mod tests {
         let layout = compute_layout(&diagram, &config);
 
         let edge = &diagram.edges[0];
-        let routed = route_edge(edge, &layout, Direction::TopDown).unwrap();
+        let routed = route_edge(edge, &layout, Direction::TopDown, None, None).unwrap();
 
         // TD forward edges enter from Top
         assert_eq!(routed.entry_direction, AttachDirection::Top);
@@ -1334,7 +1402,7 @@ mod tests {
         let layout = compute_layout(&diagram, &config);
 
         let edge = &diagram.edges[0];
-        let routed = route_edge(edge, &layout, Direction::LeftRight).unwrap();
+        let routed = route_edge(edge, &layout, Direction::LeftRight, None, None).unwrap();
 
         // LR forward edges enter from Left
         assert_eq!(routed.entry_direction, AttachDirection::Left);
@@ -1358,8 +1426,8 @@ mod tests {
         // Route both backward edges — they should both produce valid paths
         let edge_c_to_a = &diagram.edges[2];
         let edge_c_to_b = &diagram.edges[3];
-        let routed_c_a = route_edge(edge_c_to_a, &layout, Direction::TopDown);
-        let routed_c_b = route_edge(edge_c_to_b, &layout, Direction::TopDown);
+        let routed_c_a = route_edge(edge_c_to_a, &layout, Direction::TopDown, None, None);
+        let routed_c_b = route_edge(edge_c_to_b, &layout, Direction::TopDown, None, None);
 
         assert!(routed_c_a.is_some(), "Backward edge C->A should route");
         assert!(routed_c_b.is_some(), "Backward edge C->B should route");
@@ -1386,7 +1454,7 @@ mod tests {
         let layout = compute_layout_dagre(&diagram, &config);
 
         let backward_edge = &diagram.edges[2];
-        let routed = route_edge(backward_edge, &layout, Direction::TopDown).unwrap();
+        let routed = route_edge(backward_edge, &layout, Direction::TopDown, None, None).unwrap();
 
         assert!(
             routed.segments.len() >= 2,
@@ -1408,7 +1476,7 @@ mod tests {
         let layout = compute_layout_dagre(&diagram, &config);
 
         let backward_edge = &diagram.edges[1];
-        let routed = route_edge(backward_edge, &layout, Direction::TopDown);
+        let routed = route_edge(backward_edge, &layout, Direction::TopDown, None, None);
         assert!(
             routed.is_some(),
             "Short backward edge should route successfully"
@@ -1429,7 +1497,7 @@ mod tests {
         let layout = compute_layout_dagre(&diagram, &config);
 
         let backward_edge = &diagram.edges[2];
-        let routed = route_edge(backward_edge, &layout, Direction::LeftRight);
+        let routed = route_edge(backward_edge, &layout, Direction::LeftRight, None, None);
         assert!(
             routed.is_some(),
             "LR backward edge should route successfully"
