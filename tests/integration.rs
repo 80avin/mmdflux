@@ -326,6 +326,119 @@ mod rendering {
 }
 
 // =============================================================================
+// Stagger Preservation Tests
+// =============================================================================
+
+mod stagger {
+    use mmdflux::render::{LayoutConfig, compute_layout_dagre, route_all_edges};
+
+    use super::*;
+
+    /// Helper to parse, build a diagram from a fixture.
+    fn parse_and_build(name: &str) -> mmdflux::Diagram {
+        let input = load_fixture(name);
+        let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
+        build_diagram(&flowchart)
+    }
+
+    #[test]
+    fn stagger_present_for_multiple_cycles() {
+        // multiple_cycles.mmd: A[Top] --> B[Middle], B --> C[Bottom], C --> A, C --> B
+        // Dagre computes A rightward (aligned with dummy chain for reversed A→C edge)
+        // After stagger: A's center_x should be > B's and C's center_x
+        let diagram = parse_and_build("multiple_cycles.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        let a_bounds = layout.node_bounds.get("A").expect("A should have bounds");
+        let b_bounds = layout.node_bounds.get("B").expect("B should have bounds");
+        let c_bounds = layout.node_bounds.get("C").expect("C should have bounds");
+
+        assert!(
+            a_bounds.center_x() > b_bounds.center_x(),
+            "A (center_x={}) should be right of B (center_x={})",
+            a_bounds.center_x(),
+            b_bounds.center_x()
+        );
+        assert!(
+            a_bounds.center_x() > c_bounds.center_x(),
+            "A (center_x={}) should be right of C (center_x={})",
+            a_bounds.center_x(),
+            c_bounds.center_x()
+        );
+    }
+
+    #[test]
+    fn no_stagger_for_simple_chain() {
+        // chain.mmd: linear chain with no backward edges → no stagger
+        let diagram = parse_and_build("chain.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        // All nodes should have the same center_x (centered, no stagger)
+        let centers: Vec<usize> = layout.node_bounds.values().map(|b| b.center_x()).collect();
+        let first = centers[0];
+        for &c in &centers[1..] {
+            assert!(
+                (c as isize - first as isize).unsigned_abs() <= 1,
+                "All nodes should be centered: got {:?}",
+                centers
+            );
+        }
+    }
+
+    #[test]
+    fn stagger_produces_different_attachment_points() {
+        // For multiple_cycles.mmd, the forward edge A→B and backward edge C→A
+        // should attach at different positions on node A's boundary.
+        let diagram = parse_and_build("multiple_cycles.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+        let routed = route_all_edges(&diagram.edges, &layout, diagram.direction);
+
+        // Find edges involving node A
+        let a_b_edge = routed
+            .iter()
+            .find(|e| e.edge.from == "A" && e.edge.to == "B")
+            .expect("A→B edge should exist");
+        let c_a_edge = routed
+            .iter()
+            .find(|e| e.edge.from == "C" && e.edge.to == "A")
+            .expect("C→A edge should exist");
+
+        // A→B exits from A (start point); C→A enters A (end point)
+        // With stagger, these should be at different positions on A
+        let a_b_start = a_b_edge.start;
+        let c_a_end = c_a_edge.end;
+
+        assert_ne!(
+            a_b_start, c_a_end,
+            "Forward A→B start ({:?}) and backward C→A end ({:?}) should differ on A",
+            a_b_start, c_a_end
+        );
+    }
+
+    #[test]
+    fn stagger_present_for_simple_cycle() {
+        // simple_cycle.mmd has backward edges → should show stagger
+        let diagram = parse_and_build("simple_cycle.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_dagre(&diagram, &config);
+
+        // With cycle, nodes should not all have the same center_x
+        let centers: Vec<usize> = layout.node_bounds.values().map(|b| b.center_x()).collect();
+        let min_center = *centers.iter().min().unwrap();
+        let max_center = *centers.iter().max().unwrap();
+        assert!(
+            max_center - min_center >= 2,
+            "Cycle diagram should have stagger: centers {:?} (range={})",
+            centers,
+            max_center - min_center
+        );
+    }
+}
+
+// =============================================================================
 // All Fixtures Parse and Render
 // =============================================================================
 
