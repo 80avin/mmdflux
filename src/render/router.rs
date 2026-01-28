@@ -192,7 +192,7 @@ fn route_edge_with_waypoints(
     ));
 
     // Determine entry direction based on final segment orientation
-    let entry_direction = entry_direction_from_segments(&segments, end);
+    let entry_direction = entry_direction_from_segments(&segments);
 
     Some(RoutedEdge {
         edge: edge.clone(),
@@ -255,7 +255,7 @@ fn route_edge_direct(
     // The arrow itself provides the visual connection to the target.
 
     // Determine entry direction based on final segment orientation
-    let entry_direction = entry_direction_from_segments(&segments, end);
+    let entry_direction = entry_direction_from_segments(&segments);
 
     Some(RoutedEdge {
         edge: edge.clone(),
@@ -366,7 +366,7 @@ fn add_connector_segment(segments: &mut Vec<Segment>, boundary: (usize, usize), 
 /// - Vertical final segment going up → entry from Bottom (arrow ▲)
 /// - Horizontal final segment going right → entry from Left (arrow ►)
 /// - Horizontal final segment going left → entry from Right (arrow ◄)
-fn entry_direction_from_segments(segments: &[Segment], _end: Point) -> AttachDirection {
+fn entry_direction_from_segments(segments: &[Segment]) -> AttachDirection {
     if let Some(last_segment) = segments.last() {
         match last_segment {
             Segment::Vertical { y_start, y_end, .. } => {

@@ -74,12 +74,8 @@ fn draw_edge_label_with_tracking(
                         // two attachment ports (i.e., sandwiched between this edge's
                         // vertical segment and another edge targeting the same node).
                         // If an edge cell exists on the far side of the label, flip sides.
-                        let (trial_x, trial_y) = find_label_position_on_segment_with_side(
-                            seg,
-                            label_len,
-                            direction,
-                            place_right,
-                        );
+                        let (trial_x, trial_y) =
+                            find_label_position_on_segment_with_side(seg, label_len, place_right);
                         if label_adjacent_to_edge_on_far_side(
                             canvas,
                             trial_x,
@@ -90,12 +86,7 @@ fn draw_edge_label_with_tracking(
                             place_right = !place_right;
                         }
 
-                        find_label_position_on_segment_with_side(
-                            seg,
-                            label_len,
-                            direction,
-                            place_right,
-                        )
+                        find_label_position_on_segment_with_side(seg, label_len, place_right)
                     } else {
                         // Fallback to midpoint
                         let mid_y = (routed.start.y + routed.end.y) / 2;
@@ -182,17 +173,19 @@ fn draw_edge_label_with_tracking(
     })
 }
 
-/// Find the label position on a specific segment (for backward edge labels).
-///
 /// Find the label position on a segment, with control over which side to place it.
 ///
-/// For vertical segments:
+/// Only used for TD/BT layouts where edges have Z-shaped paths. LR/RL layouts
+/// use inline label positioning with collision avoidance via `find_safe_label_position`.
+///
+/// For vertical segments (the typical case in TD/BT):
 /// - `place_right = false`: label goes to the left of the segment
 /// - `place_right = true`: label goes to the right of the segment
+///
+/// For horizontal segments (middle of Z-paths): label is placed above the segment.
 fn find_label_position_on_segment_with_side(
     segment: &Segment,
     label_len: usize,
-    direction: Direction,
     place_right: bool,
 ) -> (usize, usize) {
     match segment {
@@ -214,19 +207,10 @@ fn find_label_position_on_segment_with_side(
             }
         }
         Segment::Horizontal { y, x_start, x_end } => {
-            // For horizontal segments, place label above/below
+            // For horizontal segments, place label above
             let mid_x = (*x_start + *x_end) / 2;
             let label_x = mid_x.saturating_sub(label_len / 2);
-            match direction {
-                Direction::TopDown | Direction::BottomTop => {
-                    // Vertical layout: place above the horizontal segment
-                    (label_x, y.saturating_sub(1))
-                }
-                Direction::LeftRight | Direction::RightLeft => {
-                    // Horizontal layout: place above the horizontal segment
-                    (label_x, y.saturating_sub(1))
-                }
-            }
+            (label_x, y.saturating_sub(1))
         }
     }
 }
@@ -456,6 +440,10 @@ fn segment_midpoint(segment: &Segment) -> (usize, usize) {
 }
 
 /// Draw a single segment on the canvas.
+///
+/// TODO: Use `stroke` to render dotted (`┄`/`┆`) and thick edges differently.
+/// The `CharSet` already has `dotted_horizontal` and `dotted_vertical` characters;
+/// this function should select them based on `Stroke::Dotted` vs `Stroke::Solid`.
 fn draw_segment(canvas: &mut Canvas, segment: &Segment, _stroke: Stroke, charset: &CharSet) {
     match segment {
         Segment::Vertical { x, y_start, y_end } => {
@@ -466,21 +454,13 @@ fn draw_segment(canvas: &mut Canvas, segment: &Segment, _stroke: Stroke, charset
             };
 
             for y in y_min..=y_max {
-                // Note: For dotted strokes, we could use different characters,
-                // but set_with_connection uses the charset's junction() method
-                // which handles the character selection based on connections.
-
                 let connections = Connections {
                     up: y > y_min,
                     down: y < y_max,
                     left: false,
                     right: false,
                 };
-
-                // Try to set with connection merging; if cell is protected, skip
-                if !canvas.set_with_connection(*x, y, connections, charset) {
-                    // Cell is protected (part of a node), skip
-                }
+                canvas.set_with_connection(*x, y, connections, charset);
             }
         }
         Segment::Horizontal { y, x_start, x_end } => {
@@ -497,10 +477,7 @@ fn draw_segment(canvas: &mut Canvas, segment: &Segment, _stroke: Stroke, charset
                     left: x > x_min,
                     right: x < x_max,
                 };
-
-                if !canvas.set_with_connection(x, *y, connections, charset) {
-                    // Cell is protected
-                }
+                canvas.set_with_connection(x, *y, connections, charset);
             }
         }
     }
