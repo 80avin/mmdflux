@@ -1151,6 +1151,36 @@ mod tests {
     }
 
     #[test]
+    fn label_position_within_canvas_bounds() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\n    A -->|yes| B";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+
+        // Label position should exist
+        let key = ("A".to_string(), "B".to_string());
+        assert!(
+            layout.edge_label_positions.contains_key(&key),
+            "Should have precomputed label position for A->B, got keys: {:?}",
+            layout.edge_label_positions.keys().collect::<Vec<_>>()
+        );
+
+        let (lx, ly) = layout.edge_label_positions[&key];
+        // Should be within canvas bounds
+        assert!(
+            lx < layout.width && ly < layout.height,
+            "Label position ({}, {}) should be within canvas ({}, {})",
+            lx,
+            ly,
+            layout.width,
+            layout.height
+        );
+    }
+
+    #[test]
     fn label_transform_skips_missing_edge() {
         use crate::graph::{Arrow, Stroke};
         let edges = vec![Edge {
