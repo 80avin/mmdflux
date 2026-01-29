@@ -58,8 +58,8 @@ pub fn classify_face(
 
 /// Compute N evenly-spaced attachment positions along a face.
 ///
-/// Uses N+1 divisions to avoid placing edges at face corners.
-/// For N=1, returns the center of the extent.
+/// Uses endpoint-maximizing placement: edges are spread to the full extent
+/// of the face for maximum separation. For N=1, returns the center.
 /// Returns (x, y) coordinates.
 pub fn spread_points_on_face(
     face: NodeFace,
@@ -82,19 +82,10 @@ pub fn spread_points_on_face(
         };
     }
 
-    // When the range is too small for the inward formula to produce distinct
-    // positions, fall back to endpoint-inclusive distribution. The extent
-    // endpoints are already inside border corners, so placing edges there
-    // is visually fine.
-    let use_endpoints = range < count;
-
+    // Endpoint-maximizing: place edges at extremes of range for maximum separation
     (0..count)
         .map(|i| {
-            let pos = if use_endpoints {
-                start + (i * range) / (count - 1)
-            } else {
-                start + ((i + 1) * range) / (count + 1)
-            };
+            let pos = start + (i * range) / (count - 1);
             let pos = pos.min(end);
             match face {
                 NodeFace::Top | NodeFace::Bottom => (pos, fixed_coord),
@@ -648,49 +639,48 @@ mod tests {
     }
 
     #[test]
-    fn test_spread_points_count_two() {
-        // N=2 on range (0, 8) => positions: (1*8)/3=2, (2*8)/3=5
+    fn test_spread_points_endpoint_maximizing() {
+        // 2 edges on range (10, 13), range=3
+        // Endpoint: positions at 10, 13 (maximized separation)
+        let points = spread_points_on_face(NodeFace::Top, 5, (10, 13), 2);
+        assert_eq!(points, vec![(10, 5), (13, 5)]);
+    }
+
+    #[test]
+    fn test_spread_points_two_on_wide_range() {
+        // 2 edges on range (0, 8), range=8
+        // Endpoint: positions at 0, 8
         let result = spread_points_on_face(NodeFace::Top, 0, (0, 8), 2);
-        assert_eq!(result.len(), 2);
-        assert_eq!(result[0], (2, 0));
-        assert_eq!(result[1], (5, 0));
+        assert_eq!(result, vec![(0, 0), (8, 0)]);
     }
 
     #[test]
     fn test_spread_points_count_three() {
-        // N=3 on range (0, 8) => positions: (1*8)/4=2, (2*8)/4=4, (3*8)/4=6
+        // N=3 on range (0, 8) => endpoint positions: 0, 4, 8
         let result = spread_points_on_face(NodeFace::Bottom, 10, (0, 8), 3);
-        assert_eq!(result, vec![(2, 10), (4, 10), (6, 10)]);
+        assert_eq!(result, vec![(0, 10), (4, 10), (8, 10)]);
     }
 
     #[test]
     fn test_spread_points_left_right_face() {
         // For Left/Right faces, coordinates are (fixed, pos)
+        // 2 edges on range (0, 8) => endpoint: 0, 8
         let result = spread_points_on_face(NodeFace::Left, 5, (0, 8), 2);
-        assert_eq!(result[0], (5, 2));
-        assert_eq!(result[1], (5, 5));
+        assert_eq!(result[0], (5, 0));
+        assert_eq!(result[1], (5, 8));
     }
 
     #[test]
     fn test_spread_points_narrow_range() {
-        // N=3 on range (0, 2) => positions: (1*2)/4=0, (2*2)/4=1, (3*2)/4=1
-        // All clamped to [0, 2]
+        // N=3 on range (0, 2): endpoint positions 0, 1, 2
         let result = spread_points_on_face(NodeFace::Top, 0, (0, 2), 3);
-        assert_eq!(result.len(), 3);
-        for (x, _) in &result {
-            assert!(*x <= 2);
-        }
+        assert_eq!(result, vec![(0, 0), (1, 0), (2, 0)]);
     }
 
     #[test]
     fn test_spread_points_five_on_wide_face() {
-        // N=5 on range (0, 12) => positions: 2, 4, 6, 8, 10
+        // N=5 on range (0, 12) => endpoint positions: 0, 3, 6, 9, 12
         let result = spread_points_on_face(NodeFace::Bottom, 0, (0, 12), 5);
-        assert_eq!(result.len(), 5);
-        // All distinct
-        let xs: Vec<_> = result.iter().map(|(x, _)| *x).collect();
-        for i in 0..xs.len() - 1 {
-            assert!(xs[i] < xs[i + 1], "Points should be strictly increasing");
-        }
+        assert_eq!(result, vec![(0, 0), (3, 0), (6, 0), (9, 0), (12, 0)]);
     }
 }
