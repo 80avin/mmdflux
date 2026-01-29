@@ -1107,4 +1107,49 @@ mod lr_routing {
             output
         );
     }
+
+    #[test]
+    fn lr_multirank_backward_edge_does_not_extend_left_of_target() {
+        // LR layout with a backward edge spanning multiple ranks.
+        // The backward edge D→A should NOT place its arrow to the LEFT
+        // of A's left border — that extends outside the diagram bounds.
+        // The arrow should enter A from below or the left face, but the
+        // routing path should not go further left than A's left border.
+        let input = "graph LR\n    A --> B --> C --> D\n    D --> A";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &RenderOptions::default());
+
+        // Find the leftmost column of node A's box (the │ character of its left border)
+        // and verify no arrow character appears to its left.
+        // Currently the ◄ appears at column 0 while A's border starts at column 1,
+        // meaning the arrow extends outside the diagram area.
+        let lines: Vec<&str> = output.lines().collect();
+        let mut arrow_col = None;
+        let mut node_left_border = None;
+
+        for line in &lines {
+            if let Some(pos) = line.find('◄') {
+                arrow_col = Some(pos);
+            }
+            // Find leftmost │ on a line containing " A " (the node label)
+            if line.contains(" A ") {
+                // Find the first │ which is the left border of node A
+                if let Some(pos) = line.find('│') {
+                    node_left_border = Some(pos);
+                }
+            }
+        }
+
+        if let (Some(arrow), Some(border)) = (arrow_col, node_left_border) {
+            assert!(
+                arrow >= border,
+                "Backward edge arrow (col {}) should not extend left of node A's border (col {}). \
+                 The arrow extends outside the diagram area.\nOutput:\n{}",
+                arrow,
+                border,
+                output
+            );
+        }
+    }
 }

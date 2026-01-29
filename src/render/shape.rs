@@ -63,9 +63,12 @@ impl NodeBounds {
                 (start, end.max(start))
             }
             NodeFace::Left | NodeFace::Right => {
-                // Exclude corner rows (first and last rows are corner chars)
-                let start = self.y + 1;
-                let end = (self.y + self.height).saturating_sub(2);
+                // Include full height — corner rows are valid attachment points
+                // for horizontal edges entering/exiting side faces. This ensures
+                // multiple edges on a side face can be spread apart even on
+                // minimum-height (3-cell) nodes.
+                let start = self.y;
+                let end = self.y + self.height.saturating_sub(1);
                 (start, end.max(start))
             }
         }
@@ -384,9 +387,9 @@ mod tests {
             dagre_center_x: None,
             dagre_center_y: None,
         };
-        // Left/Right: exclude corner rows => 11 to 11 (only middle row)
-        assert_eq!(bounds.face_extent(&NodeFace::Left), (11, 11));
-        assert_eq!(bounds.face_extent(&NodeFace::Right), (11, 11));
+        // Left/Right: full height => 10 to 12
+        assert_eq!(bounds.face_extent(&NodeFace::Left), (10, 12));
+        assert_eq!(bounds.face_extent(&NodeFace::Right), (10, 12));
     }
 
     #[test]

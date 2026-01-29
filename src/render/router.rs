@@ -195,9 +195,12 @@ fn route_edge_with_waypoints(
     let src_attach = (src_attach_point.x, src_attach_point.y);
     let tgt_attach = (tgt_attach_point.x, tgt_attach_point.y);
 
-    // Offset both attachment points by 1 cell outside the node boundaries
-    let start = offset_from_boundary(src_attach, from_bounds);
-    let end = offset_from_boundary(tgt_attach, to_bounds);
+    // Use face-aware offset to avoid corner ambiguity (e.g., a point at
+    // the top-right corner should offset RIGHT for LR layouts, not UP)
+    let is_backward = is_backward_edge(from_bounds, to_bounds, direction);
+    let (src_face, tgt_face) = edge_faces(direction, is_backward);
+    let start = offset_for_face(src_attach, src_face);
+    let end = offset_for_face(tgt_attach, tgt_face);
 
     let mut segments = Vec::new();
 
@@ -251,32 +254,25 @@ fn route_edge_direct(
     );
 
     // Clamp attachment points to actual node boundaries
-    // The intersection calculation may return points slightly outside due to
-    // floating-point rounding (e.g., height/2 doesn't account for discrete cells)
     let src_attach_point = clamp_to_boundary(src_attach_raw, from_bounds);
     let tgt_attach_point = clamp_to_boundary(tgt_attach_raw, to_bounds);
     let src_attach = (src_attach_point.x, src_attach_point.y);
     let tgt_attach = (tgt_attach_point.x, tgt_attach_point.y);
 
-    // Offset both attachment points by 1 cell outside the node boundaries
-    // This ensures edges don't overlap with node drawings and arrows are
-    // placed in the gap between nodes
-    let start = offset_from_boundary(src_attach, from_bounds);
-    let end = offset_from_boundary(tgt_attach, to_bounds);
+    // Use face-aware offset to avoid corner ambiguity
+    let is_backward = is_backward_edge(from_bounds, to_bounds, direction);
+    let (src_face, tgt_face) = edge_faces(direction, is_backward);
+    let start = offset_for_face(src_attach, src_face);
+    let end = offset_for_face(tgt_attach, tgt_face);
     let mut segments = Vec::new();
 
     // Add connector segment from source node boundary to offset start point
-    // This ensures the edge visually connects to the node
     if src_attach != (start.x, start.y) {
         add_connector_segment(&mut segments, src_attach, start);
     }
 
     // Build orthogonal path with direction-appropriate segment ordering
     segments.extend(build_orthogonal_path_for_direction(start, end, direction));
-
-    // Note: We don't add a connector to the target because the arrow is drawn
-    // at 'end' which is already at the offset position (1 cell from node).
-    // The arrow itself provides the visual connection to the target.
 
     // Determine entry direction: use canonical direction when start == end
     // (zero-length path produces a degenerate segment that can't indicate direction)
@@ -317,9 +313,33 @@ fn resolve_attachment_points(
     waypoints: &[(usize, usize)],
     direction: Direction,
 ) -> ((usize, usize), (usize, usize)) {
-    // For LR/RL layouts, compute a consensus y so both attachment points
-    // share the same row, producing a straight horizontal segment.
+    // For LR/RL layouts, all edges (forward and backward) attach to the
+    // side faces. Forward edges use consensus-y for straight horizontal
+    // segments. Backward edges also use side faces (matching Mermaid behavior)
+    // but may use the opposite side face — the source exits from its LEFT face
+    // and the target is entered from its LEFT face (for LR), with the edge
+    // routing around below/above the nodes.
+    let is_backward = is_backward_edge(from_bounds, to_bounds, direction);
+
     match direction {
+        Direction::LeftRight if is_backward => {
+            // Backward LR: source exits LEFT face, target enters RIGHT face.
+            // The edge wraps around below (or above) the nodes and approaches
+            // the target from its right side, matching Mermaid behavior.
+            let src = src_override.unwrap_or((from_bounds.x, from_bounds.center_y()));
+            let tgt =
+                tgt_override.unwrap_or((to_bounds.x + to_bounds.width - 1, to_bounds.center_y()));
+            return (src, tgt);
+        }
+        Direction::RightLeft if is_backward => {
+            // Backward RL: source exits RIGHT face, target enters LEFT face.
+            let src = src_override.unwrap_or((
+                from_bounds.x + from_bounds.width - 1,
+                from_bounds.center_y(),
+            ));
+            let tgt = tgt_override.unwrap_or((to_bounds.x, to_bounds.center_y()));
+            return (src, tgt);
+        }
         Direction::LeftRight => {
             let consensus_y = consensus_y(from_bounds, to_bounds);
             let src = src_override.unwrap_or((from_bounds.x + from_bounds.width - 1, consensus_y));
@@ -373,51 +393,52 @@ fn clamp_to_boundary(point: (usize, usize), bounds: &NodeBounds) -> Point {
     Point::new(clamped_x, clamped_y)
 }
 
-/// Offset an attachment point by 1 cell outside the node boundary.
+/// Determine the source and target faces for an edge based on layout direction
+/// and whether the edge is backward.
+fn edge_faces(direction: Direction, is_backward: bool) -> (NodeFace, NodeFace) {
+    match direction {
+        Direction::TopDown => {
+            if is_backward {
+                (NodeFace::Top, NodeFace::Bottom)
+            } else {
+                (NodeFace::Bottom, NodeFace::Top)
+            }
+        }
+        Direction::BottomTop => {
+            if is_backward {
+                (NodeFace::Bottom, NodeFace::Top)
+            } else {
+                (NodeFace::Top, NodeFace::Bottom)
+            }
+        }
+        Direction::LeftRight => {
+            if is_backward {
+                (NodeFace::Left, NodeFace::Right)
+            } else {
+                (NodeFace::Right, NodeFace::Left)
+            }
+        }
+        Direction::RightLeft => {
+            if is_backward {
+                (NodeFace::Right, NodeFace::Left)
+            } else {
+                (NodeFace::Left, NodeFace::Right)
+            }
+        }
+    }
+}
+
+/// Offset an attachment point by 1 cell in the direction of the given face.
 ///
-/// This ensures edges don't overlap with node drawings. The offset direction
-/// is determined by which edge of the node the point is closest to.
-fn offset_from_boundary(point: (usize, usize), bounds: &NodeBounds) -> Point {
+/// Unlike `offset_from_boundary`, this doesn't infer the face from position,
+/// avoiding ambiguity when the point is at a corner of the node.
+fn offset_for_face(point: (usize, usize), face: NodeFace) -> Point {
     let (x, y) = point;
-    let cx = bounds.center_x();
-    let cy = bounds.center_y();
-
-    // Determine which boundary edge the point is on
-    let on_top = y == bounds.y;
-    let on_bottom = y == bounds.y + bounds.height - 1;
-    let on_left = x == bounds.x;
-    let on_right = x == bounds.x + bounds.width - 1;
-
-    // Offset in the appropriate direction
-    if on_top {
-        Point::new(x, y.saturating_sub(1))
-    } else if on_bottom {
-        Point::new(x, y + 1)
-    } else if on_left {
-        Point::new(x.saturating_sub(1), y)
-    } else if on_right {
-        Point::new(x + 1, y)
-    } else {
-        // Point is not on boundary (shouldn't happen with proper intersection)
-        // Fall back to moving away from center
-        let dx = if x > cx {
-            1
-        } else if x < cx {
-            -1_isize
-        } else {
-            0
-        };
-        let dy = if y > cy {
-            1
-        } else if y < cy {
-            -1_isize
-        } else {
-            0
-        };
-        Point::new(
-            (x as isize + dx).max(0) as usize,
-            (y as isize + dy).max(0) as usize,
-        )
+    match face {
+        NodeFace::Top => Point::new(x, y.saturating_sub(1)),
+        NodeFace::Bottom => Point::new(x, y + 1),
+        NodeFace::Left => Point::new(x.saturating_sub(1), y),
+        NodeFace::Right => Point::new(x + 1, y),
     }
 }
 
@@ -857,11 +878,12 @@ pub fn compute_attachment_plan(
             .and_then(|wps| wps.last().copied())
             .unwrap_or((src_bounds.center_x(), src_bounds.center_y()));
 
-        // For LR/RL layouts, force side faces instead of geometric classification
-        // to ensure edges exit/enter on the correct sides
+        // For LR/RL layouts, force side faces based on edge direction.
+        // Forward edges: source exits forward face, target enters forward face.
+        // Backward edges: source exits backward face, target enters backward face.
+        let is_backward = is_backward_edge(src_bounds, tgt_bounds, direction);
         let (src_face, tgt_face) = match direction {
-            Direction::LeftRight => (NodeFace::Right, NodeFace::Left),
-            Direction::RightLeft => (NodeFace::Left, NodeFace::Right),
+            Direction::LeftRight | Direction::RightLeft => edge_faces(direction, is_backward),
             _ => (
                 classify_face(src_bounds, src_approach, src_shape),
                 classify_face(tgt_bounds, tgt_approach, tgt_shape),
