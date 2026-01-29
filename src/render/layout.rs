@@ -479,6 +479,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         is_vertical,
         width,
         height,
+        max_overhang_x,
+        max_overhang_y,
     );
 
     let edge_label_positions_converted = transform_label_positions_direct(
@@ -490,6 +492,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         scale_y,
         config.padding,
         config.left_label_margin,
+        max_overhang_x,
+        max_overhang_y,
     );
 
     // --- Phase I: Nudge waypoints that collide with nodes ---
@@ -1800,6 +1804,8 @@ fn transform_waypoints_direct(
     is_vertical: bool,
     canvas_width: usize,
     canvas_height: usize,
+    overhang_x: usize,
+    overhang_y: usize,
 ) -> HashMap<(String, String), Vec<(usize, usize)>> {
     let mut converted = HashMap::new();
 
@@ -1815,13 +1821,16 @@ fn transform_waypoints_direct(
                     if is_vertical {
                         let y = layer_starts.get(rank_idx).copied().unwrap_or(0);
                         let x = ((wp.point.x - dagre_min_x) * scale_x).round() as usize
+                            + overhang_x
                             + padding
                             + left_label_margin;
                         let x = x.min(canvas_width.saturating_sub(1));
                         (x, y)
                     } else {
                         let x = layer_starts.get(rank_idx).copied().unwrap_or(0);
-                        let y = ((wp.point.y - dagre_min_y) * scale_y).round() as usize + padding;
+                        let y = ((wp.point.y - dagre_min_y) * scale_y).round() as usize
+                            + overhang_y
+                            + padding;
                         let y = y.min(canvas_height.saturating_sub(1));
                         (x, y)
                     }
@@ -1846,15 +1855,19 @@ fn transform_label_positions_direct(
     scale_y: f64,
     padding: usize,
     left_label_margin: usize,
+    overhang_x: usize,
+    overhang_y: usize,
 ) -> HashMap<(String, String), (usize, usize)> {
     let mut converted = HashMap::new();
 
     for (edge_idx, pos) in label_positions {
         if let Some(edge) = edges.get(*edge_idx) {
             let key = (edge.from.clone(), edge.to.clone());
-            let x =
-                ((pos.x - dagre_min_x) * scale_x).round() as usize + padding + left_label_margin;
-            let y = ((pos.y - dagre_min_y) * scale_y).round() as usize + padding;
+            let x = ((pos.x - dagre_min_x) * scale_x).round() as usize
+                + overhang_x
+                + padding
+                + left_label_margin;
+            let y = ((pos.y - dagre_min_y) * scale_y).round() as usize + overhang_y + padding;
             converted.insert(key, (x, y));
         }
     }
@@ -2508,6 +2521,8 @@ mod tests {
             true,
             80,
             20,
+            0,
+            0,
         );
 
         let key = ("A".to_string(), "C".to_string());
@@ -2552,6 +2567,8 @@ mod tests {
             false,
             40,
             80,
+            0,
+            0,
         );
 
         let key = ("A".to_string(), "C".to_string());
@@ -2594,6 +2611,8 @@ mod tests {
             true,
             30,
             20,
+            0,
+            0,
         );
 
         let key = ("A".to_string(), "B".to_string());
@@ -2618,6 +2637,8 @@ mod tests {
             true,
             80,
             20,
+            0,
+            0,
         );
         assert!(result.is_empty());
     }
@@ -2641,7 +2662,7 @@ mod tests {
         labels.insert(0usize, Point { x: 150.0, y: 100.0 });
 
         let result =
-            transform_label_positions_direct(&labels, &edges, 50.0, 50.0, 0.22, 0.11, 1, 0);
+            transform_label_positions_direct(&labels, &edges, 50.0, 50.0, 0.22, 0.11, 1, 0, 0, 0);
 
         let key = ("A".to_string(), "B".to_string());
         assert!(result.contains_key(&key));
@@ -2663,7 +2684,7 @@ mod tests {
         labels.insert(0usize, Point { x: 150.0, y: 100.0 });
 
         let result =
-            transform_label_positions_direct(&labels, &edges, 50.0, 50.0, 0.22, 0.11, 1, 3);
+            transform_label_positions_direct(&labels, &edges, 50.0, 50.0, 0.22, 0.11, 1, 3, 0, 0);
 
         let key = ("A".to_string(), "B".to_string());
         assert_eq!(result[&key].0, 26);
@@ -2673,7 +2694,8 @@ mod tests {
     fn label_transform_empty_input() {
         let edges: Vec<Edge> = vec![];
         let labels: HashMap<usize, Point> = HashMap::new();
-        let result = transform_label_positions_direct(&labels, &edges, 0.0, 0.0, 0.2, 0.1, 1, 0);
+        let result =
+            transform_label_positions_direct(&labels, &edges, 0.0, 0.0, 0.2, 0.1, 1, 0, 0, 0);
         assert!(result.is_empty());
     }
 
@@ -2691,7 +2713,8 @@ mod tests {
         let mut labels = HashMap::new();
         labels.insert(5usize, Point { x: 100.0, y: 100.0 });
 
-        let result = transform_label_positions_direct(&labels, &edges, 0.0, 0.0, 0.2, 0.1, 1, 0);
+        let result =
+            transform_label_positions_direct(&labels, &edges, 0.0, 0.0, 0.2, 0.1, 1, 0, 0, 0);
 
         assert!(
             result.is_empty(),

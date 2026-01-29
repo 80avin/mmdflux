@@ -574,6 +574,89 @@ mod spreading {
 }
 
 // =============================================================================
+// Skip-Edge Waypoint Separation Tests
+// =============================================================================
+
+mod skip_edge_separation {
+    use mmdflux::render::{LayoutConfig, compute_layout_direct};
+
+    use super::*;
+
+    fn parse_and_build(name: &str) -> mmdflux::Diagram {
+        let input = load_fixture(name);
+        let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
+        build_diagram(&flowchart)
+    }
+
+    /// For double_skip.mmd (A→B→C→D, A→C, A→D), the skip edge A→D has waypoints
+    /// passing through ranks containing nodes B and C. Those waypoints must not
+    /// overlap with the bounding boxes of intermediate nodes.
+    #[test]
+    fn double_skip_waypoints_avoid_intermediate_nodes() {
+        let diagram = parse_and_build("double_skip.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        // Get node B's bounding box (intermediate node on rank 1)
+        let b_bounds = layout.node_bounds.get("B").expect("B should have bounds");
+        let b_right = b_bounds.x + b_bounds.width;
+
+        // Get the A→D skip-edge waypoints
+        let key = ("A".to_string(), "D".to_string());
+        let waypoints = layout
+            .edge_waypoints
+            .get(&key)
+            .expect("A→D should have waypoints (it spans 3 ranks)");
+
+        // The waypoint at B's rank should have x > b_right (separated, not overlapping)
+        // Waypoints are ordered by rank; the first waypoint is at rank 1 (B's rank)
+        assert!(
+            !waypoints.is_empty(),
+            "A→D skip edge should have at least one waypoint"
+        );
+
+        let wp_at_b_rank = waypoints[0];
+        assert!(
+            wp_at_b_rank.0 > b_right,
+            "A→D waypoint x={} should be > B's right edge {} (need separation)",
+            wp_at_b_rank.0,
+            b_right,
+        );
+    }
+
+    /// For skip_edge_collision.mmd (A→B→C→D, A→D), same check:
+    /// the skip-edge waypoints must not collide with intermediate nodes.
+    #[test]
+    fn skip_edge_collision_waypoints_avoid_intermediate_nodes() {
+        let diagram = parse_and_build("skip_edge_collision.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let b_bounds = layout.node_bounds.get("B").expect("B should have bounds");
+        let b_right = b_bounds.x + b_bounds.width;
+
+        let key = ("A".to_string(), "D".to_string());
+        let waypoints = layout
+            .edge_waypoints
+            .get(&key)
+            .expect("A→D should have waypoints");
+
+        assert!(
+            !waypoints.is_empty(),
+            "A→D skip edge should have at least one waypoint"
+        );
+
+        let wp_at_b_rank = waypoints[0];
+        assert!(
+            wp_at_b_rank.0 > b_right,
+            "A→D waypoint x={} should be > B's right edge {} (need separation)",
+            wp_at_b_rank.0,
+            b_right,
+        );
+    }
+}
+
+// =============================================================================
 // Direct Layout Integration Tests
 // =============================================================================
 
