@@ -152,7 +152,7 @@ impl Canvas {
         charset: &CharSet,
     ) -> bool {
         if let Some(cell) = self.get_mut(x, y) {
-            if cell.is_node {
+            if cell.is_node || charset.is_arrow(cell.ch) {
                 return false;
             }
             cell.connections.merge(connections);

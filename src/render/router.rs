@@ -817,8 +817,10 @@ pub fn compute_attachment_plan(
     direction: Direction,
 ) -> HashMap<usize, AttachmentOverride> {
     // Step 1: Classify faces and build groups
-    // Key: (node_id, face) -> Vec<(edge_index, is_source_side)>
-    let mut face_groups: HashMap<(String, NodeFace), Vec<(usize, bool)>> = HashMap::new();
+    // Key: (node_id, face) -> Vec<(edge_index, is_source_side, approach_cross_axis)>
+    // The approach_cross_axis is the cross-axis coordinate of the approach point,
+    // used for sorting to minimize visual crossings.
+    let mut face_groups: HashMap<(String, NodeFace), Vec<(usize, bool, usize)>> = HashMap::new();
 
     for (i, edge) in edges.iter().enumerate() {
         let src_bounds = match layout.get_bounds(&edge.from) {
@@ -841,41 +843,49 @@ pub fn compute_attachment_plan(
             .copied()
             .unwrap_or(Shape::Rectangle);
 
+        // Determine approach points using waypoints if available
+        let edge_key = (edge.from.clone(), edge.to.clone());
+        let waypoints = layout.edge_waypoints.get(&edge_key);
+
+        // For source: approach point is first waypoint or target center
+        let src_approach = waypoints
+            .and_then(|wps| wps.first().copied())
+            .unwrap_or((tgt_bounds.center_x(), tgt_bounds.center_y()));
+
+        // For target: approach point is last waypoint or source center
+        let tgt_approach = waypoints
+            .and_then(|wps| wps.last().copied())
+            .unwrap_or((src_bounds.center_x(), src_bounds.center_y()));
+
         // For LR/RL layouts, force side faces instead of geometric classification
         // to ensure edges exit/enter on the correct sides
         let (src_face, tgt_face) = match direction {
             Direction::LeftRight => (NodeFace::Right, NodeFace::Left),
             Direction::RightLeft => (NodeFace::Left, NodeFace::Right),
-            _ => {
-                // Determine approach points using waypoints if available
-                let edge_key = (edge.from.clone(), edge.to.clone());
-                let waypoints = layout.edge_waypoints.get(&edge_key);
+            _ => (
+                classify_face(src_bounds, src_approach, src_shape),
+                classify_face(tgt_bounds, tgt_approach, tgt_shape),
+            ),
+        };
 
-                // For source: approach point is first waypoint or target center
-                let src_approach = waypoints
-                    .and_then(|wps| wps.first().copied())
-                    .unwrap_or((tgt_bounds.center_x(), tgt_bounds.center_y()));
-
-                // For target: approach point is last waypoint or source center
-                let tgt_approach = waypoints
-                    .and_then(|wps| wps.last().copied())
-                    .unwrap_or((src_bounds.center_x(), src_bounds.center_y()));
-
-                (
-                    classify_face(src_bounds, src_approach, src_shape),
-                    classify_face(tgt_bounds, tgt_approach, tgt_shape),
-                )
-            }
+        // Extract cross-axis coordinate from approach point for sorting
+        let src_cross = match src_face {
+            NodeFace::Top | NodeFace::Bottom => src_approach.0,
+            NodeFace::Left | NodeFace::Right => src_approach.1,
+        };
+        let tgt_cross = match tgt_face {
+            NodeFace::Top | NodeFace::Bottom => tgt_approach.0,
+            NodeFace::Left | NodeFace::Right => tgt_approach.1,
         };
 
         face_groups
             .entry((edge.from.clone(), src_face))
             .or_default()
-            .push((i, true));
+            .push((i, true, src_cross));
         face_groups
             .entry((edge.to.clone(), tgt_face))
             .or_default()
-            .push((i, false));
+            .push((i, false, tgt_cross));
     }
 
     // Step 2: For faces with >1 edge, compute spread positions
@@ -891,15 +901,15 @@ pub fn compute_attachment_plan(
             None => continue,
         };
 
-        // Sort edges by cross-axis position of opposite endpoint
+        // Sort edges by approach point's cross-axis coordinate
         let mut sorted = group.clone();
-        sort_face_group(&mut sorted, edges, layout, *face);
+        sorted.sort_by_key(|&(_, _, approach_cross)| approach_cross);
 
         let extent = bounds.face_extent(face);
         let fixed = bounds.face_fixed_coord(face);
         let points = spread_points_on_face(*face, fixed, extent, sorted.len());
 
-        for (idx, &(edge_i, is_source)) in sorted.iter().enumerate() {
+        for (idx, &(edge_i, is_source, _)) in sorted.iter().enumerate() {
             let point = points[idx];
             let entry = overrides.entry(edge_i).or_insert(AttachmentOverride {
                 source: None,
@@ -914,29 +924,6 @@ pub fn compute_attachment_plan(
     }
 
     overrides
-}
-
-/// Sort edges within a face group by cross-axis position of the opposite endpoint.
-/// This minimizes visual crossings by matching left-to-right edge order to
-/// left-to-right source/target order.
-fn sort_face_group(
-    group: &mut Vec<(usize, bool)>,
-    edges: &[Edge],
-    layout: &Layout,
-    face: NodeFace,
-) {
-    group.sort_by_key(|&(edge_i, is_source)| {
-        let edge = &edges[edge_i];
-        let other_id = if is_source { &edge.to } else { &edge.from };
-        let other_bounds = layout.get_bounds(other_id);
-
-        match face {
-            // For top/bottom faces, sort by x-position of opposite endpoint
-            NodeFace::Top | NodeFace::Bottom => other_bounds.map(|b| b.center_x()).unwrap_or(0),
-            // For left/right faces, sort by y-position of opposite endpoint
-            NodeFace::Left | NodeFace::Right => other_bounds.map(|b| b.center_y()).unwrap_or(0),
-        }
-    });
 }
 
 /// Route all edges in the layout.

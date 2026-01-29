@@ -798,6 +798,53 @@ mod direct_layout {
         // All 26 fixtures differ due to slightly more compact direct scaling.
         // No regressions observed — differences are minor geometry shifts.
     }
+
+    #[test]
+    fn direct_fan_in_ordered_arrivals() {
+        let diagram = parse_and_build("fan_in.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+        let routed = route_all_edges(&diagram.edges, &layout, diagram.direction);
+
+        let mut arrival_xs: Vec<usize> = routed
+            .iter()
+            .filter(|r| r.edge.to == "D")
+            .map(|r| r.end.x)
+            .collect();
+        arrival_xs.sort();
+        arrival_xs.dedup();
+
+        assert!(
+            arrival_xs.len() >= 2,
+            "fan_in: expected >=2 distinct arrival x-coords at D, got {:?}",
+            arrival_xs
+        );
+    }
+
+    #[test]
+    fn direct_five_fan_in_distinct_arrivals() {
+        let diagram = parse_and_build("five_fan_in.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+        let routed = route_all_edges(&diagram.edges, &layout, diagram.direction);
+
+        let arrival_xs: Vec<usize> = routed
+            .iter()
+            .filter(|r| r.edge.to == "F")
+            .map(|r| r.end.x)
+            .collect();
+
+        // All pairs distinct
+        for i in 0..arrival_xs.len() {
+            for j in (i + 1)..arrival_xs.len() {
+                assert_ne!(
+                    arrival_xs[i], arrival_xs[j],
+                    "five_fan_in: duplicate arrival x at F: {} (all: {:?})",
+                    arrival_xs[i], arrival_xs
+                );
+            }
+        }
+    }
 }
 
 // =============================================================================

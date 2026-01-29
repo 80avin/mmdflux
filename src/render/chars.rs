@@ -98,6 +98,14 @@ impl CharSet {
         }
     }
 
+    /// Check if a character is an arrow character in this charset.
+    pub fn is_arrow(&self, ch: char) -> bool {
+        ch == self.arrow_up
+            || ch == self.arrow_down
+            || ch == self.arrow_left
+            || ch == self.arrow_right
+    }
+
     /// Get the appropriate junction character based on connections.
     ///
     /// This handles all combinations of up/down/left/right connections
