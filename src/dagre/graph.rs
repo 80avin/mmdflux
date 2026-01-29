@@ -139,6 +139,9 @@ pub(crate) struct LayoutGraph {
 
     /// Edge weights, indexed by position in `edges` vec. Default 1.0 for all edges.
     pub edge_weights: Vec<f64>,
+
+    /// Minimum rank span for each edge. Default 1 for all edges.
+    pub edge_minlens: Vec<i32>,
 }
 
 impl LayoutGraph {
@@ -188,6 +191,7 @@ impl LayoutGraph {
             dummy_chains: Vec::new(),
             original_edge_count: edge_count,
             edge_weights,
+            edge_minlens: vec![1; edge_count],
         }
     }
 
@@ -384,6 +388,31 @@ mod tests {
         assert!(dummy.is_label());
         assert_eq!(dummy.edge_index, 0);
         assert_eq!(dummy.rank, 1);
+    }
+
+    #[test]
+    fn test_layout_graph_has_edge_minlens() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (5.0, 3.0));
+        graph.add_node("B", (5.0, 3.0));
+        graph.add_edge("A", "B");
+
+        let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        // Every edge should have minlen = 1 by default
+        assert_eq!(lg.edge_minlens.len(), 1);
+        assert_eq!(lg.edge_minlens[0], 1);
+    }
+
+    #[test]
+    fn test_layout_graph_minlen_can_be_set() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (5.0, 3.0));
+        graph.add_node("B", (5.0, 3.0));
+        graph.add_edge("A", "B");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        lg.edge_minlens[0] = 2;
+        assert_eq!(lg.edge_minlens[0], 2);
     }
 
     #[test]
