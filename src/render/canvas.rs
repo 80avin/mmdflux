@@ -159,6 +159,12 @@ impl Canvas {
             if cell.is_node || charset.is_arrow(cell.ch) {
                 return false;
             }
+            // If overwriting a subgraph border, infer its connections first
+            // so the junction merges border + edge directions.
+            if cell.is_subgraph_border {
+                let border_conns = charset.infer_connections(cell.ch);
+                cell.connections.merge(border_conns);
+            }
             cell.connections.merge(connections);
             cell.ch = charset.junction(cell.connections);
             cell.is_edge = true;
@@ -404,5 +410,41 @@ mod tests {
         assert!(!canvas.set_with_connection(2, 2, connections, &charset));
         // Original character should be preserved
         assert_eq!(canvas.get(2, 2).unwrap().ch, '#');
+    }
+
+    // =========================================================================
+    // Edge-border crossing tests (Plan 0026, Task 4.1)
+    // =========================================================================
+
+    #[test]
+    fn test_edge_over_border_produces_junction() {
+        let charset = CharSet::unicode();
+        let mut canvas = Canvas::new(10, 5);
+
+        // Draw a horizontal border
+        canvas.set_subgraph_border(0, 2, '─');
+        canvas.set_subgraph_border(1, 2, '─');
+        canvas.set_subgraph_border(2, 2, '─');
+        canvas.set_subgraph_border(3, 2, '─');
+
+        // Draw a vertical edge crossing the border at x=2
+        let conn_ud = Connections {
+            up: true,
+            down: true,
+            left: false,
+            right: false,
+        };
+        canvas.set_with_connection(2, 1, conn_ud, &charset);
+        canvas.set_with_connection(2, 2, conn_ud, &charset);
+        canvas.set_with_connection(2, 3, conn_ud, &charset);
+
+        // At the crossing point (2, 2), should be a junction ┼
+        // (up+down from edge + left+right from border)
+        let cell = canvas.get(2, 2).unwrap();
+        assert_eq!(
+            cell.ch, '┼',
+            "Edge crossing border should produce junction, got: {}",
+            cell.ch
+        );
     }
 }

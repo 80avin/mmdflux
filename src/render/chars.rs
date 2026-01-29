@@ -106,6 +106,39 @@ impl CharSet {
             || ch == self.arrow_right
     }
 
+    /// Infer connections from an existing box-drawing character.
+    ///
+    /// Returns the connections that the character implies (e.g., '─' implies
+    /// left+right, '┌' implies down+right). Returns `Connections::none()`
+    /// for unrecognized characters.
+    pub fn infer_connections(&self, ch: char) -> Connections {
+        if ch == self.horizontal {
+            Connections { left: true, right: true, ..Connections::none() }
+        } else if ch == self.vertical {
+            Connections { up: true, down: true, ..Connections::none() }
+        } else if ch == self.corner_tl {
+            Connections { down: true, right: true, ..Connections::none() }
+        } else if ch == self.corner_tr {
+            Connections { down: true, left: true, ..Connections::none() }
+        } else if ch == self.corner_bl {
+            Connections { up: true, right: true, ..Connections::none() }
+        } else if ch == self.corner_br {
+            Connections { up: true, left: true, ..Connections::none() }
+        } else if ch == self.tee_down {
+            Connections { down: true, left: true, right: true, ..Connections::none() }
+        } else if ch == self.tee_up {
+            Connections { up: true, left: true, right: true, ..Connections::none() }
+        } else if ch == self.tee_right {
+            Connections { up: true, down: true, right: true, ..Connections::none() }
+        } else if ch == self.tee_left {
+            Connections { up: true, down: true, left: true, ..Connections::none() }
+        } else if ch == self.cross {
+            Connections { up: true, down: true, left: true, right: true }
+        } else {
+            Connections::none()
+        }
+    }
+
     /// Get the appropriate junction character based on connections.
     ///
     /// This handles all combinations of up/down/left/right connections
@@ -305,5 +338,60 @@ mod tests {
     fn test_junction_no_connections() {
         let cs = CharSet::unicode();
         assert_eq!(cs.junction(Connections::none()), ' ');
+    }
+
+    // =========================================================================
+    // infer_connections tests (Plan 0026, Task 4.1)
+    // =========================================================================
+
+    #[test]
+    fn test_infer_connections_horizontal() {
+        let cs = CharSet::unicode();
+        let conns = cs.infer_connections('─');
+        assert!(conns.left && conns.right);
+        assert!(!conns.up && !conns.down);
+    }
+
+    #[test]
+    fn test_infer_connections_vertical() {
+        let cs = CharSet::unicode();
+        let conns = cs.infer_connections('│');
+        assert!(conns.up && conns.down);
+        assert!(!conns.left && !conns.right);
+    }
+
+    #[test]
+    fn test_infer_connections_corners() {
+        let cs = CharSet::unicode();
+
+        let tl = cs.infer_connections('┌');
+        assert!(tl.down && tl.right);
+        assert!(!tl.up && !tl.left);
+
+        let tr = cs.infer_connections('┐');
+        assert!(tr.down && tr.left);
+        assert!(!tr.up && !tr.right);
+
+        let bl = cs.infer_connections('└');
+        assert!(bl.up && bl.right);
+        assert!(!bl.down && !bl.left);
+
+        let br = cs.infer_connections('┘');
+        assert!(br.up && br.left);
+        assert!(!br.down && !br.right);
+    }
+
+    #[test]
+    fn test_infer_connections_cross() {
+        let cs = CharSet::unicode();
+        let conns = cs.infer_connections('┼');
+        assert!(conns.up && conns.down && conns.left && conns.right);
+    }
+
+    #[test]
+    fn test_infer_connections_unknown_returns_none() {
+        let cs = CharSet::unicode();
+        let conns = cs.infer_connections('X');
+        assert_eq!(conns, Connections::none());
     }
 }
