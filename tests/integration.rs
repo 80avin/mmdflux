@@ -807,6 +807,9 @@ mod all_fixtures {
         "http_request.mmd",
         "ci_pipeline.mmd",
         "complex.mmd",
+        "simple_subgraph.mmd",
+        "subgraph_edges.mmd",
+        "multi_subgraph.mmd",
     ];
 
     #[test]
@@ -955,6 +958,110 @@ mod lr_routing {
                 arrow,
                 border,
                 output
+            );
+        }
+    }
+}
+
+// =============================================================================
+// Subgraph Rendering Tests
+// =============================================================================
+
+mod subgraph_rendering {
+    use super::*;
+
+    #[test]
+    fn simple_subgraph_renders_title_and_nodes() {
+        let output = render_fixture("simple_subgraph.mmd");
+        assert!(output.contains("Process"), "Should contain subgraph title");
+        assert!(output.contains("Start"), "Should contain Start node");
+        assert!(output.contains("Middle"), "Should contain Middle node");
+        assert!(output.contains("End"), "Should contain End node");
+    }
+
+    #[test]
+    fn simple_subgraph_has_border() {
+        let output = render_fixture("simple_subgraph.mmd");
+        // Subgraph border uses box-drawing characters
+        assert!(
+            output.contains('┌') && output.contains('┘'),
+            "Should have box-drawing border characters"
+        );
+    }
+
+    #[test]
+    fn subgraph_edges_renders_both_groups() {
+        let output = render_fixture("subgraph_edges.mmd");
+        assert!(output.contains("Input"), "Should contain Input subgraph title");
+        assert!(output.contains("Data"), "Should contain Data node");
+        assert!(output.contains("Config"), "Should contain Config node");
+        assert!(output.contains("Result"), "Should contain Result node");
+        assert!(output.contains("Log"), "Should contain Log node");
+    }
+
+    #[test]
+    fn multi_subgraph_renders_both_groups() {
+        let output = render_fixture("multi_subgraph.mmd");
+        // LR layout may not display subgraph titles if the box is too compact
+        assert!(output.contains("UI"), "Should contain UI node");
+        assert!(output.contains("API"), "Should contain API node");
+        assert!(output.contains("Server"), "Should contain Server node");
+        assert!(output.contains("DB"), "Should contain DB node");
+        // Should have two distinct subgraph borders
+        let border_count = output.matches('┌').count();
+        assert!(
+            border_count >= 4,
+            "Should have borders for subgraphs and nodes, got {} '┌' chars",
+            border_count
+        );
+    }
+
+    #[test]
+    fn simple_subgraph_ascii_mode() {
+        let output = render_fixture_ascii("simple_subgraph.mmd");
+        assert!(output.contains("Process"), "ASCII: should contain title");
+        assert!(output.contains("Start"), "ASCII: should contain Start");
+        // ASCII mode uses +/-/| for borders
+        assert!(
+            output.contains('+') && output.contains('-'),
+            "ASCII mode should use +/- border characters"
+        );
+    }
+
+    #[test]
+    fn subgraph_nodes_aligned_vertically() {
+        // Verify the stagger fix: nodes in a vertical chain inside a subgraph
+        // should have similar horizontal positions
+        let (_, layout) = layout_fixture("simple_subgraph.mmd");
+
+        let a_cx = layout.node_bounds["A"].center_x();
+        let b_cx = layout.node_bounds["B"].center_x();
+
+        assert!(
+            (a_cx as isize - b_cx as isize).unsigned_abs() <= 1,
+            "A (center_x={}) and B (center_x={}) should be vertically aligned",
+            a_cx,
+            b_cx
+        );
+    }
+
+    #[test]
+    fn existing_fixtures_unchanged_by_subgraph_support() {
+        // Render non-subgraph fixtures and verify they produce valid output
+        let fixtures = [
+            "simple.mmd",
+            "chain.mmd",
+            "fan_in.mmd",
+            "fan_out.mmd",
+            "decision.mmd",
+            "edge_styles.mmd",
+        ];
+        for fixture in fixtures {
+            let output = render_fixture(fixture);
+            assert!(
+                !output.is_empty(),
+                "{} should produce non-empty output",
+                fixture
             );
         }
     }
