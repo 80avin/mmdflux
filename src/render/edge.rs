@@ -7,6 +7,35 @@ use super::chars::CharSet;
 use super::router::{AttachDirection, Point, RoutedEdge, Segment};
 use crate::graph::{Arrow, Direction, Stroke};
 
+/// Calculate the label position at the midpoint of a routed path.
+///
+/// Walks the segments by Manhattan distance and returns the point at 50%
+/// of the total path length. Returns `None` if the path has no segments.
+pub fn calc_label_position(segments: &[Segment]) -> Option<Point> {
+    if segments.is_empty() {
+        return None;
+    }
+
+    let total_length: usize = segments.iter().map(|s| s.length()).sum();
+    if total_length == 0 {
+        return Some(segments[0].start_point());
+    }
+
+    let target = total_length / 2;
+    let mut accumulated = 0usize;
+
+    for seg in segments {
+        let seg_len = seg.length();
+        if accumulated + seg_len >= target {
+            let offset_in_seg = target - accumulated;
+            return Some(seg.point_at_offset(offset_in_seg));
+        }
+        accumulated += seg_len;
+    }
+
+    segments.last().map(|s| s.end_point())
+}
+
 /// Render a routed edge onto the canvas.
 pub fn render_edge(
     canvas: &mut Canvas,
@@ -1199,5 +1228,69 @@ mod tests {
             cell.ch, charset.arrow_down,
             "Arrow should be drawn on empty cell"
         );
+    }
+
+    // === calc_label_position tests (Task 2.1) ===
+
+    #[test]
+    fn calc_label_empty_segments_returns_none() {
+        assert_eq!(calc_label_position(&[]), None);
+    }
+
+    #[test]
+    fn calc_label_single_vertical_segment_returns_midpoint() {
+        let segments = vec![Segment::Vertical { x: 5, y_start: 10, y_end: 20 }];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 15 }));
+    }
+
+    #[test]
+    fn calc_label_single_horizontal_segment_returns_midpoint() {
+        let segments = vec![Segment::Horizontal { y: 3, x_start: 0, x_end: 10 }];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 3 }));
+    }
+
+    #[test]
+    fn calc_label_l_path_midpoint_at_corner() {
+        // V(x=5, y 0->6) + H(y=6, x 5->11) = total 12, midpoint at 6
+        let segments = vec![
+            Segment::Vertical { x: 5, y_start: 0, y_end: 6 },
+            Segment::Horizontal { y: 6, x_start: 5, x_end: 11 },
+        ];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 6 }));
+    }
+
+    #[test]
+    fn calc_label_z_path_midpoint_on_middle_segment() {
+        // V(4) + H(10) + V(4) = 18, midpoint at 9 -> 4 into first, 5 into H -> (10, 4)
+        let segments = vec![
+            Segment::Vertical { x: 5, y_start: 0, y_end: 4 },
+            Segment::Horizontal { y: 4, x_start: 5, x_end: 15 },
+            Segment::Vertical { x: 15, y_start: 4, y_end: 8 },
+        ];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 10, y: 4 }));
+    }
+
+    #[test]
+    fn calc_label_zero_length_path_returns_start() {
+        let segments = vec![Segment::Vertical { x: 5, y_start: 10, y_end: 10 }];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 10 }));
+    }
+
+    #[test]
+    fn calc_label_odd_total_length_rounds_down() {
+        // Length 7, midpoint at offset 3
+        let segments = vec![Segment::Vertical { x: 5, y_start: 0, y_end: 7 }];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 3 }));
+    }
+
+    #[test]
+    fn calc_label_backward_edge_typical_shape() {
+        // H(5) + V(12) + H(5) = 22, midpoint at 11 -> 5 into H, 6 into V -> (25, 9)
+        let segments = vec![
+            Segment::Horizontal { y: 3, x_start: 20, x_end: 25 },
+            Segment::Vertical { x: 25, y_start: 3, y_end: 15 },
+            Segment::Horizontal { y: 15, x_start: 25, x_end: 20 },
+        ];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 25, y: 9 }));
     }
 }
