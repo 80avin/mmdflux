@@ -1389,6 +1389,33 @@ fn transform_waypoints_direct(
     converted
 }
 
+/// Transform dagre label positions to ASCII draw coordinates using uniform
+/// scale factors, matching the same transformation applied to nodes and waypoints.
+fn transform_label_positions_direct(
+    label_positions: &HashMap<usize, Point>,
+    edges: &[Edge],
+    dagre_min_x: f64,
+    dagre_min_y: f64,
+    scale_x: f64,
+    scale_y: f64,
+    padding: usize,
+    left_label_margin: usize,
+) -> HashMap<(String, String), (usize, usize)> {
+    let mut converted = HashMap::new();
+
+    for (edge_idx, pos) in label_positions {
+        if let Some(edge) = edges.get(*edge_idx) {
+            let key = (edge.from.clone(), edge.to.clone());
+            let x =
+                ((pos.x - dagre_min_x) * scale_x).round() as usize + padding + left_label_margin;
+            let y = ((pos.y - dagre_min_y) * scale_y).round() as usize + padding;
+            converted.insert(key, (x, y));
+        }
+    }
+
+    converted
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2147,5 +2174,82 @@ mod tests {
             20,
         );
         assert!(result.is_empty());
+    }
+
+    // =========================================================================
+    // Label Transform Tests (Phase 5)
+    // =========================================================================
+
+    #[test]
+    fn label_transform_basic_scaling() {
+        use crate::graph::{Arrow, Stroke};
+        let edges = vec![Edge {
+            from: "A".into(),
+            to: "B".into(),
+            label: Some("yes".into()),
+            stroke: Stroke::Solid,
+            arrow: Arrow::Normal,
+        }];
+
+        let mut labels = HashMap::new();
+        labels.insert(0usize, Point { x: 150.0, y: 100.0 });
+
+        let result =
+            transform_label_positions_direct(&labels, &edges, 50.0, 50.0, 0.22, 0.11, 1, 0);
+
+        let key = ("A".to_string(), "B".to_string());
+        assert!(result.contains_key(&key));
+        assert_eq!(result[&key], (23, 7));
+    }
+
+    #[test]
+    fn label_transform_with_left_margin() {
+        use crate::graph::{Arrow, Stroke};
+        let edges = vec![Edge {
+            from: "A".into(),
+            to: "B".into(),
+            label: Some("yes".into()),
+            stroke: Stroke::Solid,
+            arrow: Arrow::Normal,
+        }];
+
+        let mut labels = HashMap::new();
+        labels.insert(0usize, Point { x: 150.0, y: 100.0 });
+
+        let result =
+            transform_label_positions_direct(&labels, &edges, 50.0, 50.0, 0.22, 0.11, 1, 3);
+
+        let key = ("A".to_string(), "B".to_string());
+        assert_eq!(result[&key].0, 26);
+    }
+
+    #[test]
+    fn label_transform_empty_input() {
+        let edges: Vec<Edge> = vec![];
+        let labels: HashMap<usize, Point> = HashMap::new();
+        let result = transform_label_positions_direct(&labels, &edges, 0.0, 0.0, 0.2, 0.1, 1, 0);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn label_transform_skips_missing_edge() {
+        use crate::graph::{Arrow, Stroke};
+        let edges = vec![Edge {
+            from: "A".into(),
+            to: "B".into(),
+            label: Some("x".into()),
+            stroke: Stroke::Solid,
+            arrow: Arrow::Normal,
+        }];
+
+        let mut labels = HashMap::new();
+        labels.insert(5usize, Point { x: 100.0, y: 100.0 });
+
+        let result = transform_label_positions_direct(&labels, &edges, 0.0, 0.0, 0.2, 0.1, 1, 0);
+
+        assert!(
+            result.is_empty(),
+            "out-of-bounds edge index should be skipped"
+        );
     }
 }
