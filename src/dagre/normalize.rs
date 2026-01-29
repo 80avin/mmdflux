@@ -170,13 +170,6 @@ fn generate_dummy_id() -> NodeId {
     NodeId::from(format!("_d{}", id))
 }
 
-/// Reset the dummy counter (for testing).
-#[cfg(test)]
-#[allow(dead_code)]
-fn reset_dummy_counter() {
-    DUMMY_COUNTER.store(0, std::sync::atomic::Ordering::Relaxed);
-}
-
 /// Normalize long edges by inserting dummy nodes.
 ///
 /// This function processes each edge and, if it spans more than one rank,
@@ -366,8 +359,12 @@ pub(crate) fn denormalize(graph: &LayoutGraph) -> HashMap<usize, Vec<WaypointWit
 /// Get the label position for an edge if it has a label dummy.
 ///
 /// # Returns
-/// The (x, y) center position of the label, or None if the edge has no label.
-pub(crate) fn get_label_position(graph: &LayoutGraph, edge_index: usize) -> Option<Point> {
+/// The center position of the label with rank information, or None if the edge has no label.
+/// The rank is needed so the render layer can snap the primary axis to `layer_starts`.
+pub(crate) fn get_label_position(
+    graph: &LayoutGraph,
+    edge_index: usize,
+) -> Option<WaypointWithRank> {
     for chain in &graph.dummy_chains {
         if chain.edge_index == edge_index
             && let Some(label_idx) = chain.label_dummy_index
@@ -376,9 +373,13 @@ pub(crate) fn get_label_position(graph: &LayoutGraph, edge_index: usize) -> Opti
             if let Some(&idx) = graph.node_index.get(dummy_id) {
                 let pos = graph.positions[idx];
                 let dims = graph.dimensions[idx];
-                return Some(Point {
-                    x: pos.x + dims.0 / 2.0,
-                    y: pos.y + dims.1 / 2.0,
+                let rank = graph.ranks[idx];
+                return Some(WaypointWithRank {
+                    point: Point {
+                        x: pos.x + dims.0 / 2.0,
+                        y: pos.y + dims.1 / 2.0,
+                    },
+                    rank,
                 });
             }
         }
@@ -406,7 +407,7 @@ mod tests {
 
     #[test]
     fn test_normalize_short_edge() {
-        reset_dummy_counter();
+
         // A -> B (spans 1 rank, should not be normalized)
         let mut lg = create_test_graph(&["A", "B"], &[("A", "B")]);
         acyclic::run(&mut lg);
@@ -425,7 +426,7 @@ mod tests {
 
     #[test]
     fn test_normalize_long_edge() {
-        reset_dummy_counter();
+
         // A -> B -> C, but also A -> C (spans 2 ranks)
         let mut lg = create_test_graph(&["A", "B", "C"], &[("A", "B"), ("B", "C"), ("A", "C")]);
         acyclic::run(&mut lg);
@@ -458,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_normalize_with_label() {
-        reset_dummy_counter();
+
         // A -> B -> C -> D, and A -> D (spans 3 ranks, needs 2 dummies)
         let mut lg = create_test_graph(
             &["A", "B", "C", "D"],
@@ -492,7 +493,7 @@ mod tests {
 
     #[test]
     fn test_denormalize() {
-        reset_dummy_counter();
+
         // A -> B -> C, and A -> C
         let mut lg = create_test_graph(&["A", "B", "C"], &[("A", "B"), ("B", "C"), ("A", "C")]);
         acyclic::run(&mut lg);
@@ -607,7 +608,7 @@ mod tests {
 
     #[test]
     fn test_short_edge_with_label_gets_dummy() {
-        reset_dummy_counter();
+
         // A -> B, 1-rank span, but with label and minlen=2
         // After ranking: A=0, B=2 (due to minlen=2)
         // After normalization: one dummy at rank 1 with EdgeLabel type
@@ -651,7 +652,7 @@ mod tests {
 
     #[test]
     fn test_long_edge_with_label_gets_midpoint_dummy() {
-        reset_dummy_counter();
+
         // A -> B -> C -> D, and A -> D with label (originally spans 3 ranks)
         // With minlen=2, A->D spans 4 ranks (A=0, D=4)
         let mut lg = create_test_graph(

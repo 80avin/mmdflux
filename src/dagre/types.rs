@@ -138,9 +138,10 @@ pub struct LayoutResult {
     pub edge_waypoints: HashMap<usize, Vec<WaypointWithRank>>,
 
     /// Pre-computed label positions for edges with labels.
-    /// Key: original edge index, Value: label center position.
+    /// Key: original edge index, Value: label center position with rank.
     /// Only populated for edges that have labels.
-    pub label_positions: HashMap<usize, Point>,
+    /// The rank information is needed to snap the primary axis to `layer_starts`.
+    pub label_positions: HashMap<usize, WaypointWithRank>,
 }
 
 /// Layout information for a single edge.

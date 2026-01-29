@@ -442,12 +442,12 @@ mod tests {
         let a_rect = result.nodes.get(&"A".into()).unwrap();
         // Label should be in the general vicinity of the edge path
         assert!(
-            label_pos.x >= 0.0,
+            label_pos.point.x >= 0.0,
             "Label x should be non-negative, got {}",
-            label_pos.x
+            label_pos.point.x
         );
         assert!(
-            label_pos.y > a_rect.y,
+            label_pos.point.y > a_rect.y,
             "Label should be below A in TD layout"
         );
     }
@@ -472,9 +472,9 @@ mod tests {
         let a_y = result.nodes.get(&"A".into()).unwrap().y;
         let b_y = result.nodes.get(&"B".into()).unwrap().y;
         assert!(
-            label_pos.y > a_y && label_pos.y < b_y,
+            label_pos.point.y > a_y && label_pos.point.y < b_y,
             "Label y={} should be between A y={} and B y={}",
-            label_pos.y,
+            label_pos.point.y,
             a_y,
             b_y
         );
@@ -530,7 +530,7 @@ mod tests {
         let a_y = result.nodes.get(&"A".into()).unwrap().y;
         let c_y = result.nodes.get(&"C".into()).unwrap().y;
         assert!(
-            label_pos.y > a_y && label_pos.y < c_y,
+            label_pos.point.y > a_y && label_pos.point.y < c_y,
             "Label should be between A and C"
         );
     }

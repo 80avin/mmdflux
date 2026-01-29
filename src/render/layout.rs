@@ -7,7 +7,9 @@ use std::collections::HashMap;
 
 use super::shape::{NodeBounds, node_dimensions};
 use crate::dagre::normalize::WaypointWithRank;
-use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Point};
+use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig};
+#[cfg(test)]
+use crate::dagre::Point;
 use crate::graph::{Diagram, Direction, Edge, Shape};
 
 /// Grid position of a node (layer/column in abstract grid coordinates).
@@ -421,8 +423,15 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         height,
     );
 
-    let edge_label_positions_converted =
-        transform_label_positions_direct(&result.label_positions, &diagram.edges, &ctx);
+    let edge_label_positions_converted = transform_label_positions_direct(
+        &result.label_positions,
+        &diagram.edges,
+        &ctx,
+        &node_bounds,
+        is_vertical,
+        width,
+        height,
+    );
 
     // --- Phase I: Nudge waypoints that collide with nodes ---
     let mut edge_waypoints_final = edge_waypoints_converted;
@@ -731,19 +740,58 @@ fn transform_waypoints_direct(
     converted
 }
 
-/// Transform dagre label positions to ASCII draw coordinates using uniform
-/// scale factors, matching the same transformation applied to nodes and waypoints.
+/// Transform dagre label positions to ASCII draw coordinates.
+///
+/// The primary axis (Y for TD/BT, X for LR/RL) is placed at the midpoint
+/// between the source and target node boundaries, ensuring the label lands
+/// in the gap between nodes rather than on a node row. The cross axis uses
+/// uniform scaling from dagre coordinates.
 fn transform_label_positions_direct(
-    label_positions: &HashMap<usize, Point>,
+    label_positions: &HashMap<usize, WaypointWithRank>,
     edges: &[Edge],
     ctx: &TransformContext,
+    node_bounds: &HashMap<String, NodeBounds>,
+    is_vertical: bool,
+    canvas_width: usize,
+    canvas_height: usize,
 ) -> HashMap<(String, String), (usize, usize)> {
     let mut converted = HashMap::new();
 
-    for (edge_idx, pos) in label_positions {
+    for (edge_idx, wp) in label_positions {
         if let Some(edge) = edges.get(*edge_idx) {
             let key = (edge.from.clone(), edge.to.clone());
-            converted.insert(key, ctx.to_ascii(pos.x, pos.y));
+            let (scaled_x, scaled_y) = ctx.to_ascii(wp.point.x, wp.point.y);
+
+            // Compute primary axis as midpoint between source bottom and target top.
+            let pos = match (node_bounds.get(&edge.from), node_bounds.get(&edge.to)) {
+                (Some(src), Some(tgt)) => {
+                    if is_vertical {
+                        let src_bottom = src.y + src.height;
+                        let tgt_top = tgt.y;
+                        let mid_y = (src_bottom + tgt_top) / 2;
+                        (
+                            scaled_x.min(canvas_width.saturating_sub(1)),
+                            mid_y.min(canvas_height.saturating_sub(1)),
+                        )
+                    } else {
+                        let src_right = src.x + src.width;
+                        let tgt_left = tgt.x;
+                        let mid_x = (src_right + tgt_left) / 2;
+                        (
+                            mid_x.min(canvas_width.saturating_sub(1)),
+                            scaled_y.min(canvas_height.saturating_sub(1)),
+                        )
+                    }
+                }
+                _ => {
+                    // Fallback to uniform scaling if node bounds missing
+                    (
+                        scaled_x.min(canvas_width.saturating_sub(1)),
+                        scaled_y.min(canvas_height.saturating_sub(1)),
+                    )
+                }
+            };
+            converted.insert(key, pos);
         }
     }
 
@@ -1083,7 +1131,13 @@ mod tests {
         }];
 
         let mut labels = HashMap::new();
-        labels.insert(0usize, Point { x: 150.0, y: 100.0 });
+        labels.insert(
+            0usize,
+            WaypointWithRank {
+                point: Point { x: 150.0, y: 100.0 },
+                rank: 1,
+            },
+        );
 
         let ctx = TransformContext {
             dagre_min_x: 50.0,
@@ -1095,11 +1149,38 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let result = transform_label_positions_direct(&labels, &edges, &ctx);
+        let mut bounds = HashMap::new();
+        bounds.insert(
+            "A".to_string(),
+            NodeBounds {
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 3,
+                dagre_center_x: None,
+                dagre_center_y: None,
+            },
+        );
+        bounds.insert(
+            "B".to_string(),
+            NodeBounds {
+                x: 0,
+                y: 13,
+                width: 10,
+                height: 3,
+                dagre_center_x: None,
+                dagre_center_y: None,
+            },
+        );
+        let result = transform_label_positions_direct(
+            &labels, &edges, &ctx, &bounds, true, 50, 20,
+        );
 
         let key = ("A".to_string(), "B".to_string());
         assert!(result.contains_key(&key));
-        assert_eq!(result[&key], (23, 7));
+        // x uses uniform scale: (150-50)*0.22 + 1 = 23
+        // y = midpoint of A bottom (0+3=3) and B top (13) = (3+13)/2 = 8
+        assert_eq!(result[&key], (23, 8));
     }
 
     #[test]
@@ -1114,7 +1195,13 @@ mod tests {
         }];
 
         let mut labels = HashMap::new();
-        labels.insert(0usize, Point { x: 150.0, y: 100.0 });
+        labels.insert(
+            0usize,
+            WaypointWithRank {
+                point: Point { x: 150.0, y: 100.0 },
+                rank: 1,
+            },
+        );
 
         let ctx = TransformContext {
             dagre_min_x: 50.0,
@@ -1126,16 +1213,42 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let result = transform_label_positions_direct(&labels, &edges, &ctx);
+        let mut bounds = HashMap::new();
+        bounds.insert(
+            "A".to_string(),
+            NodeBounds {
+                x: 0,
+                y: 0,
+                width: 10,
+                height: 3,
+                dagre_center_x: None,
+                dagre_center_y: None,
+            },
+        );
+        bounds.insert(
+            "B".to_string(),
+            NodeBounds {
+                x: 0,
+                y: 13,
+                width: 10,
+                height: 3,
+                dagre_center_x: None,
+                dagre_center_y: None,
+            },
+        );
+        let result = transform_label_positions_direct(
+            &labels, &edges, &ctx, &bounds, true, 50, 20,
+        );
 
         let key = ("A".to_string(), "B".to_string());
+        // x = 23 + 3 (left_label_margin) = 26
         assert_eq!(result[&key].0, 26);
     }
 
     #[test]
     fn label_transform_empty_input() {
         let edges: Vec<Edge> = vec![];
-        let labels: HashMap<usize, Point> = HashMap::new();
+        let labels: HashMap<usize, WaypointWithRank> = HashMap::new();
         let ctx = TransformContext {
             dagre_min_x: 0.0,
             dagre_min_y: 0.0,
@@ -1146,7 +1259,10 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let result = transform_label_positions_direct(&labels, &edges, &ctx);
+        let bounds = HashMap::new();
+        let result = transform_label_positions_direct(
+            &labels, &edges, &ctx, &bounds, true, 50, 20,
+        );
         assert!(result.is_empty());
     }
 
@@ -1192,7 +1308,13 @@ mod tests {
         }];
 
         let mut labels = HashMap::new();
-        labels.insert(5usize, Point { x: 100.0, y: 100.0 });
+        labels.insert(
+            5usize,
+            WaypointWithRank {
+                point: Point { x: 100.0, y: 100.0 },
+                rank: 0,
+            },
+        );
 
         let ctx = TransformContext {
             dagre_min_x: 0.0,
@@ -1204,7 +1326,10 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let result = transform_label_positions_direct(&labels, &edges, &ctx);
+        let bounds = HashMap::new();
+        let result = transform_label_positions_direct(
+            &labels, &edges, &ctx, &bounds, true, 50, 20,
+        );
 
         assert!(
             result.is_empty(),
