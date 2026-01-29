@@ -1106,6 +1106,20 @@ mod label_edge_cases {
     }
 
     #[test]
+    fn diamond_text_not_corrupted_by_arrows() {
+        let input = load_fixture("labeled_edges.mmd");
+        let flowchart = parse_flowchart(&input).expect("Failed to parse");
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &Default::default());
+
+        // The diamond should contain "Valid?" text, not corrupted by arrow characters
+        assert!(
+            output.contains("Valid?"),
+            "Diamond text 'Valid?' should be intact in output:\n{output}"
+        );
+    }
+
+    #[test]
     fn simple_cycle_compact_backward_routing() {
         let input = load_fixture("simple_cycle.mmd");
         let flowchart = parse_flowchart(&input).expect("Failed to parse");

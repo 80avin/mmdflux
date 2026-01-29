@@ -571,6 +571,13 @@ fn draw_arrow_with_entry(
     entry_direction: AttachDirection,
     charset: &CharSet,
 ) {
+    // Protect node content from being overwritten by arrows
+    if let Some(cell) = canvas.get(point.x, point.y) {
+        if cell.is_node {
+            return;
+        }
+    }
+
     // Arrow points in the direction the edge enters FROM
     // Entry from Top means edge is going down, so arrow points down
     // Entry from Right means edge is going left, so arrow points left
@@ -1155,6 +1162,42 @@ mod tests {
         assert!(
             chosen.is_none(),
             "Should return None when no horizontal segments exist"
+        );
+    }
+
+    #[test]
+    fn draw_arrow_does_not_overwrite_node_content() {
+        let charset = CharSet::unicode();
+        let mut canvas = Canvas::new(10, 10);
+
+        // Mark a cell as node content
+        canvas.set(5, 5, 'X');
+        canvas.mark_as_node(5, 5);
+
+        // Try to draw an arrow at the same position
+        let point = Point { x: 5, y: 5 };
+        draw_arrow_with_entry(&mut canvas, &point, AttachDirection::Top, &charset);
+
+        // The cell should still contain 'X', not an arrow
+        let cell = canvas.get(5, 5).unwrap();
+        assert_eq!(cell.ch, 'X', "Arrow should not overwrite node content");
+        assert!(cell.is_node, "Cell should still be marked as node");
+    }
+
+    #[test]
+    fn draw_arrow_writes_on_non_node_cell() {
+        let charset = CharSet::unicode();
+        let mut canvas = Canvas::new(10, 10);
+
+        // Draw an arrow on an empty cell (no node)
+        let point = Point { x: 5, y: 5 };
+        draw_arrow_with_entry(&mut canvas, &point, AttachDirection::Top, &charset);
+
+        // Should succeed — arrow should be drawn
+        let cell = canvas.get(5, 5).unwrap();
+        assert_eq!(
+            cell.ch, charset.arrow_down,
+            "Arrow should be drawn on empty cell"
         );
     }
 }
