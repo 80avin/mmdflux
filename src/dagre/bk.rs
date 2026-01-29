@@ -101,23 +101,11 @@ impl BlockAlignment {
 pub struct CompactionResult {
     /// X coordinate for each node.
     pub x: HashMap<NodeIndex, f64>,
-
-    /// Sink (class representative) for each block root.
-    /// Used during compaction to track which "class" a block belongs to.
-    pub sink: HashMap<NodeIndex, NodeIndex>,
-
-    /// Shift amount for each class (keyed by sink).
-    /// Applied during the final coordinate assignment phase.
-    pub shift: HashMap<NodeIndex, f64>,
 }
 
 impl CompactionResult {
     pub fn new() -> Self {
-        Self {
-            x: HashMap::new(),
-            sink: HashMap::new(),
-            shift: HashMap::new(),
-        }
+        Self { x: HashMap::new() }
     }
 }
 
@@ -644,38 +632,48 @@ pub fn horizontal_compaction(
 ) -> CompactionResult {
     let mut result = CompactionResult::new();
     let layers = get_layers(graph);
-
-    // Initialize sink and shift for each node
     let num_nodes = graph.node_ids.len();
-    for node in 0..num_nodes {
-        result.sink.insert(node, node);
-        result.shift.insert(node, f64::INFINITY);
+
+    // Build block graph with separation constraints
+    let block_graph = build_block_graph(graph, alignment, &layers, config);
+
+    // Two-pass compaction on the block graph
+    let mut xs: HashMap<NodeIndex, f64> = HashMap::new();
+
+    // Pass 1: Assign smallest valid coordinates (topological order from sources)
+    // Each block root is placed at the max of (predecessor_x + edge_weight)
+    let topo = block_graph.topological_order();
+    for &root in &topo {
+        let x = block_graph
+            .predecessors(root)
+            .iter()
+            .map(|&(pred, weight)| xs.get(&pred).copied().unwrap_or(0.0) + weight)
+            .fold(0.0_f64, f64::max);
+        xs.insert(root, x);
     }
 
-    // Get all unique block roots
-    let roots = alignment.get_all_roots();
-
-    // Process roots in order: first by layer, then by position
-    let mut sorted_roots = roots.clone();
-    sorted_roots.sort_by(|&a, &b| {
-        let layer_a = get_layer(graph, a);
-        let layer_b = get_layer(graph, b);
-        layer_a
-            .cmp(&layer_b)
-            .then_with(|| get_position(graph, a).cmp(&get_position(graph, b)))
-    });
-
-    // Place each block
-    for &root in &sorted_roots {
-        if !result.x.contains_key(&root) {
-            place_block(graph, alignment, &mut result, root, &layers, config);
+    // Pass 2: Assign greatest valid coordinates (reverse topological order)
+    // Pull blocks rightward to consume unused slack
+    for &root in topo.iter().rev() {
+        let successors = block_graph.successors(root);
+        if !successors.is_empty() {
+            let pull_right = successors
+                .iter()
+                .map(|&(succ, weight)| xs[&succ] - weight)
+                .fold(f64::INFINITY, f64::min);
+            if pull_right.is_finite() {
+                let current = xs[&root];
+                if pull_right > current {
+                    xs.insert(root, pull_right);
+                }
+            }
         }
     }
 
-    // Copy x-coordinate from root to all nodes in each block
+    // Propagate: all nodes in block get root's coordinate
     for node in 0..num_nodes {
         let root = alignment.get_root(node);
-        if let Some(&root_x) = result.x.get(&root) {
+        if let Some(&root_x) = xs.get(&root) {
             result.x.insert(node, root_x);
         }
     }
@@ -844,75 +842,6 @@ fn separation_for(graph: &LayoutGraph, node: NodeIndex, config: &BKConfig) -> f6
         config.edge_sep
     } else {
         config.node_sep
-    }
-}
-
-/// Place a single block, respecting separation constraints with left neighbors.
-fn place_block(
-    graph: &LayoutGraph,
-    alignment: &BlockAlignment,
-    result: &mut CompactionResult,
-    root: NodeIndex,
-    layers: &[Vec<NodeIndex>],
-    config: &BKConfig,
-) {
-    if result.x.contains_key(&root) {
-        return; // Already placed
-    }
-
-    // Initialize x at 0
-    result.x.insert(root, 0.0);
-
-    // Get all nodes in this block
-    let block_nodes = alignment.get_block_nodes(root);
-
-    // For each node in the block, check its left neighbor and enforce separation
-    for &node in &block_nodes {
-        let layer = get_layer(graph, node);
-        let pos = get_position(graph, node);
-
-        // Get nodes in this layer
-        if layer >= layers.len() {
-            continue;
-        }
-        let layer_nodes = &layers[layer];
-
-        // Find left neighbor (node with position pos-1 in the same layer)
-        if pos > 0 {
-            // Find the node at position pos-1
-            let left_neighbor = layer_nodes
-                .iter()
-                .find(|&&n| get_position(graph, n) == pos - 1);
-
-            if let Some(&left) = left_neighbor {
-                let left_root = alignment.get_root(left);
-
-                // Don't process if left neighbor is in the same block
-                if left_root != root {
-                    // Place left neighbor's block first (recursively)
-                    place_block(graph, alignment, result, left_root, layers, config);
-
-                    // Compute required separation
-                    // Distance from center of left node to center of this node
-                    let left_width = get_width(graph, left, config.direction);
-                    let node_width = get_width(graph, node, config.direction);
-                    let left_sep = separation_for(graph, left, config);
-                    let node_sep = separation_for(graph, node, config);
-                    let sep = (left_sep + node_sep) / 2.0;
-                    let min_separation = (left_width + node_width) / 2.0 + sep;
-
-                    // Update our position if needed
-                    if let Some(&left_x) = result.x.get(&left_root) {
-                        let min_x = left_x + min_separation;
-                        let current_x = result.x.get(&root).copied().unwrap_or(0.0);
-
-                        if min_x > current_x {
-                            result.x.insert(root, min_x);
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -1101,7 +1030,7 @@ mod tests {
     use super::*;
     use crate::dagre::graph::DiGraph;
     use crate::dagre::normalize::{DummyNode, DummyType, LabelPos};
-    use crate::dagre::rank;
+    use crate::dagre::{order, rank};
 
     /// Test helper: check if two nodes are in the same block
     fn same_block(alignment: &BlockAlignment, v: NodeIndex, w: NodeIndex) -> bool {
@@ -1188,8 +1117,6 @@ mod tests {
     fn test_compaction_result_default() {
         let result = CompactionResult::default();
         assert!(result.x.is_empty());
-        assert!(result.sink.is_empty());
-        assert!(result.shift.is_empty());
     }
 
     #[test]
@@ -2186,6 +2113,95 @@ mod tests {
         let pos_2 = topo.iter().position(|&n| n == 2).unwrap();
         assert!(pos_0 < pos_1);
         assert!(pos_0 < pos_2);
+    }
+
+    // =========================================================================
+    // Two-Pass Compaction Tests (Task 2.1)
+    // =========================================================================
+
+    #[test]
+    fn test_compaction_two_pass_separation_constraints() {
+        // Build a graph with skip edges to exercise the two-pass algorithm
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("Start", (50.0, 20.0));
+        graph.add_node("Step1", (50.0, 20.0));
+        graph.add_node("Step2", (50.0, 20.0));
+        graph.add_node("End", (50.0, 20.0));
+        graph.add_edge("Start", "Step1");
+        graph.add_edge("Start", "Step2");
+        graph.add_edge("Start", "End");
+        graph.add_edge("Step1", "Step2");
+        graph.add_edge("Step2", "End");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        order::run(&mut lg);
+
+        let config = BKConfig::default();
+        let conflicts = find_all_conflicts(&lg);
+        let alignment = vertical_alignment(&lg, &conflicts, AlignmentDirection::UL);
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        // Verify all separation constraints are met
+        let layers = get_layers(&lg);
+        for layer in &layers {
+            for i in 1..layer.len() {
+                let left = layer[i - 1];
+                let right = layer[i];
+                let left_x = result.x[&left];
+                let right_x = result.x[&right];
+                let min_sep = compute_sep(&lg, left, right, &config);
+                assert!(
+                    right_x - left_x >= min_sep - 0.001,
+                    "Separation constraint violated: {} - {} = {} < {}",
+                    right_x,
+                    left_x,
+                    right_x - left_x,
+                    min_sep
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_compaction_chain_no_regression() {
+        let lg = make_chain_graph();
+        let config = BKConfig::default();
+        let conflicts = find_all_conflicts(&lg);
+        let alignment = vertical_alignment(&lg, &conflicts, AlignmentDirection::UL);
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+
+        // All in same block → same x coordinate
+        assert_eq!(result.x[&a], result.x[&b]);
+        assert_eq!(result.x[&b], result.x[&c]);
+    }
+
+    #[test]
+    fn test_compaction_diamond_separation() {
+        let lg = make_diamond_graph();
+        let config = BKConfig::default();
+        let conflicts = find_all_conflicts(&lg);
+        let alignment = vertical_alignment(&lg, &conflicts, AlignmentDirection::UL);
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+
+        // B and C must be separated by at least compute_sep
+        let sep = compute_sep(&lg, b, c, &config);
+        assert!(
+            result.x[&c] - result.x[&b] >= sep - 0.001,
+            "Diamond separation: {} - {} = {} < {}",
+            result.x[&c],
+            result.x[&b],
+            result.x[&c] - result.x[&b],
+            sep
+        );
     }
 
     // =========================================================================
