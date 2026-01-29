@@ -1244,6 +1244,46 @@ fn map_cross_axis(
     }
 }
 
+/// Compute per-axis ASCII scale factors for translating dagre float coordinates
+/// to character grid positions.
+///
+/// Returns `(scale_x, scale_y)` where each factor maps dagre coordinate deltas
+/// to ASCII character deltas along that axis.
+///
+/// For vertical layouts (TD/BT):
+///   - scale_y (primary) = (max_h + v_spacing) / (max_h + rank_sep)
+///   - scale_x (cross)   = (avg_w + h_spacing) / (avg_w + node_sep)
+///
+/// For horizontal layouts (LR/RL):
+///   - scale_x (primary) = (max_w + h_spacing) / (max_w + rank_sep)
+///   - scale_y (cross)   = (avg_h + v_spacing) / (avg_h + node_sep)
+fn compute_ascii_scale_factors(
+    node_dims: &HashMap<String, (usize, usize)>,
+    rank_sep: f64,
+    node_sep: f64,
+    v_spacing: usize,
+    h_spacing: usize,
+    is_vertical: bool,
+) -> (f64, f64) {
+    let (total_w, total_h, max_w, max_h, count) = node_dims.values().fold(
+        (0usize, 0usize, 0usize, 0usize, 0usize),
+        |(tw, th, mw, mh, c), &(w, h)| (tw + w, th + h, mw.max(w), mh.max(h), c + 1),
+    );
+    let count_f = count.max(1) as f64;
+    let avg_w = total_w as f64 / count_f;
+    let avg_h = total_h as f64 / count_f;
+
+    if is_vertical {
+        let scale_primary = (max_h as f64 + v_spacing as f64) / (max_h as f64 + rank_sep);
+        let scale_cross = (avg_w + h_spacing as f64) / (avg_w + node_sep);
+        (scale_cross, scale_primary)
+    } else {
+        let scale_primary = (max_w as f64 + h_spacing as f64) / (max_w as f64 + rank_sep);
+        let scale_cross = (avg_h + v_spacing as f64) / (avg_h + node_sep);
+        (scale_primary, scale_cross)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1680,5 +1720,78 @@ mod tests {
             targets_center,
             offset
         );
+    }
+
+    // =========================================================================
+    // Scale Factor Tests (Phase 2)
+    // =========================================================================
+
+    #[test]
+    fn scale_factors_td_typical() {
+        // Typical TD: 3 nodes with widths 9,7,11 and heights all 3
+        // avg_w = 9.0, max_h = 3
+        // rank_sep = 50.0, node_sep = 50.0, v_spacing = 3, h_spacing = 4
+        // scale_y (primary) = (3 + 3) / (3 + 50) = 6/53
+        // scale_x (cross)   = (9 + 4) / (9 + 50) = 13/59
+        let mut dims = HashMap::new();
+        dims.insert("A".into(), (9, 3));
+        dims.insert("B".into(), (7, 3));
+        dims.insert("C".into(), (11, 3));
+
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true);
+
+        let expected_sy = 6.0 / 53.0;
+        let expected_sx = 13.0 / 59.0;
+        assert!(
+            (sx - expected_sx).abs() < 1e-6,
+            "sx: got {sx}, expected {expected_sx}"
+        );
+        assert!(
+            (sy - expected_sy).abs() < 1e-6,
+            "sy: got {sy}, expected {expected_sy}"
+        );
+    }
+
+    #[test]
+    fn scale_factors_lr_direction_aware() {
+        // LR: nodes widths 9,9, heights 3,3 → avg_h = 3, max_w = 9
+        // scale_x (primary) = (9 + 4) / (9 + 50) = 13/59
+        // scale_y (cross)   = (3 + 3) / (3 + 6) = 6/9
+        let mut dims = HashMap::new();
+        dims.insert("A".into(), (9, 3));
+        dims.insert("B".into(), (9, 3));
+
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 6.0, 3, 4, false);
+
+        let expected_sx = 13.0 / 59.0;
+        let expected_sy = 6.0 / 9.0;
+        assert!(
+            (sx - expected_sx).abs() < 1e-6,
+            "sx: got {sx}, expected {expected_sx}"
+        );
+        assert!(
+            (sy - expected_sy).abs() < 1e-6,
+            "sy: got {sy}, expected {expected_sy}"
+        );
+    }
+
+    #[test]
+    fn scale_factors_single_node() {
+        let mut dims = HashMap::new();
+        dims.insert("X".into(), (5, 3));
+
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true);
+        assert!(sx > 0.0, "sx should be positive, got {sx}");
+        assert!(sy > 0.0, "sy should be positive, got {sy}");
+        assert!(sx.is_finite());
+        assert!(sy.is_finite());
+    }
+
+    #[test]
+    fn scale_factors_empty_nodes() {
+        let dims: HashMap<String, (usize, usize)> = HashMap::new();
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true);
+        assert!(sx.is_finite());
+        assert!(sy.is_finite());
     }
 }
