@@ -1,7 +1,4 @@
-#[allow(deprecated)]
-use super::super::layout::{
-    LayoutConfig, compute_layout, compute_layout_dagre, compute_layout_direct,
-};
+use super::super::layout::{LayoutConfig, compute_layout_direct};
 use super::*;
 use crate::graph::{Diagram, Node};
 
@@ -17,7 +14,7 @@ fn simple_td_diagram() -> Diagram {
 fn test_route_edge_straight_vertical() {
     let diagram = simple_td_diagram();
     let config = LayoutConfig::default();
-    let layout = compute_layout(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     let edge = &diagram.edges[0];
     let routed = route_edge(edge, &layout, Direction::TopDown, None, None).unwrap();
@@ -53,7 +50,7 @@ fn test_route_edge_with_bend() {
     diagram.add_edge(Edge::new("A", "C"));
 
     let config = LayoutConfig::default();
-    let layout = compute_layout(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     // Route edge from A to C (which will be offset horizontally)
     let edge = &diagram.edges[1];
@@ -69,7 +66,7 @@ fn test_route_edge_with_bend() {
 fn test_route_all_edges() {
     let diagram = simple_td_diagram();
     let config = LayoutConfig::default();
-    let layout = compute_layout(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     let routed = route_all_edges(&diagram.edges, &layout, Direction::TopDown);
 
@@ -422,7 +419,7 @@ fn test_route_backward_edge_td() {
     diagram.add_edge(Edge::new("B", "A")); // Backward
 
     let config = LayoutConfig::default();
-    let layout = compute_layout(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     // Route the backward edge
     let backward_edge = &diagram.edges[1];
@@ -446,7 +443,7 @@ fn test_route_backward_edge_lr() {
     diagram.add_edge(Edge::new("B", "A")); // Backward
 
     let config = LayoutConfig::default();
-    let layout = compute_layout(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     // Route the backward edge
     let backward_edge = &diagram.edges[1];
@@ -465,7 +462,7 @@ fn test_forward_edge_entry_direction_td() {
     // Forward edges should have standard entry direction
     let diagram = simple_td_diagram();
     let config = LayoutConfig::default();
-    let layout = compute_layout(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     let edge = &diagram.edges[0];
     let routed = route_edge(edge, &layout, Direction::TopDown, None, None).unwrap();
@@ -482,7 +479,7 @@ fn test_forward_edge_entry_direction_lr() {
     diagram.add_edge(Edge::new("A", "B"));
 
     let config = LayoutConfig::default();
-    let layout = compute_layout(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     let edge = &diagram.edges[0];
     let routed = route_edge(edge, &layout, Direction::LeftRight, None, None).unwrap();
@@ -504,7 +501,7 @@ fn test_multiple_backward_edges_route_successfully() {
     diagram.add_edge(Edge::new("C", "B")); // Backward to B
 
     let config = LayoutConfig::default();
-    let layout = compute_layout(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     // Route both backward edges — they should both produce valid paths
     let edge_c_to_a = &diagram.edges[2];
@@ -534,7 +531,7 @@ fn test_backward_edge_with_waypoints_td() {
     diagram.add_edge(Edge::new("C", "A")); // Backward spanning 2 ranks
 
     let config = LayoutConfig::default();
-    let layout = compute_layout_dagre(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     let backward_edge = &diagram.edges[2];
     let routed = route_edge(backward_edge, &layout, Direction::TopDown, None, None).unwrap();
@@ -556,7 +553,7 @@ fn test_short_backward_edge_no_waypoints() {
     diagram.add_edge(Edge::new("B", "A")); // Backward, 1 rank
 
     let config = LayoutConfig::default();
-    let layout = compute_layout_dagre(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     let backward_edge = &diagram.edges[1];
     let routed = route_edge(backward_edge, &layout, Direction::TopDown, None, None);
@@ -577,7 +574,7 @@ fn test_backward_edge_lr_with_waypoints() {
     diagram.add_edge(Edge::new("C", "A")); // Backward, spans 2 ranks
 
     let config = LayoutConfig::default();
-    let layout = compute_layout_dagre(&diagram, &config);
+    let layout = compute_layout_direct(&diagram, &config);
 
     let backward_edge = &diagram.edges[2];
     let routed = route_edge(backward_edge, &layout, Direction::LeftRight, None, None);
@@ -602,8 +599,8 @@ fn test_backward_edge_no_canvas_expansion() {
     diagram_no_cycle.add_edge(Edge::new("A", "B"));
 
     let config = LayoutConfig::default();
-    let layout_cycle = compute_layout_dagre(&diagram_with_cycle, &config);
-    let layout_no_cycle = compute_layout_dagre(&diagram_no_cycle, &config);
+    let layout_cycle = compute_layout_direct(&diagram_with_cycle, &config);
+    let layout_no_cycle = compute_layout_direct(&diagram_no_cycle, &config);
 
     assert_eq!(
         layout_cycle.width, layout_no_cycle.width,
