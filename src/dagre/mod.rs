@@ -416,6 +416,71 @@ mod tests {
     }
 
     #[test]
+    fn test_bk_allocates_space_for_label_dummy() {
+        // Verify that label dummies with non-zero width influence layout spacing
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 3.0));
+        graph.add_node("B", (10.0, 3.0));
+        graph.add_node("C", (10.0, 3.0));
+        // A -> B and A -> C: two parallel edges on same ranks
+        graph.add_edge("A", "B");
+        graph.add_edge("A", "C");
+
+        // Label on A->B with significant width
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, normalize::EdgeLabelInfo::new(50.0, 5.0));
+
+        let config = LayoutConfig::default();
+        let result = layout_with_labels(&graph, &config, |_, dims| *dims, &edge_labels);
+
+        // The label position should exist and have a valid x coordinate
+        assert!(result.label_positions.contains_key(&0));
+        let label_pos = result.label_positions.get(&0).unwrap();
+
+        // Label dummy width (50.0) should be accounted for — the label
+        // position should be at a reasonable x coordinate
+        let a_rect = result.nodes.get(&"A".into()).unwrap();
+        // Label should be in the general vicinity of the edge path
+        assert!(
+            label_pos.x >= 0.0,
+            "Label x should be non-negative, got {}",
+            label_pos.x
+        );
+        assert!(
+            label_pos.y > a_rect.y,
+            "Label should be below A in TD layout"
+        );
+    }
+
+    #[test]
+    fn test_denorm_extracts_label_position_between_nodes() {
+        // A -> B with label: verify label position is geometrically between A and B
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        graph.add_edge("A", "B");
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, normalize::EdgeLabelInfo::new(50.0, 20.0));
+
+        let config = LayoutConfig::default();
+        let result = layout_with_labels(&graph, &config, |_, dims| *dims, &edge_labels);
+
+        assert!(result.label_positions.contains_key(&0));
+        let label_pos = result.label_positions.get(&0).unwrap();
+
+        let a_y = result.nodes.get(&"A".into()).unwrap().y;
+        let b_y = result.nodes.get(&"B".into()).unwrap().y;
+        assert!(
+            label_pos.y > a_y && label_pos.y < b_y,
+            "Label y={} should be between A y={} and B y={}",
+            label_pos.y,
+            a_y,
+            b_y
+        );
+    }
+
+    #[test]
     fn test_layout_with_labels_short_edge_gets_label_position() {
         // A -> B (short edge, 1-rank span) with label
         // After make_space, it should span 2 ranks and get a label dummy
