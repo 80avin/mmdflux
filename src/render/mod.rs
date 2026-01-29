@@ -50,7 +50,7 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
 
     // Step 1: Compute layout with direction-aware spacing
     let config = layout_config_for_diagram(diagram);
-    let layout = compute_layout_dagre(diagram, &config);
+    let layout = compute_layout_direct(diagram, &config);
 
     // Step 2: Create canvas
     let mut canvas = Canvas::new(layout.width, layout.height);
