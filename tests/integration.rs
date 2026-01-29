@@ -1046,6 +1046,17 @@ mod subgraph_rendering {
     }
 
     #[test]
+    fn subgraph_title_embedded_in_border() {
+        let output = render_fixture("simple_subgraph.mmd");
+        // Title should be embedded in border line, not floating above
+        assert!(
+            output.contains("─ Process ─") || output.contains("- Process -"),
+            "Title should be embedded in border: {}",
+            output
+        );
+    }
+
+    #[test]
     fn existing_fixtures_unchanged_by_subgraph_support() {
         // Render non-subgraph fixtures and verify they produce valid output
         let fixtures = [
