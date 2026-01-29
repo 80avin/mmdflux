@@ -118,6 +118,40 @@ Output:
        └─────┘
 ```
 
+### Subgraph Flow
+
+Input:
+```
+graph TD
+subgraph sg1[Process]
+A[Start] --> B[Middle]
+end
+B --> C[End]
+```
+
+Output:
+```
+Process
+┌───────────┐
+│           │
+│           │
+│ ┌───────┐ │
+│ │ Start │ │
+│ └───────┘ │
+│     │     │
+│     │     │
+│     ▼     │
+│┌────────┐ │
+││ Middle │ │
+│└────────┘ │
+│     │     │
+└─────│─────┘
+      ▼
+   ┌─────┐
+   │ End │
+   └─────┘
+```
+
 ### HTTP Request Flow
 
 Input:
@@ -244,6 +278,18 @@ graph LR
     X & Y --> Z
 ```
 
+### Subgraphs
+
+```
+graph TD
+subgraph id[Title]
+    A --> B
+end
+```
+
+Subgraphs group nodes inside a bordered box with an optional title.
+Multiple subgraphs and cross-boundary edges are supported.
+
 ### Comments
 
 Lines starting with `%%` are treated as comments.
@@ -296,6 +342,7 @@ use mmdflux::graph::{Stroke, Arrow};
 
 - [x] Flowchart parsing (`graph` / `flowchart`)
 - [x] ASCII rendering (TD, BT, LR, RL layouts)
+- [x] Subgraph support (`subgraph` / `end`)
 - [ ] Sequence diagrams
 - [ ] Class diagrams
 - [ ] State diagrams
