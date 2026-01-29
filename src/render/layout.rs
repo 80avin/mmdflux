@@ -247,8 +247,15 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Scale each node's center, then compute top-left.
     // First pass: compute raw centers and find the maximum overhang
     // (how much a node's half-width exceeds its raw center coordinate).
-    // This prevents saturating_sub from clipping, which would make
-    // dagre centers inconsistent with actual box positions.
+    // This prevents clipping to zero, which would destroy the relative
+    // separations computed by the layout algorithm (e.g., BK stagger).
+    //
+    // Lesson (research/0015, Q5): rendering pipeline bugs can silently mask
+    // correct layout output. The original saturating_sub here clipped wide
+    // left-positioned nodes to x=0, collapsing BK-computed stagger. The fix
+    // is a uniform coordinate-space translation that preserves all relative
+    // separations. When debugging layout issues, check the rendering pipeline
+    // first — the layout algorithm may already be correct.
     let mut raw_centers: Vec<RawCenter> = Vec::new();
     let mut max_overhang_x: usize = 0;
     let mut max_overhang_y: usize = 0;

@@ -654,7 +654,19 @@ pub fn horizontal_compaction(
     }
 
     // Pass 2: Assign greatest valid coordinates (reverse topological order)
-    // Pull blocks rightward to consume unused slack
+    // Pull blocks rightward to consume unused slack.
+    //
+    // For simple flowcharts (DAGs without compound/subgraph nodes), this pass
+    // is a no-op: Pass 1's longest-path placement already satisfies all
+    // separation constraints, so pull_right <= current for every block.
+    // (See research/0015, Q2 and Q3 for the proof.)
+    //
+    // This pass becomes meaningful for compound graphs where subgraph border
+    // nodes carry a `borderType` ("borderLeft"/"borderRight"). In dagre.js,
+    // Pass 2 skips pull-right for border nodes matching the current alignment
+    // direction, preventing them from crossing their subgraph boundary. When
+    // mmdflux adds compound graph support, this pass will need a borderType
+    // guard: skip pull-right when `node.border_type == current_border_type`.
     for &root in topo.iter().rev() {
         let successors = block_graph.successors(root);
         if !successors.is_empty() {
