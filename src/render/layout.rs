@@ -1,8 +1,7 @@
 //! Layout computation for flowchart diagrams.
 //!
-//! This module computes the position of nodes on a grid based on topological ordering.
-//! It supports both a built-in algorithm and an optional dagre-based algorithm for
-//! better crossing reduction and cycle handling.
+//! Translates dagre float coordinates into ASCII character-grid positions using
+//! uniform scale factors, collision repair, and waypoint transformation.
 
 use std::collections::HashMap;
 
@@ -99,18 +98,17 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // --- Phase A: Build dagre graph ---
     let mut dgraph = dagre::DiGraph::new();
 
-    let mut seen_nodes = std::collections::HashSet::new();
+    let mut seen = std::collections::HashSet::new();
     let mut ordered_node_ids = Vec::new();
     for edge in &diagram.edges {
         for node_id in [&edge.from, &edge.to] {
-            if !seen_nodes.contains(node_id) {
-                seen_nodes.insert(node_id.clone());
+            if seen.insert(node_id.clone()) {
                 ordered_node_ids.push(node_id.clone());
             }
         }
     }
     for id in diagram.nodes.keys() {
-        if !seen_nodes.contains(id) {
+        if seen.insert(id.clone()) {
             ordered_node_ids.push(id.clone());
         }
     }
@@ -185,7 +183,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             (id.0.clone(), primary, secondary)
         })
         .collect();
-    layer_coords.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    layer_coords.sort_by(|a, b| a.1.total_cmp(&b.1));
 
     let mut layers: Vec<Vec<String>> = Vec::new();
     let mut current_layer: Vec<String> = Vec::new();
@@ -204,22 +202,15 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         layers.push(current_layer);
     }
 
+    let secondary_coord = |id: &String| -> f64 {
+        result
+            .nodes
+            .get(&dagre::NodeId(id.clone()))
+            .map(|r| if is_vertical { r.x } else { r.y })
+            .unwrap_or(0.0)
+    };
     for layer in &mut layers {
-        layer.sort_by(|a, b| {
-            let a_sec = result
-                .nodes
-                .get(&dagre::NodeId(a.clone()))
-                .map(|r| if is_vertical { r.x } else { r.y })
-                .unwrap_or(0.0);
-            let b_sec = result
-                .nodes
-                .get(&dagre::NodeId(b.clone()))
-                .map(|r| if is_vertical { r.x } else { r.y })
-                .unwrap_or(0.0);
-            a_sec
-                .partial_cmp(&b_sec)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        layer.sort_by(|a, b| secondary_coord(a).total_cmp(&secondary_coord(b)));
     }
 
     let grid_positions = compute_grid_positions(&layers);
@@ -258,24 +249,28 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // (how much a node's half-width exceeds its raw center coordinate).
     // This prevents saturating_sub from clipping, which would make
     // dagre centers inconsistent with actual box positions.
-    let mut raw_centers: Vec<(String, usize, usize, usize, usize)> = Vec::new();
+    let mut raw_centers: Vec<RawCenter> = Vec::new();
     let mut max_overhang_x: usize = 0;
     let mut max_overhang_y: usize = 0;
 
     for (id, rect) in &result.nodes {
         let node_id = &id.0;
         if let Some(&(w, h)) = node_dims.get(node_id) {
-            let center_x = ((rect.x + rect.width / 2.0 - dagre_min_x) * scale_x).round() as usize;
-            let center_y = ((rect.y + rect.height / 2.0 - dagre_min_y) * scale_y).round() as usize;
-            let half_w = w / 2;
-            let half_h = h / 2;
-            if half_w > center_x {
-                max_overhang_x = max_overhang_x.max(half_w - center_x);
+            let cx = ((rect.x + rect.width / 2.0 - dagre_min_x) * scale_x).round() as usize;
+            let cy = ((rect.y + rect.height / 2.0 - dagre_min_y) * scale_y).round() as usize;
+            if w / 2 > cx {
+                max_overhang_x = max_overhang_x.max(w / 2 - cx);
             }
-            if half_h > center_y {
-                max_overhang_y = max_overhang_y.max(half_h - center_y);
+            if h / 2 > cy {
+                max_overhang_y = max_overhang_y.max(h / 2 - cy);
             }
-            raw_centers.push((node_id.clone(), center_x, center_y, w, h));
+            raw_centers.push(RawCenter {
+                id: node_id.clone(),
+                cx,
+                cy,
+                w,
+                h,
+            });
         }
     }
 
@@ -283,25 +278,23 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     let mut draw_positions: HashMap<String, (usize, usize)> = HashMap::new();
     let mut node_bounds: HashMap<String, NodeBounds> = HashMap::new();
 
-    for (node_id, raw_cx, raw_cy, w, h) in &raw_centers {
-        let center_x = raw_cx + max_overhang_x;
-        let center_y = raw_cy + max_overhang_y;
+    for rc in &raw_centers {
+        let center_x = rc.cx + max_overhang_x;
+        let center_y = rc.cy + max_overhang_y;
 
-        let x = center_x - w / 2 + config.padding + config.left_label_margin;
-        let y = center_y - h / 2 + config.padding;
+        let x = center_x - rc.w / 2 + config.padding + config.left_label_margin;
+        let y = center_y - rc.h / 2 + config.padding;
 
-        draw_positions.insert(node_id.clone(), (x, y));
-        let dcx = center_x + config.padding + config.left_label_margin;
-        let dcy = center_y + config.padding;
+        draw_positions.insert(rc.id.clone(), (x, y));
         node_bounds.insert(
-            node_id.clone(),
+            rc.id.clone(),
             NodeBounds {
                 x,
                 y,
-                width: *w,
-                height: *h,
-                dagre_center_x: Some(dcx),
-                dagre_center_y: Some(dcy),
+                width: rc.w,
+                height: rc.h,
+                dagre_center_x: Some(center_x + config.padding + config.left_label_margin),
+                dagre_center_y: Some(center_y + config.padding),
             },
         );
     }
@@ -411,26 +404,13 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
 
     // --- Phase I: Nudge waypoints that collide with nodes ---
     let mut edge_waypoints_final = edge_waypoints_converted;
-    for waypoints in edge_waypoints_final.values_mut() {
-        for wp in waypoints.iter_mut() {
-            for bounds in node_bounds.values() {
-                let collides = wp.0 >= bounds.x
-                    && wp.0 < bounds.x + bounds.width
-                    && wp.1 >= bounds.y
-                    && wp.1 < bounds.y + bounds.height;
-                if collides {
-                    if is_vertical {
-                        wp.0 = bounds.x + bounds.width + 1;
-                    } else {
-                        wp.1 = bounds.y + bounds.height + 1;
-                    }
-                    break;
-                }
-            }
-            wp.0 = wp.0.min(width.saturating_sub(1));
-            wp.1 = wp.1.min(height.saturating_sub(1));
-        }
-    }
+    nudge_colliding_waypoints(
+        &mut edge_waypoints_final,
+        &node_bounds,
+        is_vertical,
+        width,
+        height,
+    );
 
     // --- Phase J: Collect node shapes and assemble Layout ---
     let node_shapes: HashMap<String, Shape> = diagram
@@ -621,6 +601,46 @@ fn rank_gap_repair(
     }
 }
 
+/// Intermediate result for a node's scaled center and dimensions, used between
+/// the overhang-detection pass and the draw-position pass.
+struct RawCenter {
+    id: String,
+    cx: usize,
+    cy: usize,
+    w: usize,
+    h: usize,
+}
+
+/// Nudge waypoints that overlap with node bounding boxes.
+///
+/// If a waypoint falls inside a node, push it just past the node's edge along the
+/// cross-axis (X for vertical layouts, Y for horizontal). The waypoint is then
+/// clamped to stay within canvas bounds.
+fn nudge_colliding_waypoints(
+    edge_waypoints: &mut HashMap<(String, String), Vec<(usize, usize)>>,
+    node_bounds: &HashMap<String, NodeBounds>,
+    is_vertical: bool,
+    canvas_width: usize,
+    canvas_height: usize,
+) {
+    for waypoints in edge_waypoints.values_mut() {
+        for wp in waypoints.iter_mut() {
+            for bounds in node_bounds.values() {
+                if bounds.contains(wp.0, wp.1) {
+                    if is_vertical {
+                        wp.0 = bounds.x + bounds.width + 1;
+                    } else {
+                        wp.1 = bounds.y + bounds.height + 1;
+                    }
+                    break;
+                }
+            }
+            wp.0 = wp.0.min(canvas_width.saturating_sub(1));
+            wp.1 = wp.1.min(canvas_height.saturating_sub(1));
+        }
+    }
+}
+
 /// Shared parameters for transforming dagre coordinates to ASCII draw coordinates.
 struct TransformContext {
     dagre_min_x: f64,
@@ -631,6 +651,20 @@ struct TransformContext {
     left_label_margin: usize,
     overhang_x: usize,
     overhang_y: usize,
+}
+
+impl TransformContext {
+    /// Transform a dagre (x, y) coordinate to ASCII draw coordinates.
+    fn to_ascii(&self, dagre_x: f64, dagre_y: f64) -> (usize, usize) {
+        let x = ((dagre_x - self.dagre_min_x) * self.scale_x).round() as usize
+            + self.overhang_x
+            + self.padding
+            + self.left_label_margin;
+        let y = ((dagre_y - self.dagre_min_y) * self.scale_y).round() as usize
+            + self.overhang_y
+            + self.padding;
+        (x, y)
+    }
 }
 
 /// Transform dagre waypoints to ASCII draw coordinates using uniform scale factors.
@@ -657,22 +691,13 @@ fn transform_waypoints_direct(
                 .iter()
                 .map(|wp| {
                     let rank_idx = wp.rank as usize;
+                    let layer_pos = layer_starts.get(rank_idx).copied().unwrap_or(0);
+                    let (scaled_x, scaled_y) = ctx.to_ascii(wp.point.x, wp.point.y);
 
                     if is_vertical {
-                        let y = layer_starts.get(rank_idx).copied().unwrap_or(0);
-                        let x = ((wp.point.x - ctx.dagre_min_x) * ctx.scale_x).round() as usize
-                            + ctx.overhang_x
-                            + ctx.padding
-                            + ctx.left_label_margin;
-                        let x = x.min(canvas_width.saturating_sub(1));
-                        (x, y)
+                        (scaled_x.min(canvas_width.saturating_sub(1)), layer_pos)
                     } else {
-                        let x = layer_starts.get(rank_idx).copied().unwrap_or(0);
-                        let y = ((wp.point.y - ctx.dagre_min_y) * ctx.scale_y).round() as usize
-                            + ctx.overhang_y
-                            + ctx.padding;
-                        let y = y.min(canvas_height.saturating_sub(1));
-                        (x, y)
+                        (layer_pos, scaled_y.min(canvas_height.saturating_sub(1)))
                     }
                 })
                 .collect();
@@ -696,14 +721,7 @@ fn transform_label_positions_direct(
     for (edge_idx, pos) in label_positions {
         if let Some(edge) = edges.get(*edge_idx) {
             let key = (edge.from.clone(), edge.to.clone());
-            let x = ((pos.x - ctx.dagre_min_x) * ctx.scale_x).round() as usize
-                + ctx.overhang_x
-                + ctx.padding
-                + ctx.left_label_margin;
-            let y = ((pos.y - ctx.dagre_min_y) * ctx.scale_y).round() as usize
-                + ctx.overhang_y
-                + ctx.padding;
-            converted.insert(key, (x, y));
+            converted.insert(key, ctx.to_ascii(pos.x, pos.y));
         }
     }
 

@@ -314,48 +314,41 @@ fn resolve_attachment_points(
     let from_bounds = ep.from_bounds;
     let to_bounds = ep.to_bounds;
 
-    // For LR/RL layouts, all edges (forward and backward) attach to the
-    // side faces. Forward edges use consensus-y for straight horizontal
-    // segments. Backward edges also use side faces (matching Mermaid behavior)
-    // but may use the opposite side face — the source exits from its LEFT face
-    // and the target is entered from its LEFT face (for LR), with the edge
-    // routing around below/above the nodes.
     let is_backward = is_backward_edge(from_bounds, to_bounds, direction);
 
+    // LR/RL layouts: all edges attach to side faces.
+    // Forward edges use consensus-y for straight horizontal segments.
+    // Backward edges use center-y on the opposite side face.
     match direction {
-        Direction::LeftRight if is_backward => {
-            // Backward LR: source exits LEFT face, target enters RIGHT face.
-            // The edge wraps around below (or above) the nodes and approaches
-            // the target from its right side, matching Mermaid behavior.
-            let src = src_override.unwrap_or((from_bounds.x, from_bounds.center_y()));
-            let tgt =
-                tgt_override.unwrap_or((to_bounds.x + to_bounds.width - 1, to_bounds.center_y()));
-            return (src, tgt);
-        }
-        Direction::RightLeft if is_backward => {
-            // Backward RL: source exits RIGHT face, target enters LEFT face.
-            let src = src_override.unwrap_or((
-                from_bounds.x + from_bounds.width - 1,
-                from_bounds.center_y(),
-            ));
-            let tgt = tgt_override.unwrap_or((to_bounds.x, to_bounds.center_y()));
-            return (src, tgt);
-        }
-        Direction::LeftRight => {
-            let consensus_y = consensus_y(from_bounds, to_bounds);
-            let src = src_override.unwrap_or((from_bounds.x + from_bounds.width - 1, consensus_y));
-            let tgt = tgt_override.unwrap_or((to_bounds.x, consensus_y));
-            return (src, tgt);
-        }
-        Direction::RightLeft => {
-            let consensus_y = consensus_y(from_bounds, to_bounds);
-            let src = src_override.unwrap_or((from_bounds.x, consensus_y));
-            let tgt = tgt_override.unwrap_or((to_bounds.x + to_bounds.width - 1, consensus_y));
+        Direction::LeftRight | Direction::RightLeft => {
+            let flows_right = matches!(direction, Direction::LeftRight) != is_backward;
+            let y = if is_backward {
+                // Backward: each node uses its own center_y
+                // (consensus doesn't apply since the edge wraps around)
+                from_bounds.center_y()
+            } else {
+                consensus_y(from_bounds, to_bounds)
+            };
+            let tgt_y = if is_backward { to_bounds.center_y() } else { y };
+            let (src, tgt) = if flows_right {
+                // Source exits right face, target enters left face
+                (
+                    src_override.unwrap_or((from_bounds.x + from_bounds.width - 1, y)),
+                    tgt_override.unwrap_or((to_bounds.x, tgt_y)),
+                )
+            } else {
+                // Source exits left face, target enters right face
+                (
+                    src_override.unwrap_or((from_bounds.x, y)),
+                    tgt_override.unwrap_or((to_bounds.x + to_bounds.width - 1, tgt_y)),
+                )
+            };
             return (src, tgt);
         }
         _ => {}
     }
 
+    // TD/BT layouts: use geometric intersection to find attachment points.
     let fallback = || {
         calculate_attachment_points(
             from_bounds,
@@ -387,15 +380,12 @@ fn consensus_y(a: &NodeBounds, b: &NodeBounds) -> usize {
 fn clamp_to_boundary(point: (usize, usize), bounds: &NodeBounds) -> Point {
     let (x, y) = point;
 
-    // Calculate actual boundary cell coordinates
     let left = bounds.x;
     let right = bounds.x + bounds.width - 1;
     let top = bounds.y;
     let bottom = bounds.y + bounds.height - 1;
 
-    // Clamp x to boundary
     let clamped_x = x.clamp(left, right);
-    // Clamp y to boundary
     let clamped_y = y.clamp(top, bottom);
 
     Point::new(clamped_x, clamped_y)
@@ -403,36 +393,20 @@ fn clamp_to_boundary(point: (usize, usize), bounds: &NodeBounds) -> Point {
 
 /// Determine the source and target faces for an edge based on layout direction
 /// and whether the edge is backward.
+///
+/// Forward edges exit the "downstream" face and enter the "upstream" face.
+/// Backward edges reverse these faces.
 fn edge_faces(direction: Direction, is_backward: bool) -> (NodeFace, NodeFace) {
-    match direction {
-        Direction::TopDown => {
-            if is_backward {
-                (NodeFace::Top, NodeFace::Bottom)
-            } else {
-                (NodeFace::Bottom, NodeFace::Top)
-            }
-        }
-        Direction::BottomTop => {
-            if is_backward {
-                (NodeFace::Bottom, NodeFace::Top)
-            } else {
-                (NodeFace::Top, NodeFace::Bottom)
-            }
-        }
-        Direction::LeftRight => {
-            if is_backward {
-                (NodeFace::Left, NodeFace::Right)
-            } else {
-                (NodeFace::Right, NodeFace::Left)
-            }
-        }
-        Direction::RightLeft => {
-            if is_backward {
-                (NodeFace::Right, NodeFace::Left)
-            } else {
-                (NodeFace::Left, NodeFace::Right)
-            }
-        }
+    let (forward_src, forward_tgt) = match direction {
+        Direction::TopDown => (NodeFace::Bottom, NodeFace::Top),
+        Direction::BottomTop => (NodeFace::Top, NodeFace::Bottom),
+        Direction::LeftRight => (NodeFace::Right, NodeFace::Left),
+        Direction::RightLeft => (NodeFace::Left, NodeFace::Right),
+    };
+    if is_backward {
+        (forward_tgt, forward_src)
+    } else {
+        (forward_src, forward_tgt)
     }
 }
 
@@ -627,66 +601,20 @@ fn build_orthogonal_path_with_waypoints(
     }
 
     // Last waypoint → end: use direction-appropriate final segment
-    let last_wp = Point::new(
-        waypoints[waypoints.len() - 1].0,
-        waypoints[waypoints.len() - 1].1,
-    );
+    let &(last_x, last_y) = waypoints.last().unwrap();
+    let last_wp = Point::new(last_x, last_y);
     segments.extend(build_orthogonal_path_for_direction(last_wp, end, direction));
 
     segments
 }
 
 /// Compute path preferring vertical movement first (used in tests).
+///
+/// Delegates to `build_orthogonal_path_for_direction` with TD direction,
+/// which produces the same V-H-V Z-shaped path.
 #[cfg(test)]
 fn compute_vertical_first_path(start: Point, end: Point) -> Vec<Segment> {
-    let mut segments = Vec::new();
-
-    if start.x == end.x {
-        // Straight vertical line
-        segments.push(Segment::Vertical {
-            x: start.x,
-            y_start: start.y,
-            y_end: end.y,
-        });
-    } else if start.y == end.y {
-        // Straight horizontal line (shouldn't happen often in TD)
-        segments.push(Segment::Horizontal {
-            y: start.y,
-            x_start: start.x,
-            x_end: end.x,
-        });
-    } else {
-        // L-shaped or Z-shaped path
-        // Calculate midpoint for the bend
-        let mid_y = if start.y < end.y {
-            start.y + (end.y - start.y) / 2
-        } else {
-            end.y + (start.y - end.y) / 2
-        };
-
-        // Vertical segment from start to midpoint
-        segments.push(Segment::Vertical {
-            x: start.x,
-            y_start: start.y,
-            y_end: mid_y,
-        });
-
-        // Horizontal segment at midpoint
-        segments.push(Segment::Horizontal {
-            y: mid_y,
-            x_start: start.x,
-            x_end: end.x,
-        });
-
-        // Vertical segment from midpoint to end
-        segments.push(Segment::Vertical {
-            x: end.x,
-            y_start: mid_y,
-            y_end: end.y,
-        });
-    }
-
-    segments
+    build_orthogonal_path_for_direction(start, end, Direction::TopDown)
 }
 
 /// Convert a single diagonal segment into orthogonal (axis-aligned) segments.
@@ -820,10 +748,8 @@ pub fn build_orthogonal_path(
     }
 
     // Last waypoint → end
-    let last_wp = Point::new(
-        waypoints[waypoints.len() - 1].0,
-        waypoints[waypoints.len() - 1].1,
-    );
+    let &(last_x, last_y) = waypoints.last().unwrap();
+    let last_wp = Point::new(last_x, last_y);
     segments.extend(orthogonalize_segment(last_wp, end, vertical_first));
 
     segments

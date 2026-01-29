@@ -126,11 +126,15 @@ fn test_z_shaped_vertical_path() {
 // Backward edge detection tests
 
 fn make_bounds(x: usize, y: usize) -> NodeBounds {
+    make_bounds_sized(x, y, 10, 3)
+}
+
+fn make_bounds_sized(x: usize, y: usize, width: usize, height: usize) -> NodeBounds {
     NodeBounds {
         x,
         y,
-        width: 10,
-        height: 3,
+        width,
+        height,
         dagre_center_x: None,
         dagre_center_y: None,
     }
@@ -643,23 +647,8 @@ fn test_lr_zero_gap_entry_direction() {
 
 #[test]
 fn test_lr_attachment_consensus_y_same_height() {
-    // Two nodes at different y positions but same height
-    let from = NodeBounds {
-        x: 0,
-        y: 2,
-        width: 10,
-        height: 3,
-        dagre_center_x: None,
-        dagre_center_y: None,
-    };
-    let to = NodeBounds {
-        x: 20,
-        y: 4,
-        width: 10,
-        height: 3,
-        dagre_center_x: None,
-        dagre_center_y: None,
-    };
+    let from = make_bounds_sized(0, 2, 10, 3);
+    let to = make_bounds_sized(20, 4, 10, 3);
     let ep = EdgeEndpoints {
         from_bounds: &from,
         from_shape: Shape::Rectangle,
@@ -676,23 +665,8 @@ fn test_lr_attachment_consensus_y_same_height() {
 
 #[test]
 fn test_lr_attachment_consensus_y_different_height() {
-    // Node A height=3 center_y=3, Node B height=5 center_y=5 — different center_y values
-    let from = NodeBounds {
-        x: 0,
-        y: 2,
-        width: 10,
-        height: 3,
-        dagre_center_x: None,
-        dagre_center_y: None,
-    };
-    let to = NodeBounds {
-        x: 20,
-        y: 3,
-        width: 10,
-        height: 5,
-        dagre_center_x: None,
-        dagre_center_y: None,
-    };
+    let from = make_bounds_sized(0, 2, 10, 3);
+    let to = make_bounds_sized(20, 3, 10, 5);
     let ep = EdgeEndpoints {
         from_bounds: &from,
         from_shape: Shape::Rectangle,
@@ -709,22 +683,8 @@ fn test_lr_attachment_consensus_y_different_height() {
 
 #[test]
 fn test_rl_attachment_consensus_y() {
-    let from = NodeBounds {
-        x: 20,
-        y: 2,
-        width: 10,
-        height: 3,
-        dagre_center_x: None,
-        dagre_center_y: None,
-    };
-    let to = NodeBounds {
-        x: 0,
-        y: 4,
-        width: 10,
-        height: 3,
-        dagre_center_x: None,
-        dagre_center_y: None,
-    };
+    let from = make_bounds_sized(20, 2, 10, 3);
+    let to = make_bounds_sized(0, 4, 10, 3);
     let ep = EdgeEndpoints {
         from_bounds: &from,
         from_shape: Shape::Rectangle,

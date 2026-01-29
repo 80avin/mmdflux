@@ -691,6 +691,16 @@ pub fn horizontal_compaction(
     result
 }
 
+/// Get the separation value for a node: `edge_sep` for dummy nodes, `node_sep` for real nodes.
+#[inline]
+fn separation_for(graph: &LayoutGraph, node: NodeIndex, config: &BKConfig) -> f64 {
+    if is_dummy(graph, node) {
+        config.edge_sep
+    } else {
+        config.node_sep
+    }
+}
+
 /// Place a single block, respecting separation constraints with left neighbors.
 fn place_block(
     graph: &LayoutGraph,
@@ -740,17 +750,9 @@ fn place_block(
                     // Distance from center of left node to center of this node
                     let left_width = get_width(graph, left, config.direction);
                     let node_width = get_width(graph, node, config.direction);
-                    let left_sep = if is_dummy(graph, left) {
-                        config.edge_sep
-                    } else {
-                        config.node_sep
-                    };
-                    let node_s = if is_dummy(graph, node) {
-                        config.edge_sep
-                    } else {
-                        config.node_sep
-                    };
-                    let sep = (left_sep + node_s) / 2.0;
+                    let left_sep = separation_for(graph, left, config);
+                    let node_sep = separation_for(graph, node, config);
+                    let sep = (left_sep + node_sep) / 2.0;
                     let min_separation = (left_width + node_width) / 2.0 + sep;
 
                     // Update our position if needed
@@ -774,17 +776,7 @@ pub fn calculate_width(
     result: &CompactionResult,
     direction: Direction,
 ) -> f64 {
-    let mut min_x = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-
-    for node in 0..graph.node_ids.len() {
-        if let Some(&x) = result.x.get(&node) {
-            let width = get_width(graph, node, direction);
-            min_x = min_x.min(x - width / 2.0);
-            max_x = max_x.max(x + width / 2.0);
-        }
-    }
-
+    let (min_x, max_x) = find_bounds(graph, result, direction);
     if max_x > min_x { max_x - min_x } else { 0.0 }
 }
 

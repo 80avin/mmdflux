@@ -141,24 +141,7 @@ fn draw_edge_label_with_tracking(
             }
             Direction::LeftRight => {
                 if routed.segments.len() >= 3 {
-                    if let Some(Segment::Horizontal { y, x_start, x_end }) =
-                        select_label_segment_horizontal(&routed.segments)
-                    {
-                        let seg_min_x = (*x_start).min(*x_end);
-                        let seg_max_x = (*x_start).max(*x_end);
-                        let seg_len = seg_max_x - seg_min_x;
-                        let label_x = if seg_len >= label_len {
-                            seg_min_x + (seg_len - label_len) / 2
-                        } else {
-                            seg_min_x
-                        };
-                        (label_x, y.saturating_sub(1))
-                    } else {
-                        // Anchor y to source exit point, not averaged midpoint
-                        let anchor_y = routed.start.y.saturating_sub(1);
-                        let mid_x = (routed.start.x + routed.end.x) / 2;
-                        (mid_x.saturating_sub(label_len / 2), anchor_y)
-                    }
+                    label_on_horizontal_segment(routed, label_len)
                 } else {
                     // Short/straight path — keep existing inline placement
                     let mid_y = (routed.start.y + routed.end.y) / 2;
@@ -177,24 +160,7 @@ fn draw_edge_label_with_tracking(
             }
             Direction::RightLeft => {
                 if routed.segments.len() >= 3 {
-                    if let Some(Segment::Horizontal { y, x_start, x_end }) =
-                        select_label_segment_horizontal(&routed.segments)
-                    {
-                        let seg_min_x = (*x_start).min(*x_end);
-                        let seg_max_x = (*x_start).max(*x_end);
-                        let seg_len = seg_max_x - seg_min_x;
-                        let label_x = if seg_len >= label_len {
-                            seg_min_x + (seg_len - label_len) / 2
-                        } else {
-                            seg_min_x
-                        };
-                        (label_x, y.saturating_sub(1))
-                    } else {
-                        // Anchor y to source exit point, not averaged midpoint
-                        let anchor_y = routed.start.y.saturating_sub(1);
-                        let mid_x = (routed.start.x + routed.end.x) / 2;
-                        (mid_x.saturating_sub(label_len / 2), anchor_y)
-                    }
+                    label_on_horizontal_segment(routed, label_len)
                 } else {
                     // Short/straight path — keep existing inline placement
                     let mid_y = (routed.start.y + routed.end.y) / 2;
@@ -253,6 +219,32 @@ fn draw_edge_label_with_tracking(
         y: label_y,
         len: label_len,
     })
+}
+
+/// Position a label above the best horizontal segment for LR/RL multi-segment edges.
+///
+/// Shared by both LeftRight and RightLeft layout branches. Centers the label on
+/// the widest horizontal segment when possible, otherwise falls back to the
+/// midpoint between source and target anchored to the source y.
+fn label_on_horizontal_segment(routed: &RoutedEdge, label_len: usize) -> (usize, usize) {
+    if let Some(Segment::Horizontal { y, x_start, x_end }) =
+        select_label_segment_horizontal(&routed.segments)
+    {
+        let seg_min_x = (*x_start).min(*x_end);
+        let seg_max_x = (*x_start).max(*x_end);
+        let seg_len = seg_max_x - seg_min_x;
+        let label_x = if seg_len >= label_len {
+            seg_min_x + (seg_len - label_len) / 2
+        } else {
+            seg_min_x
+        };
+        (label_x, y.saturating_sub(1))
+    } else {
+        // Anchor y to source exit point, not averaged midpoint
+        let anchor_y = routed.start.y.saturating_sub(1);
+        let mid_x = (routed.start.x + routed.end.x) / 2;
+        (mid_x.saturating_sub(label_len / 2), anchor_y)
+    }
 }
 
 /// Find the label position on a segment, with control over which side to place it.
@@ -326,37 +318,33 @@ fn find_safe_label_position(
     }
 
     // Try shifting positions based on diagram direction
-    let shifts: Vec<(isize, isize)> = match direction {
-        Direction::TopDown | Direction::BottomTop => {
-            // For vertical layouts, try up/down shifts first, then left/right
-            vec![
-                (0, -1),
-                (0, 1),
-                (0, -2),
-                (0, 2),
-                (-1, 0),
-                (1, 0),
-                (-2, 0),
-                (2, 0),
-                (0, -3),
-                (0, 3),
-                (-3, 0),
-                (3, 0),
-            ]
-        }
-        Direction::LeftRight | Direction::RightLeft => {
-            // For horizontal layouts, try up/down shifts first
-            vec![
-                (0, -1),
-                (0, 1),
-                (0, -2),
-                (0, 2),
-                (-1, 0),
-                (1, 0),
-                (0, -3),
-                (0, 3),
-            ]
-        }
+    const VERTICAL_SHIFTS: &[(isize, isize)] = &[
+        (0, -1),
+        (0, 1),
+        (0, -2),
+        (0, 2),
+        (-1, 0),
+        (1, 0),
+        (-2, 0),
+        (2, 0),
+        (0, -3),
+        (0, 3),
+        (-3, 0),
+        (3, 0),
+    ];
+    const HORIZONTAL_SHIFTS: &[(isize, isize)] = &[
+        (0, -1),
+        (0, 1),
+        (0, -2),
+        (0, 2),
+        (-1, 0),
+        (1, 0),
+        (0, -3),
+        (0, 3),
+    ];
+    let shifts = match direction {
+        Direction::TopDown | Direction::BottomTop => VERTICAL_SHIFTS,
+        Direction::LeftRight | Direction::RightLeft => HORIZONTAL_SHIFTS,
     };
 
     // Try each shift until we find a collision-free position
@@ -417,6 +405,17 @@ fn label_adjacent_to_edge_on_far_side(
     }
 }
 
+/// Return the inner segments of an edge path, excluding the first and last
+/// stub segments near the source and target nodes. Falls back to the full
+/// slice when there are 2 or fewer segments.
+fn inner_segments(segments: &[Segment]) -> &[Segment] {
+    if segments.len() > 2 {
+        &segments[1..segments.len() - 1]
+    } else {
+        segments
+    }
+}
+
 /// Select the best segment for placing a label on a multi-segment edge.
 ///
 /// For forward edges (few segments), returns the last vertical segment
@@ -435,11 +434,7 @@ fn select_label_segment(segments: &[Segment]) -> Option<&Segment> {
     if is_long_path {
         // For long paths (backward edges), find the longest vertical segment.
         // Skip the first and last segments (they're short stubs near nodes).
-        let inner = if segments.len() > 2 {
-            &segments[1..segments.len() - 1]
-        } else {
-            segments
-        };
+        let inner = inner_segments(segments);
         inner
             .iter()
             .filter(|s| matches!(s, Segment::Vertical { .. }))
@@ -480,11 +475,7 @@ fn select_label_segment_horizontal(segments: &[Segment]) -> Option<&Segment> {
     let is_long_path = segments.len() >= 6;
 
     if is_long_path {
-        let inner = if segments.len() > 2 {
-            &segments[1..segments.len() - 1]
-        } else {
-            segments
-        };
+        let inner = inner_segments(segments);
         inner
             .iter()
             .filter(|s| matches!(s, Segment::Horizontal { .. }))
@@ -682,27 +673,17 @@ pub fn render_all_edges_with_labels(
             let edge_key = (routed.edge.from.clone(), routed.edge.to.clone());
             let label_len = label.chars().count();
 
-            // Only use precomputed position if it's within canvas bounds
-            let placed = if let Some(&(pre_x, pre_y)) = label_positions.get(&edge_key) {
-                // Check if position is within canvas bounds
-                if pre_x < canvas.width()
-                    && pre_y < canvas.height()
-                    && pre_x.saturating_add(label_len) <= canvas.width()
-                {
-                    // Use pre-computed position
-                    draw_label_at_position(canvas, label, pre_x, pre_y)
-                } else {
-                    // Pre-computed position is out of bounds, fall back to heuristic
-                    draw_edge_label_with_tracking(
-                        canvas,
-                        routed,
-                        label,
-                        diagram_direction,
-                        &placed_labels,
-                    )
-                }
+            // Use precomputed position if available and within canvas bounds,
+            // otherwise fall back to heuristic placement.
+            let precomputed = label_positions.get(&edge_key).filter(|&&(px, py)| {
+                px < canvas.width()
+                    && py < canvas.height()
+                    && px.saturating_add(label_len) <= canvas.width()
+            });
+
+            let placed = if let Some(&(pre_x, pre_y)) = precomputed {
+                draw_label_at_position(canvas, label, pre_x, pre_y)
             } else {
-                // Fall back to heuristic placement
                 draw_edge_label_with_tracking(
                     canvas,
                     routed,

@@ -31,6 +31,11 @@ impl NodeBounds {
         self.dagre_center_y.unwrap_or(self.y + self.height / 2)
     }
 
+    /// Check if a point (x, y) falls inside this bounding box.
+    pub fn contains(&self, x: usize, y: usize) -> bool {
+        x >= self.x && x < self.x + self.width && y >= self.y && y < self.y + self.height
+    }
+
     /// Get the top attachment point (center of top edge).
     pub fn top(&self) -> (usize, usize) {
         (self.center_x(), self.y)

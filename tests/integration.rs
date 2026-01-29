@@ -5,10 +5,12 @@
 use std::fs;
 use std::path::Path;
 
-use mmdflux::render::{RenderOptions, render};
-use mmdflux::{Direction, Shape, build_diagram, parse_flowchart};
+use mmdflux::render::{
+    Layout, LayoutConfig, RenderOptions, compute_layout_direct, render, route_all_edges,
+};
+use mmdflux::{Diagram, Direction, Shape, build_diagram, parse_flowchart};
 
-/// Helper to load a fixture file.
+/// Load a fixture file by name from `tests/fixtures/`.
 fn load_fixture(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -17,20 +19,43 @@ fn load_fixture(name: &str) -> String {
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read fixture {}: {}", name, e))
 }
 
-/// Helper to parse, build, and render a fixture.
-fn render_fixture(name: &str) -> String {
+/// Parse and build a diagram from a fixture file.
+fn parse_and_build(name: &str) -> Diagram {
     let input = load_fixture(name);
     let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
-    let diagram = build_diagram(&flowchart);
+    build_diagram(&flowchart)
+}
+
+/// Parse, build, and compute layout for a fixture file.
+fn layout_fixture(name: &str) -> (Diagram, Layout) {
+    let diagram = parse_and_build(name);
+    let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+    (diagram, layout)
+}
+
+/// Parse, build, and render a fixture file.
+fn render_fixture(name: &str) -> String {
+    let diagram = parse_and_build(name);
     render(&diagram, &RenderOptions::default())
 }
 
-/// Helper to parse, build, and render with ASCII-only output.
+/// Parse, build, and render a fixture file with ASCII-only output.
 fn render_fixture_ascii(name: &str) -> String {
-    let input = load_fixture(name);
-    let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
-    let diagram = build_diagram(&flowchart);
+    let diagram = parse_and_build(name);
     render(&diagram, &RenderOptions { ascii_only: true })
+}
+
+/// Assert that all values in the slice are distinct.
+fn assert_all_distinct(values: &[usize], context: &str) {
+    for i in 0..values.len() {
+        for j in (i + 1)..values.len() {
+            assert_ne!(
+                values[i], values[j],
+                "{}: duplicate value {} (all: {:?})",
+                context, values[i], values
+            );
+        }
+    }
 }
 
 // =============================================================================
@@ -330,52 +355,38 @@ mod rendering {
 // =============================================================================
 
 mod stagger {
-    use mmdflux::render::{LayoutConfig, compute_layout_direct, route_all_edges};
-
     use super::*;
-
-    /// Helper to parse, build a diagram from a fixture.
-    fn parse_and_build(name: &str) -> mmdflux::Diagram {
-        let input = load_fixture(name);
-        let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
-        build_diagram(&flowchart)
-    }
 
     #[test]
     fn stagger_present_for_multiple_cycles() {
         // multiple_cycles.mmd: A[Top] --> B[Middle], B --> C[Bottom], C --> A, C --> B
         // Dagre computes A rightward (aligned with dummy chain for reversed A→C edge)
         // After stagger: A's center_x should be > B's and C's center_x
-        let diagram = parse_and_build("multiple_cycles.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (_, layout) = layout_fixture("multiple_cycles.mmd");
 
-        let a_bounds = layout.node_bounds.get("A").expect("A should have bounds");
-        let b_bounds = layout.node_bounds.get("B").expect("B should have bounds");
-        let c_bounds = layout.node_bounds.get("C").expect("C should have bounds");
+        let a_cx = layout.node_bounds["A"].center_x();
+        let b_cx = layout.node_bounds["B"].center_x();
+        let c_cx = layout.node_bounds["C"].center_x();
 
         assert!(
-            a_bounds.center_x() > b_bounds.center_x(),
+            a_cx > b_cx,
             "A (center_x={}) should be right of B (center_x={})",
-            a_bounds.center_x(),
-            b_bounds.center_x()
+            a_cx,
+            b_cx
         );
         assert!(
-            a_bounds.center_x() > c_bounds.center_x(),
+            a_cx > c_cx,
             "A (center_x={}) should be right of C (center_x={})",
-            a_bounds.center_x(),
-            c_bounds.center_x()
+            a_cx,
+            c_cx
         );
     }
 
     #[test]
     fn no_stagger_for_simple_chain() {
         // chain.mmd: linear chain with no backward edges → no stagger
-        let diagram = parse_and_build("chain.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (_, layout) = layout_fixture("chain.mmd");
 
-        // All nodes should have the same center_x (centered, no stagger)
         let centers: Vec<usize> = layout.node_bounds.values().map(|b| b.center_x()).collect();
         let first = centers[0];
         for &c in &centers[1..] {
@@ -391,12 +402,9 @@ mod stagger {
     fn stagger_produces_different_attachment_points() {
         // For multiple_cycles.mmd, the forward edge A→B and backward edge C→A
         // should attach at different positions on node A's boundary.
-        let diagram = parse_and_build("multiple_cycles.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (diagram, layout) = layout_fixture("multiple_cycles.mmd");
         let routed = route_all_edges(&diagram.edges, &layout, diagram.direction);
 
-        // Find edges involving node A
         let a_b_edge = routed
             .iter()
             .find(|e| e.edge.from == "A" && e.edge.to == "B")
@@ -408,24 +416,18 @@ mod stagger {
 
         // A→B exits from A (start point); C→A enters A (end point)
         // With stagger, these should be at different positions on A
-        let a_b_start = a_b_edge.start;
-        let c_a_end = c_a_edge.end;
-
         assert_ne!(
-            a_b_start, c_a_end,
+            a_b_edge.start, c_a_edge.end,
             "Forward A→B start ({:?}) and backward C→A end ({:?}) should differ on A",
-            a_b_start, c_a_end
+            a_b_edge.start, c_a_edge.end
         );
     }
 
     #[test]
     fn stagger_present_for_simple_cycle() {
         // simple_cycle.mmd has backward edges → should show stagger
-        let diagram = parse_and_build("simple_cycle.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (_, layout) = layout_fixture("simple_cycle.mmd");
 
-        // With cycle, nodes should not all have the same center_x
         let centers: Vec<usize> = layout.node_bounds.values().map(|b| b.center_x()).collect();
         let min_center = *centers.iter().min().unwrap();
         let max_center = *centers.iter().max().unwrap();
@@ -443,17 +445,9 @@ mod stagger {
 // =============================================================================
 
 mod spreading {
-    use mmdflux::render::{LayoutConfig, compute_layout_direct, route_all_edges};
-
     use super::*;
 
-    fn parse_and_build(name: &str) -> mmdflux::Diagram {
-        let input = load_fixture(name);
-        let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
-        build_diagram(&flowchart)
-    }
-
-    /// Verify that no row has immediately adjacent down-arrows (▼▼).
+    /// Verify that no row has immediately adjacent down-arrows.
     fn assert_no_adjacent_arrows(output: &str, fixture_name: &str) {
         for (line_num, line) in output.lines().enumerate() {
             assert!(
@@ -468,9 +462,7 @@ mod spreading {
 
     /// Verify that edges arriving at a shared target node have distinct endpoint x-coordinates.
     fn assert_distinct_arrival_x(fixture_name: &str, target_node: &str) {
-        let diagram = parse_and_build(fixture_name);
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (diagram, layout) = layout_fixture(fixture_name);
         let routed = route_all_edges(&diagram.edges, &layout, diagram.direction);
 
         let arrival_xs: Vec<usize> = routed
@@ -487,16 +479,10 @@ mod spreading {
             arrival_xs.len()
         );
 
-        // Check all pairs are distinct
-        for i in 0..arrival_xs.len() {
-            for j in (i + 1)..arrival_xs.len() {
-                assert_ne!(
-                    arrival_xs[i], arrival_xs[j],
-                    "{}: edges arriving at {} have duplicate x-coordinate {} (all: {:?})",
-                    fixture_name, target_node, arrival_xs[i], arrival_xs
-                );
-            }
-        }
+        assert_all_distinct(
+            &arrival_xs,
+            &format!("{}: edges arriving at {}", fixture_name, target_node),
+        );
     }
 
     // --- Wide-node fixtures: no adjacent arrows ---
@@ -550,9 +536,7 @@ mod spreading {
 
     #[test]
     fn fan_out_distinct_departures() {
-        let diagram = parse_and_build("fan_out.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (diagram, layout) = layout_fixture("fan_out.mmd");
         let routed = route_all_edges(&diagram.edges, &layout, diagram.direction);
 
         let departure_xs: Vec<usize> = routed
@@ -562,15 +546,7 @@ mod spreading {
             .collect();
 
         assert!(departure_xs.len() >= 2);
-        for i in 0..departure_xs.len() {
-            for j in (i + 1)..departure_xs.len() {
-                assert_ne!(
-                    departure_xs[i], departure_xs[j],
-                    "fan_out.mmd: edges departing A have duplicate x {} (all: {:?})",
-                    departure_xs[i], departure_xs
-                );
-            }
-        }
+        assert_all_distinct(&departure_xs, "fan_out.mmd: edges departing A");
     }
 }
 
@@ -579,61 +555,15 @@ mod spreading {
 // =============================================================================
 
 mod skip_edge_separation {
-    use mmdflux::render::{LayoutConfig, compute_layout_direct};
-
     use super::*;
 
-    fn parse_and_build(name: &str) -> mmdflux::Diagram {
-        let input = load_fixture(name);
-        let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
-        build_diagram(&flowchart)
-    }
+    /// Assert that the A→D skip-edge waypoints do not overlap with node B's bounding box.
+    /// Both fixtures have an A→B→...→D chain plus an A→D skip edge whose waypoints
+    /// must clear intermediate node B.
+    fn assert_skip_edge_clears_node_b(fixture_name: &str) {
+        let (_, layout) = layout_fixture(fixture_name);
 
-    /// For double_skip.mmd (A→B→C→D, A→C, A→D), the skip edge A→D has waypoints
-    /// passing through ranks containing nodes B and C. Those waypoints must not
-    /// overlap with the bounding boxes of intermediate nodes.
-    #[test]
-    fn double_skip_waypoints_avoid_intermediate_nodes() {
-        let diagram = parse_and_build("double_skip.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
-
-        // Get node B's bounding box (intermediate node on rank 1)
-        let b_bounds = layout.node_bounds.get("B").expect("B should have bounds");
-        let b_right = b_bounds.x + b_bounds.width;
-
-        // Get the A→D skip-edge waypoints
-        let key = ("A".to_string(), "D".to_string());
-        let waypoints = layout
-            .edge_waypoints
-            .get(&key)
-            .expect("A→D should have waypoints (it spans 3 ranks)");
-
-        // The waypoint at B's rank should have x > b_right (separated, not overlapping)
-        // Waypoints are ordered by rank; the first waypoint is at rank 1 (B's rank)
-        assert!(
-            !waypoints.is_empty(),
-            "A→D skip edge should have at least one waypoint"
-        );
-
-        let wp_at_b_rank = waypoints[0];
-        assert!(
-            wp_at_b_rank.0 > b_right,
-            "A→D waypoint x={} should be > B's right edge {} (need separation)",
-            wp_at_b_rank.0,
-            b_right,
-        );
-    }
-
-    /// For skip_edge_collision.mmd (A→B→C→D, A→D), same check:
-    /// the skip-edge waypoints must not collide with intermediate nodes.
-    #[test]
-    fn skip_edge_collision_waypoints_avoid_intermediate_nodes() {
-        let diagram = parse_and_build("skip_edge_collision.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
-
-        let b_bounds = layout.node_bounds.get("B").expect("B should have bounds");
+        let b_bounds = &layout.node_bounds["B"];
         let b_right = b_bounds.x + b_bounds.width;
 
         let key = ("A".to_string(), "D".to_string());
@@ -644,16 +574,29 @@ mod skip_edge_separation {
 
         assert!(
             !waypoints.is_empty(),
-            "A→D skip edge should have at least one waypoint"
+            "{}: A→D skip edge should have at least one waypoint",
+            fixture_name
         );
 
+        // Waypoints are ordered by rank; the first is at B's rank
         let wp_at_b_rank = waypoints[0];
         assert!(
             wp_at_b_rank.0 > b_right,
-            "A→D waypoint x={} should be > B's right edge {} (need separation)",
+            "{}: A→D waypoint x={} should be > B's right edge {} (need separation)",
+            fixture_name,
             wp_at_b_rank.0,
             b_right,
         );
+    }
+
+    #[test]
+    fn double_skip_waypoints_avoid_intermediate_nodes() {
+        assert_skip_edge_clears_node_b("double_skip.mmd");
+    }
+
+    #[test]
+    fn skip_edge_collision_waypoints_avoid_intermediate_nodes() {
+        assert_skip_edge_clears_node_b("skip_edge_collision.mmd");
     }
 }
 
@@ -662,25 +605,11 @@ mod skip_edge_separation {
 // =============================================================================
 
 mod direct_layout {
-    use mmdflux::render::{Layout, LayoutConfig, compute_layout_direct, route_all_edges};
-
     use super::*;
-
-    fn parse_and_build(name: &str) -> mmdflux::Diagram {
-        let input = load_fixture(name);
-        let flowchart = parse_flowchart(&input).expect("Failed to parse");
-        build_diagram(&flowchart)
-    }
-
-    fn layout_fixture(name: &str) -> Layout {
-        let diagram = parse_and_build(name);
-        let config = LayoutConfig::default();
-        compute_layout_direct(&diagram, &config)
-    }
 
     #[test]
     fn direct_simple_produces_valid_layout() {
-        let layout = layout_fixture("simple.mmd");
+        let (_, layout) = layout_fixture("simple.mmd");
 
         assert!(layout.width > 0, "canvas width must be positive");
         assert!(layout.height > 0, "canvas height must be positive");
@@ -692,7 +621,7 @@ mod direct_layout {
 
     #[test]
     fn direct_no_node_overlaps() {
-        let layout = layout_fixture("chain.mmd");
+        let (_, layout) = layout_fixture("chain.mmd");
 
         let bounds: Vec<_> = layout.node_bounds.values().collect();
         for i in 0..bounds.len() {
@@ -713,7 +642,7 @@ mod direct_layout {
 
     #[test]
     fn direct_nodes_within_canvas() {
-        let layout = layout_fixture("fan_out.mmd");
+        let (_, layout) = layout_fixture("fan_out.mmd");
 
         for (id, bounds) in &layout.node_bounds {
             assert!(
@@ -737,7 +666,7 @@ mod direct_layout {
 
     #[test]
     fn direct_td_vertical_ordering() {
-        let layout = layout_fixture("simple.mmd");
+        let (_, layout) = layout_fixture("simple.mmd");
 
         let a_y = layout.draw_positions["A"].1;
         let b_y = layout.draw_positions["B"].1;
@@ -749,9 +678,7 @@ mod direct_layout {
 
     #[test]
     fn direct_lr_horizontal_ordering() {
-        let diagram = parse_and_build("left_right.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (_, layout) = layout_fixture("left_right.mmd");
 
         assert!(
             layout.width > layout.height || layout.node_bounds.len() <= 2,
@@ -763,16 +690,12 @@ mod direct_layout {
     fn direct_preserves_cross_axis_stagger() {
         // fan_out.mmd: A→B, A→C, A→D — layer 1 has B, C, D which should
         // have distinct x positions from dagre's BK algorithm.
-        let diagram = parse_and_build("fan_out.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (_, layout) = layout_fixture("fan_out.mmd");
 
-        // B, C, D are in the same layer — they should have distinct x centers
         let b_x = layout.node_bounds["B"].center_x();
         let c_x = layout.node_bounds["C"].center_x();
         let d_x = layout.node_bounds["D"].center_x();
 
-        // At least two must differ (dagre assigns different cross-axis positions)
         assert!(
             b_x != c_x || c_x != d_x,
             "B/C/D all at same x center ({}) — cross-axis stagger was lost",
@@ -782,9 +705,7 @@ mod direct_layout {
 
     #[test]
     fn direct_cycle_no_edge_overlap_at_attachment() {
-        let diagram = parse_and_build("simple_cycle.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (_, layout) = layout_fixture("simple_cycle.mmd");
 
         let wp_vecs: Vec<&Vec<(usize, usize)>> = layout.edge_waypoints.values().collect();
         for i in 0..wp_vecs.len() {
@@ -801,9 +722,7 @@ mod direct_layout {
 
     #[test]
     fn direct_fan_in_ordered_arrivals() {
-        let diagram = parse_and_build("fan_in.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (diagram, layout) = layout_fixture("fan_in.mmd");
         let routed = route_all_edges(&diagram.edges, &layout, diagram.direction);
 
         let mut arrival_xs: Vec<usize> = routed
@@ -823,9 +742,7 @@ mod direct_layout {
 
     #[test]
     fn direct_five_fan_in_distinct_arrivals() {
-        let diagram = parse_and_build("five_fan_in.mmd");
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let (diagram, layout) = layout_fixture("five_fan_in.mmd");
         let routed = route_all_edges(&diagram.edges, &layout, diagram.direction);
 
         let arrival_xs: Vec<usize> = routed
@@ -834,16 +751,7 @@ mod direct_layout {
             .map(|r| r.end.x)
             .collect();
 
-        // All pairs distinct
-        for i in 0..arrival_xs.len() {
-            for j in (i + 1)..arrival_xs.len() {
-                assert_ne!(
-                    arrival_xs[i], arrival_xs[j],
-                    "five_fan_in: duplicate arrival x at F: {} (all: {:?})",
-                    arrival_xs[i], arrival_xs
-                );
-            }
-        }
+        assert_all_distinct(&arrival_xs, "five_fan_in: arrival x at F");
     }
 }
 
@@ -866,7 +774,7 @@ mod snapshots {
 
         for entry in fs::read_dir(&fixture_dir).unwrap() {
             let path = entry.unwrap().path();
-            if path.extension().map_or(false, |e| e == "mmd") {
+            if path.extension().is_some_and(|e| e == "mmd") {
                 let name = path.file_stem().unwrap().to_str().unwrap();
                 let input = fs::read_to_string(&path).unwrap();
                 let flowchart = parse_flowchart(&input).expect("Failed to parse");
@@ -943,65 +851,22 @@ mod all_fixtures {
 mod lr_routing {
     use super::*;
 
-    #[test]
-    fn lr_simple_chain_horizontal_arrows() {
-        // A simple LR chain should use right-pointing arrows, not vertical ones
-        let input = "graph LR\n    A[Start] --> B[End]";
+    /// Render inline Mermaid text (not a fixture file).
+    fn render_inline(input: &str) -> String {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let output = render(&diagram, &RenderOptions::default());
+        render(&diagram, &RenderOptions::default())
+    }
 
-        // Should contain a right-pointing arrow, not up/down arrows between nodes
+    fn assert_has_right_arrow(output: &str) {
         assert!(
             output.contains('►') || output.contains('>'),
             "LR edge should use right-pointing arrow, got:\n{}",
             output
         );
-        // Should NOT contain vertical arrows between horizontally adjacent nodes
-        let has_vertical_arrow_between_nodes = output.lines().any(|line| {
-            // Check if a vertical arrow appears between two box-drawing characters
-            // (indicating it's between nodes, not inside a node)
-            line.contains("│▲│") || line.contains("│▼│")
-        });
-        assert!(
-            !has_vertical_arrow_between_nodes,
-            "LR edge should not have vertical arrows between nodes, got:\n{}",
-            output
-        );
     }
 
-    #[test]
-    fn lr_three_node_chain_horizontal_arrows() {
-        let output = render_fixture("left_right.mmd");
-        // All arrows in a LR chain should point right
-        assert!(
-            output.contains('►') || output.contains('>'),
-            "LR chain should have right-pointing arrows, got:\n{}",
-            output
-        );
-        assert!(
-            !output
-                .lines()
-                .any(|line| line.contains("│▲│") || line.contains("│▼│")),
-            "LR chain should not have vertical arrows between nodes, got:\n{}",
-            output
-        );
-    }
-
-    #[test]
-    fn lr_backward_edge_renders_without_panic() {
-        // A cycle in LR layout should render without panicking
-        let input = "graph LR\n    A[Start] --> B[Middle]\n    B --> C[End]\n    C --> A";
-        let flowchart = parse_flowchart(input).unwrap();
-        let diagram = build_diagram(&flowchart);
-        let output = render(&diagram, &RenderOptions::default());
-
-        // All three node labels should appear
-        assert!(output.contains("Start"), "Should contain Start node");
-        assert!(output.contains("Middle"), "Should contain Middle node");
-        assert!(output.contains("End"), "Should contain End node");
-
-        // Should have a left-pointing arrow (backward edge C→A enters Start from right)
+    fn assert_has_left_arrow(output: &str) {
         assert!(
             output.contains('◄') || output.contains('<'),
             "LR backward edge should have left-pointing arrow, got:\n{}",
@@ -1009,52 +874,65 @@ mod lr_routing {
         );
     }
 
-    #[test]
-    fn lr_backward_edge_entry_direction() {
-        // Simple LR cycle: A→B forward, B→A backward
-        let input = "graph LR\n    A --> B\n    B --> A";
-        let flowchart = parse_flowchart(input).unwrap();
-        let diagram = build_diagram(&flowchart);
-        let output = render(&diagram, &RenderOptions::default());
-
-        // The backward edge B→A should produce a left-pointing arrow on A
+    fn assert_no_vertical_arrows_between_nodes(output: &str) {
+        let has_vertical = output
+            .lines()
+            .any(|line| line.contains("│▲│") || line.contains("│▼│"));
         assert!(
-            output.contains('◄') || output.contains('<'),
-            "LR backward edge should produce left-pointing arrow, got:\n{}",
+            !has_vertical,
+            "LR edge should not have vertical arrows between nodes, got:\n{}",
             output
         );
     }
 
     #[test]
-    fn lr_multirank_backward_edge_does_not_extend_left_of_target() {
-        // LR layout with a backward edge spanning multiple ranks.
-        // The backward edge D→A should NOT place its arrow to the LEFT
-        // of A's left border — that extends outside the diagram bounds.
-        // The arrow should enter A from below or the left face, but the
-        // routing path should not go further left than A's left border.
-        let input = "graph LR\n    A --> B --> C --> D\n    D --> A";
-        let flowchart = parse_flowchart(input).unwrap();
-        let diagram = build_diagram(&flowchart);
-        let output = render(&diagram, &RenderOptions::default());
+    fn lr_simple_chain_horizontal_arrows() {
+        let output = render_inline("graph LR\n    A[Start] --> B[End]");
+        assert_has_right_arrow(&output);
+        assert_no_vertical_arrows_between_nodes(&output);
+    }
 
-        // Find the leftmost column of node A's box (the │ character of its left border)
-        // and verify no arrow character appears to its left.
-        // Currently the ◄ appears at column 0 while A's border starts at column 1,
-        // meaning the arrow extends outside the diagram area.
-        let lines: Vec<&str> = output.lines().collect();
+    #[test]
+    fn lr_three_node_chain_horizontal_arrows() {
+        let output = render_fixture("left_right.mmd");
+        assert_has_right_arrow(&output);
+        assert_no_vertical_arrows_between_nodes(&output);
+    }
+
+    #[test]
+    fn lr_backward_edge_renders_without_panic() {
+        let output =
+            render_inline("graph LR\n    A[Start] --> B[Middle]\n    B --> C[End]\n    C --> A");
+
+        assert!(output.contains("Start"), "Should contain Start node");
+        assert!(output.contains("Middle"), "Should contain Middle node");
+        assert!(output.contains("End"), "Should contain End node");
+        assert_has_left_arrow(&output);
+    }
+
+    #[test]
+    fn lr_backward_edge_entry_direction() {
+        let output = render_inline("graph LR\n    A --> B\n    B --> A");
+        assert_has_left_arrow(&output);
+    }
+
+    #[test]
+    fn lr_multirank_backward_edge_does_not_extend_left_of_target() {
+        // The backward edge D→A should NOT place its arrow to the LEFT
+        // of A's left border -- that extends outside the diagram bounds.
+        let output = render_inline("graph LR\n    A --> B --> C --> D\n    D --> A");
+
         let mut arrow_col = None;
         let mut node_left_border = None;
 
-        for line in &lines {
+        for line in output.lines() {
             if let Some(pos) = line.find('◄') {
                 arrow_col = Some(pos);
             }
-            // Find leftmost │ on a line containing " A " (the node label)
-            if line.contains(" A ") {
-                // Find the first │ which is the left border of node A
-                if let Some(pos) = line.find('│') {
-                    node_left_border = Some(pos);
-                }
+            if line.contains(" A ")
+                && let Some(pos) = line.find('│')
+            {
+                node_left_border = Some(pos);
             }
         }
 
