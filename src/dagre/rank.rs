@@ -19,10 +19,11 @@ pub fn run(graph: &mut LayoutGraph) {
 
     // Build adjacency and compute in-degrees
     let mut in_degree = vec![0usize; n];
-    let mut successors: Vec<Vec<usize>> = vec![Vec::new(); n];
+    let mut successors: Vec<Vec<(usize, i32)>> = vec![Vec::new(); n];
 
-    for &(from, to) in &edges {
-        successors[from].push(to);
+    for (edge_idx, &(from, to)) in edges.iter().enumerate() {
+        let minlen = graph.edge_minlens[edge_idx];
+        successors[from].push((to, minlen));
         in_degree[to] += 1;
     }
 
@@ -49,9 +50,8 @@ pub fn run(graph: &mut LayoutGraph) {
     let mut processed = 0;
     while let Some(node) = queue.pop_front() {
         processed += 1;
-        for &succ in &successors[node] {
-            // Each successor is at least one rank below
-            ranks[succ] = ranks[succ].max(ranks[node] + 1);
+        for &(succ, minlen) in &successors[node] {
+            ranks[succ] = ranks[succ].max(ranks[node] + minlen);
 
             in_degree[succ] -= 1;
             if in_degree[succ] == 0 {
@@ -157,6 +157,31 @@ mod tests {
         assert_eq!(lg.ranks[0], 0);
         assert_eq!(lg.ranks[1], 0);
         assert_eq!(lg.ranks[2], 0);
+    }
+
+    #[test]
+    fn test_longest_path_respects_minlen() {
+        // A -> B with minlen=2, B -> C with minlen=1
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_node("C", ());
+        graph.add_edge("A", "B");
+        graph.add_edge("B", "C");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        lg.edge_minlens[0] = 2; // A->B needs minlen=2
+
+        run(&mut lg);
+        normalize(&mut lg);
+
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+
+        assert_eq!(lg.ranks[a], 0);
+        assert_eq!(lg.ranks[b], 2); // minlen=2 from A
+        assert_eq!(lg.ranks[c], 3); // minlen=1 from B
     }
 
     #[test]
