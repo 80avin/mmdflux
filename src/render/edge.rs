@@ -572,10 +572,10 @@ fn draw_arrow_with_entry(
     charset: &CharSet,
 ) {
     // Protect node content from being overwritten by arrows
-    if let Some(cell) = canvas.get(point.x, point.y) {
-        if cell.is_node {
-            return;
-        }
+    if let Some(cell) = canvas.get(point.x, point.y)
+        && cell.is_node
+    {
+        return;
     }
 
     // Arrow points in the direction the edge enters FROM

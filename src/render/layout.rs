@@ -476,10 +476,9 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             let key = (edge.from.clone(), edge.to.clone());
             if let (Some(from_b), Some(to_b)) =
                 (node_bounds.get(&edge.from), node_bounds.get(&edge.to))
+                && crate::render::router::is_backward_edge(from_b, to_b, diagram.direction)
             {
-                if crate::render::router::is_backward_edge(from_b, to_b, diagram.direction) {
-                    edge_waypoints_final.remove(&key);
-                }
+                edge_waypoints_final.remove(&key);
             }
         }
     }
