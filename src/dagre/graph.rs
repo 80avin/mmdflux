@@ -204,6 +204,11 @@ pub(crate) struct LayoutGraph {
     /// Edge indices that are nesting edges (to be removed after ranking).
     pub nesting_edges: HashSet<usize>,
 
+    /// Edge indices excluded from effective_edges (nesting edges after cleanup).
+    /// These edges exist in the `edges` vec but are ignored by downstream phases
+    /// (normalization, ordering, BK alignment).
+    pub excluded_edges: HashSet<usize>,
+
     /// Node indices that are compound (subgraph) nodes.
     pub compound_nodes: HashSet<usize>,
 }
@@ -277,6 +282,7 @@ impl LayoutGraph {
             border_type: HashMap::new(),
             nesting_root: None,
             nesting_edges: HashSet::new(),
+            excluded_edges: HashSet::new(),
             compound_nodes,
         }
     }

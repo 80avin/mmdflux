@@ -208,6 +208,11 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
     let mut new_chain_weights: Vec<f64> = Vec::new();
 
     for (edge_pos, &(from_idx, to_idx, orig_edge_idx)) in graph.edges.iter().enumerate() {
+        // Skip excluded edges (nesting edges removed during compound graph cleanup)
+        if graph.excluded_edges.contains(&edge_pos) {
+            continue;
+        }
+
         let (eff_from, eff_to) = effective[edge_pos];
         let from_rank = graph.ranks[eff_from];
         let to_rank = graph.ranks[eff_to];
@@ -270,6 +275,7 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
             graph.order.push(dummy_idx);
             graph.positions.push(Point::default());
             graph.dimensions.push((width, height));
+            graph.parents.push(None);
             graph.dummy_nodes.insert(dummy_id.clone(), dummy_node);
 
             if is_label_dummy {

@@ -226,8 +226,9 @@ pub fn get_predecessors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> 
     let effective_edges = graph.effective_edges();
     let mut preds: Vec<NodeIndex> = effective_edges
         .iter()
-        .filter(|&&(_, to)| to == node)
-        .map(|&(from, _)| from)
+        .enumerate()
+        .filter(|&(idx, &(_, to))| to == node && !graph.excluded_edges.contains(&idx))
+        .map(|(_, &(from, _))| from)
         .collect();
 
     preds.sort_by_key(|&n| graph.order[n]);
@@ -241,8 +242,9 @@ pub fn get_successors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> {
     let effective_edges = graph.effective_edges();
     let mut succs: Vec<NodeIndex> = effective_edges
         .iter()
-        .filter(|&&(from, _)| from == node)
-        .map(|&(_, to)| to)
+        .enumerate()
+        .filter(|&(idx, &(from, _))| from == node && !graph.excluded_edges.contains(&idx))
+        .map(|(_, &(_, to))| to)
         .collect();
 
     succs.sort_by_key(|&n| graph.order[n]);
@@ -868,6 +870,13 @@ fn build_block_graph(
             let right_root = alignment.get_root(right);
 
             if left_root != right_root {
+                // Skip separation edges between a border node and a sibling
+                // child of the same compound. Border segment nodes would
+                // otherwise push real nodes apart, causing stagger in straight
+                // vertical chains inside a subgraph.
+                if is_border_sibling_pair(graph, left, right) {
+                    continue;
+                }
                 let weight = compute_sep(graph, left, right, config);
                 bg.add_edge(left_root, right_root, weight);
             }
@@ -875,6 +884,29 @@ fn build_block_graph(
     }
 
     bg
+}
+
+/// Check if two adjacent nodes are a border node and a child of the same compound.
+///
+/// Returns true when one node is a border segment node and the other is a
+/// non-border child of the same compound (same parent). In that case, the
+/// block graph should not create a separation edge between them, because
+/// the border's only purpose is defining the subgraph bounding box — it
+/// should not exert horizontal pressure on real child nodes.
+fn is_border_sibling_pair(graph: &LayoutGraph, left: NodeIndex, right: NodeIndex) -> bool {
+    let left_is_border = graph.border_type.contains_key(&left);
+    let right_is_border = graph.border_type.contains_key(&right);
+
+    // Need exactly one border node in the pair
+    if left_is_border == right_is_border {
+        return false;
+    }
+
+    // Both must share the same parent compound
+    let left_parent = graph.parents.get(left).copied().flatten();
+    let right_parent = graph.parents.get(right).copied().flatten();
+
+    left_parent.is_some() && left_parent == right_parent
 }
 
 /// Get the separation value for a node: `edge_sep` for dummy nodes, `node_sep` for real nodes.

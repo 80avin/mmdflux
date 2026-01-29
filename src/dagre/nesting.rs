@@ -99,11 +99,14 @@ pub fn assign_rank_minmax(lg: &mut LayoutGraph) {
 /// and the nesting root is cleared. Border top/bottom nodes remain for
 /// rank extraction in assign_rank_minmax.
 pub fn cleanup(lg: &mut LayoutGraph) {
-    // Mark nesting edges as zero-weight (effectively removing them from ranking influence)
+    // Mark nesting edges as excluded from downstream processing.
+    // They remain in the edges vec (for index stability) but are skipped by
+    // normalization, ordering, and BK alignment.
     for &edge_idx in &lg.nesting_edges {
         if edge_idx < lg.edge_weights.len() {
             lg.edge_weights[edge_idx] = 0.0;
         }
+        lg.excluded_edges.insert(edge_idx);
     }
     lg.nesting_edges.clear();
     lg.nesting_root = None;
