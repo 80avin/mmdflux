@@ -896,6 +896,55 @@ mod tests {
     }
 
     #[test]
+    fn test_label_rendered_at_precomputed_position() {
+        let output = crate::render::render(
+            &{
+                let mut d = Diagram::new(Direction::TopDown);
+                d.add_node(Node::new("A").with_label("A"));
+                d.add_node(Node::new("B").with_label("B"));
+                d.add_edge(Edge::new("A", "B").with_label("yes"));
+                d
+            },
+            &crate::render::RenderOptions { ascii_only: false },
+        );
+
+        assert!(output.contains("yes"), "Label 'yes' should be rendered");
+
+        // Label should appear between A and B rows
+        let lines: Vec<&str> = output.lines().collect();
+        let a_line = lines.iter().position(|l| l.contains('A')).unwrap();
+        let b_line = lines.iter().rposition(|l| l.contains('B')).unwrap();
+        let yes_line = lines.iter().position(|l| l.contains("yes")).unwrap();
+        assert!(
+            yes_line > a_line && yes_line < b_line,
+            "Label at line {} should be between A (line {}) and B (line {})\n{}",
+            yes_line,
+            a_line,
+            b_line,
+            output
+        );
+    }
+
+    #[test]
+    fn test_labeled_edge_has_waypoints() {
+        // Verify a labeled short edge (A->B) now produces waypoints
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("Start"));
+        diagram.add_node(Node::new("B").with_label("End"));
+        diagram.add_edge(Edge::new("A", "B").with_label("yes"));
+
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        // The A->B edge should have waypoints from the label dummy
+        let edge_key = ("A".to_string(), "B".to_string());
+        assert!(
+            layout.edge_waypoints.contains_key(&edge_key),
+            "Labeled short edge should have waypoints from label dummy"
+        );
+    }
+
+    #[test]
     fn test_segment_length() {
         let vertical = Segment::Vertical {
             x: 5,
