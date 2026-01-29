@@ -1,6 +1,8 @@
 //! Converts AST to graph data structures.
 
-use super::diagram::{Diagram, Direction};
+use std::collections::HashSet;
+
+use super::diagram::{Diagram, Direction, Subgraph};
 use super::edge::{Arrow, Edge, Stroke};
 use super::node::{Node, Shape};
 use crate::parser::{
@@ -11,25 +13,40 @@ use crate::parser::{
 pub fn build_diagram(flowchart: &Flowchart) -> Diagram {
     let direction = convert_direction(flowchart.direction);
     let mut diagram = Diagram::new(direction);
+    process_statements(&mut diagram, &flowchart.statements, None);
+    diagram
+}
 
-    for statement in &flowchart.statements {
+fn process_statements(
+    diagram: &mut Diagram,
+    statements: &[Statement],
+    parent_subgraph: Option<&str>,
+) {
+    for statement in statements {
         match statement {
             Statement::Vertex(vertex) => {
-                add_vertex_to_diagram(&mut diagram, vertex);
+                add_vertex_to_diagram(diagram, vertex, parent_subgraph);
             }
             Statement::Edge(edge_spec) => {
-                // Add both nodes (they might be new or updates)
-                add_vertex_to_diagram(&mut diagram, &edge_spec.from);
-                add_vertex_to_diagram(&mut diagram, &edge_spec.to);
-
-                // Create the edge
+                add_vertex_to_diagram(diagram, &edge_spec.from, parent_subgraph);
+                add_vertex_to_diagram(diagram, &edge_spec.to, parent_subgraph);
                 let edge = convert_edge(edge_spec);
                 diagram.add_edge(edge);
             }
+            Statement::Subgraph(sg_spec) => {
+                process_statements(diagram, &sg_spec.statements, Some(&sg_spec.id));
+                let node_ids = collect_node_ids(&sg_spec.statements);
+                diagram.subgraphs.insert(
+                    sg_spec.id.clone(),
+                    Subgraph {
+                        id: sg_spec.id.clone(),
+                        title: sg_spec.title.clone(),
+                        nodes: node_ids,
+                    },
+                );
+            }
         }
     }
-
-    diagram
 }
 
 fn convert_direction(dir: ParseDirection) -> Direction {
@@ -41,22 +58,42 @@ fn convert_direction(dir: ParseDirection) -> Direction {
     }
 }
 
-fn add_vertex_to_diagram(diagram: &mut Diagram, vertex: &Vertex) {
-    // Check if node already exists
+fn add_vertex_to_diagram(diagram: &mut Diagram, vertex: &Vertex, parent: Option<&str>) {
     if let Some(existing) = diagram.nodes.get_mut(&vertex.id) {
         // Update existing node if this vertex has more info
         if vertex.shape.is_some() && existing.label == existing.id {
-            // Update label and shape from the vertex
             if let Some(shape_spec) = &vertex.shape {
                 existing.label = shape_spec.text().to_string();
                 existing.shape = convert_shape(shape_spec);
             }
         }
+        // Set parent if provided and not already set
+        if parent.is_some() && existing.parent.is_none() {
+            existing.parent = parent.map(|s| s.to_string());
+        }
     } else {
-        // Create new node
-        let node = convert_vertex(vertex);
+        let mut node = convert_vertex(vertex);
+        node.parent = parent.map(|s| s.to_string());
         diagram.add_node(node);
     }
+}
+
+fn collect_node_ids(statements: &[Statement]) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut ids = Vec::new();
+    for stmt in statements {
+        let new_ids: Vec<String> = match stmt {
+            Statement::Vertex(v) => vec![v.id.clone()],
+            Statement::Edge(e) => vec![e.from.id.clone(), e.to.id.clone()],
+            Statement::Subgraph(_) => vec![],
+        };
+        for id in new_ids {
+            if seen.insert(id.clone()) {
+                ids.push(id);
+            }
+        }
+    }
+    ids
 }
 
 fn convert_vertex(vertex: &Vertex) -> Node {
@@ -208,5 +245,41 @@ mod tests {
 
         assert_eq!(diagram.nodes.len(), 3);
         assert_eq!(diagram.edges.len(), 2);
+    }
+
+    #[test]
+    fn test_build_diagram_with_subgraph() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert!(diagram.has_subgraphs());
+        assert!(diagram.subgraphs.contains_key("sg1"));
+        let sg = &diagram.subgraphs["sg1"];
+        assert_eq!(sg.title, "Group");
+        assert!(sg.nodes.contains(&"A".to_string()));
+        assert!(sg.nodes.contains(&"B".to_string()));
+    }
+
+    #[test]
+    fn test_build_diagram_node_parent_set() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\nC --> A\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert_eq!(diagram.nodes["A"].parent, Some("sg1".to_string()));
+        assert_eq!(diagram.nodes["B"].parent, Some("sg1".to_string()));
+        assert_eq!(diagram.nodes["C"].parent, None);
+    }
+
+    #[test]
+    fn test_build_diagram_subgraph_edges_cross_boundary() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA\nB\nend\nA --> C\nC --> B\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert_eq!(diagram.edges.len(), 2);
+        assert_eq!(diagram.nodes["A"].parent, Some("sg1".to_string()));
+        assert_eq!(diagram.nodes["C"].parent, None);
     }
 }

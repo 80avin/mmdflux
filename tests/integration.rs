@@ -959,3 +959,41 @@ mod lr_routing {
         }
     }
 }
+
+// === Subgraph parsing and building tests ===
+
+#[test]
+fn test_parse_simple_subgraph_fixture() {
+    let diagram = parse_and_build("simple_subgraph.mmd");
+
+    assert!(diagram.has_subgraphs());
+    assert!(diagram.subgraphs.contains_key("sg1"));
+    assert_eq!(diagram.subgraphs["sg1"].title, "Process");
+    assert!(diagram.subgraphs["sg1"].nodes.contains(&"A".to_string()));
+    assert!(diagram.subgraphs["sg1"].nodes.contains(&"B".to_string()));
+}
+
+#[test]
+fn test_parse_subgraph_edges_fixture() {
+    let diagram = parse_and_build("subgraph_edges.mmd");
+
+    assert_eq!(diagram.subgraphs.len(), 2);
+    assert!(diagram.subgraphs.contains_key("sg1"));
+    assert!(diagram.subgraphs.contains_key("sg2"));
+    // Edges cross subgraph boundaries
+    assert!(diagram.edges.iter().any(|e| e.from == "A" && e.to == "C"));
+    assert!(diagram.edges.iter().any(|e| e.from == "B" && e.to == "D"));
+}
+
+#[test]
+fn test_parse_multi_subgraph_fixture() {
+    let diagram = parse_and_build("multi_subgraph.mmd");
+
+    assert_eq!(diagram.subgraphs.len(), 2);
+    assert!(diagram.subgraphs.contains_key("sg1"));
+    assert!(diagram.subgraphs.contains_key("sg2"));
+    assert_eq!(diagram.subgraphs["sg1"].title, "Frontend");
+    assert_eq!(diagram.subgraphs["sg2"].title, "Backend");
+    // Cross-boundary edge
+    assert!(diagram.edges.iter().any(|e| e.from == "B" && e.to == "C"));
+}

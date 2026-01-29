@@ -3,7 +3,7 @@
 use pest::Parser;
 use pest_derive::Parser;
 
-use super::ast::{ConnectorSpec, EdgeSpec, ShapeSpec, Statement, Vertex};
+use super::ast::{ConnectorSpec, EdgeSpec, ShapeSpec, Statement, SubgraphSpec, Vertex};
 use super::error::ParseError;
 
 #[derive(Parser)]
@@ -48,6 +48,9 @@ impl Flowchart {
                 Statement::Edge(e) => {
                     result.push(&e.from);
                     result.push(&e.to);
+                }
+                Statement::Subgraph(_) => {
+                    // Subgraph vertices handled in task 1.5
                 }
             }
         }
@@ -106,12 +109,60 @@ fn parse_statement(pair: pest::iterators::Pair<Rule>) -> Vec<Statement> {
     let mut statements = Vec::new();
 
     for inner in pair.into_inner() {
-        if inner.as_rule() == Rule::vertex_statement {
-            statements.extend(parse_vertex_statement(inner));
+        match inner.as_rule() {
+            Rule::vertex_statement => {
+                statements.extend(parse_vertex_statement(inner));
+            }
+            Rule::subgraph_stmt => {
+                statements.push(Statement::Subgraph(parse_subgraph(inner)));
+            }
+            _ => {}
         }
     }
 
     statements
+}
+
+fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
+    let mut id = String::new();
+    let mut title = None;
+    let mut body_statements = Vec::new();
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::subgraph_spec => {
+                for spec_inner in inner.into_inner() {
+                    match spec_inner.as_rule() {
+                        Rule::subgraph_id => {
+                            id = spec_inner.as_str().to_string();
+                        }
+                        Rule::subgraph_title_bracket => {
+                            for title_inner in spec_inner.into_inner() {
+                                if title_inner.as_rule() == Rule::subgraph_title_text {
+                                    title = Some(title_inner.as_str().to_string());
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Rule::subgraph_body_line => {
+                for body_inner in inner.into_inner() {
+                    if body_inner.as_rule() == Rule::statement {
+                        body_statements.extend(parse_statement(body_inner));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    SubgraphSpec {
+        title: title.unwrap_or_else(|| id.clone()),
+        id,
+        statements: body_statements,
+    }
 }
 
 fn parse_vertex_statement(pair: pest::iterators::Pair<Rule>) -> Vec<Statement> {
@@ -540,5 +591,47 @@ mod tests {
         assert_eq!(edges.len(), 2);
         assert_eq!(edges[0].connector.label(), Some("step1"));
         assert_eq!(edges[1].connector.label(), Some("step2"));
+    }
+
+    // Subgraph tests
+    #[test]
+    fn test_parse_subgraph_with_title() {
+        let input = "graph TD\nsubgraph sg1[My Group]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        let subgraphs: Vec<_> = result.statements.iter().filter(|s| matches!(s, Statement::Subgraph(_))).collect();
+        assert_eq!(subgraphs.len(), 1, "Expected 1 subgraph statement");
+        match &subgraphs[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "sg1");
+                assert_eq!(sg.title, "My Group");
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_without_title() {
+        let input = "graph TD\nsubgraph sg1\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        let subgraphs: Vec<_> = result.statements.iter().filter(|s| matches!(s, Statement::Subgraph(_))).collect();
+        assert_eq!(subgraphs.len(), 1, "Expected 1 subgraph statement");
+        match &subgraphs[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "sg1");
+                assert_eq!(sg.title, "sg1"); // title defaults to id
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_with_external_nodes() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\nC --> A\n";
+        let result = parse_flowchart(input).unwrap();
+        let subgraphs: Vec<_> = result.statements.iter().filter(|s| matches!(s, Statement::Subgraph(_))).collect();
+        assert_eq!(subgraphs.len(), 1);
+        // External edge should also be present
+        let edges = result.edges();
+        assert!(!edges.is_empty(), "Expected external edge C --> A");
     }
 }

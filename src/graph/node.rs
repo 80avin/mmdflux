@@ -21,6 +21,8 @@ pub struct Node {
     pub label: String,
     /// Shape of the node.
     pub shape: Shape,
+    /// Parent subgraph ID, if this node belongs to a subgraph.
+    pub parent: Option<String>,
 }
 
 impl Node {
@@ -31,6 +33,7 @@ impl Node {
             label: id.clone(),
             id,
             shape: Shape::default(),
+            parent: None,
         }
     }
 
@@ -44,5 +47,23 @@ impl Node {
     pub fn with_shape(mut self, shape: Shape) -> Self {
         self.shape = shape;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_node_parent_default_none() {
+        let node = Node::new("A");
+        assert_eq!(node.parent, None);
+    }
+
+    #[test]
+    fn test_node_parent_set() {
+        let mut node = Node::new("A");
+        node.parent = Some("sg1".to_string());
+        assert_eq!(node.parent, Some("sg1".to_string()));
     }
 }

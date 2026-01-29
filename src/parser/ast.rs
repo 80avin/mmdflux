@@ -100,6 +100,17 @@ pub struct EdgeSpec {
     pub to: Vertex,
 }
 
+/// A subgraph block in the AST.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubgraphSpec {
+    /// The subgraph identifier.
+    pub id: String,
+    /// The display title.
+    pub title: String,
+    /// Statements contained within the subgraph.
+    pub statements: Vec<Statement>,
+}
+
 /// A statement in the flowchart AST.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Statement {
@@ -107,4 +118,42 @@ pub enum Statement {
     Vertex(Vertex),
     /// An edge connecting two vertices.
     Edge(EdgeSpec),
+    /// A subgraph block.
+    Subgraph(SubgraphSpec),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_subgraph_spec_construction() {
+        let sg = SubgraphSpec {
+            id: "sg1".to_string(),
+            title: "My Group".to_string(),
+            statements: vec![],
+        };
+        assert_eq!(sg.id, "sg1");
+        assert_eq!(sg.title, "My Group");
+        assert!(sg.statements.is_empty());
+    }
+
+    #[test]
+    fn test_statement_subgraph_variant() {
+        let sg = SubgraphSpec {
+            id: "sg1".to_string(),
+            title: "Title".to_string(),
+            statements: vec![
+                Statement::Vertex(Vertex { id: "A".to_string(), shape: None }),
+            ],
+        };
+        let stmt = Statement::Subgraph(sg);
+        match &stmt {
+            Statement::Subgraph(s) => {
+                assert_eq!(s.id, "sg1");
+                assert_eq!(s.statements.len(), 1);
+            }
+            _ => panic!("Expected Subgraph variant"),
+        }
+    }
 }

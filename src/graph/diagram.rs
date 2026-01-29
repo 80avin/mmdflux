@@ -19,6 +19,17 @@ pub enum Direction {
     RightLeft,
 }
 
+/// A subgraph grouping of nodes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Subgraph {
+    /// Unique identifier for this subgraph.
+    pub id: String,
+    /// Display title.
+    pub title: String,
+    /// IDs of nodes belonging to this subgraph.
+    pub nodes: Vec<String>,
+}
+
 /// A complete flowchart diagram.
 #[derive(Debug, Clone)]
 pub struct Diagram {
@@ -28,6 +39,8 @@ pub struct Diagram {
     pub nodes: HashMap<String, Node>,
     /// Edges connecting nodes.
     pub edges: Vec<Edge>,
+    /// Subgraphs indexed by their ID.
+    pub subgraphs: HashMap<String, Subgraph>,
 }
 
 impl Diagram {
@@ -37,6 +50,7 @@ impl Diagram {
             direction,
             nodes: HashMap::new(),
             edges: Vec::new(),
+            subgraphs: HashMap::new(),
         }
     }
 
@@ -58,5 +72,45 @@ impl Diagram {
     /// Get all node IDs.
     pub fn node_ids(&self) -> impl Iterator<Item = &String> {
         self.nodes.keys()
+    }
+
+    /// Check if the diagram contains any subgraphs.
+    pub fn has_subgraphs(&self) -> bool {
+        !self.subgraphs.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_subgraph_construction() {
+        let sg = Subgraph {
+            id: "sg1".to_string(),
+            title: "My Group".to_string(),
+            nodes: vec!["A".to_string(), "B".to_string()],
+        };
+        assert_eq!(sg.id, "sg1");
+        assert_eq!(sg.title, "My Group");
+        assert_eq!(sg.nodes.len(), 2);
+    }
+
+    #[test]
+    fn test_diagram_subgraphs_empty() {
+        let diagram = Diagram::new(Direction::TopDown);
+        assert!(diagram.subgraphs.is_empty());
+        assert!(!diagram.has_subgraphs());
+    }
+
+    #[test]
+    fn test_diagram_has_subgraphs() {
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.subgraphs.insert("sg1".to_string(), Subgraph {
+            id: "sg1".to_string(),
+            title: "Group".to_string(),
+            nodes: vec![],
+        });
+        assert!(diagram.has_subgraphs());
     }
 }
