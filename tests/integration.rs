@@ -574,6 +574,37 @@ mod spreading {
 }
 
 // =============================================================================
+// Baseline Snapshots
+// =============================================================================
+
+mod snapshots {
+    use super::*;
+
+    #[test]
+    fn generate_baseline_snapshots() {
+        let fixture_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures");
+        let snapshot_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("snapshots");
+        fs::create_dir_all(&snapshot_dir).unwrap();
+
+        for entry in fs::read_dir(&fixture_dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.extension().map_or(false, |e| e == "mmd") {
+                let name = path.file_stem().unwrap().to_str().unwrap();
+                let input = fs::read_to_string(&path).unwrap();
+                let flowchart = parse_flowchart(&input).expect("Failed to parse");
+                let diagram = build_diagram(&flowchart);
+                let output = render(&diagram, &RenderOptions::default());
+                fs::write(snapshot_dir.join(format!("{}.txt", name)), &output).unwrap();
+            }
+        }
+    }
+}
+
+// =============================================================================
 // All Fixtures Parse and Render
 // =============================================================================
 
