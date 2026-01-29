@@ -153,6 +153,17 @@ pub fn generate_backward_waypoints(
     }
 }
 
+/// Return the faces used by synthetic backward-edge routing.
+///
+/// Synthetic waypoints route around the right side (TD/BT) or bottom side
+/// (LR/RL) of nodes, so both source and target attach on the same face.
+fn backward_routing_faces(direction: Direction) -> (NodeFace, NodeFace) {
+    match direction {
+        Direction::TopDown | Direction::BottomTop => (NodeFace::Right, NodeFace::Right),
+        Direction::LeftRight | Direction::RightLeft => (NodeFace::Bottom, NodeFace::Bottom),
+    }
+}
+
 /// Route an edge between two nodes.
 pub fn route_edge(
     edge: &Edge,
@@ -929,16 +940,22 @@ pub fn compute_attachment_plan(
             .and_then(|wps| wps.last().copied())
             .unwrap_or((src_bounds.center_x(), src_bounds.center_y()));
 
-        // For LR/RL layouts, force side faces based on edge direction.
-        // Forward edges: source exits forward face, target enters forward face.
-        // Backward edges: source exits backward face, target enters backward face.
+        // Determine faces for this edge.
+        // Backward edges without dagre waypoints use synthetic routing (around
+        // the right/bottom of nodes), so they must be classified on the face
+        // that matches the synthetic path — not the geometric approach angle.
         let is_backward = is_backward_edge(src_bounds, tgt_bounds, direction);
-        let (src_face, tgt_face) = match direction {
-            Direction::LeftRight | Direction::RightLeft => edge_faces(direction, is_backward),
-            _ => (
-                classify_face(src_bounds, src_approach, src_shape),
-                classify_face(tgt_bounds, tgt_approach, tgt_shape),
-            ),
+        let has_dagre_waypoints = waypoints.is_some_and(|wps| !wps.is_empty());
+        let (src_face, tgt_face) = if is_backward && !has_dagre_waypoints {
+            backward_routing_faces(direction)
+        } else {
+            match direction {
+                Direction::LeftRight | Direction::RightLeft => edge_faces(direction, is_backward),
+                _ => (
+                    classify_face(src_bounds, src_approach, src_shape),
+                    classify_face(tgt_bounds, tgt_approach, tgt_shape),
+                ),
+            }
         };
 
         // Extract cross-axis coordinate from approach point for sorting
