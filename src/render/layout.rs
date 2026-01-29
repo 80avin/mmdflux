@@ -392,7 +392,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     };
 
     // --- Phase G: Compute layer_starts from draw positions ---
-    let layer_starts: Vec<usize> = layers
+    // layer_starts maps layer index → primary-axis draw coordinate for that layer.
+    let layer_starts_raw: Vec<usize> = layers
         .iter()
         .map(|layer| {
             layer
@@ -406,6 +407,31 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                 .unwrap_or(0)
         })
         .collect();
+
+    // When ranks are doubled (labels present), real nodes sit at even dagre ranks
+    // (0, 2, 4, ...) and dummies/labels at odd ranks (1, 3, 5, ...).
+    // Build rank_positions: dagre_rank → draw coordinate.
+    // Even ranks map to layer_starts_raw[rank/2].
+    // Odd ranks interpolate between adjacent layers.
+    let layer_starts: Vec<usize> = if ranks_doubled && layer_starts_raw.len() >= 2 {
+        let max_rank = layer_starts_raw.len() * 2 - 1;
+        (0..=max_rank)
+            .map(|rank| {
+                let layer_idx = rank / 2;
+                if rank % 2 == 0 {
+                    // Even rank → real node layer
+                    layer_starts_raw.get(layer_idx).copied().unwrap_or(0)
+                } else {
+                    // Odd rank → midpoint between adjacent layers
+                    let curr = layer_starts_raw.get(layer_idx).copied().unwrap_or(0);
+                    let next = layer_starts_raw.get(layer_idx + 1).copied().unwrap_or(curr);
+                    (curr + next) / 2
+                }
+            })
+            .collect()
+    } else {
+        layer_starts_raw
+    };
 
     // --- Phase H: Transform waypoints and labels ---
     let ctx = TransformContext {
@@ -433,7 +459,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         &result.label_positions,
         &diagram.edges,
         &ctx,
-        &node_bounds,
+        &layer_starts,
         is_vertical,
         width,
         height,
@@ -765,15 +791,14 @@ fn transform_waypoints_direct(
 
 /// Transform dagre label positions to ASCII draw coordinates.
 ///
-/// The primary axis (Y for TD/BT, X for LR/RL) is placed at the midpoint
-/// between the source and target node boundaries, ensuring the label lands
-/// in the gap between nodes rather than on a node row. The cross axis uses
-/// uniform scaling from dagre coordinates.
+/// The primary axis (Y for TD/BT, X for LR/RL) uses rank-based snapping via
+/// `layer_starts[rank]`, matching how `transform_waypoints_direct()` works.
+/// The cross axis uses uniform scaling from dagre coordinates.
 fn transform_label_positions_direct(
     label_positions: &HashMap<usize, WaypointWithRank>,
     edges: &[Edge],
     ctx: &TransformContext,
-    node_bounds: &HashMap<String, NodeBounds>,
+    layer_starts: &[usize],
     is_vertical: bool,
     canvas_width: usize,
     canvas_height: usize,
@@ -783,36 +808,20 @@ fn transform_label_positions_direct(
     for (edge_idx, wp) in label_positions {
         if let Some(edge) = edges.get(*edge_idx) {
             let key = (edge.from.clone(), edge.to.clone());
+            let rank_idx = wp.rank as usize;
+            let layer_pos = layer_starts.get(rank_idx).copied().unwrap_or(0);
             let (scaled_x, scaled_y) = ctx.to_ascii(wp.point.x, wp.point.y);
 
-            // Compute primary axis as midpoint between source bottom and target top.
-            let pos = match (node_bounds.get(&edge.from), node_bounds.get(&edge.to)) {
-                (Some(src), Some(tgt)) => {
-                    if is_vertical {
-                        let src_bottom = src.y + src.height;
-                        let tgt_top = tgt.y;
-                        let mid_y = (src_bottom + tgt_top) / 2;
-                        (
-                            scaled_x.min(canvas_width.saturating_sub(1)),
-                            mid_y.min(canvas_height.saturating_sub(1)),
-                        )
-                    } else {
-                        let src_right = src.x + src.width;
-                        let tgt_left = tgt.x;
-                        let mid_x = (src_right + tgt_left) / 2;
-                        (
-                            mid_x.min(canvas_width.saturating_sub(1)),
-                            scaled_y.min(canvas_height.saturating_sub(1)),
-                        )
-                    }
-                }
-                _ => {
-                    // Fallback to uniform scaling if node bounds missing
-                    (
-                        scaled_x.min(canvas_width.saturating_sub(1)),
-                        scaled_y.min(canvas_height.saturating_sub(1)),
-                    )
-                }
+            let pos = if is_vertical {
+                (
+                    scaled_x.min(canvas_width.saturating_sub(1)),
+                    layer_pos,
+                )
+            } else {
+                (
+                    layer_pos,
+                    scaled_y.min(canvas_height.saturating_sub(1)),
+                )
             };
             converted.insert(key, pos);
         }
@@ -1200,37 +1209,16 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let mut bounds = HashMap::new();
-        bounds.insert(
-            "A".to_string(),
-            NodeBounds {
-                x: 0,
-                y: 0,
-                width: 10,
-                height: 3,
-                dagre_center_x: None,
-                dagre_center_y: None,
-            },
-        );
-        bounds.insert(
-            "B".to_string(),
-            NodeBounds {
-                x: 0,
-                y: 13,
-                width: 10,
-                height: 3,
-                dagre_center_x: None,
-                dagre_center_y: None,
-            },
-        );
+        // layer_starts: rank 0 → y=0, rank 1 → y=8, rank 2 → y=16
+        let layer_starts = vec![0, 8, 16];
         let result = transform_label_positions_direct(
-            &labels, &edges, &ctx, &bounds, true, 50, 20,
+            &labels, &edges, &ctx, &layer_starts, true, 50, 20,
         );
 
         let key = ("A".to_string(), "B".to_string());
         assert!(result.contains_key(&key));
         // x uses uniform scale: (150-50)*0.22 + 1 = 23
-        // y = midpoint of A bottom (0+3=3) and B top (13) = (3+13)/2 = 8
+        // y = layer_starts[rank=1] = 8
         assert_eq!(result[&key], (23, 8));
     }
 
@@ -1264,31 +1252,9 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let mut bounds = HashMap::new();
-        bounds.insert(
-            "A".to_string(),
-            NodeBounds {
-                x: 0,
-                y: 0,
-                width: 10,
-                height: 3,
-                dagre_center_x: None,
-                dagre_center_y: None,
-            },
-        );
-        bounds.insert(
-            "B".to_string(),
-            NodeBounds {
-                x: 0,
-                y: 13,
-                width: 10,
-                height: 3,
-                dagre_center_x: None,
-                dagre_center_y: None,
-            },
-        );
+        let layer_starts = vec![0, 8, 16];
         let result = transform_label_positions_direct(
-            &labels, &edges, &ctx, &bounds, true, 50, 20,
+            &labels, &edges, &ctx, &layer_starts, true, 50, 20,
         );
 
         let key = ("A".to_string(), "B".to_string());
@@ -1310,9 +1276,9 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let bounds = HashMap::new();
+        let layer_starts: Vec<usize> = vec![];
         let result = transform_label_positions_direct(
-            &labels, &edges, &ctx, &bounds, true, 50, 20,
+            &labels, &edges, &ctx, &layer_starts, true, 50, 20,
         );
         assert!(result.is_empty());
     }
@@ -1377,9 +1343,9 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let bounds = HashMap::new();
+        let layer_starts = vec![0];
         let result = transform_label_positions_direct(
-            &labels, &edges, &ctx, &bounds, true, 50, 20,
+            &labels, &edges, &ctx, &layer_starts, true, 50, 20,
         );
 
         assert!(
