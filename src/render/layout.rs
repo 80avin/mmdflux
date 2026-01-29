@@ -7,8 +7,9 @@
 use std::collections::{HashMap, HashSet};
 
 use super::shape::{NodeBounds, node_dimensions};
-use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig};
-use crate::graph::{Diagram, Direction, Shape};
+use crate::dagre::normalize::WaypointWithRank;
+use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Point};
+use crate::graph::{Diagram, Direction, Edge, Shape};
 
 /// Grid position of a node (layer/column in abstract grid coordinates).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1334,6 +1335,60 @@ fn collision_repair(
     }
 }
 
+/// Transform dagre waypoints to ASCII draw coordinates using uniform scale factors.
+///
+/// The primary axis (Y for TD/BT, X for LR/RL) uses `layer_starts` to snap to
+/// the correct rank position. The cross axis uses uniform scaling from dagre
+/// coordinates, ensuring consistency with node positions.
+#[allow(clippy::too_many_arguments)]
+fn transform_waypoints_direct(
+    edge_waypoints: &HashMap<usize, Vec<WaypointWithRank>>,
+    edges: &[Edge],
+    dagre_min_x: f64,
+    dagre_min_y: f64,
+    scale_x: f64,
+    scale_y: f64,
+    padding: usize,
+    left_label_margin: usize,
+    layer_starts: &[usize],
+    is_vertical: bool,
+    canvas_width: usize,
+    canvas_height: usize,
+) -> HashMap<(String, String), Vec<(usize, usize)>> {
+    let mut converted = HashMap::new();
+
+    for (edge_idx, waypoints) in edge_waypoints {
+        if let Some(edge) = edges.get(*edge_idx) {
+            let key = (edge.from.clone(), edge.to.clone());
+
+            let wps: Vec<(usize, usize)> = waypoints
+                .iter()
+                .map(|wp| {
+                    let rank_idx = wp.rank as usize;
+
+                    if is_vertical {
+                        let y = layer_starts.get(rank_idx).copied().unwrap_or(0);
+                        let x = ((wp.point.x - dagre_min_x) * scale_x).round() as usize
+                            + padding
+                            + left_label_margin;
+                        let x = x.min(canvas_width.saturating_sub(1));
+                        (x, y)
+                    } else {
+                        let x = layer_starts.get(rank_idx).copied().unwrap_or(0);
+                        let y = ((wp.point.y - dagre_min_y) * scale_y).round() as usize + padding;
+                        let y = y.min(canvas_height.saturating_sub(1));
+                        (x, y)
+                    }
+                })
+                .collect();
+
+            converted.insert(key, wps);
+        }
+    }
+
+    converted
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1940,5 +1995,157 @@ mod tests {
 
         assert_eq!(positions["B"], (0, 0));
         assert_eq!(positions["A"], (20, 0));
+    }
+
+    // =========================================================================
+    // Waypoint Transform Tests (Phase 4)
+    // =========================================================================
+
+    #[test]
+    fn waypoint_transform_vertical_basic() {
+        use crate::graph::{Arrow, Stroke};
+        let edges = vec![Edge {
+            from: "A".into(),
+            to: "C".into(),
+            label: None,
+            stroke: Stroke::Solid,
+            arrow: Arrow::Normal,
+        }];
+
+        let mut waypoints = HashMap::new();
+        waypoints.insert(
+            0usize,
+            vec![WaypointWithRank {
+                point: Point { x: 100.0, y: 75.0 },
+                rank: 1,
+            }],
+        );
+
+        let layer_starts = vec![1, 5, 9];
+        let result = transform_waypoints_direct(
+            &waypoints,
+            &edges,
+            50.0,
+            25.0,
+            0.22,
+            0.11,
+            1,
+            0,
+            &layer_starts,
+            true,
+            80,
+            20,
+        );
+
+        let key = ("A".to_string(), "C".to_string());
+        assert!(result.contains_key(&key), "should have waypoints for A→C");
+        let wps = &result[&key];
+        assert_eq!(wps.len(), 1);
+        assert_eq!(wps[0].1, 5, "y should be layer_starts[1]");
+        assert_eq!(wps[0].0, 12, "x should be scaled dagre x + padding");
+    }
+
+    #[test]
+    fn waypoint_transform_horizontal_basic() {
+        use crate::graph::{Arrow, Stroke};
+        let edges = vec![Edge {
+            from: "A".into(),
+            to: "C".into(),
+            label: None,
+            stroke: Stroke::Solid,
+            arrow: Arrow::Normal,
+        }];
+
+        let mut waypoints = HashMap::new();
+        waypoints.insert(
+            0usize,
+            vec![WaypointWithRank {
+                point: Point { x: 75.0, y: 100.0 },
+                rank: 1,
+            }],
+        );
+
+        let layer_starts = vec![1, 8, 15];
+        let result = transform_waypoints_direct(
+            &waypoints,
+            &edges,
+            25.0,
+            50.0,
+            0.22,
+            0.67,
+            1,
+            0,
+            &layer_starts,
+            false,
+            40,
+            80,
+        );
+
+        let key = ("A".to_string(), "C".to_string());
+        let wps = &result[&key];
+        assert_eq!(wps[0].0, 8, "x should be layer_starts[1]");
+        assert_eq!(wps[0].1, 35, "y should be scaled dagre y + padding");
+    }
+
+    #[test]
+    fn waypoint_transform_clamps_to_canvas() {
+        use crate::graph::{Arrow, Stroke};
+        let edges = vec![Edge {
+            from: "A".into(),
+            to: "B".into(),
+            label: None,
+            stroke: Stroke::Solid,
+            arrow: Arrow::Normal,
+        }];
+
+        let mut waypoints = HashMap::new();
+        waypoints.insert(
+            0usize,
+            vec![WaypointWithRank {
+                point: Point { x: 5000.0, y: 50.0 },
+                rank: 0,
+            }],
+        );
+
+        let layer_starts = vec![1];
+        let result = transform_waypoints_direct(
+            &waypoints,
+            &edges,
+            0.0,
+            0.0,
+            0.5,
+            0.5,
+            1,
+            0,
+            &layer_starts,
+            true,
+            30,
+            20,
+        );
+
+        let key = ("A".to_string(), "B".to_string());
+        let wps = &result[&key];
+        assert!(wps[0].0 <= 29, "x clamped to canvas_width - 1");
+    }
+
+    #[test]
+    fn waypoint_transform_empty_input() {
+        let edges: Vec<Edge> = vec![];
+        let waypoints: HashMap<usize, Vec<WaypointWithRank>> = HashMap::new();
+        let result = transform_waypoints_direct(
+            &waypoints,
+            &edges,
+            0.0,
+            0.0,
+            0.2,
+            0.1,
+            1,
+            0,
+            &[],
+            true,
+            80,
+            20,
+        );
+        assert!(result.is_empty());
     }
 }
