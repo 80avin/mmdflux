@@ -674,6 +674,46 @@ mod direct_layout {
             "LR layout should generally be wider than tall"
         );
     }
+
+    #[test]
+    fn direct_preserves_cross_axis_stagger() {
+        // fan_out.mmd: A→B, A→C, A→D — layer 1 has B, C, D which should
+        // have distinct x positions from dagre's BK algorithm.
+        let diagram = parse_and_build("fan_out.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        // B, C, D are in the same layer — they should have distinct x centers
+        let b_x = layout.node_bounds["B"].center_x();
+        let c_x = layout.node_bounds["C"].center_x();
+        let d_x = layout.node_bounds["D"].center_x();
+
+        // At least two must differ (dagre assigns different cross-axis positions)
+        assert!(
+            b_x != c_x || c_x != d_x,
+            "B/C/D all at same x center ({}) — cross-axis stagger was lost",
+            b_x,
+        );
+    }
+
+    #[test]
+    fn direct_cycle_no_edge_overlap_at_attachment() {
+        let diagram = parse_and_build("simple_cycle.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let wp_vecs: Vec<&Vec<(usize, usize)>> = layout.edge_waypoints.values().collect();
+        for i in 0..wp_vecs.len() {
+            for j in (i + 1)..wp_vecs.len() {
+                if !wp_vecs[i].is_empty() && !wp_vecs[j].is_empty() {
+                    assert_ne!(
+                        wp_vecs[i], wp_vecs[j],
+                        "two edges share identical waypoint paths — overlap likely"
+                    );
+                }
+            }
+        }
+    }
 }
 
 // =============================================================================
