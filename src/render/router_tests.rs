@@ -660,16 +660,13 @@ fn test_lr_attachment_consensus_y_same_height() {
         dagre_center_x: None,
         dagre_center_y: None,
     };
-    let (src, tgt) = resolve_attachment_points(
-        None,
-        None,
-        &from,
-        Shape::Rectangle,
-        &to,
-        Shape::Rectangle,
-        &[],
-        Direction::LeftRight,
-    );
+    let ep = EdgeEndpoints {
+        from_bounds: &from,
+        from_shape: Shape::Rectangle,
+        to_bounds: &to,
+        to_shape: Shape::Rectangle,
+    };
+    let (src, tgt) = resolve_attachment_points(None, None, &ep, &[], Direction::LeftRight);
     assert_eq!(
         src.1, tgt.1,
         "LR attachment points should have consensus y, got src.y={} tgt.y={}",
@@ -696,16 +693,13 @@ fn test_lr_attachment_consensus_y_different_height() {
         dagre_center_x: None,
         dagre_center_y: None,
     };
-    let (src, tgt) = resolve_attachment_points(
-        None,
-        None,
-        &from,
-        Shape::Rectangle,
-        &to,
-        Shape::Rectangle,
-        &[],
-        Direction::LeftRight,
-    );
+    let ep = EdgeEndpoints {
+        from_bounds: &from,
+        from_shape: Shape::Rectangle,
+        to_bounds: &to,
+        to_shape: Shape::Rectangle,
+    };
+    let (src, tgt) = resolve_attachment_points(None, None, &ep, &[], Direction::LeftRight);
     assert_eq!(
         src.1, tgt.1,
         "LR attachment points should have consensus y even with different heights, got src.y={} tgt.y={}",
@@ -731,16 +725,13 @@ fn test_rl_attachment_consensus_y() {
         dagre_center_x: None,
         dagre_center_y: None,
     };
-    let (src, tgt) = resolve_attachment_points(
-        None,
-        None,
-        &from,
-        Shape::Rectangle,
-        &to,
-        Shape::Rectangle,
-        &[],
-        Direction::RightLeft,
-    );
+    let ep = EdgeEndpoints {
+        from_bounds: &from,
+        from_shape: Shape::Rectangle,
+        to_bounds: &to,
+        to_shape: Shape::Rectangle,
+    };
+    let (src, tgt) = resolve_attachment_points(None, None, &ep, &[], Direction::RightLeft);
     assert_eq!(
         src.1, tgt.1,
         "RL attachment points should have consensus y, got src.y={} tgt.y={}",

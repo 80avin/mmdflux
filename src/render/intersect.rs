@@ -49,12 +49,10 @@ pub fn classify_face(
         } else {
             NodeFace::Bottom
         }
+    } else if dx < 0.0 {
+        NodeFace::Left
     } else {
-        if dx < 0.0 {
-            NodeFace::Left
-        } else {
-            NodeFace::Right
-        }
+        NodeFace::Right
     }
 }
 

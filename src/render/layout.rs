@@ -191,10 +191,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     let mut current_layer: Vec<String> = Vec::new();
     let mut last_primary: Option<f64> = None;
     for (id, primary, _) in &layer_coords {
-        if let Some(last) = last_primary {
-            if (*primary - last).abs() > 25.0 && !current_layer.is_empty() {
-                layers.push(std::mem::take(&mut current_layer));
-            }
+        if let Some(last) = last_primary
+            && (*primary - last).abs() > 25.0
+            && !current_layer.is_empty()
+        {
+            layers.push(std::mem::take(&mut current_layer));
         }
         current_layer.push(id.clone());
         last_primary = Some(*primary);
@@ -384,35 +385,29 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .collect();
 
     // --- Phase H: Transform waypoints and labels ---
-    let edge_waypoints_converted = transform_waypoints_direct(
-        &result.edge_waypoints,
-        &diagram.edges,
+    let ctx = TransformContext {
         dagre_min_x,
         dagre_min_y,
         scale_x,
         scale_y,
-        config.padding,
-        config.left_label_margin,
+        padding: config.padding,
+        left_label_margin: config.left_label_margin,
+        overhang_x: max_overhang_x,
+        overhang_y: max_overhang_y,
+    };
+
+    let edge_waypoints_converted = transform_waypoints_direct(
+        &result.edge_waypoints,
+        &diagram.edges,
+        &ctx,
         &layer_starts,
         is_vertical,
         width,
         height,
-        max_overhang_x,
-        max_overhang_y,
     );
 
-    let edge_label_positions_converted = transform_label_positions_direct(
-        &result.label_positions,
-        &diagram.edges,
-        dagre_min_x,
-        dagre_min_y,
-        scale_x,
-        scale_y,
-        config.padding,
-        config.left_label_margin,
-        max_overhang_x,
-        max_overhang_y,
-    );
+    let edge_label_positions_converted =
+        transform_label_positions_direct(&result.label_positions, &diagram.edges, &ctx);
 
     // --- Phase I: Nudge waypoints that collide with nodes ---
     let mut edge_waypoints_final = edge_waypoints_converted;
@@ -626,27 +621,31 @@ fn rank_gap_repair(
     }
 }
 
-/// Transform dagre waypoints to ASCII draw coordinates using uniform scale factors.
-///
-/// The primary axis (Y for TD/BT, X for LR/RL) uses `layer_starts` to snap to
-/// the correct rank position. The cross axis uses uniform scaling from dagre
-/// coordinates, ensuring consistency with node positions.
-#[allow(clippy::too_many_arguments)]
-fn transform_waypoints_direct(
-    edge_waypoints: &HashMap<usize, Vec<WaypointWithRank>>,
-    edges: &[Edge],
+/// Shared parameters for transforming dagre coordinates to ASCII draw coordinates.
+struct TransformContext {
     dagre_min_x: f64,
     dagre_min_y: f64,
     scale_x: f64,
     scale_y: f64,
     padding: usize,
     left_label_margin: usize,
+    overhang_x: usize,
+    overhang_y: usize,
+}
+
+/// Transform dagre waypoints to ASCII draw coordinates using uniform scale factors.
+///
+/// The primary axis (Y for TD/BT, X for LR/RL) uses `layer_starts` to snap to
+/// the correct rank position. The cross axis uses uniform scaling from dagre
+/// coordinates, ensuring consistency with node positions.
+fn transform_waypoints_direct(
+    edge_waypoints: &HashMap<usize, Vec<WaypointWithRank>>,
+    edges: &[Edge],
+    ctx: &TransformContext,
     layer_starts: &[usize],
     is_vertical: bool,
     canvas_width: usize,
     canvas_height: usize,
-    overhang_x: usize,
-    overhang_y: usize,
 ) -> HashMap<(String, String), Vec<(usize, usize)>> {
     let mut converted = HashMap::new();
 
@@ -661,17 +660,17 @@ fn transform_waypoints_direct(
 
                     if is_vertical {
                         let y = layer_starts.get(rank_idx).copied().unwrap_or(0);
-                        let x = ((wp.point.x - dagre_min_x) * scale_x).round() as usize
-                            + overhang_x
-                            + padding
-                            + left_label_margin;
+                        let x = ((wp.point.x - ctx.dagre_min_x) * ctx.scale_x).round() as usize
+                            + ctx.overhang_x
+                            + ctx.padding
+                            + ctx.left_label_margin;
                         let x = x.min(canvas_width.saturating_sub(1));
                         (x, y)
                     } else {
                         let x = layer_starts.get(rank_idx).copied().unwrap_or(0);
-                        let y = ((wp.point.y - dagre_min_y) * scale_y).round() as usize
-                            + overhang_y
-                            + padding;
+                        let y = ((wp.point.y - ctx.dagre_min_y) * ctx.scale_y).round() as usize
+                            + ctx.overhang_y
+                            + ctx.padding;
                         let y = y.min(canvas_height.saturating_sub(1));
                         (x, y)
                     }
@@ -690,25 +689,20 @@ fn transform_waypoints_direct(
 fn transform_label_positions_direct(
     label_positions: &HashMap<usize, Point>,
     edges: &[Edge],
-    dagre_min_x: f64,
-    dagre_min_y: f64,
-    scale_x: f64,
-    scale_y: f64,
-    padding: usize,
-    left_label_margin: usize,
-    overhang_x: usize,
-    overhang_y: usize,
+    ctx: &TransformContext,
 ) -> HashMap<(String, String), (usize, usize)> {
     let mut converted = HashMap::new();
 
     for (edge_idx, pos) in label_positions {
         if let Some(edge) = edges.get(*edge_idx) {
             let key = (edge.from.clone(), edge.to.clone());
-            let x = ((pos.x - dagre_min_x) * scale_x).round() as usize
-                + overhang_x
-                + padding
-                + left_label_margin;
-            let y = ((pos.y - dagre_min_y) * scale_y).round() as usize + overhang_y + padding;
+            let x = ((pos.x - ctx.dagre_min_x) * ctx.scale_x).round() as usize
+                + ctx.overhang_x
+                + ctx.padding
+                + ctx.left_label_margin;
+            let y = ((pos.y - ctx.dagre_min_y) * ctx.scale_y).round() as usize
+                + ctx.overhang_y
+                + ctx.padding;
             converted.insert(key, (x, y));
         }
     }
@@ -915,22 +909,18 @@ mod tests {
         );
 
         let layer_starts = vec![1, 5, 9];
-        let result = transform_waypoints_direct(
-            &waypoints,
-            &edges,
-            50.0,
-            25.0,
-            0.22,
-            0.11,
-            1,
-            0,
-            &layer_starts,
-            true,
-            80,
-            20,
-            0,
-            0,
-        );
+        let ctx = TransformContext {
+            dagre_min_x: 50.0,
+            dagre_min_y: 25.0,
+            scale_x: 0.22,
+            scale_y: 0.11,
+            padding: 1,
+            left_label_margin: 0,
+            overhang_x: 0,
+            overhang_y: 0,
+        };
+        let result =
+            transform_waypoints_direct(&waypoints, &edges, &ctx, &layer_starts, true, 80, 20);
 
         let key = ("A".to_string(), "C".to_string());
         assert!(result.contains_key(&key), "should have waypoints for A→C");
@@ -961,22 +951,18 @@ mod tests {
         );
 
         let layer_starts = vec![1, 8, 15];
-        let result = transform_waypoints_direct(
-            &waypoints,
-            &edges,
-            25.0,
-            50.0,
-            0.22,
-            0.67,
-            1,
-            0,
-            &layer_starts,
-            false,
-            40,
-            80,
-            0,
-            0,
-        );
+        let ctx = TransformContext {
+            dagre_min_x: 25.0,
+            dagre_min_y: 50.0,
+            scale_x: 0.22,
+            scale_y: 0.67,
+            padding: 1,
+            left_label_margin: 0,
+            overhang_x: 0,
+            overhang_y: 0,
+        };
+        let result =
+            transform_waypoints_direct(&waypoints, &edges, &ctx, &layer_starts, false, 40, 80);
 
         let key = ("A".to_string(), "C".to_string());
         let wps = &result[&key];
@@ -1005,22 +991,18 @@ mod tests {
         );
 
         let layer_starts = vec![1];
-        let result = transform_waypoints_direct(
-            &waypoints,
-            &edges,
-            0.0,
-            0.0,
-            0.5,
-            0.5,
-            1,
-            0,
-            &layer_starts,
-            true,
-            30,
-            20,
-            0,
-            0,
-        );
+        let ctx = TransformContext {
+            dagre_min_x: 0.0,
+            dagre_min_y: 0.0,
+            scale_x: 0.5,
+            scale_y: 0.5,
+            padding: 1,
+            left_label_margin: 0,
+            overhang_x: 0,
+            overhang_y: 0,
+        };
+        let result =
+            transform_waypoints_direct(&waypoints, &edges, &ctx, &layer_starts, true, 30, 20);
 
         let key = ("A".to_string(), "B".to_string());
         let wps = &result[&key];
@@ -1031,22 +1013,17 @@ mod tests {
     fn waypoint_transform_empty_input() {
         let edges: Vec<Edge> = vec![];
         let waypoints: HashMap<usize, Vec<WaypointWithRank>> = HashMap::new();
-        let result = transform_waypoints_direct(
-            &waypoints,
-            &edges,
-            0.0,
-            0.0,
-            0.2,
-            0.1,
-            1,
-            0,
-            &[],
-            true,
-            80,
-            20,
-            0,
-            0,
-        );
+        let ctx = TransformContext {
+            dagre_min_x: 0.0,
+            dagre_min_y: 0.0,
+            scale_x: 0.2,
+            scale_y: 0.1,
+            padding: 1,
+            left_label_margin: 0,
+            overhang_x: 0,
+            overhang_y: 0,
+        };
+        let result = transform_waypoints_direct(&waypoints, &edges, &ctx, &[], true, 80, 20);
         assert!(result.is_empty());
     }
 
@@ -1068,8 +1045,17 @@ mod tests {
         let mut labels = HashMap::new();
         labels.insert(0usize, Point { x: 150.0, y: 100.0 });
 
-        let result =
-            transform_label_positions_direct(&labels, &edges, 50.0, 50.0, 0.22, 0.11, 1, 0, 0, 0);
+        let ctx = TransformContext {
+            dagre_min_x: 50.0,
+            dagre_min_y: 50.0,
+            scale_x: 0.22,
+            scale_y: 0.11,
+            padding: 1,
+            left_label_margin: 0,
+            overhang_x: 0,
+            overhang_y: 0,
+        };
+        let result = transform_label_positions_direct(&labels, &edges, &ctx);
 
         let key = ("A".to_string(), "B".to_string());
         assert!(result.contains_key(&key));
@@ -1090,8 +1076,17 @@ mod tests {
         let mut labels = HashMap::new();
         labels.insert(0usize, Point { x: 150.0, y: 100.0 });
 
-        let result =
-            transform_label_positions_direct(&labels, &edges, 50.0, 50.0, 0.22, 0.11, 1, 3, 0, 0);
+        let ctx = TransformContext {
+            dagre_min_x: 50.0,
+            dagre_min_y: 50.0,
+            scale_x: 0.22,
+            scale_y: 0.11,
+            padding: 1,
+            left_label_margin: 3,
+            overhang_x: 0,
+            overhang_y: 0,
+        };
+        let result = transform_label_positions_direct(&labels, &edges, &ctx);
 
         let key = ("A".to_string(), "B".to_string());
         assert_eq!(result[&key].0, 26);
@@ -1101,8 +1096,17 @@ mod tests {
     fn label_transform_empty_input() {
         let edges: Vec<Edge> = vec![];
         let labels: HashMap<usize, Point> = HashMap::new();
-        let result =
-            transform_label_positions_direct(&labels, &edges, 0.0, 0.0, 0.2, 0.1, 1, 0, 0, 0);
+        let ctx = TransformContext {
+            dagre_min_x: 0.0,
+            dagre_min_y: 0.0,
+            scale_x: 0.2,
+            scale_y: 0.1,
+            padding: 1,
+            left_label_margin: 0,
+            overhang_x: 0,
+            overhang_y: 0,
+        };
+        let result = transform_label_positions_direct(&labels, &edges, &ctx);
         assert!(result.is_empty());
     }
 
@@ -1120,8 +1124,17 @@ mod tests {
         let mut labels = HashMap::new();
         labels.insert(5usize, Point { x: 100.0, y: 100.0 });
 
-        let result =
-            transform_label_positions_direct(&labels, &edges, 0.0, 0.0, 0.2, 0.1, 1, 0, 0, 0);
+        let ctx = TransformContext {
+            dagre_min_x: 0.0,
+            dagre_min_y: 0.0,
+            scale_x: 0.2,
+            scale_y: 0.1,
+            padding: 1,
+            left_label_margin: 0,
+            overhang_x: 0,
+            overhang_y: 0,
+        };
+        let result = transform_label_positions_direct(&labels, &edges, &ctx);
 
         assert!(
             result.is_empty(),

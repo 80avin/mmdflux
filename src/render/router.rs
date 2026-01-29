@@ -11,6 +11,18 @@ use super::layout::Layout;
 use super::shape::NodeBounds;
 use crate::graph::{Direction, Edge, Shape};
 
+/// Map from (node_id, face) to the edges attached at that face.
+/// Each entry is `(edge_index, is_source_side, approach_cross_axis)`.
+type FaceGroupMap = HashMap<(String, NodeFace), Vec<(usize, bool, usize)>>;
+
+/// Grouped endpoint parameters for edge routing functions.
+struct EdgeEndpoints<'a> {
+    from_bounds: &'a NodeBounds,
+    from_shape: Shape,
+    to_bounds: &'a NodeBounds,
+    to_shape: Shape,
+}
+
 /// A point on the canvas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Point {
@@ -120,6 +132,13 @@ pub fn route_edge(
         .copied()
         .unwrap_or(Shape::Rectangle);
 
+    let endpoints = EdgeEndpoints {
+        from_bounds,
+        from_shape,
+        to_bounds,
+        to_shape,
+    };
+
     // Check for waypoints from normalization — works for both forward and backward long edges
     let edge_key = (edge.from.clone(), edge.to.clone());
     if let Some(wps) = layout.edge_waypoints.get(&edge_key)
@@ -138,10 +157,7 @@ pub fn route_edge(
 
         return route_edge_with_waypoints(
             edge,
-            from_bounds,
-            from_shape,
-            to_bounds,
-            to_shape,
+            &endpoints,
             &waypoints,
             diagram_direction,
             src_attach_override,
@@ -152,10 +168,7 @@ pub fn route_edge(
     // No waypoints: direct routing (works for both forward and short backward edges)
     route_edge_direct(
         edge,
-        from_bounds,
-        from_shape,
-        to_bounds,
-        to_shape,
+        &endpoints,
         diagram_direction,
         src_attach_override,
         tgt_attach_override,
@@ -168,10 +181,7 @@ pub fn route_edge(
 /// based on the approach angle from the first/last waypoint.
 fn route_edge_with_waypoints(
     edge: &Edge,
-    from_bounds: &NodeBounds,
-    from_shape: Shape,
-    to_bounds: &NodeBounds,
-    to_shape: Shape,
+    ep: &EdgeEndpoints,
     waypoints: &[(usize, usize)],
     direction: Direction,
     src_attach_override: Option<(usize, usize)>,
@@ -181,23 +191,20 @@ fn route_edge_with_waypoints(
     let (src_attach_raw, tgt_attach_raw) = resolve_attachment_points(
         src_attach_override,
         tgt_attach_override,
-        from_bounds,
-        from_shape,
-        to_bounds,
-        to_shape,
+        ep,
         waypoints,
         direction,
     );
 
     // Clamp attachment points to actual node boundaries
-    let src_attach_point = clamp_to_boundary(src_attach_raw, from_bounds);
-    let tgt_attach_point = clamp_to_boundary(tgt_attach_raw, to_bounds);
+    let src_attach_point = clamp_to_boundary(src_attach_raw, ep.from_bounds);
+    let tgt_attach_point = clamp_to_boundary(tgt_attach_raw, ep.to_bounds);
     let src_attach = (src_attach_point.x, src_attach_point.y);
     let tgt_attach = (tgt_attach_point.x, tgt_attach_point.y);
 
     // Use face-aware offset to avoid corner ambiguity (e.g., a point at
     // the top-right corner should offset RIGHT for LR layouts, not UP)
-    let is_backward = is_backward_edge(from_bounds, to_bounds, direction);
+    let is_backward = is_backward_edge(ep.from_bounds, ep.to_bounds, direction);
     let (src_face, tgt_face) = edge_faces(direction, is_backward);
     let start = offset_for_face(src_attach, src_face);
     let end = offset_for_face(tgt_attach, tgt_face);
@@ -232,10 +239,7 @@ fn route_edge_with_waypoints(
 /// the relative positions of the nodes.
 fn route_edge_direct(
     edge: &Edge,
-    from_bounds: &NodeBounds,
-    from_shape: Shape,
-    to_bounds: &NodeBounds,
-    to_shape: Shape,
+    ep: &EdgeEndpoints,
     direction: Direction,
     src_attach_override: Option<(usize, usize)>,
     tgt_attach_override: Option<(usize, usize)>,
@@ -245,22 +249,19 @@ fn route_edge_direct(
     let (src_attach_raw, tgt_attach_raw) = resolve_attachment_points(
         src_attach_override,
         tgt_attach_override,
-        from_bounds,
-        from_shape,
-        to_bounds,
-        to_shape,
+        ep,
         empty_waypoints,
         direction,
     );
 
     // Clamp attachment points to actual node boundaries
-    let src_attach_point = clamp_to_boundary(src_attach_raw, from_bounds);
-    let tgt_attach_point = clamp_to_boundary(tgt_attach_raw, to_bounds);
+    let src_attach_point = clamp_to_boundary(src_attach_raw, ep.from_bounds);
+    let tgt_attach_point = clamp_to_boundary(tgt_attach_raw, ep.to_bounds);
     let src_attach = (src_attach_point.x, src_attach_point.y);
     let tgt_attach = (tgt_attach_point.x, tgt_attach_point.y);
 
     // Use face-aware offset to avoid corner ambiguity
-    let is_backward = is_backward_edge(from_bounds, to_bounds, direction);
+    let is_backward = is_backward_edge(ep.from_bounds, ep.to_bounds, direction);
     let (src_face, tgt_face) = edge_faces(direction, is_backward);
     let start = offset_for_face(src_attach, src_face);
     let end = offset_for_face(tgt_attach, tgt_face);
@@ -306,13 +307,13 @@ fn route_edge_direct(
 fn resolve_attachment_points(
     src_override: Option<(usize, usize)>,
     tgt_override: Option<(usize, usize)>,
-    from_bounds: &NodeBounds,
-    from_shape: Shape,
-    to_bounds: &NodeBounds,
-    to_shape: Shape,
+    ep: &EdgeEndpoints,
     waypoints: &[(usize, usize)],
     direction: Direction,
 ) -> ((usize, usize), (usize, usize)) {
+    let from_bounds = ep.from_bounds;
+    let to_bounds = ep.to_bounds;
+
     // For LR/RL layouts, all edges (forward and backward) attach to the
     // side faces. Forward edges use consensus-y for straight horizontal
     // segments. Backward edges also use side faces (matching Mermaid behavior)
@@ -355,8 +356,15 @@ fn resolve_attachment_points(
         _ => {}
     }
 
-    let fallback =
-        || calculate_attachment_points(from_bounds, from_shape, to_bounds, to_shape, waypoints);
+    let fallback = || {
+        calculate_attachment_points(
+            from_bounds,
+            ep.from_shape,
+            to_bounds,
+            ep.to_shape,
+            waypoints,
+        )
+    };
     let src = src_override.unwrap_or_else(|| fallback().0);
     let tgt = tgt_override.unwrap_or_else(|| fallback().1);
     (src, tgt)
@@ -838,10 +846,9 @@ pub fn compute_attachment_plan(
     direction: Direction,
 ) -> HashMap<usize, AttachmentOverride> {
     // Step 1: Classify faces and build groups
-    // Key: (node_id, face) -> Vec<(edge_index, is_source_side, approach_cross_axis)>
     // The approach_cross_axis is the cross-axis coordinate of the approach point,
     // used for sorting to minimize visual crossings.
-    let mut face_groups: HashMap<(String, NodeFace), Vec<(usize, bool, usize)>> = HashMap::new();
+    let mut face_groups: FaceGroupMap = HashMap::new();
 
     for (i, edge) in edges.iter().enumerate() {
         let src_bounds = match layout.get_bounds(&edge.from) {
