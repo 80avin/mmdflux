@@ -606,6 +606,90 @@ mod tests {
     }
 
     #[test]
+    fn test_short_edge_with_label_gets_dummy() {
+        reset_dummy_counter();
+        // A -> B, 1-rank span, but with label and minlen=2
+        // After ranking: A=0, B=2 (due to minlen=2)
+        // After normalization: one dummy at rank 1 with EdgeLabel type
+        let mut lg = create_test_graph(&["A", "B"], &[("A", "B")]);
+        acyclic::run(&mut lg);
+
+        // Simulate make_space_for_edge_labels: set minlen=2 for edge 0
+        lg.edge_minlens[0] = 2;
+
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        let a_idx = lg.node_index[&NodeId::from("A")];
+        let b_idx = lg.node_index[&NodeId::from("B")];
+        assert_eq!(lg.ranks[a_idx], 0);
+        assert_eq!(lg.ranks[b_idx], 2, "B should be at rank 2 due to minlen=2");
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, EdgeLabelInfo::new(5.0, 1.0));
+        run(&mut lg, &edge_labels);
+
+        // Should have one dummy chain for A->B
+        assert_eq!(lg.dummy_chains.len(), 1);
+        assert_eq!(lg.dummy_chains[0].dummy_ids.len(), 1);
+
+        // The chain should have a label dummy
+        assert!(lg.dummy_chains[0].label_dummy_index.is_some());
+
+        // Label dummy should have the correct dimensions
+        let label_idx = lg.dummy_chains[0].label_dummy_index.unwrap();
+        let label_dummy_id = &lg.dummy_chains[0].dummy_ids[label_idx];
+        let label_dummy = lg.dummy_nodes.get(label_dummy_id).unwrap();
+        assert!(label_dummy.is_label());
+        assert_eq!(label_dummy.width, 5.0);
+        assert_eq!(label_dummy.height, 1.0);
+
+        // Label dummy should be at rank 1 (midpoint of 0 and 2)
+        let dummy_idx = lg.node_index[label_dummy_id];
+        assert_eq!(lg.ranks[dummy_idx], 1);
+    }
+
+    #[test]
+    fn test_long_edge_with_label_gets_midpoint_dummy() {
+        reset_dummy_counter();
+        // A -> B -> C -> D, and A -> D with label (originally spans 3 ranks)
+        // With minlen=2, A->D spans 4 ranks (A=0, D=4)
+        let mut lg = create_test_graph(
+            &["A", "B", "C", "D"],
+            &[("A", "B"), ("B", "C"), ("C", "D"), ("A", "D")],
+        );
+        acyclic::run(&mut lg);
+
+        // edge index 3 is A->D, set minlen=2 for label
+        lg.edge_minlens[3] = 2;
+
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(3, EdgeLabelInfo::new(7.0, 1.0));
+        run(&mut lg, &edge_labels);
+
+        // A->D should produce a chain with a label dummy
+        let labeled_chain = lg
+            .dummy_chains
+            .iter()
+            .find(|c| c.edge_index == 3 && c.label_dummy_index.is_some());
+        assert!(
+            labeled_chain.is_some(),
+            "Should have a chain with label dummy for A->D"
+        );
+
+        let chain = labeled_chain.unwrap();
+        let label_idx = chain.label_dummy_index.unwrap();
+        let label_dummy_id = &chain.dummy_ids[label_idx];
+        let label_dummy = lg.dummy_nodes.get(label_dummy_id).unwrap();
+        assert!(label_dummy.is_label());
+        assert_eq!(label_dummy.width, 7.0);
+        assert_eq!(label_dummy.height, 1.0);
+    }
+
+    #[test]
     fn test_dummy_node_clone() {
         let dummy = DummyNode::edge_label(2, 5, 15.0, 8.0, LabelPos::Right);
         let cloned = dummy.clone();
