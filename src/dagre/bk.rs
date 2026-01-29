@@ -6,7 +6,7 @@
 //! The algorithm produces x-coordinates that minimize total edge length while
 //! respecting node separation constraints.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use super::graph::LayoutGraph;
 use super::types::Direction;
@@ -689,6 +689,152 @@ pub fn horizontal_compaction(
     }
 
     result
+}
+
+// =============================================================================
+// Block Graph
+// =============================================================================
+
+/// A directed graph of block separation constraints for two-pass compaction.
+/// Nodes are block roots. Edges carry minimum separation weights.
+#[derive(Debug)]
+struct BlockGraph {
+    /// All block root node indices.
+    nodes: Vec<NodeIndex>,
+    /// Adjacency: node -> [(successor, weight)].
+    out_edges: HashMap<NodeIndex, Vec<(NodeIndex, f64)>>,
+    /// Reverse adjacency: node -> [(predecessor, weight)].
+    in_edges: HashMap<NodeIndex, Vec<(NodeIndex, f64)>>,
+}
+
+impl BlockGraph {
+    fn new() -> Self {
+        Self {
+            nodes: Vec::new(),
+            out_edges: HashMap::new(),
+            in_edges: HashMap::new(),
+        }
+    }
+
+    fn add_node(&mut self, root: NodeIndex) {
+        if !self.nodes.contains(&root) {
+            self.nodes.push(root);
+        }
+    }
+
+    /// Add an edge or update to max weight if edge already exists.
+    fn add_edge(&mut self, from: NodeIndex, to: NodeIndex, weight: f64) {
+        let out = self.out_edges.entry(from).or_default();
+        if let Some(entry) = out.iter_mut().find(|(n, _)| *n == to) {
+            entry.1 = entry.1.max(weight);
+        } else {
+            out.push((to, weight));
+        }
+
+        let inp = self.in_edges.entry(to).or_default();
+        if let Some(entry) = inp.iter_mut().find(|(n, _)| *n == from) {
+            entry.1 = entry.1.max(weight);
+        } else {
+            inp.push((from, weight));
+        }
+    }
+
+    fn predecessors(&self, node: NodeIndex) -> &[(NodeIndex, f64)] {
+        self.in_edges
+            .get(&node)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    fn successors(&self, node: NodeIndex) -> &[(NodeIndex, f64)] {
+        self.out_edges
+            .get(&node)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// Kahn's algorithm for topological sort.
+    fn topological_order(&self) -> Vec<NodeIndex> {
+        let mut in_degree: HashMap<NodeIndex, usize> = HashMap::new();
+        for &n in &self.nodes {
+            in_degree.insert(n, self.predecessors(n).len());
+        }
+
+        // Collect sources, sorted for determinism
+        let mut sources: Vec<NodeIndex> = in_degree
+            .iter()
+            .filter(|&(_, &deg)| deg == 0)
+            .map(|(&n, _)| n)
+            .collect();
+        sources.sort();
+
+        let mut queue: VecDeque<NodeIndex> = sources.into_iter().collect();
+        let mut result = Vec::with_capacity(self.nodes.len());
+
+        while let Some(node) = queue.pop_front() {
+            result.push(node);
+            // Collect and sort successors for determinism
+            let mut succs: Vec<NodeIndex> = self
+                .successors(node)
+                .iter()
+                .filter_map(|&(succ, _)| {
+                    let deg = in_degree.get_mut(&succ).unwrap();
+                    *deg -= 1;
+                    if *deg == 0 { Some(succ) } else { None }
+                })
+                .collect();
+            succs.sort();
+            queue.extend(succs);
+        }
+
+        result
+    }
+}
+
+/// Compute the minimum center-to-center separation between two adjacent nodes.
+/// Uses `node_sep` for real nodes and `edge_sep` for dummy nodes, averaged between the pair.
+fn compute_sep(graph: &LayoutGraph, left: NodeIndex, right: NodeIndex, config: &BKConfig) -> f64 {
+    let left_width = get_width(graph, left, config.direction);
+    let right_width = get_width(graph, right, config.direction);
+    let left_sep = separation_for(graph, left, config);
+    let right_sep = separation_for(graph, right, config);
+    left_width / 2.0 + (left_sep + right_sep) / 2.0 + right_width / 2.0
+}
+
+/// Build a block graph from a vertical alignment.
+///
+/// Each unique block root becomes a node. For each pair of adjacent nodes
+/// in a layer with different block roots, adds an edge with the separation weight.
+/// Duplicate edges are merged by taking the maximum weight.
+///
+/// Mirrors dagre.js `buildBlockGraph()` (bk.js lines 267-287).
+fn build_block_graph(
+    graph: &LayoutGraph,
+    alignment: &BlockAlignment,
+    layers: &[Vec<NodeIndex>],
+    config: &BKConfig,
+) -> BlockGraph {
+    let mut bg = BlockGraph::new();
+
+    for &root in &alignment.get_all_roots() {
+        bg.add_node(root);
+    }
+
+    for layer in layers {
+        for i in 1..layer.len() {
+            let left = layer[i - 1];
+            let right = layer[i];
+            let left_root = alignment.get_root(left);
+            let right_root = alignment.get_root(right);
+
+            if left_root != right_root {
+                let weight = compute_sep(graph, left, right, config);
+                bg.add_edge(left_root, right_root, weight);
+            }
+        }
+    }
+
+    bg
 }
 
 /// Get the separation value for a node: `edge_sep` for dummy nodes, `node_sep` for real nodes.
@@ -1919,5 +2065,195 @@ mod tests {
             actual_sep,
             expected_min
         );
+    }
+
+    // =========================================================================
+    // BlockGraph Tests (Task 1.1)
+    // =========================================================================
+
+    #[test]
+    fn test_block_graph_empty() {
+        let bg = BlockGraph::new();
+        assert!(bg.nodes.is_empty());
+        assert_eq!(bg.topological_order().len(), 0);
+    }
+
+    #[test]
+    fn test_block_graph_single_node() {
+        let mut bg = BlockGraph::new();
+        bg.add_node(0);
+        assert_eq!(bg.nodes.len(), 1);
+        assert_eq!(bg.predecessors(0).len(), 0);
+        assert_eq!(bg.successors(0).len(), 0);
+        assert_eq!(bg.topological_order(), vec![0]);
+    }
+
+    #[test]
+    fn test_block_graph_chain() {
+        let mut bg = BlockGraph::new();
+        bg.add_node(0);
+        bg.add_node(1);
+        bg.add_node(2);
+        bg.add_edge(0, 1, 50.0);
+        bg.add_edge(1, 2, 50.0);
+
+        assert_eq!(bg.predecessors(1).len(), 1);
+        assert_eq!(bg.predecessors(1)[0], (0, 50.0));
+        assert_eq!(bg.successors(1).len(), 1);
+        assert_eq!(bg.successors(1)[0], (2, 50.0));
+
+        let topo = bg.topological_order();
+        let pos_0 = topo.iter().position(|&n| n == 0).unwrap();
+        let pos_1 = topo.iter().position(|&n| n == 1).unwrap();
+        let pos_2 = topo.iter().position(|&n| n == 2).unwrap();
+        assert!(pos_0 < pos_1);
+        assert!(pos_1 < pos_2);
+    }
+
+    #[test]
+    fn test_block_graph_max_weight_edge() {
+        let mut bg = BlockGraph::new();
+        bg.add_node(0);
+        bg.add_node(1);
+        bg.add_edge(0, 1, 30.0);
+        bg.add_edge(0, 1, 50.0);
+
+        assert_eq!(bg.successors(0).len(), 1);
+        assert_eq!(bg.successors(0)[0], (1, 50.0));
+        assert_eq!(bg.predecessors(1)[0], (0, 50.0));
+    }
+
+    // =========================================================================
+    // compute_sep Tests (Task 1.2)
+    // =========================================================================
+
+    #[test]
+    fn test_compute_sep_real_nodes() {
+        let lg = make_diamond_graph();
+        let config = BKConfig::default(); // node_sep=50, edge_sep=20
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+
+        // Both real: b_width/2 + (node_sep+node_sep)/2 + c_width/2 = 50 + 50 + 50 = 150
+        let sep = compute_sep(&lg, b, c, &config);
+        assert_eq!(sep, 150.0);
+    }
+
+    #[test]
+    fn test_compute_sep_dummy_nodes() {
+        let lg = make_two_node_graph([(1.0, 1.0), (1.0, 1.0)], [true, true]);
+        let config = BKConfig {
+            node_sep: 50.0,
+            edge_sep: 10.0,
+            direction: Direction::TopBottom,
+        };
+
+        // Both dummy: 0.5 + (10+10)/2 + 0.5 = 11.0
+        let sep = compute_sep(&lg, 0, 1, &config);
+        assert_eq!(sep, 11.0);
+    }
+
+    #[test]
+    fn test_compute_sep_mixed() {
+        let lg = make_two_node_graph([(100.0, 50.0), (1.0, 1.0)], [false, true]);
+        let config = BKConfig {
+            node_sep: 50.0,
+            edge_sep: 10.0,
+            direction: Direction::TopBottom,
+        };
+
+        // Mixed: 50 + (50+10)/2 + 0.5 = 80.5
+        let sep = compute_sep(&lg, 0, 1, &config);
+        assert_eq!(sep, 80.5);
+    }
+
+    #[test]
+    fn test_block_graph_diamond() {
+        let mut bg = BlockGraph::new();
+        bg.add_node(0);
+        bg.add_node(1);
+        bg.add_node(2);
+        bg.add_edge(0, 1, 40.0);
+        bg.add_edge(0, 2, 40.0);
+
+        assert_eq!(bg.successors(0).len(), 2);
+        assert_eq!(bg.predecessors(1).len(), 1);
+        assert_eq!(bg.predecessors(2).len(), 1);
+
+        let topo = bg.topological_order();
+        let pos_0 = topo.iter().position(|&n| n == 0).unwrap();
+        let pos_1 = topo.iter().position(|&n| n == 1).unwrap();
+        let pos_2 = topo.iter().position(|&n| n == 2).unwrap();
+        assert!(pos_0 < pos_1);
+        assert!(pos_0 < pos_2);
+    }
+
+    // =========================================================================
+    // build_block_graph Tests (Task 1.3)
+    // =========================================================================
+
+    #[test]
+    fn test_build_block_graph_single_block() {
+        let lg = make_diamond_graph();
+        let layers = get_layers(&lg);
+        let config = BKConfig::default();
+
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+        let d = lg.node_index[&"D".into()];
+
+        let mut alignment = BlockAlignment::new(&[a, b, c, d]);
+        alignment.root.insert(b, a);
+        alignment.root.insert(c, a);
+        alignment.root.insert(d, a);
+
+        let bg = build_block_graph(&lg, &alignment, &layers, &config);
+        assert_eq!(bg.nodes.len(), 1);
+    }
+
+    #[test]
+    fn test_build_block_graph_diamond_separate_blocks() {
+        let lg = make_diamond_graph();
+        let layers = get_layers(&lg);
+        let config = BKConfig::default();
+
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+        let d = lg.node_index[&"D".into()];
+
+        let alignment = BlockAlignment::new(&[a, b, c, d]);
+
+        let bg = build_block_graph(&lg, &alignment, &layers, &config);
+
+        // Layer 1 has B (order 0) and C (order 1), different roots
+        assert_eq!(bg.successors(b).len(), 1);
+        assert_eq!(bg.successors(b)[0].0, c);
+
+        // Layer 0 has only A, layer 2 has only D → no edges from those
+        assert_eq!(bg.successors(a).len(), 0);
+        assert_eq!(bg.successors(d).len(), 0);
+    }
+
+    #[test]
+    fn test_build_block_graph_adjacent_same_root_no_edge() {
+        let lg = make_diamond_graph();
+        let layers = get_layers(&lg);
+        let config = BKConfig::default();
+
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+        let d = lg.node_index[&"D".into()];
+
+        // B and C share root B
+        let mut alignment = BlockAlignment::new(&[a, b, c, d]);
+        alignment.root.insert(c, b);
+
+        let bg = build_block_graph(&lg, &alignment, &layers, &config);
+
+        // B and C are adjacent in layer 1 but same root → no edge
+        assert_eq!(bg.successors(b).len(), 0);
     }
 }
