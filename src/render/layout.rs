@@ -89,6 +89,10 @@ impl Default for LayoutConfig {
 }
 
 /// Compute the layout for a diagram.
+///
+/// **Deprecated:** Use `compute_layout_direct` instead. This is the original
+/// hand-rolled pipeline superseded by the dagre-based direct translation pipeline.
+#[deprecated(note = "use compute_layout_direct instead (old pipeline, pending removal)")]
 pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
     // Step 1: Topological sort to assign layers
     let layers = topological_layers(diagram);
@@ -357,6 +361,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     }
 
     // --- Phase E: Collision repair ---
+    // Within-layer (cross-axis) repair
     collision_repair(
         &layers,
         &mut draw_positions,
@@ -366,6 +371,18 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             config.h_spacing
         } else {
             config.v_spacing
+        },
+    );
+    // Between-layer (primary-axis) repair: ensure minimum gap for edge routing
+    rank_gap_repair(
+        &layers,
+        &mut draw_positions,
+        &node_dims,
+        is_vertical,
+        if is_vertical {
+            config.v_spacing
+        } else {
+            config.h_spacing
         },
     );
 
@@ -495,6 +512,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
 ///
 /// The algorithm phases come from dagre, but coordinate assignment uses
 /// the original ASCII-friendly logic for proper character grid alignment.
+///
+/// **Deprecated:** Use `compute_layout_direct` instead. This hybrid pipeline
+/// is superseded by the direct translation pipeline.
+#[deprecated(note = "use compute_layout_direct instead (old pipeline, pending removal)")]
+#[allow(deprecated)]
 pub fn compute_layout_dagre(diagram: &Diagram, config: &LayoutConfig) -> Layout {
     // Convert diagram to dagre graph
     let mut dgraph = dagre::DiGraph::new();
@@ -1359,6 +1381,7 @@ fn grid_to_draw_horizontal(
 ///
 /// Returns: HashMap<node_id, cross_axis_center_draw_position>.
 /// Returns empty map when no stagger is detected (all nodes at same cross-axis position).
+#[deprecated(note = "old pipeline helper, pending removal")]
 #[allow(clippy::too_many_arguments)]
 fn compute_stagger_positions(
     layers: &[Vec<String>],
@@ -1483,8 +1506,11 @@ fn compute_stagger_positions(
 /// If the target coordinate is outside the anchor range, extrapolates from the nearest pair.
 /// Falls back to returning the coordinate clamped to canvas bounds if no anchors exist.
 ///
+/// **Deprecated:** Old pipeline helper, pending removal.
+///
 /// `global_scale` is the dagre→draw ratio derived from all anchors across ranks,
 /// used as a fallback when only a single anchor is available at this rank.
+#[deprecated(note = "old pipeline helper, pending removal")]
 fn map_cross_axis(
     dagre_pos: f64,
     anchors: &[(f64, f64)],
@@ -1649,6 +1675,65 @@ fn collision_repair(
                 let min_y = prev_y + ph + min_gap;
                 if curr_y < min_y {
                     draw_positions.insert(curr_id.clone(), (curr_x, min_y));
+                }
+            }
+        }
+    }
+}
+
+/// Enforce minimum spacing between adjacent layers along the primary axis.
+///
+/// For vertical layouts, layers stack along Y; for horizontal, along X.
+/// If the closest node in the next layer is too close to the farthest node
+/// in the previous layer, shift the entire next layer (and all subsequent layers)
+/// forward to maintain the minimum gap.
+fn rank_gap_repair(
+    layers: &[Vec<String>],
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_dims: &HashMap<String, (usize, usize)>,
+    is_vertical: bool,
+    min_gap: usize,
+) {
+    if layers.len() <= 1 {
+        return;
+    }
+
+    for i in 1..layers.len() {
+        // Find the maximum primary-axis extent of the previous layer
+        let prev_max = layers[i - 1]
+            .iter()
+            .filter_map(|id| {
+                let &(x, y) = draw_positions.get(id)?;
+                let &(w, h) = node_dims.get(id)?;
+                Some(if is_vertical { y + h } else { x + w })
+            })
+            .max()
+            .unwrap_or(0);
+
+        // Find the minimum primary-axis position in the current layer
+        let curr_min = layers[i]
+            .iter()
+            .filter_map(|id| {
+                let &(x, y) = draw_positions.get(id)?;
+                Some(if is_vertical { y } else { x })
+            })
+            .min()
+            .unwrap_or(0);
+
+        let required = prev_max + min_gap;
+        if curr_min < required {
+            let shift = required - curr_min;
+            // Shift all nodes in this layer and all subsequent layers
+            for layer in &layers[i..] {
+                for id in layer {
+                    if let Some(&(x, y)) = draw_positions.get(id) {
+                        let new_pos = if is_vertical {
+                            (x, y + shift)
+                        } else {
+                            (x + shift, y)
+                        };
+                        draw_positions.insert(id.clone(), new_pos);
+                    }
                 }
             }
         }

@@ -888,3 +888,93 @@ mod all_fixtures {
         }
     }
 }
+
+// =============================================================================
+// LR/RL Routing Tests
+// =============================================================================
+
+mod lr_routing {
+    use super::*;
+
+    #[test]
+    fn lr_simple_chain_horizontal_arrows() {
+        // A simple LR chain should use right-pointing arrows, not vertical ones
+        let input = "graph LR\n    A[Start] --> B[End]";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &RenderOptions::default());
+
+        // Should contain a right-pointing arrow, not up/down arrows between nodes
+        assert!(
+            output.contains('►') || output.contains('>'),
+            "LR edge should use right-pointing arrow, got:\n{}",
+            output
+        );
+        // Should NOT contain vertical arrows between horizontally adjacent nodes
+        let has_vertical_arrow_between_nodes = output.lines().any(|line| {
+            // Check if a vertical arrow appears between two box-drawing characters
+            // (indicating it's between nodes, not inside a node)
+            line.contains("│▲│") || line.contains("│▼│")
+        });
+        assert!(
+            !has_vertical_arrow_between_nodes,
+            "LR edge should not have vertical arrows between nodes, got:\n{}",
+            output
+        );
+    }
+
+    #[test]
+    fn lr_three_node_chain_horizontal_arrows() {
+        let output = render_fixture("left_right.mmd");
+        // All arrows in a LR chain should point right
+        assert!(
+            output.contains('►') || output.contains('>'),
+            "LR chain should have right-pointing arrows, got:\n{}",
+            output
+        );
+        assert!(
+            !output
+                .lines()
+                .any(|line| line.contains("│▲│") || line.contains("│▼│")),
+            "LR chain should not have vertical arrows between nodes, got:\n{}",
+            output
+        );
+    }
+
+    #[test]
+    fn lr_backward_edge_renders_without_panic() {
+        // A cycle in LR layout should render without panicking
+        let input = "graph LR\n    A[Start] --> B[Middle]\n    B --> C[End]\n    C --> A";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &RenderOptions::default());
+
+        // All three node labels should appear
+        assert!(output.contains("Start"), "Should contain Start node");
+        assert!(output.contains("Middle"), "Should contain Middle node");
+        assert!(output.contains("End"), "Should contain End node");
+
+        // Should have a left-pointing arrow (backward edge C→A enters Start from right)
+        assert!(
+            output.contains('◄') || output.contains('<'),
+            "LR backward edge should have left-pointing arrow, got:\n{}",
+            output
+        );
+    }
+
+    #[test]
+    fn lr_backward_edge_entry_direction() {
+        // Simple LR cycle: A→B forward, B→A backward
+        let input = "graph LR\n    A --> B\n    B --> A";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &RenderOptions::default());
+
+        // The backward edge B→A should produce a left-pointing arrow on A
+        assert!(
+            output.contains('◄') || output.contains('<'),
+            "LR backward edge should produce left-pointing arrow, got:\n{}",
+            output
+        );
+    }
+}
