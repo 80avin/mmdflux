@@ -49,48 +49,86 @@ fn draw_edge_label_with_tracking(
 ) -> Option<PlacedLabel> {
     let label_len = label.chars().count();
 
-    // Calculate base position for label
-    // (backward edges now use the same segment structure as forward edges)
+    // Calculate base position for label.
+    // `on_h_seg` tracks whether we placed above a horizontal segment,
+    // which means edge cell collisions should be ignored (the label
+    // intentionally overwrites the jog line).
+    let mut on_h_seg = false;
     let (base_x, base_y) = {
         match direction {
             Direction::TopDown | Direction::BottomTop => {
                 // For vertical layouts with Z-shaped paths (3+ segments),
-                // place label next to the final vertical segment going to target.
-                // This ensures branching edges have labels at different X positions.
+                // place label on the best segment available.
                 if routed.segments.len() >= 3 {
-                    // Choose the best segment for label placement.
-                    // For backward edges (many segments routing around the diagram),
-                    // prefer the longest vertical segment (the waypoint path) to avoid
-                    // placing the label near the target node where it crowds other labels.
-                    // For forward edges, use the last vertical segment approaching the target.
-                    let chosen_seg = select_label_segment(&routed.segments);
+                    let is_long_path = routed.segments.len() >= 6;
 
-                    if let Some(seg) = chosen_seg {
-                        // Determine which side to place the label based on target position
-                        // If target is to the right of source, place label to the right
-                        let mut place_right = routed.end.x > routed.start.x;
-
-                        // Check if the proposed position would place the label between
-                        // two attachment ports (i.e., sandwiched between this edge's
-                        // vertical segment and another edge targeting the same node).
-                        // If an edge cell exists on the far side of the label, flip sides.
-                        let (trial_x, trial_y) =
-                            find_label_position_on_segment_with_side(seg, label_len, place_right);
-                        if label_adjacent_to_edge_on_far_side(
-                            canvas,
-                            trial_x,
-                            trial_y,
-                            label_len,
-                            place_right,
-                        ) {
-                            place_right = !place_right;
-                        }
-
-                        find_label_position_on_segment_with_side(seg, label_len, place_right)
+                    // For short forward paths, prefer placing the label centered
+                    // above a horizontal segment when it's wide enough. This keeps
+                    // labels on the horizontal "jog" of Z-paths rather than beside
+                    // short vertical stubs where they can crowd adjacent edges.
+                    let h_seg = if !is_long_path {
+                        routed
+                            .segments
+                            .iter()
+                            .filter(|s| match s {
+                                Segment::Horizontal { x_start, x_end, .. } => {
+                                    // Require padding so the label doesn't touch the
+                                    // turn characters at segment endpoints.
+                                    x_start.abs_diff(*x_end) >= label_len + 2
+                                }
+                                _ => false,
+                            })
+                            .max_by_key(|s| match s {
+                                Segment::Horizontal { x_start, x_end, .. } => {
+                                    x_start.abs_diff(*x_end)
+                                }
+                                _ => 0,
+                            })
                     } else {
-                        // Fallback to midpoint
-                        let mid_y = (routed.start.y + routed.end.y) / 2;
-                        (routed.end.x.saturating_sub(label_len / 2), mid_y)
+                        None
+                    };
+
+                    if let Some(Segment::Horizontal { y, x_start, x_end }) = h_seg {
+                        let seg_min_x = (*x_start).min(*x_end);
+                        let seg_max_x = (*x_start).max(*x_end);
+                        let seg_len = seg_max_x - seg_min_x;
+                        let label_x = seg_min_x + (seg_len - label_len) / 2;
+                        on_h_seg = true;
+                        (label_x, *y)
+                    } else {
+                        // Fall back to vertical segment placement.
+                        // For backward edges, prefer the longest inner vertical segment.
+                        // For forward edges, prefer the longest vertical near the source.
+                        let chosen_seg = select_label_segment(&routed.segments);
+
+                        if let Some(seg) = chosen_seg {
+                            // Determine which side to place the label based on target position
+                            let mut place_right = routed.end.x > routed.start.x;
+
+                            // Check if the proposed position would place the label between
+                            // two attachment ports. If an edge cell exists on the far side
+                            // of the label, flip sides.
+                            let (trial_x, trial_y) = find_label_position_on_segment_with_side(
+                                seg,
+                                label_len,
+                                place_right,
+                            );
+                            if label_adjacent_to_edge_on_far_side(
+                                canvas,
+                                trial_x,
+                                trial_y,
+                                label_len,
+                                place_right,
+                            ) {
+                                place_right = !place_right;
+                            }
+
+                            find_label_position_on_segment_with_side(seg, label_len, place_right)
+                        } else {
+                            // Fallback to midpoint
+                            let mid_y = (routed.start.y + routed.end.y) / 2;
+                            (routed.end.x.saturating_sub(label_len / 2), mid_y)
+                        }
                     }
                 } else {
                     // Simple straight path - place label beside the edge line
@@ -180,10 +218,18 @@ fn draw_edge_label_with_tracking(
         }
     };
 
-    // Try to find a position that doesn't collide with nodes or other labels
-    let (label_x, label_y) =
-        find_safe_label_position(canvas, base_x, base_y, label_len, direction, placed_labels);
-
+    // Try to find a position that doesn't collide with nodes or other labels.
+    // When placed above a horizontal segment, skip edge collision checks since
+    // the label intentionally overwrites edge cells on the jog line.
+    let (label_x, label_y) = find_safe_label_position(
+        canvas,
+        base_x,
+        base_y,
+        label_len,
+        direction,
+        placed_labels,
+        !on_h_seg,
+    );
     // Write the label only to non-node cells, avoiding the arrow position
     // Labels can overwrite edge cells since they're drawn after edges and should appear on top
     // For horizontal layouts, don't overwrite the arrow at routed.end
@@ -195,7 +241,9 @@ fn draw_edge_label_with_tracking(
             continue;
         }
         // Only write if cell is not part of a node (but edge cells can be overwritten)
-        if canvas.get(x, label_y).is_some_and(|cell| !cell.is_node) {
+        let cell = canvas.get(x, label_y);
+        let can_write = cell.is_some_and(|cell| !cell.is_node);
+        if can_write {
             canvas.set(x, label_y, ch);
         }
     }
@@ -253,6 +301,10 @@ fn find_label_position_on_segment_with_side(
 ///
 /// Tries the base position first, then shifts in the appropriate direction
 /// based on the diagram layout until a collision-free position is found.
+///
+/// When `check_edge_collision` is false, labels can be placed over edge cells
+/// (useful when intentionally centering above a horizontal segment where the
+/// label is expected to overwrite the jog line).
 fn find_safe_label_position(
     canvas: &Canvas,
     base_x: usize,
@@ -260,9 +312,16 @@ fn find_safe_label_position(
     label_len: usize,
     direction: Direction,
     placed_labels: &[PlacedLabel],
+    check_edge_collision: bool,
 ) -> (usize, usize) {
+    let has_collision = |x, y| {
+        label_collides_with_node(canvas, x, y, label_len)
+            || (check_edge_collision && label_collides_with_edge(canvas, x, y, label_len))
+            || placed_labels.iter().any(|p| p.overlaps(x, y, label_len))
+    };
+
     // Check if the base position has any collision
-    if !label_has_collision(canvas, base_x, base_y, label_len, placed_labels) {
+    if !has_collision(base_x, base_y) {
         return (base_x, base_y);
     }
 
@@ -305,26 +364,13 @@ fn find_safe_label_position(
         let new_x = (base_x as isize + dx).max(0) as usize;
         let new_y = (base_y as isize + dy).max(0) as usize;
 
-        if !label_has_collision(canvas, new_x, new_y, label_len, placed_labels) {
+        if !has_collision(new_x, new_y) {
             return (new_x, new_y);
         }
     }
 
     // If all shifts fail, return the base position (will skip node cells when writing)
     (base_x, base_y)
-}
-
-/// Check if placing a label at the given position would collide with any node cells, edge cells, or other labels.
-fn label_has_collision(
-    canvas: &Canvas,
-    x: usize,
-    y: usize,
-    label_len: usize,
-    placed_labels: &[PlacedLabel],
-) -> bool {
-    label_collides_with_node(canvas, x, y, label_len)
-        || label_collides_with_edge(canvas, x, y, label_len)
-        || placed_labels.iter().any(|p| p.overlaps(x, y, label_len))
 }
 
 /// Check if placing a label at the given position would collide with any node cells.
@@ -409,11 +455,19 @@ fn select_label_segment(segments: &[Segment]) -> Option<&Segment> {
                     .find(|s| matches!(s, Segment::Vertical { .. }))
             })
     } else {
-        // For short paths (forward edges), use the last vertical segment
+        // For short paths (forward edges), prefer the longest vertical segment
+        // nearest to the source node. Iterating in reverse makes max_by_key's
+        // last-wins tie-breaking favor earlier segments, placing labels near
+        // the source where branching originates rather than near the target
+        // where sibling-edge labels cluster.
         segments
             .iter()
             .rev()
-            .find(|s| matches!(s, Segment::Vertical { .. }))
+            .filter(|s| matches!(s, Segment::Vertical { .. }))
+            .max_by_key(|s| match s {
+                Segment::Vertical { y_start, y_end, .. } => (*y_start).abs_diff(*y_end),
+                _ => 0,
+            })
     }
 }
 
@@ -445,6 +499,9 @@ fn select_label_segment_horizontal(segments: &[Segment]) -> Option<&Segment> {
                     .find(|s| matches!(s, Segment::Horizontal { .. }))
             })
     } else {
+        // For LR/RL short paths, the last horizontal segment approaches the
+        // target at a unique Y position, so labels on sibling edges naturally
+        // separate vertically.
         segments
             .iter()
             .rev()
