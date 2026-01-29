@@ -44,6 +44,8 @@ pub struct Cell {
     pub is_node: bool,
     /// Whether this cell is part of an edge path (protected from label overwrite).
     pub is_edge: bool,
+    /// Whether this cell is part of a subgraph border (NOT protected from overwrite).
+    pub is_subgraph_border: bool,
 }
 
 impl Cell {
@@ -54,6 +56,7 @@ impl Cell {
             connections: Connections::none(),
             is_node: false,
             is_edge: false,
+            is_subgraph_border: false,
         }
     }
 
@@ -64,6 +67,7 @@ impl Cell {
             connections: Connections::none(),
             is_node: false,
             is_edge: false,
+            is_subgraph_border: false,
         }
     }
 }
@@ -168,6 +172,19 @@ impl Canvas {
     pub fn mark_as_node(&mut self, x: usize, y: usize) -> bool {
         if let Some(cell) = self.get_mut(x, y) {
             cell.is_node = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Set a cell as a subgraph border character.
+    ///
+    /// Border cells are NOT protected from overwrite by nodes or edges.
+    pub fn set_subgraph_border(&mut self, x: usize, y: usize, ch: char) -> bool {
+        if let Some(cell) = self.get_mut(x, y) {
+            cell.ch = ch;
+            cell.is_subgraph_border = true;
             true
         } else {
             false
@@ -349,6 +366,24 @@ mod tests {
         canvas.set(0, 2, 'B');
         let output = canvas.to_string();
         assert_eq!(output, "A\n\nB");
+    }
+
+    #[test]
+    fn test_cell_subgraph_border_default_false() {
+        let cell = Cell::empty();
+        assert!(!cell.is_subgraph_border);
+    }
+
+    #[test]
+    fn test_cell_subgraph_border_overwritable() {
+        let mut canvas = Canvas::new(10, 5);
+        canvas.set_subgraph_border(3, 2, '─');
+        assert_eq!(canvas.get(3, 2).unwrap().ch, '─');
+        assert!(canvas.get(3, 2).unwrap().is_subgraph_border);
+
+        // Node rendering should be able to overwrite border cells
+        canvas.set(3, 2, '┌');
+        assert_eq!(canvas.get(3, 2).unwrap().ch, '┌');
     }
 
     #[test]

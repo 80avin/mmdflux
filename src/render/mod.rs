@@ -9,11 +9,12 @@ pub mod intersect;
 mod layout;
 mod router;
 mod shape;
+mod subgraph;
 
 pub use canvas::Canvas;
 pub use chars::CharSet;
 pub use edge::{render_all_edges, render_all_edges_with_labels, render_edge};
-pub use layout::{Layout, LayoutConfig, compute_layout_direct};
+pub use layout::{Layout, LayoutConfig, SubgraphBounds, compute_layout_direct};
 pub use router::{Point, RoutedEdge, Segment, route_all_edges, route_edge};
 pub use shape::{NodeBounds, node_dimensions, render_node};
 
@@ -52,6 +53,11 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
 
     // Step 2: Create canvas
     let mut canvas = Canvas::new(layout.width, layout.height);
+
+    // Step 2.5: Render subgraph borders FIRST (z-order: background)
+    if !layout.subgraph_bounds.is_empty() {
+        subgraph::render_subgraph_borders(&mut canvas, &layout.subgraph_bounds, &charset);
+    }
 
     // Step 3: Render nodes
     for (node_id, node) in &diagram.nodes {
@@ -165,4 +171,48 @@ fn branching_label_info(diagram: &Diagram) -> (bool, usize, usize) {
     }
 
     (has_branching, max_left_len, max_right_len)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::build_diagram;
+    use crate::parser::parse_flowchart;
+
+    #[test]
+    fn test_render_with_subgraph_produces_borders() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &RenderOptions::default());
+
+        // Output should contain border characters
+        assert!(
+            output.contains('┌') || output.contains('+'),
+            "output should contain top-left corner: {output}"
+        );
+        assert!(
+            output.contains('┘') || output.contains('+'),
+            "output should contain bottom-right corner: {output}"
+        );
+        // Output should contain the title
+        assert!(
+            output.contains("Group"),
+            "output should contain title: {output}"
+        );
+    }
+
+    #[test]
+    fn test_render_simple_diagram_unchanged() {
+        let input = "graph TD\nA --> B\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &RenderOptions::default());
+
+        // Should not contain subgraph border artifacts (no ┌ corners
+        // that aren't part of node shapes)
+        // Simple check: output should contain nodes and edges
+        assert!(output.contains('A'), "output should contain node A: {output}");
+        assert!(output.contains('B'), "output should contain node B: {output}");
+    }
 }

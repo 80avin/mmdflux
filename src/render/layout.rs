@@ -10,6 +10,21 @@ use crate::dagre::normalize::WaypointWithRank;
 use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Point};
 use crate::graph::{Diagram, Direction, Edge, Shape};
 
+/// Bounding box for a subgraph border in draw coordinates.
+#[derive(Debug, Clone)]
+pub struct SubgraphBounds {
+    /// Left edge x coordinate.
+    pub x: usize,
+    /// Top edge y coordinate.
+    pub y: usize,
+    /// Total width including border.
+    pub width: usize,
+    /// Total height including border.
+    pub height: usize,
+    /// Display title for the subgraph.
+    pub title: String,
+}
+
 /// Grid position of a node (layer/column in abstract grid coordinates).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GridPos {
@@ -51,6 +66,11 @@ pub struct Layout {
     /// Node shapes for intersection calculation.
     /// Maps node ID to its shape for computing dynamic attachment points.
     pub node_shapes: HashMap<String, Shape>,
+
+    /// Subgraph bounding boxes in draw coordinates.
+    /// Key: subgraph ID, Value: bounds with title.
+    /// Empty for diagrams without subgraphs.
+    pub subgraph_bounds: HashMap<String, SubgraphBounds>,
 }
 
 impl Layout {
@@ -451,12 +471,30 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         height,
     );
 
-    // --- Phase J: Collect node shapes and assemble Layout ---
+    // --- Phase J: Collect node shapes ---
     let node_shapes: HashMap<String, Shape> = diagram
         .nodes
         .iter()
         .map(|(id, node)| (id.clone(), node.shape))
         .collect();
+
+    // --- Phase K: Convert subgraph bounds to draw coordinates ---
+    let subgraph_bounds = convert_subgraph_bounds(
+        &result.subgraph_bounds,
+        &diagram.subgraphs,
+        &ctx,
+        &draw_positions,
+        &node_dims,
+        config.padding,
+    );
+
+    // Expand canvas to fit subgraph borders (which extend beyond member nodes)
+    let mut width = width;
+    let mut height = height;
+    for sb in subgraph_bounds.values() {
+        width = width.max(sb.x + sb.width + config.padding);
+        height = height.max(sb.y + sb.height + config.padding);
+    }
 
     Layout {
         grid_positions,
@@ -469,6 +507,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         edge_waypoints: edge_waypoints_final,
         edge_label_positions: edge_label_positions_converted,
         node_shapes,
+        subgraph_bounds,
     }
 }
 
@@ -648,6 +687,65 @@ struct RawCenter {
     cy: usize,
     w: usize,
     h: usize,
+}
+
+/// Convert dagre subgraph bounds to draw-coordinate SubgraphBounds.
+///
+/// Computes the bounding box of each subgraph's member nodes in draw coordinates,
+/// then adds padding for the border rectangle and title row.
+fn convert_subgraph_bounds(
+    _dagre_bounds: &HashMap<String, crate::dagre::Rect>,
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    _ctx: &TransformContext,
+    draw_positions: &HashMap<String, (usize, usize)>,
+    node_dims: &HashMap<String, (usize, usize)>,
+    _padding: usize,
+) -> HashMap<String, SubgraphBounds> {
+    let mut bounds = HashMap::new();
+    let border_padding: usize = 2; // cells between member nodes and border
+    let title_height: usize = 1; // row above border for title
+
+    for (sg_id, sg) in subgraphs {
+        // Find bounding box of member nodes in draw coordinates
+        let mut min_x = usize::MAX;
+        let mut min_y = usize::MAX;
+        let mut max_x: usize = 0;
+        let mut max_y: usize = 0;
+
+        for node_id in &sg.nodes {
+            if let (Some(&(x, y)), Some(&(w, h))) =
+                (draw_positions.get(node_id), node_dims.get(node_id))
+            {
+                min_x = min_x.min(x);
+                min_y = min_y.min(y);
+                max_x = max_x.max(x + w);
+                max_y = max_y.max(y + h);
+            }
+        }
+
+        if min_x == usize::MAX {
+            continue; // no member nodes found
+        }
+
+        // Add padding around member nodes for the border
+        let border_x = min_x.saturating_sub(border_padding);
+        let border_y = min_y.saturating_sub(border_padding + title_height);
+        let border_right = max_x + border_padding;
+        let border_bottom = max_y + border_padding;
+
+        bounds.insert(
+            sg_id.clone(),
+            SubgraphBounds {
+                x: border_x,
+                y: border_y,
+                width: border_right - border_x,
+                height: border_bottom - border_y,
+                title: sg.title.clone(),
+            },
+        );
+    }
+
+    bounds
 }
 
 /// Nudge waypoints that overlap with node bounding boxes.
@@ -1170,6 +1268,64 @@ mod tests {
     // =========================================================================
     // Compound Graph Wiring Tests
     // =========================================================================
+
+    #[test]
+    fn test_layout_subgraph_bounds_present() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+
+        assert!(
+            layout.subgraph_bounds.contains_key("sg1"),
+            "should have bounds for sg1"
+        );
+        let bounds = &layout.subgraph_bounds["sg1"];
+        assert!(bounds.width > 0, "width should be positive");
+        assert!(bounds.height > 0, "height should be positive");
+        assert_eq!(bounds.title, "Group");
+    }
+
+    #[test]
+    fn test_layout_no_subgraph_bounds_simple() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nA --> B\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+
+        assert!(layout.subgraph_bounds.is_empty());
+    }
+
+    #[test]
+    fn test_layout_canvas_dimensions_include_borders() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+
+        let bounds = &layout.subgraph_bounds["sg1"];
+        assert!(
+            layout.width >= bounds.x + bounds.width,
+            "canvas width {} should contain border x+w={}",
+            layout.width,
+            bounds.x + bounds.width
+        );
+        assert!(
+            layout.height >= bounds.y + bounds.height,
+            "canvas height {} should contain border y+h={}",
+            layout.height,
+            bounds.y + bounds.height
+        );
+    }
 
     #[test]
     fn test_compute_layout_subgraph_diagram_succeeds() {
