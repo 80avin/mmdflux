@@ -1284,6 +1284,56 @@ fn compute_ascii_scale_factors(
     }
 }
 
+/// Enforce minimum spacing between adjacent nodes within each layer after
+/// scaling and rounding.
+///
+/// Nodes are sorted by their cross-axis position within each layer, then
+/// scanned left-to-right (or top-to-bottom for horizontal layouts). If any
+/// adjacent pair overlaps or is too close, the later node is pushed forward.
+/// This cascades: pushing node B may cause it to overlap C, which also gets pushed.
+///
+/// For vertical layouts (`is_vertical = true`), the cross-axis is X.
+/// For horizontal layouts (`is_vertical = false`), the cross-axis is Y.
+fn collision_repair(
+    layers: &[Vec<String>],
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_dims: &HashMap<String, (usize, usize)>,
+    is_vertical: bool,
+    min_gap: usize,
+) {
+    for layer in layers {
+        if layer.len() <= 1 {
+            continue;
+        }
+
+        let mut sorted: Vec<String> = layer.clone();
+        sorted.sort_by_key(|id| {
+            let &(x, y) = &draw_positions[id];
+            if is_vertical { x } else { y }
+        });
+
+        for i in 1..sorted.len() {
+            let prev_id = &sorted[i - 1];
+            let curr_id = &sorted[i];
+            let &(pw, ph) = &node_dims[prev_id];
+            let (prev_x, prev_y) = draw_positions[prev_id];
+            let (curr_x, curr_y) = draw_positions[curr_id];
+
+            if is_vertical {
+                let min_x = prev_x + pw + min_gap;
+                if curr_x < min_x {
+                    draw_positions.insert(curr_id.clone(), (min_x, curr_y));
+                }
+            } else {
+                let min_y = prev_y + ph + min_gap;
+                if curr_y < min_y {
+                    draw_positions.insert(curr_id.clone(), (curr_x, min_y));
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1793,5 +1843,102 @@ mod tests {
         let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true);
         assert!(sx.is_finite());
         assert!(sy.is_finite());
+    }
+
+    // =========================================================================
+    // Collision Repair Tests (Phase 3)
+    // =========================================================================
+
+    #[test]
+    fn collision_repair_pushes_overlapping_nodes_apart() {
+        let layers = vec![vec!["A".into(), "B".into()]];
+        let mut positions: HashMap<String, (usize, usize)> = HashMap::new();
+        positions.insert("A".into(), (0, 0));
+        positions.insert("B".into(), (5, 0));
+        let dims: HashMap<String, (usize, usize)> =
+            [("A".into(), (8, 3)), ("B".into(), (8, 3))].into();
+
+        collision_repair(&layers, &mut positions, &dims, true, 4);
+
+        assert_eq!(positions["A"], (0, 0), "A should not move");
+        assert_eq!(positions["B"], (12, 0), "B pushed to right edge of A + gap");
+    }
+
+    #[test]
+    fn collision_repair_cascading() {
+        let layers = vec![vec!["A".into(), "B".into(), "C".into()]];
+        let mut positions: HashMap<String, (usize, usize)> = HashMap::new();
+        positions.insert("A".into(), (0, 0));
+        positions.insert("B".into(), (3, 0));
+        positions.insert("C".into(), (8, 0));
+        let dims: HashMap<String, (usize, usize)> = [
+            ("A".into(), (6, 3)),
+            ("B".into(), (6, 3)),
+            ("C".into(), (6, 3)),
+        ]
+        .into();
+
+        collision_repair(&layers, &mut positions, &dims, true, 2);
+
+        assert_eq!(positions["A"], (0, 0));
+        assert_eq!(positions["B"], (8, 0));
+        assert_eq!(positions["C"], (16, 0));
+    }
+
+    #[test]
+    fn collision_repair_no_change_when_spaced() {
+        let layers = vec![vec!["A".into(), "B".into()]];
+        let mut positions: HashMap<String, (usize, usize)> = HashMap::new();
+        positions.insert("A".into(), (0, 0));
+        positions.insert("B".into(), (20, 0));
+        let dims: HashMap<String, (usize, usize)> =
+            [("A".into(), (8, 3)), ("B".into(), (8, 3))].into();
+
+        collision_repair(&layers, &mut positions, &dims, true, 4);
+
+        assert_eq!(positions["A"], (0, 0));
+        assert_eq!(positions["B"], (20, 0));
+    }
+
+    #[test]
+    fn collision_repair_horizontal_layout() {
+        let layers = vec![vec!["A".into(), "B".into()]];
+        let mut positions: HashMap<String, (usize, usize)> = HashMap::new();
+        positions.insert("A".into(), (0, 0));
+        positions.insert("B".into(), (0, 2));
+        let dims: HashMap<String, (usize, usize)> =
+            [("A".into(), (8, 3)), ("B".into(), (8, 3))].into();
+
+        collision_repair(&layers, &mut positions, &dims, false, 3);
+
+        assert_eq!(positions["A"], (0, 0));
+        assert_eq!(positions["B"], (0, 6));
+    }
+
+    #[test]
+    fn collision_repair_single_node_layer_noop() {
+        let layers = vec![vec!["A".into()]];
+        let mut positions: HashMap<String, (usize, usize)> = HashMap::new();
+        positions.insert("A".into(), (5, 5));
+        let dims: HashMap<String, (usize, usize)> = [("A".into(), (8, 3))].into();
+
+        collision_repair(&layers, &mut positions, &dims, true, 4);
+
+        assert_eq!(positions["A"], (5, 5));
+    }
+
+    #[test]
+    fn collision_repair_sorts_by_cross_axis() {
+        let layers = vec![vec!["A".into(), "B".into()]];
+        let mut positions: HashMap<String, (usize, usize)> = HashMap::new();
+        positions.insert("A".into(), (20, 0));
+        positions.insert("B".into(), (0, 0));
+        let dims: HashMap<String, (usize, usize)> =
+            [("A".into(), (8, 3)), ("B".into(), (8, 3))].into();
+
+        collision_repair(&layers, &mut positions, &dims, true, 4);
+
+        assert_eq!(positions["B"], (0, 0));
+        assert_eq!(positions["A"], (20, 0));
     }
 }
