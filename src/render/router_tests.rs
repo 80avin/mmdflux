@@ -429,9 +429,9 @@ fn test_route_backward_edge_td() {
     let backward_edge = &diagram.edges[1];
     let routed = route_edge(backward_edge, &layout, Direction::TopDown, None, None).unwrap();
 
-    // Backward edge without waypoints uses direct routing.
-    // For TD layout with B above A, the edge goes upward, entering from Bottom.
-    assert_eq!(routed.entry_direction, AttachDirection::Bottom);
+    // Backward edge uses synthetic waypoints routing around the right side.
+    // The edge approaches the target from the right.
+    assert_eq!(routed.entry_direction, AttachDirection::Right);
 
     // Should have segments connecting B to A
     assert!(!routed.segments.is_empty());
@@ -453,9 +453,9 @@ fn test_route_backward_edge_lr() {
     let backward_edge = &diagram.edges[1];
     let routed = route_edge(backward_edge, &layout, Direction::LeftRight, None, None).unwrap();
 
-    // Backward edge without waypoints uses direct routing.
-    // For LR layout with B to the right of A, the backward edge goes leftward.
-    assert_eq!(routed.entry_direction, AttachDirection::Right);
+    // Backward edge uses synthetic waypoints routing below nodes.
+    // The edge approaches the target from below.
+    assert_eq!(routed.entry_direction, AttachDirection::Bottom);
 
     // Should have segments connecting B to A
     assert!(!routed.segments.is_empty());
@@ -548,8 +548,9 @@ fn test_backward_edge_with_waypoints_td() {
 }
 
 #[test]
-fn test_short_backward_edge_no_waypoints() {
-    // B→A backward edge spanning 1 rank — no dummies, no waypoints
+fn test_short_backward_edge_uses_synthetic_waypoints() {
+    // B→A backward edge spanning 1 rank — no dummies, no dagre waypoints
+    // With synthetic waypoints, should route around the right side of nodes
     let mut diagram = Diagram::new(Direction::TopDown);
     diagram.add_node(Node::new("A").with_label("Top"));
     diagram.add_node(Node::new("B").with_label("Bottom"));
@@ -561,9 +562,15 @@ fn test_short_backward_edge_no_waypoints() {
 
     let backward_edge = &diagram.edges[1];
     let routed = route_edge(backward_edge, &layout, Direction::TopDown, None, None);
+    assert!(routed.is_some(), "Backward edge should route successfully");
+
+    let routed = routed.unwrap();
+    // With synthetic waypoints routing around the right side, there should be
+    // more than 2 segments (direct routing gives ~2, waypoint routing gives >= 4)
     assert!(
-        routed.is_some(),
-        "Short backward edge should route successfully"
+        routed.segments.len() >= 4,
+        "Backward edge with synthetic waypoints should have >= 4 segments, got {}",
+        routed.segments.len()
     );
 }
 
@@ -589,8 +596,8 @@ fn test_backward_edge_lr_with_waypoints() {
 }
 
 #[test]
-fn test_backward_edge_no_canvas_expansion() {
-    // Backward edge waypoints should NOT expand canvas width
+fn test_backward_edge_expands_canvas_for_routing() {
+    // Backward edges add canvas margin for synthetic waypoint routing
     let mut diagram_with_cycle = Diagram::new(Direction::TopDown);
     diagram_with_cycle.add_node(Node::new("A").with_label("Top"));
     diagram_with_cycle.add_node(Node::new("B").with_label("Bottom"));
@@ -606,10 +613,11 @@ fn test_backward_edge_no_canvas_expansion() {
     let layout_cycle = compute_layout_direct(&diagram_with_cycle, &config);
     let layout_no_cycle = compute_layout_direct(&diagram_no_cycle, &config);
 
-    assert_eq!(
-        layout_cycle.width, layout_no_cycle.width,
-        "Backward edge should not expand canvas width. With cycle: {}, without: {}",
-        layout_cycle.width, layout_no_cycle.width
+    assert!(
+        layout_cycle.width > layout_no_cycle.width,
+        "Backward edge should expand canvas width for routing margin. With cycle: {}, without: {}",
+        layout_cycle.width,
+        layout_no_cycle.width
     );
 }
 
@@ -697,4 +705,97 @@ fn test_rl_attachment_consensus_y() {
         "RL attachment points should have consensus y, got src.y={} tgt.y={}",
         src.1, tgt.1
     );
+}
+
+// --- generate_backward_waypoints tests ---
+
+#[test]
+fn test_generate_backward_waypoints_td() {
+    // TD layout: source (B) at y=6, target (A) at y=0 — backward
+    let src = make_bounds_sized(4, 6, 8, 3);
+    let tgt = make_bounds_sized(4, 0, 8, 3);
+
+    let waypoints = generate_backward_waypoints(&src, &tgt, Direction::TopDown);
+
+    assert!(!waypoints.is_empty(), "should produce waypoints");
+    // Waypoints should be to the right of both nodes
+    let max_right = (src.x + src.width).max(tgt.x + tgt.width);
+    for wp in &waypoints {
+        assert!(
+            wp.0 > max_right,
+            "waypoint x={} should be right of nodes (max_right={})",
+            wp.0,
+            max_right
+        );
+    }
+}
+
+#[test]
+fn test_generate_backward_waypoints_lr() {
+    // LR layout: source (B) at x=12, target (A) at x=0 — backward
+    let src = make_bounds_sized(12, 2, 8, 3);
+    let tgt = make_bounds_sized(0, 2, 8, 3);
+
+    let waypoints = generate_backward_waypoints(&src, &tgt, Direction::LeftRight);
+
+    assert!(!waypoints.is_empty(), "should produce waypoints");
+    // Waypoints should be below both nodes
+    let max_bottom = (src.y + src.height).max(tgt.y + tgt.height);
+    for wp in &waypoints {
+        assert!(
+            wp.1 > max_bottom,
+            "waypoint y={} should be below nodes (max_bottom={})",
+            wp.1,
+            max_bottom
+        );
+    }
+}
+
+#[test]
+fn test_generate_backward_waypoints_forward_returns_empty() {
+    // Forward edge in TD: src above target — not backward
+    let src = make_bounds_sized(4, 0, 8, 3);
+    let tgt = make_bounds_sized(4, 6, 8, 3);
+
+    let waypoints = generate_backward_waypoints(&src, &tgt, Direction::TopDown);
+    assert!(
+        waypoints.is_empty(),
+        "forward edge should return empty waypoints"
+    );
+}
+
+#[test]
+fn test_generate_backward_waypoints_bt() {
+    // BT layout: source at y=0 (visually bottom), target at y=6 (visually top) — backward
+    let src = make_bounds_sized(4, 0, 8, 3);
+    let tgt = make_bounds_sized(4, 6, 8, 3);
+
+    let waypoints = generate_backward_waypoints(&src, &tgt, Direction::BottomTop);
+
+    assert!(
+        !waypoints.is_empty(),
+        "should produce waypoints for BT backward"
+    );
+    let max_right = (src.x + src.width).max(tgt.x + tgt.width);
+    for wp in &waypoints {
+        assert!(wp.0 > max_right, "BT waypoint should be right of nodes");
+    }
+}
+
+#[test]
+fn test_generate_backward_waypoints_rl() {
+    // RL layout: source at x=0, target at x=12 — backward
+    let src = make_bounds_sized(0, 2, 8, 3);
+    let tgt = make_bounds_sized(12, 2, 8, 3);
+
+    let waypoints = generate_backward_waypoints(&src, &tgt, Direction::RightLeft);
+
+    assert!(
+        !waypoints.is_empty(),
+        "should produce waypoints for RL backward"
+    );
+    let max_bottom = (src.y + src.height).max(tgt.y + tgt.height);
+    for wp in &waypoints {
+        assert!(wp.1 > max_bottom, "RL waypoint should be below nodes");
+    }
 }

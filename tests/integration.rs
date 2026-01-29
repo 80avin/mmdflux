@@ -910,9 +910,21 @@ mod lr_routing {
     }
 
     #[test]
-    fn lr_backward_edge_entry_direction() {
+    fn lr_backward_edge_routes_around_nodes() {
+        // LR backward edges now route below nodes with synthetic waypoints.
+        // The backward edge should produce some arrow character.
         let output = render_inline("graph LR\n    A --> B\n    B --> A");
-        assert_has_left_arrow(&output);
+        let arrow_count = output
+            .chars()
+            .filter(|c| matches!(c, '▲' | '▼' | '◄' | '►' | '<' | '>'))
+            .count();
+        // Should have at least 2 arrows: one for forward A→B (►) and one for backward B→A
+        assert!(
+            arrow_count >= 2,
+            "Should have arrows for both forward and backward edges, found {} arrows in:\n{}",
+            arrow_count,
+            output
+        );
     }
 
     #[test]

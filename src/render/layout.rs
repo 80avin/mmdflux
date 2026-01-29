@@ -347,19 +347,34 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     }
 
     // --- Phase F: Compute canvas size ---
-    let width = node_bounds
+    // Add margin for synthetic backward-edge routing around nodes
+    let has_backward_edges = !result.reversed_edges.is_empty();
+    let backward_margin = if has_backward_edges {
+        super::router::BACKWARD_ROUTE_GAP + 2
+    } else {
+        0
+    };
+
+    let base_width = node_bounds
         .values()
         .map(|b| b.x + b.width)
         .max()
         .unwrap_or(0)
         + config.padding
         + config.right_label_margin;
-    let height = node_bounds
+    let base_height = node_bounds
         .values()
         .map(|b| b.y + b.height)
         .max()
         .unwrap_or(0)
         + config.padding;
+
+    // For TD/BT, backward edges route to the right; for LR/RL, below
+    let (width, height) = if is_vertical {
+        (base_width + backward_margin, base_height)
+    } else {
+        (base_width, base_height + backward_margin)
+    };
 
     // --- Phase G: Compute layer_starts from draw positions ---
     let layer_starts: Vec<usize> = layers
