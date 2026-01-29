@@ -134,6 +134,8 @@ fn make_bounds(x: usize, y: usize) -> NodeBounds {
         y,
         width: 10,
         height: 3,
+        dagre_center_x: None,
+        dagre_center_y: None,
     }
 }
 
@@ -650,12 +652,16 @@ fn test_lr_attachment_consensus_y_same_height() {
         y: 2,
         width: 10,
         height: 3,
+        dagre_center_x: None,
+        dagre_center_y: None,
     };
     let to = NodeBounds {
         x: 20,
         y: 4,
         width: 10,
         height: 3,
+        dagre_center_x: None,
+        dagre_center_y: None,
     };
     let (src, tgt) = resolve_attachment_points(
         None,
@@ -682,12 +688,16 @@ fn test_lr_attachment_consensus_y_different_height() {
         y: 2,
         width: 10,
         height: 3,
+        dagre_center_x: None,
+        dagre_center_y: None,
     };
     let to = NodeBounds {
         x: 20,
         y: 3,
         width: 10,
         height: 5,
+        dagre_center_x: None,
+        dagre_center_y: None,
     };
     let (src, tgt) = resolve_attachment_points(
         None,
@@ -713,12 +723,16 @@ fn test_rl_attachment_consensus_y() {
         y: 2,
         width: 10,
         height: 3,
+        dagre_center_x: None,
+        dagre_center_y: None,
     };
     let to = NodeBounds {
         x: 0,
         y: 4,
         width: 10,
         height: 3,
+        dagre_center_x: None,
+        dagre_center_y: None,
     };
     let (src, tgt) = resolve_attachment_points(
         None,

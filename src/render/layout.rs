@@ -334,30 +334,57 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .map(|r| r.y)
         .fold(f64::INFINITY, f64::min);
 
-    // Scale each node's center, then compute top-left
-    let mut draw_positions: HashMap<String, (usize, usize)> = HashMap::new();
-    let mut node_bounds: HashMap<String, NodeBounds> = HashMap::new();
+    // Scale each node's center, then compute top-left.
+    // First pass: compute raw centers and find the maximum overhang
+    // (how much a node's half-width exceeds its raw center coordinate).
+    // This prevents saturating_sub from clipping, which would make
+    // dagre centers inconsistent with actual box positions.
+    let mut raw_centers: Vec<(String, usize, usize, usize, usize)> = Vec::new();
+    let mut max_overhang_x: usize = 0;
+    let mut max_overhang_y: usize = 0;
 
     for (id, rect) in &result.nodes {
         let node_id = &id.0;
         if let Some(&(w, h)) = node_dims.get(node_id) {
             let center_x = ((rect.x + rect.width / 2.0 - dagre_min_x) * scale_x).round() as usize;
             let center_y = ((rect.y + rect.height / 2.0 - dagre_min_y) * scale_y).round() as usize;
-
-            let x = center_x.saturating_sub(w / 2) + config.padding + config.left_label_margin;
-            let y = center_y.saturating_sub(h / 2) + config.padding;
-
-            draw_positions.insert(node_id.clone(), (x, y));
-            node_bounds.insert(
-                node_id.clone(),
-                NodeBounds {
-                    x,
-                    y,
-                    width: w,
-                    height: h,
-                },
-            );
+            let half_w = w / 2;
+            let half_h = h / 2;
+            if half_w > center_x {
+                max_overhang_x = max_overhang_x.max(half_w - center_x);
+            }
+            if half_h > center_y {
+                max_overhang_y = max_overhang_y.max(half_h - center_y);
+            }
+            raw_centers.push((node_id.clone(), center_x, center_y, w, h));
         }
+    }
+
+    // Second pass: apply overhang offset and compute draw positions
+    let mut draw_positions: HashMap<String, (usize, usize)> = HashMap::new();
+    let mut node_bounds: HashMap<String, NodeBounds> = HashMap::new();
+
+    for (node_id, raw_cx, raw_cy, w, h) in &raw_centers {
+        let center_x = raw_cx + max_overhang_x;
+        let center_y = raw_cy + max_overhang_y;
+
+        let x = center_x - w / 2 + config.padding + config.left_label_margin;
+        let y = center_y - h / 2 + config.padding;
+
+        draw_positions.insert(node_id.clone(), (x, y));
+        let dcx = center_x + config.padding + config.left_label_margin;
+        let dcy = center_y + config.padding;
+        node_bounds.insert(
+            node_id.clone(),
+            NodeBounds {
+                x,
+                y,
+                width: *w,
+                height: *h,
+                dagre_center_x: Some(dcx),
+                dagre_center_y: Some(dcy),
+            },
+        );
     }
 
     // --- Phase E: Collision repair ---
@@ -389,6 +416,10 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Update node_bounds after collision repair
     for (id, &(x, y)) in &draw_positions {
         if let Some(&(w, h)) = node_dims.get(id) {
+            // Preserve dagre center from the initial pass
+            let prev = node_bounds.get(id);
+            let dagre_center_x = prev.and_then(|b| b.dagre_center_x);
+            let dagre_center_y = prev.and_then(|b| b.dagre_center_y);
             node_bounds.insert(
                 id.clone(),
                 NodeBounds {
@@ -396,6 +427,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                     y,
                     width: w,
                     height: h,
+                    dagre_center_x,
+                    dagre_center_y,
                 },
             );
         }
@@ -1143,6 +1176,8 @@ fn grid_to_draw_vertical(
                             y,
                             width: w,
                             height: h,
+                            dagre_center_x: None,
+                            dagre_center_y: None,
                         },
                     );
                 }
@@ -1176,6 +1211,8 @@ fn grid_to_draw_vertical(
                             y,
                             width: w,
                             height: h,
+                            dagre_center_x: None,
+                            dagre_center_y: None,
                         },
                     );
                     x += w + config.h_spacing;
@@ -1311,6 +1348,8 @@ fn grid_to_draw_horizontal(
                             y: node_y,
                             width: w,
                             height: h,
+                            dagre_center_x: None,
+                            dagre_center_y: None,
                         },
                     );
                 }
@@ -1345,6 +1384,8 @@ fn grid_to_draw_horizontal(
                             y,
                             width: w,
                             height: h,
+                            dagre_center_x: None,
+                            dagre_center_y: None,
                         },
                     );
                     y += h + config.v_spacing;

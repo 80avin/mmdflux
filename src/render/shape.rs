@@ -12,17 +12,23 @@ pub struct NodeBounds {
     pub y: usize,
     pub width: usize,
     pub height: usize,
+    /// Dagre-derived center x, avoids integer division rounding.
+    pub dagre_center_x: Option<usize>,
+    /// Dagre-derived center y, avoids integer division rounding.
+    pub dagre_center_y: Option<usize>,
 }
 
 impl NodeBounds {
     /// Get the center x coordinate.
+    /// Uses the stored dagre center if available, otherwise falls back to integer division.
     pub fn center_x(&self) -> usize {
-        self.x + self.width / 2
+        self.dagre_center_x.unwrap_or(self.x + self.width / 2)
     }
 
     /// Get the center y coordinate.
+    /// Uses the stored dagre center if available, otherwise falls back to integer division.
     pub fn center_y(&self) -> usize {
-        self.y + self.height / 2
+        self.dagre_center_y.unwrap_or(self.y + self.height / 2)
     }
 
     /// Get the top attachment point (center of top edge).
@@ -136,6 +142,8 @@ pub fn render_node(
         y,
         width,
         height,
+        dagre_center_x: None,
+        dagre_center_y: None,
     }
 }
 
@@ -338,6 +346,8 @@ mod tests {
             y: 5,
             width: 8,
             height: 3,
+            dagre_center_x: None,
+            dagre_center_y: None,
         };
 
         assert_eq!(bounds.center_x(), 14); // 10 + 8/2 = 14
@@ -356,6 +366,8 @@ mod tests {
             y: 10,
             width: 10,
             height: 3,
+            dagre_center_x: None,
+            dagre_center_y: None,
         };
         // Top/Bottom: exclude corners => x+1 to x+width-2 = 6 to 13
         assert_eq!(bounds.face_extent(&NodeFace::Top), (6, 13));
@@ -369,6 +381,8 @@ mod tests {
             y: 10,
             width: 10,
             height: 3,
+            dagre_center_x: None,
+            dagre_center_y: None,
         };
         // Left/Right: exclude corner rows => 11 to 11 (only middle row)
         assert_eq!(bounds.face_extent(&NodeFace::Left), (11, 11));
@@ -382,6 +396,8 @@ mod tests {
             y: 0,
             width: 2,
             height: 1,
+            dagre_center_x: None,
+            dagre_center_y: None,
         };
         // width=2: start=1, end=max(0,1)=1 => (1, 1)
         assert_eq!(bounds.face_extent(&NodeFace::Top), (1, 1));
@@ -394,6 +410,8 @@ mod tests {
             y: 10,
             width: 10,
             height: 3,
+            dagre_center_x: None,
+            dagre_center_y: None,
         };
         assert_eq!(bounds.face_fixed_coord(&NodeFace::Top), 10);
         assert_eq!(bounds.face_fixed_coord(&NodeFace::Bottom), 12);
