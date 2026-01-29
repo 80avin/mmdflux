@@ -1104,4 +1104,32 @@ mod label_edge_cases {
             );
         }
     }
+
+    #[test]
+    fn simple_cycle_compact_backward_routing() {
+        let input = load_fixture("simple_cycle.mmd");
+        let flowchart = parse_flowchart(&input).expect("Failed to parse");
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &Default::default());
+        let line_count = output.lines().count();
+
+        assert!(
+            line_count < 30,
+            "simple_cycle.mmd should be compact, got {line_count} lines"
+        );
+    }
+
+    #[test]
+    fn multiple_cycles_compact_backward_routing() {
+        let input = load_fixture("multiple_cycles.mmd");
+        let flowchart = parse_flowchart(&input).expect("Failed to parse");
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &Default::default());
+        let line_count = output.lines().count();
+
+        assert!(
+            line_count < 40,
+            "multiple_cycles.mmd should be compact, got {line_count} lines"
+        );
+    }
 }

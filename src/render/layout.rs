@@ -465,8 +465,26 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         height,
     );
 
-    // --- Phase I: Nudge waypoints that collide with nodes ---
+    // --- Phase I: Strip dagre waypoints from backward edges ---
+    // When ranks are doubled (labels present), backward edges get inflated dagre
+    // waypoints from normalization dummies that create tall vertical columns.
+    // Strip them so the router falls through to synthetic compact routing via
+    // generate_backward_waypoints().
     let mut edge_waypoints_final = edge_waypoints_converted;
+    if ranks_doubled {
+        for edge in &diagram.edges {
+            let key = (edge.from.clone(), edge.to.clone());
+            if let (Some(from_b), Some(to_b)) =
+                (node_bounds.get(&edge.from), node_bounds.get(&edge.to))
+            {
+                if crate::render::router::is_backward_edge(from_b, to_b, diagram.direction) {
+                    edge_waypoints_final.remove(&key);
+                }
+            }
+        }
+    }
+
+    // --- Phase I.5: Nudge waypoints that collide with nodes ---
     nudge_colliding_waypoints(
         &mut edge_waypoints_final,
         &node_bounds,
