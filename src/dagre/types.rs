@@ -141,6 +141,11 @@ pub struct LayoutResult {
     /// Key: original edge index, Value: label center position.
     /// Only populated for edges that have labels.
     pub label_positions: HashMap<usize, Point>,
+
+    /// Bounding boxes for subgraphs (compound nodes).
+    /// Key: subgraph node ID string, Value: bounding rectangle.
+    /// Empty for graphs without subgraphs.
+    pub subgraph_bounds: HashMap<String, Rect>,
 }
 
 /// Layout information for a single edge.

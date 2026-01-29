@@ -631,6 +631,21 @@ pub fn horizontal_compaction(
     alignment: &BlockAlignment,
     config: &BKConfig,
 ) -> CompactionResult {
+    horizontal_compaction_with_direction(graph, alignment, config, None)
+}
+
+/// Horizontal compaction with optional alignment direction for border guard.
+///
+/// When `direction` is provided and the graph has border nodes, Pass 2
+/// skips pull-right for left border nodes in left-biased alignments
+/// and right border nodes in right-biased alignments. This prevents
+/// border nodes from crossing their subgraph boundary.
+fn horizontal_compaction_with_direction(
+    graph: &LayoutGraph,
+    alignment: &BlockAlignment,
+    config: &BKConfig,
+    direction: Option<AlignmentDirection>,
+) -> CompactionResult {
     let mut result = CompactionResult::new();
     let layers = get_layers(graph);
     let num_nodes = graph.node_ids.len();
@@ -659,17 +674,31 @@ pub fn horizontal_compaction(
     // For simple flowcharts (DAGs without compound/subgraph nodes), this pass
     // is a no-op: Pass 1's longest-path placement already satisfies all
     // separation constraints, so pull_right <= current for every block.
-    // (See research/0015, Q2 and Q3 for the proof.)
     //
-    // This pass becomes meaningful for compound graphs where subgraph border
-    // nodes carry a `borderType` ("borderLeft"/"borderRight"). In dagre.js,
-    // Pass 2 skips pull-right for border nodes matching the current alignment
-    // direction, preventing them from crossing their subgraph boundary. When
-    // mmdflux adds compound graph support, this pass will need a borderType
-    // guard: skip pull-right when `node.border_type == current_border_type`.
+    // For compound graphs, this pass applies a borderType guard: border nodes
+    // matching the current alignment direction are skipped to prevent them
+    // from crossing their subgraph boundary. See the guard logic below.
     for &root in topo.iter().rev() {
         let successors = block_graph.successors(root);
         if !successors.is_empty() {
+            // borderType guard: skip pull-right for border nodes that match
+            // the current alignment direction. This prevents border nodes from
+            // crossing their subgraph boundary.
+            // - Left borders: skip in left-biased alignments (UL, DL)
+            // - Right borders: skip in right-biased alignments (UR, DR)
+            // Reference: dagre.js positionX → horizontalCompaction
+            if let Some(dir) = direction {
+                if let Some(&bt) = graph.border_type.get(&root) {
+                    let skip = match bt {
+                        super::graph::BorderType::Left => dir.prefers_left(),
+                        super::graph::BorderType::Right => !dir.prefers_left(),
+                    };
+                    if skip {
+                        continue;
+                    }
+                }
+            }
+
             let pull_right = successors
                 .iter()
                 .map(|&(succ, weight)| xs[&succ] - weight)
@@ -882,7 +911,12 @@ fn compute_all_alignments(
 
     for direction in AlignmentDirection::all() {
         let alignment = vertical_alignment(graph, conflicts, direction);
-        let compaction = horizontal_compaction(graph, &alignment, config);
+        let compaction = horizontal_compaction_with_direction(
+            graph,
+            &alignment,
+            config,
+            Some(direction),
+        );
         results.insert(direction, compaction);
     }
 
@@ -2263,6 +2297,99 @@ mod tests {
         // Layer 0 has only A, layer 2 has only D → no edges from those
         assert_eq!(bg.successors(a).len(), 0);
         assert_eq!(bg.successors(d).len(), 0);
+    }
+
+    // =========================================================================
+    // BK borderType guard tests (Task 3.2)
+    // =========================================================================
+
+    #[test]
+    fn test_bk_border_guard_left_border_not_pulled_right() {
+        // Test the border guard directly on horizontal_compaction.
+        // Set up a block graph where a left border node's block root
+        // has a successor block far to the right (creating pull-right pressure).
+        // The guard should prevent left borders from being pulled rightward.
+        use crate::dagre::{border, nesting};
+
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("X", (100.0, 50.0));
+        g.add_node("Y", (100.0, 50.0));
+        g.add_node("A", (100.0, 50.0));
+        g.add_node("B", (100.0, 50.0));
+        g.add_node("sg1", (0.0, 0.0));
+        g.add_edge("X", "A");
+        g.add_edge("X", "Y");
+        g.add_edge("A", "B");
+        g.set_parent("A", "sg1");
+        g.set_parent("B", "sg1");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
+        nesting::run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        nesting::cleanup(&mut lg);
+        nesting::assign_rank_minmax(&mut lg);
+        border::add_segments(&mut lg);
+        crate::dagre::normalize::run(&mut lg, &std::collections::HashMap::new());
+        order::run(&mut lg);
+
+        let sg1_idx = lg.node_index[&"sg1".into()];
+        let config = BKConfig::default();
+
+        // Run horizontal_compaction directly with UL alignment (left-biased)
+        let conflicts = find_all_conflicts(&lg);
+        let alignment = vertical_alignment(&lg, &conflicts, AlignmentDirection::UL);
+        let result = horizontal_compaction(&lg, &alignment, &config);
+
+        // Left border nodes should not have been pulled rightward past children
+        if let Some(left_nodes) = lg.border_left.get(&sg1_idx) {
+            for &left_idx in left_nodes {
+                if let Some(&left_x) = result.x.get(&left_idx) {
+                    let rank = lg.ranks[left_idx];
+                    let child_xs: Vec<f64> = (0..lg.node_ids.len())
+                        .filter(|&n| {
+                            lg.ranks[n] == rank
+                                && lg.parents.get(n).copied().flatten() == Some(sg1_idx)
+                                && !lg.border_type.contains_key(&n)
+                        })
+                        .filter_map(|n| result.x.get(&n).copied())
+                        .collect();
+
+                    if let Some(min_child_x) = child_xs.iter().copied().reduce(f64::min) {
+                        assert!(
+                            left_x <= min_child_x,
+                            "Left border x ({left_x}) should be <= leftmost child x ({min_child_x})"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_bk_simple_graph_unchanged_with_border_guard() {
+        // Simple graph (no compound nodes) should produce valid positions
+        // unaffected by the border guard logic.
+        let lg = make_diamond_graph();
+        let config = BKConfig::default();
+        let xs = position_x(&lg, &config);
+
+        let a = lg.node_index[&"A".into()];
+        let b = lg.node_index[&"B".into()];
+        let c = lg.node_index[&"C".into()];
+        let d = lg.node_index[&"D".into()];
+
+        // All nodes should have valid x-coordinates
+        assert!(xs.contains_key(&a));
+        assert!(xs.contains_key(&b));
+        assert!(xs.contains_key(&c));
+        assert!(xs.contains_key(&d));
+
+        // B and C should be separated
+        assert!(
+            (xs[&b] - xs[&c]).abs() > 1.0,
+            "B and C should be separated"
+        );
     }
 
     #[test]

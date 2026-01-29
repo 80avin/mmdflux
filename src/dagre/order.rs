@@ -141,6 +141,11 @@ pub fn run(graph: &mut LayoutGraph) {
             sweep_down(graph, &layers, &edges, bias_right);
         }
 
+        // Apply compound constraints after each sweep
+        for layer in &layers {
+            apply_compound_constraints(graph, layer);
+        }
+
         let cc = count_all_crossings(graph, &layers, &edges);
 
         if debug_order() {
@@ -295,6 +300,136 @@ fn reorder_layer(
 
     // Step 5: Assign new order positions
     for (new_pos, &node) in result.iter().enumerate() {
+        graph.order[node] = new_pos;
+    }
+}
+
+/// Apply compound graph constraints to the ordering of a single layer.
+///
+/// For each compound node whose children appear in this layer:
+/// 1. Group children contiguously (preserve relative order)
+/// 2. Place left border at leftmost child position
+/// 3. Place right border at rightmost child position
+///
+/// No-op for graphs without compound nodes.
+fn apply_compound_constraints(graph: &mut LayoutGraph, layer: &[usize]) {
+    if graph.compound_nodes.is_empty() {
+        return;
+    }
+
+    // Collect compound nodes that have children in this layer
+    let compound_indices: Vec<usize> = graph.compound_nodes.iter().copied().collect();
+
+    // Build a mutable copy of the layer sorted by current order
+    let mut ordered: Vec<usize> = layer.to_vec();
+    ordered.sort_by_key(|&n| graph.order[n]);
+
+    for compound_idx in &compound_indices {
+        // Find children of this compound in the layer
+        let child_positions: Vec<usize> = ordered
+            .iter()
+            .enumerate()
+            .filter(|&(_, &n)| graph.parents.get(n).copied().flatten() == Some(*compound_idx))
+            .map(|(pos, _)| pos)
+            .collect();
+
+        if child_positions.len() < 2 {
+            continue;
+        }
+
+        // Children are already in relative order; we need to make them contiguous.
+        // Strategy: move all children to a contiguous block starting at the
+        // position of the first child.
+        let first_pos = child_positions[0];
+        let children: Vec<usize> = child_positions.iter().map(|&pos| ordered[pos]).collect();
+
+        // Remove children from their current positions (reverse to preserve indices)
+        let positions_to_remove = child_positions;
+        for &pos in positions_to_remove.iter().rev() {
+            ordered.remove(pos);
+        }
+
+        // Insert children contiguously at the first child's original position
+        let insert_at = first_pos.min(ordered.len());
+        for (i, child) in children.iter().enumerate() {
+            ordered.insert(insert_at + i, *child);
+        }
+    }
+
+    // Now enforce border positions within each compound's children
+    for compound_idx in &compound_indices {
+        let left_borders = graph.border_left.get(compound_idx);
+        let right_borders = graph.border_right.get(compound_idx);
+
+        if left_borders.is_none() && right_borders.is_none() {
+            continue;
+        }
+
+        // Find children in the ordered list
+        let child_positions: Vec<usize> = ordered
+            .iter()
+            .enumerate()
+            .filter(|&(_, &n)| graph.parents.get(n).copied().flatten() == Some(*compound_idx))
+            .map(|(pos, _)| pos)
+            .collect();
+
+        if child_positions.len() < 2 {
+            continue;
+        }
+
+        let first_child_pos = child_positions[0];
+
+        // Move left border to first position among children
+        if let Some(left_nodes) = left_borders {
+            for &left_border in left_nodes {
+                if let Some(current) = ordered.iter().position(|&n| n == left_border) {
+                    if current != first_child_pos {
+                        ordered.remove(current);
+                        let target = if current < first_child_pos {
+                            first_child_pos - 1
+                        } else {
+                            first_child_pos
+                        };
+                        ordered.insert(target, left_border);
+                    }
+                }
+            }
+        }
+
+        // Recompute child positions after left border move
+        let child_positions: Vec<usize> = ordered
+            .iter()
+            .enumerate()
+            .filter(|&(_, &n)| graph.parents.get(n).copied().flatten() == Some(*compound_idx))
+            .map(|(pos, _)| pos)
+            .collect();
+
+        if child_positions.is_empty() {
+            continue;
+        }
+        let last_child_pos = *child_positions.last().unwrap();
+
+        // Move right border to last position among children
+        if let Some(right_nodes) = right_borders {
+            for &right_border in right_nodes {
+                if let Some(current) = ordered.iter().position(|&n| n == right_border) {
+                    if current != last_child_pos {
+                        ordered.remove(current);
+                        let target = if current <= last_child_pos {
+                            last_child_pos
+                        } else {
+                            last_child_pos + 1
+                        };
+                        let target = target.min(ordered.len());
+                        ordered.insert(target, right_border);
+                    }
+                }
+            }
+        }
+    }
+
+    // Reassign order values
+    for (new_pos, &node) in ordered.iter().enumerate() {
         graph.order[node] = new_pos;
     }
 }
@@ -826,5 +961,184 @@ mod tests {
             "A (weighted barycenter 0.25) should be first"
         );
         assert_eq!(lg.order[b], 1, "B (barycenter 1.0) should be second");
+    }
+
+    // --- Compound ordering constraint tests ---
+
+    use crate::dagre::{border, nesting};
+
+    /// Build a compound graph with border segments, ready for ordering.
+    ///
+    /// Graph: A -> B (both children of sg1), plus an external node X -> A.
+    /// After nesting/ranking/border setup, each rank in sg1's span has
+    /// left and right border nodes.
+    fn build_compound_for_ordering() -> LayoutGraph {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("X", ());
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("sg1", ());
+        g.add_edge("X", "A");
+        g.add_edge("A", "B");
+        g.set_parent("A", "sg1");
+        g.set_parent("B", "sg1");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        nesting::run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        nesting::cleanup(&mut lg);
+        nesting::assign_rank_minmax(&mut lg);
+        border::add_segments(&mut lg);
+        lg
+    }
+
+    #[test]
+    fn test_compound_ordering_borders_at_edges() {
+        let mut lg = build_compound_for_ordering();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+
+        run(&mut lg);
+
+        // For each rank in sg1's span, left border should be leftmost
+        // and right border should be rightmost among sg1's children
+        let left_borders = &lg.border_left[&sg1_idx];
+        let right_borders = &lg.border_right[&sg1_idx];
+        let min_r = lg.min_rank[&sg1_idx];
+        let max_r = lg.max_rank[&sg1_idx];
+
+        let layers = layers_sorted_by_order(&lg);
+        for rank in min_r..=max_r {
+            let rank_offset = (rank - min_r) as usize;
+            let left_border = left_borders[rank_offset];
+            let right_border = right_borders[rank_offset];
+
+            // Find the layer for this rank
+            let layer = layers
+                .iter()
+                .find(|l| !l.is_empty() && lg.ranks[l[0]] == rank)
+                .expect("should find layer for rank");
+
+            // Collect children of sg1 in this layer
+            let sg1_children: Vec<usize> = layer
+                .iter()
+                .copied()
+                .filter(|&n| lg.parents[n] == Some(sg1_idx))
+                .collect();
+
+            if sg1_children.len() >= 2 {
+                let min_order = sg1_children.iter().map(|&n| lg.order[n]).min().unwrap();
+                let max_order = sg1_children.iter().map(|&n| lg.order[n]).max().unwrap();
+
+                assert_eq!(
+                    lg.order[left_border], min_order,
+                    "Left border should have min order among sg1 children at rank {rank}"
+                );
+                assert_eq!(
+                    lg.order[right_border], max_order,
+                    "Right border should have max order among sg1 children at rank {rank}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_compound_ordering_children_contiguous() {
+        // Two subgraphs at the same rank level
+        // sg1: A, B; sg2: C, D; plus edges to force them into the same rank
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("X", ());
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("C", ());
+        g.add_node("D", ());
+        g.add_node("sg1", ());
+        g.add_node("sg2", ());
+        g.add_edge("X", "A");
+        g.add_edge("X", "C");
+        g.add_edge("A", "B");
+        g.add_edge("C", "D");
+        g.set_parent("A", "sg1");
+        g.set_parent("B", "sg1");
+        g.set_parent("C", "sg2");
+        g.set_parent("D", "sg2");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        nesting::run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        nesting::cleanup(&mut lg);
+        nesting::assign_rank_minmax(&mut lg);
+        border::add_segments(&mut lg);
+
+        run(&mut lg);
+
+        // For each rank, children of sg1 should be contiguous and
+        // children of sg2 should be contiguous (no interleaving)
+        let layers = layers_sorted_by_order(&lg);
+        let sg1_idx = lg.node_index[&"sg1".into()];
+        let sg2_idx = lg.node_index[&"sg2".into()];
+
+        for layer in &layers {
+            let sg1_children: Vec<usize> = layer
+                .iter()
+                .copied()
+                .filter(|&n| lg.parents[n] == Some(sg1_idx))
+                .collect();
+            let sg2_children: Vec<usize> = layer
+                .iter()
+                .copied()
+                .filter(|&n| lg.parents[n] == Some(sg2_idx))
+                .collect();
+
+            // Check contiguity: max_order - min_order + 1 == count
+            if sg1_children.len() >= 2 {
+                let orders: Vec<usize> = sg1_children.iter().map(|&n| lg.order[n]).collect();
+                let span = orders.iter().max().unwrap() - orders.iter().min().unwrap() + 1;
+                assert_eq!(
+                    span,
+                    sg1_children.len(),
+                    "sg1 children should be contiguous in layer"
+                );
+            }
+            if sg2_children.len() >= 2 {
+                let orders: Vec<usize> = sg2_children.iter().map(|&n| lg.order[n]).collect();
+                let span = orders.iter().max().unwrap() - orders.iter().min().unwrap() + 1;
+                assert_eq!(
+                    span,
+                    sg2_children.len(),
+                    "sg2 children should be contiguous in layer"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_simple_graph_ordering_unchanged() {
+        // Simple graph without compound nodes should produce
+        // a valid ordering (no regression from compound logic)
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_node("C", ());
+        graph.add_node("D", ());
+        graph.add_edge("A", "B");
+        graph.add_edge("A", "C");
+        graph.add_edge("B", "D");
+        graph.add_edge("C", "D");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        run(&mut lg);
+
+        let layers = rank::by_rank(&lg);
+        let edges = lg.effective_edges_weighted();
+        assert_eq!(
+            count_all_crossings(&lg, &layers, &edges),
+            0,
+            "Simple diamond should have zero crossings"
+        );
     }
 }
