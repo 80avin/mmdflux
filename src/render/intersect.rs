@@ -82,9 +82,19 @@ pub fn spread_points_on_face(
         };
     }
 
+    // When the range is too small for the inward formula to produce distinct
+    // positions, fall back to endpoint-inclusive distribution. The extent
+    // endpoints are already inside border corners, so placing edges there
+    // is visually fine.
+    let use_endpoints = range < count;
+
     (0..count)
         .map(|i| {
-            let pos = start + ((i + 1) * range) / (count + 1);
+            let pos = if use_endpoints {
+                start + (i * range) / (count - 1)
+            } else {
+                start + ((i + 1) * range) / (count + 1)
+            };
             let pos = pos.min(end);
             match face {
                 NodeFace::Top | NodeFace::Bottom => (pos, fixed_coord),

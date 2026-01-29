@@ -512,7 +512,6 @@ mod spreading {
     }
 
     #[test]
-    #[ignore = "compute_layout_direct produces duplicate arrival x for narrow_fan_in (known limitation)"]
     fn narrow_fan_in_distinct_arrivals() {
         assert_distinct_arrival_x("narrow_fan_in.mmd", "D");
     }
