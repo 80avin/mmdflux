@@ -887,17 +887,10 @@ mod tests {
         diagram.add_node(Node::new("B").with_label("End"));
         diagram.add_edge(Edge::new("A", "B").with_label("Yes"));
 
-        let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
-
-        let mut canvas = Canvas::new(layout.width, layout.height);
-        let charset = CharSet::unicode();
-
-        let routed =
-            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
-        render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
-
-        let output = canvas.to_string();
+        let output = crate::render::render(
+            &diagram,
+            &crate::render::RenderOptions { ascii_only: false },
+        );
         // Should contain the label
         assert!(output.contains("Yes"));
     }

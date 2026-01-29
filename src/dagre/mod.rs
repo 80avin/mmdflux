@@ -91,6 +91,9 @@ where
         acyclic::run(&mut lg);
     }
 
+    // Phase 1.5: Set minlen=2 for labeled edges so ranking creates a gap
+    make_space_for_edge_labels(&mut lg, edge_labels);
+
     // Phase 2: Assign ranks (layers)
     rank::run(&mut lg);
     rank::normalize(&mut lg);
@@ -410,6 +413,28 @@ mod tests {
 
         assert_eq!(lg.edge_minlens[0], 2); // labeled edge gets minlen=2
         assert_eq!(lg.edge_minlens[1], 1); // unlabeled edge stays at 1
+    }
+
+    #[test]
+    fn test_layout_with_labels_short_edge_gets_label_position() {
+        // A -> B (short edge, 1-rank span) with label
+        // After make_space, it should span 2 ranks and get a label dummy
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        graph.add_edge("A", "B"); // Edge 0 - labeled
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, normalize::EdgeLabelInfo::new(50.0, 20.0));
+
+        let config = LayoutConfig::default();
+        let result = layout_with_labels(&graph, &config, |_, dims| *dims, &edge_labels);
+
+        // Short labeled edge should now have a label position
+        assert!(
+            result.label_positions.contains_key(&0),
+            "Short labeled edge should have a label position"
+        );
     }
 
     #[test]
