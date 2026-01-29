@@ -117,6 +117,8 @@ pub struct RoutedEdge {
     pub segments: Vec<Segment>,
     /// Direction from which the edge enters the target node (for arrow drawing).
     pub entry_direction: AttachDirection,
+    /// Whether this edge goes backward in the layout direction.
+    pub is_backward: bool,
 }
 
 /// Direction for attachment points.
@@ -351,6 +353,7 @@ fn route_edge_with_waypoints(
         end,
         segments,
         entry_direction,
+        is_backward,
     })
 }
 
@@ -410,6 +413,7 @@ fn route_backward_with_synthetic_waypoints(
         end,
         segments,
         entry_direction,
+        is_backward: true,
     })
 }
 
@@ -474,6 +478,7 @@ fn route_edge_direct(
         end,
         segments,
         entry_direction,
+        is_backward,
     })
 }
 
