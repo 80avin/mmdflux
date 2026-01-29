@@ -120,6 +120,18 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         }
     }
 
+    // Add subgraph compound nodes (zero dimensions, sized by border removal later)
+    for sg_id in diagram.subgraphs.keys() {
+        dgraph.add_node(sg_id.as_str(), (0, 0));
+    }
+
+    // Set parent relationships for compound nodes
+    for (node_id, node) in &diagram.nodes {
+        if let Some(ref parent) = node.parent {
+            dgraph.set_parent(node_id.as_str(), parent.as_str());
+        }
+    }
+
     let mut edge_labels: HashMap<usize, dagre::normalize::EdgeLabelInfo> = HashMap::new();
     for (edge_idx, edge) in diagram.edges.iter().enumerate() {
         dgraph.add_edge(edge.from.as_str(), edge.to.as_str());
@@ -174,9 +186,14 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // --- Phase B: Group nodes into layers ---
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
 
+    // Collect subgraph IDs to exclude from layer grouping (compound nodes are not rendered as nodes)
+    let subgraph_ids: std::collections::HashSet<&str> =
+        diagram.subgraphs.keys().map(|s| s.as_str()).collect();
+
     let mut layer_coords: Vec<(String, f64, f64)> = result
         .nodes
         .iter()
+        .filter(|(id, _)| !subgraph_ids.contains(id.0.as_str()))
         .map(|(id, rect)| {
             let primary = if is_vertical { rect.y } else { rect.x };
             let secondary = if is_vertical { rect.x } else { rect.y };
@@ -1148,6 +1165,40 @@ mod tests {
         };
         let result = transform_label_positions_direct(&labels, &edges, &ctx);
         assert!(result.is_empty());
+    }
+
+    // =========================================================================
+    // Compound Graph Wiring Tests
+    // =========================================================================
+
+    #[test]
+    fn test_compute_layout_subgraph_diagram_succeeds() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\nC --> A\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        // Should not panic
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        assert!(layout.draw_positions.contains_key("A"));
+        assert!(layout.draw_positions.contains_key("B"));
+        assert!(layout.draw_positions.contains_key("C"));
+    }
+
+    #[test]
+    fn test_compute_layout_simple_diagram_no_compound() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nA --> B\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        assert!(!diagram.has_subgraphs());
+
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        assert!(layout.draw_positions.contains_key("A"));
     }
 
     #[test]

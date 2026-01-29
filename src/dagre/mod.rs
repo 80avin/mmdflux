@@ -33,7 +33,9 @@
 
 mod acyclic;
 mod bk;
+pub(crate) mod border;
 mod graph;
+pub(crate) mod nesting;
 pub mod normalize;
 mod order;
 mod position;

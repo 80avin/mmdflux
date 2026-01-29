@@ -15,6 +15,7 @@ pub struct DiGraph<N> {
     nodes: Vec<(NodeId, N)>,
     edges: Vec<(NodeId, NodeId)>,
     node_index: HashMap<NodeId, usize>,
+    parents: HashMap<NodeId, NodeId>,
 }
 
 impl<N> Default for DiGraph<N> {
@@ -29,6 +30,7 @@ impl<N> DiGraph<N> {
             nodes: Vec::new(),
             edges: Vec::new(),
             node_index: HashMap::new(),
+            parents: HashMap::new(),
         }
     }
 
@@ -95,6 +97,37 @@ impl<N> DiGraph<N> {
     pub fn out_degree(&self, id: &NodeId) -> usize {
         self.edges.iter().filter(|(from, _)| from == id).count()
     }
+
+    pub fn set_parent(&mut self, node: impl Into<NodeId>, parent: impl Into<NodeId>) {
+        self.parents.insert(node.into(), parent.into());
+    }
+
+    pub fn parent(&self, node: &NodeId) -> Option<&NodeId> {
+        self.parents.get(node)
+    }
+
+    pub fn children(&self, parent: &NodeId) -> Vec<&NodeId> {
+        self.parents
+            .iter()
+            .filter(|(_, p)| *p == parent)
+            .map(|(n, _)| n)
+            .collect()
+    }
+
+    pub fn has_compound_nodes(&self) -> bool {
+        !self.parents.is_empty()
+    }
+
+    pub fn parents_map(&self) -> &HashMap<NodeId, NodeId> {
+        &self.parents
+    }
+}
+
+/// Border node type (left or right border of a compound node).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BorderType {
+    Left,
+    Right,
 }
 
 /// Internal graph representation with additional layout metadata.
@@ -139,6 +172,40 @@ pub(crate) struct LayoutGraph {
 
     /// Edge weights, indexed by position in `edges` vec. Default 1.0 for all edges.
     pub edge_weights: Vec<f64>,
+
+    // --- Compound graph fields ---
+    /// Parent node index for each node (None if no parent).
+    pub parents: Vec<Option<usize>>,
+
+    /// Minimum rank for compound nodes.
+    pub min_rank: HashMap<usize, i32>,
+
+    /// Maximum rank for compound nodes.
+    pub max_rank: HashMap<usize, i32>,
+
+    /// Top border node index for compound nodes.
+    pub border_top: HashMap<usize, usize>,
+
+    /// Bottom border node index for compound nodes.
+    pub border_bottom: HashMap<usize, usize>,
+
+    /// Left border node indices per rank for compound nodes.
+    pub border_left: HashMap<usize, Vec<usize>>,
+
+    /// Right border node indices per rank for compound nodes.
+    pub border_right: HashMap<usize, Vec<usize>>,
+
+    /// Border type for border nodes.
+    pub border_type: HashMap<usize, BorderType>,
+
+    /// Root node index for the nesting tree.
+    pub nesting_root: Option<usize>,
+
+    /// Edge indices that are nesting edges (to be removed after ranking).
+    pub nesting_edges: HashSet<usize>,
+
+    /// Node indices that are compound (subgraph) nodes.
+    pub compound_nodes: HashSet<usize>,
 }
 
 impl LayoutGraph {
@@ -175,6 +242,18 @@ impl LayoutGraph {
 
         let edge_weights = vec![1.0; edge_count];
 
+        // Build parent index mapping and compound node set
+        let mut parents = vec![None; n];
+        let mut compound_nodes = HashSet::new();
+        for (child_id, parent_id) in graph.parents_map() {
+            if let (Some(&child_idx), Some(&parent_idx)) =
+                (node_index.get(child_id), node_index.get(parent_id))
+            {
+                parents[child_idx] = Some(parent_idx);
+                compound_nodes.insert(parent_idx);
+            }
+        }
+
         Self {
             node_ids,
             edges,
@@ -188,6 +267,17 @@ impl LayoutGraph {
             dummy_chains: Vec::new(),
             original_edge_count: edge_count,
             edge_weights,
+            parents,
+            min_rank: HashMap::new(),
+            max_rank: HashMap::new(),
+            border_top: HashMap::new(),
+            border_bottom: HashMap::new(),
+            border_left: HashMap::new(),
+            border_right: HashMap::new(),
+            border_type: HashMap::new(),
+            nesting_root: None,
+            nesting_edges: HashSet::new(),
+            compound_nodes,
         }
     }
 
@@ -256,6 +346,43 @@ impl LayoutGraph {
     /// Check if a node index corresponds to a dummy node.
     pub fn is_dummy_index(&self, idx: usize) -> bool {
         self.node_ids.get(idx).is_some_and(|id| self.is_dummy(id))
+    }
+
+    /// Get the number of nodes in the graph.
+    pub fn node_count(&self) -> usize {
+        self.node_ids.len()
+    }
+
+    /// Add a nesting dummy node with zero dimensions. Returns the node index.
+    pub fn add_nesting_node(&mut self, id: NodeId) -> usize {
+        let idx = self.node_ids.len();
+        self.node_index.insert(id.clone(), idx);
+        self.node_ids.push(id);
+        self.ranks.push(0);
+        self.order.push(idx);
+        self.positions.push(Point::default());
+        self.dimensions.push((0.0, 0.0));
+        self.parents.push(None);
+        self.edge_weights.push(0.0); // placeholder; real weights set by edge addition
+        idx
+    }
+
+    /// Add an edge and return its index.
+    pub fn add_nesting_edge(&mut self, from: usize, to: usize, weight: f64) -> usize {
+        let idx = self.edges.len();
+        self.edges.push((from, to, idx));
+        self.edge_weights.push(weight);
+        idx
+    }
+
+    /// Check if a node is a compound (subgraph) node.
+    pub fn is_compound(&self, idx: usize) -> bool {
+        self.compound_nodes.contains(&idx)
+    }
+
+    /// Check if an edge exists between two node indices.
+    pub fn has_edge(&self, from: usize, to: usize) -> bool {
+        self.edges.iter().any(|&(f, t, _)| f == from && t == to)
     }
 }
 
@@ -384,6 +511,63 @@ mod tests {
         assert!(dummy.is_label());
         assert_eq!(dummy.edge_index, 0);
         assert_eq!(dummy.rank, 1);
+    }
+
+    #[test]
+    fn test_digraph_set_parent() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("sg1", ());
+        g.set_parent("A", "sg1");
+        assert_eq!(g.parent(&"A".into()), Some(&"sg1".into()));
+    }
+
+    #[test]
+    fn test_digraph_children() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("sg1", ());
+        g.set_parent("A", "sg1");
+        g.set_parent("B", "sg1");
+        let children = g.children(&"sg1".into());
+        assert_eq!(children.len(), 2);
+    }
+
+    #[test]
+    fn test_digraph_has_compound_nodes_false() {
+        let g: DiGraph<()> = DiGraph::new();
+        assert!(!g.has_compound_nodes());
+    }
+
+    #[test]
+    fn test_digraph_has_compound_nodes_true() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("sg1", ());
+        g.set_parent("A", "sg1");
+        assert!(g.has_compound_nodes());
+    }
+
+    #[test]
+    fn test_layout_graph_compound_fields_propagated() {
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("A", (10.0, 10.0));
+        g.add_node("B", (10.0, 10.0));
+        g.add_node("sg1", (0.0, 0.0));
+        g.add_edge("A", "B");
+        g.set_parent("A", "sg1");
+        g.set_parent("B", "sg1");
+
+        let lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
+        let sg1_idx = lg.node_index[&"sg1".into()];
+        let a_idx = lg.node_index[&"A".into()];
+        let b_idx = lg.node_index[&"B".into()];
+
+        assert_eq!(lg.parents[a_idx], Some(sg1_idx));
+        assert_eq!(lg.parents[b_idx], Some(sg1_idx));
+        assert_eq!(lg.parents[sg1_idx], None);
+        assert!(lg.compound_nodes.contains(&sg1_idx));
     }
 
     #[test]
