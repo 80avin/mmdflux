@@ -66,12 +66,46 @@ Find and resume work on an in-progress implementation plan.
    - [ ] **2.3** Third incomplete task
    ```
 
-5. **Begin implementing the plan:**
-   - Work through tasks, marking them complete in task-list.md
+5. **Begin implementing the plan using strict TDD:**
+   - Read the task file in `tasks/` for each task before starting it
+   - For each task, follow the TDD cycle:
+     1. **🔴 Red:** Write the failing test(s) specified in the task file. Run them to confirm they fail for the expected reason. Do not write any implementation code.
+     2. **🟢 Green:** Write the minimum code to make the test(s) pass. Run tests to confirm.
+     3. **🔵 Refactor:** Clean up the code while keeping tests green. Commit after refactoring.
+   - Mark tasks complete in task-list.md after the full Red/Green/Refactor cycle
    - Update .plan-state.json with current_task and progress.completed
    - **When completing a phase:** Create a commit with message format:
      `feat(plan-NNNN): Phase N - <phase description>`
    - Add each commit SHA to the `commits` array in .plan-state.json
+
+6. **Record findings during implementation:**
+   - Create a `findings/` subdirectory in the active plan directory
+   - Write findings as individual markdown files with descriptive names
+   - Record any of the following as they arise:
+     - **Discoveries:** Unexpected behavior, undocumented assumptions, or new understanding of the codebase
+     - **Diversions:** Where the implementation diverged from the plan and why
+     - **Plan errors:** Things the plan got wrong — incorrect assumptions, missing steps, wrong approach
+     - **Important notes:** Context that future sessions or plans should know about
+     - **TODOs:** Work identified but deferred — cleanup, optimization, follow-up features
+     - **Cleanup items:** Technical debt introduced or discovered during implementation
+   - Use this format for finding files:
+     ```markdown
+     # Finding: Short Title
+
+     **Type:** discovery | diversion | plan-error | note | todo | cleanup
+     **Task:** 2.1 (which task surfaced this)
+     **Date:** YYYY-MM-DD
+
+     ## Details
+     [What was found/changed/wrong]
+
+     ## Impact
+     [How this affects the current plan or future work]
+
+     ## Action Items
+     - [ ] Concrete next step (if any)
+     ```
+   - These findings will be used to create issues and provide feedback to research
 
 ## Example Outputs
 

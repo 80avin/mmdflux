@@ -55,7 +55,7 @@ Plan the requested feature or change using the project's planning conventions.
    - [research-doc-name.md](../../research/topic/research-doc-name.md)
 
    ## Testing Strategy
-   [How to test the changes]
+   [How to test the changes — all tasks follow TDD Red/Green/Refactor]
    ```
 
 4. **Use this format for task-list.md:**
@@ -98,7 +98,7 @@ Plan the requested feature or change using the project's planning conventions.
 
    Each task item links to a detailed task file in `tasks/`. The Quick Links section at the bottom provides easy access to the implementation plan and any relevant research documents.
 
-5. **Create a `tasks/` subdirectory** with a file for each substantive task. Use the naming convention `{task-number}-{kebab-case-name}.md`. Each task file should include:
+5. **Create a `tasks/` subdirectory** with a file for each substantive task. Use the naming convention `{task-number}-{kebab-case-name}.md`. Each task file follows strict **Test-Driven Development (TDD)** and must include explicit Red/Green/Refactor phases:
 
    ```markdown
    # Task 1.1: Short Task Title
@@ -109,27 +109,66 @@ Plan the requested feature or change using the project's planning conventions.
    ## Location
    [File(s) to create or modify, e.g. "New file: `src/module/foo.rs`" or "Modify: `src/module/bar.rs`"]
 
-   ## Implementation
+   ## TDD Phases
 
-   [Code snippets showing the specific code to write or change. Use fenced code blocks with the appropriate language tag.]
+   ### 🔴 Red: Write Failing Tests
+
+   Write these test(s) first, before any implementation code:
 
    ```rust
-   // Example: the struct/function/code to add
-   pub struct Foo {
-       pub field: Type,
+   #[test]
+   fn test_expected_behavior() {
+       // Arrange
+       let input = ...;
+       // Act
+       let result = function_under_test(input);
+       // Assert - this defines the expected behavior
+       assert_eq!(result, expected_value);
    }
    ```
+
+   **What the failing test asserts:** [Describe what behavior the test defines]
+   **Expected failure reason:** [e.g., "function_under_test does not exist yet" or "returns wrong value because logic is missing"]
+
+   Run the test to confirm it fails for the expected reason. Do not write any implementation code during this phase.
+
+   ### 🟢 Green: Minimal Implementation
+
+   Write the minimum code necessary to make the test(s) pass:
+
+   ```rust
+   pub fn function_under_test(input: Type) -> OutputType {
+       // Minimal implementation — just enough to pass the test
+   }
+   ```
+
+   Run the test to confirm it passes. No more code than necessary.
+
+   ### 🔵 Refactor: Clean Up
+
+   [Describe refactoring opportunities, e.g.:]
+   - Extract helper function for [repeated logic]
+   - Rename [variable] for clarity
+   - Consolidate [duplicated code] with existing [function]
+
+   Run tests after refactoring to confirm they still pass. Commit after this phase.
 
    ## Context
    [Any additional notes: imports needed, related functions, edge cases to handle.
    Link to research docs if relevant: see [research-doc.md](../../../research/topic/doc.md)]
 
    ## Acceptance Criteria
-   - [ ] Criterion 1
-   - [ ] Criterion 2
+   - [ ] Failing test written and confirmed red
+   - [ ] Minimal implementation passes the test
+   - [ ] Code refactored with tests still green
+   - [ ] [Additional criteria specific to this task]
    ```
 
    **Guidelines for task files:**
+   - Every task with implementation code must have explicit Red/Green/Refactor phases
+   - The Red phase must specify what tests to write, what they assert, and why they should fail
+   - The Green phase must describe only the minimal code to pass — no extras
+   - The Refactor phase should identify concrete cleanup opportunities
    - Include enough code detail that implementation can proceed without re-reading the full codebase
    - Show specific file paths, function signatures, struct definitions, and key logic
    - Reference related research documents from `research/` when applicable
@@ -191,12 +230,18 @@ Plan the requested feature or change using the project's planning conventions.
 
    As you work:
    - Read the task file in tasks/ for each task before starting it
+   - Follow strict TDD for each task: 🔴 Red (write failing test, run it) → 🟢 Green (minimal implementation, run test) → 🔵 Refactor (clean up, run tests, commit)
    - Update task-list.md checkboxes (change `- [ ]` to `- [x]`) when completing tasks
    - Update .plan-state.json with current_task and progress.completed count
 
    When completing a phase:
    - Create a commit with message: "feat(plan-NNNN): Phase N - <phase description>"
    - Add the commit SHA to the `commits` array in .plan-state.json
+
+   Record findings during implementation:
+   - Write discoveries, diversions from the plan, things the plan got wrong, important notes, TODOs, and cleanup items to `findings/` in the plan directory
+   - Use descriptive filenames like `findings/edge-case-diamond-routing.md` or `findings/todo-cleanup-unused-helpers.md`
+   - These findings will be used to create issues and provide feedback to research
 
    Before ending the session, update .plan-state.json with last_session_notes about progress and next steps.
 

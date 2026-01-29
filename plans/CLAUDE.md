@@ -77,11 +77,57 @@ For work-in-progress notes that shouldn't be committed:
 - Draft files are gitignored and won't be committed
 - Rename to remove the `draft-` prefix when ready to commit
 
+## Test-Driven Development (TDD)
+
+All implementation tasks follow strict TDD. For each task:
+
+1. **🔴 Red:** Write failing test(s) that define expected behavior. Run to confirm they fail for the expected reason. No implementation code in this phase.
+2. **🟢 Green:** Write the minimum code to make the test(s) pass. No more, no less. Run to confirm passing.
+3. **🔵 Refactor:** Clean up code while keeping tests green. Commit after refactoring.
+
+Task files in `tasks/` must specify:
+- What test(s) to write first and what they assert
+- The expected failure reason
+- What minimal implementation satisfies the tests
+- What refactoring opportunities exist
+
 ## During Implementation
 
 - Update task list checkboxes as you complete tasks: `- [ ]` → `- [x]`
 - Keep the plan document updated if the approach changes
 - Update `.plan-state.json` with progress and session notes
+- Follow TDD Red/Green/Refactor for every task with implementation code
+
+## Findings
+
+Record discoveries, diversions, and issues in a `findings/` subdirectory within the active plan directory. Write individual markdown files for:
+
+- **Discoveries** — unexpected behavior, undocumented assumptions
+- **Diversions** — where implementation diverged from the plan and why
+- **Plan errors** — things the plan got wrong
+- **Important notes** — context for future sessions or plans
+- **TODOs** — deferred work identified during implementation
+- **Cleanup items** — technical debt introduced or discovered
+
+Use descriptive filenames like `findings/edge-case-diamond-routing.md`. These findings are used to create issues and provide feedback to research.
+
+Finding file format:
+```markdown
+# Finding: Short Title
+
+**Type:** discovery | diversion | plan-error | note | todo | cleanup
+**Task:** 2.1
+**Date:** YYYY-MM-DD
+
+## Details
+[What was found/changed/wrong]
+
+## Impact
+[How this affects the current plan or future work]
+
+## Action Items
+- [ ] Concrete next step (if any)
+```
 
 ## After Completion
 
@@ -137,10 +183,13 @@ plans/
 │   ├── implementation-plan.md
 │   ├── task-list.md
 │   ├── .plan-state.json        # Session state
-│   └── tasks/                  # Detailed task files
-│       ├── 1.1-module-structures.md
-│       ├── 1.2-helper-functions.md
-│       └── 2.1-core-algorithm.md
+│   ├── tasks/                  # Detailed task files
+│   │   ├── 1.1-module-structures.md
+│   │   ├── 1.2-helper-functions.md
+│   │   └── 2.1-core-algorithm.md
+│   └── findings/               # Implementation findings
+│       ├── edge-case-empty-input.md
+│       └── todo-cleanup-error-types.md
 ```
 
 ## Task List Format
