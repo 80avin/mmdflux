@@ -691,58 +691,86 @@ struct RawCenter {
 
 /// Convert dagre subgraph bounds to draw-coordinate SubgraphBounds.
 ///
-/// Computes the bounding box of each subgraph's member nodes in draw coordinates,
-/// then adds padding for the border rectangle and title row.
+/// Uses dagre's border-node-derived Rect as the primary bounds source,
+/// transforming through TransformContext to get draw coordinates.
+/// Falls back to member-node bounding box with hardcoded padding
+/// when dagre bounds are unavailable.
 fn convert_subgraph_bounds(
-    _dagre_bounds: &HashMap<String, crate::dagre::Rect>,
+    dagre_bounds: &HashMap<String, crate::dagre::Rect>,
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
-    _ctx: &TransformContext,
+    ctx: &TransformContext,
     draw_positions: &HashMap<String, (usize, usize)>,
     node_dims: &HashMap<String, (usize, usize)>,
     _padding: usize,
 ) -> HashMap<String, SubgraphBounds> {
     let mut bounds = HashMap::new();
-    let border_padding: usize = 2; // cells between member nodes and border
-    let title_height: usize = 1; // row above border for title
 
     for (sg_id, sg) in subgraphs {
-        // Find bounding box of member nodes in draw coordinates
-        let mut min_x = usize::MAX;
-        let mut min_y = usize::MAX;
-        let mut max_x: usize = 0;
-        let mut max_y: usize = 0;
+        if let Some(rect) = dagre_bounds.get(sg_id) {
+            // Dagre Rect: (x, y) is center, (width, height) is full span.
+            let tl_dagre_x = rect.x - rect.width / 2.0;
+            let tl_dagre_y = rect.y - rect.height / 2.0;
+            let br_dagre_x = rect.x + rect.width / 2.0;
+            let br_dagre_y = rect.y + rect.height / 2.0;
 
-        for node_id in &sg.nodes {
-            if let (Some(&(x, y)), Some(&(w, h))) =
-                (draw_positions.get(node_id), node_dims.get(node_id))
-            {
-                min_x = min_x.min(x);
-                min_y = min_y.min(y);
-                max_x = max_x.max(x + w);
-                max_y = max_y.max(y + h);
+            // Transform to draw coordinates via TransformContext
+            let (tl_x, tl_y) = ctx.to_ascii(tl_dagre_x, tl_dagre_y);
+            let (br_x, br_y) = ctx.to_ascii(br_dagre_x, br_dagre_y);
+
+            let draw_width = br_x.saturating_sub(tl_x).max(1);
+            let draw_height = br_y.saturating_sub(tl_y).max(1);
+
+            bounds.insert(
+                sg_id.clone(),
+                SubgraphBounds {
+                    x: tl_x,
+                    y: tl_y,
+                    width: draw_width,
+                    height: draw_height,
+                    title: sg.title.clone(),
+                },
+            );
+        } else {
+            // Fallback: compute from member-node draw positions
+            let border_padding: usize = 2;
+            let title_height: usize = 1;
+
+            let mut min_x = usize::MAX;
+            let mut min_y = usize::MAX;
+            let mut max_x: usize = 0;
+            let mut max_y: usize = 0;
+
+            for node_id in &sg.nodes {
+                if let (Some(&(x, y)), Some(&(w, h))) =
+                    (draw_positions.get(node_id), node_dims.get(node_id))
+                {
+                    min_x = min_x.min(x);
+                    min_y = min_y.min(y);
+                    max_x = max_x.max(x + w);
+                    max_y = max_y.max(y + h);
+                }
             }
+
+            if min_x == usize::MAX {
+                continue;
+            }
+
+            let border_x = min_x.saturating_sub(border_padding);
+            let border_y = min_y.saturating_sub(border_padding + title_height);
+            let border_right = max_x + border_padding;
+            let border_bottom = max_y + border_padding;
+
+            bounds.insert(
+                sg_id.clone(),
+                SubgraphBounds {
+                    x: border_x,
+                    y: border_y,
+                    width: border_right - border_x,
+                    height: border_bottom - border_y,
+                    title: sg.title.clone(),
+                },
+            );
         }
-
-        if min_x == usize::MAX {
-            continue; // no member nodes found
-        }
-
-        // Add padding around member nodes for the border
-        let border_x = min_x.saturating_sub(border_padding);
-        let border_y = min_y.saturating_sub(border_padding + title_height);
-        let border_right = max_x + border_padding;
-        let border_bottom = max_y + border_padding;
-
-        bounds.insert(
-            sg_id.clone(),
-            SubgraphBounds {
-                x: border_x,
-                y: border_y,
-                width: border_right - border_x,
-                height: border_bottom - border_y,
-                title: sg.title.clone(),
-            },
-        );
     }
 
     bounds
@@ -1386,6 +1414,139 @@ mod tests {
         assert!(
             result.is_empty(),
             "out-of-bounds edge index should be skipped"
+        );
+    }
+
+    // =========================================================================
+    // Dagre Bounds Tests (Plan 0026, Task 1.1)
+    // =========================================================================
+
+    #[test]
+    fn test_subgraph_bounds_no_overlap_from_dagre_rects() {
+        use crate::graph::Subgraph;
+
+        // Two non-overlapping dagre Rects (center-based coordinates).
+        // sg1: center (50, 50), 60x40 → spans [20..80] x [30..70]
+        // sg2: center (150, 50), 60x40 → spans [120..180] x [30..70]
+        let mut dagre_bounds = HashMap::new();
+        dagre_bounds.insert(
+            "sg1".to_string(),
+            crate::dagre::Rect { x: 50.0, y: 50.0, width: 60.0, height: 40.0 },
+        );
+        dagre_bounds.insert(
+            "sg2".to_string(),
+            crate::dagre::Rect { x: 150.0, y: 50.0, width: 60.0, height: 40.0 },
+        );
+
+        let mut subgraphs = HashMap::new();
+        subgraphs.insert(
+            "sg1".to_string(),
+            Subgraph { id: "sg1".to_string(), title: "Left".to_string(), nodes: vec!["A".to_string()] },
+        );
+        subgraphs.insert(
+            "sg2".to_string(),
+            Subgraph { id: "sg2".to_string(), title: "Right".to_string(), nodes: vec!["B".to_string()] },
+        );
+
+        let ctx = TransformContext {
+            dagre_min_x: 0.0,
+            dagre_min_y: 0.0,
+            scale_x: 0.2,
+            scale_y: 0.1,
+            padding: 1,
+            left_label_margin: 0,
+            overhang_x: 0,
+            overhang_y: 0,
+        };
+
+        let mut draw_positions = HashMap::new();
+        draw_positions.insert("A".to_string(), (5usize, 5usize));
+        draw_positions.insert("B".to_string(), (25usize, 5usize));
+        let mut node_dims = HashMap::new();
+        node_dims.insert("A".to_string(), (5usize, 3usize));
+        node_dims.insert("B".to_string(), (5usize, 3usize));
+
+        let result = convert_subgraph_bounds(
+            &dagre_bounds, &subgraphs, &ctx, &draw_positions, &node_dims, 1,
+        );
+
+        let a = &result["sg1"];
+        let b = &result["sg2"];
+
+        // Non-overlapping dagre rects should produce non-overlapping draw bounds
+        let no_x_overlap = a.x + a.width <= b.x || b.x + b.width <= a.x;
+        let no_y_overlap = a.y + a.height <= b.y || b.y + b.height <= a.y;
+        assert!(
+            no_x_overlap || no_y_overlap,
+            "Bounds should not overlap: sg1=({},{} {}x{}) sg2=({},{} {}x{})",
+            a.x, a.y, a.width, a.height,
+            b.x, b.y, b.width, b.height
+        );
+    }
+
+    #[test]
+    fn test_convert_subgraph_bounds_uses_dagre_rect() {
+        use crate::graph::Subgraph;
+
+        // Construct a scenario where dagre bounds are wider than
+        // the member-node extent + hardcoded padding.
+        let mut dagre_bounds = HashMap::new();
+        // Dagre Rect: x,y is top-left; width, height is full span.
+        dagre_bounds.insert(
+            "sg1".to_string(),
+            crate::dagre::Rect {
+                x: 10.0,
+                y: 5.0,
+                width: 200.0,
+                height: 100.0,
+            },
+        );
+
+        let mut subgraphs = HashMap::new();
+        subgraphs.insert(
+            "sg1".to_string(),
+            Subgraph {
+                id: "sg1".to_string(),
+                title: "Wide".to_string(),
+                nodes: vec!["A".to_string()],
+            },
+        );
+
+        let ctx = TransformContext {
+            dagre_min_x: 0.0,
+            dagre_min_y: 0.0,
+            scale_x: 0.2,
+            scale_y: 0.1,
+            padding: 1,
+            left_label_margin: 0,
+            overhang_x: 0,
+            overhang_y: 0,
+        };
+
+        // Single node at (10,10) with size (5,3)
+        let mut draw_positions = HashMap::new();
+        draw_positions.insert("A".to_string(), (10usize, 10usize));
+        let mut node_dims = HashMap::new();
+        node_dims.insert("A".to_string(), (5usize, 3usize));
+
+        let result = convert_subgraph_bounds(
+            &dagre_bounds,
+            &subgraphs,
+            &ctx,
+            &draw_positions,
+            &node_dims,
+            1,
+        );
+
+        let b = &result["sg1"];
+        // The member-node fallback would produce roughly:
+        //   x=10-2=8, width=(10+5+2)-8=9
+        // With dagre bounds (200 wide, scaled by 0.2 = 40 draw cells),
+        // the result should be significantly wider than 9.
+        assert!(
+            b.width > 15,
+            "Bounds should use dagre rect, not member-node fallback. Got width={}",
+            b.width
         );
     }
 }
