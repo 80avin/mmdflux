@@ -1080,4 +1080,28 @@ mod label_edge_cases {
             "Expected at least one node box:\n{output}"
         );
     }
+
+    #[test]
+    fn labeled_edges_reasonable_height() {
+        let input = load_fixture("labeled_edges.mmd");
+        let flowchart = parse_flowchart(&input).expect("Failed to parse labeled_edges");
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &Default::default());
+        let line_count = output.lines().count();
+
+        // Main branch renders ~29 lines. Regression was 51+ lines.
+        // With the fix, expect similar to main branch (allow some tolerance for label dummies).
+        assert!(
+            line_count < 40,
+            "labeled_edges.mmd should render in under 40 lines, got {line_count}"
+        );
+
+        // All 5 labels should be present
+        for label in &["initialize", "configure", "yes", "no", "retry"] {
+            assert!(
+                output.contains(label),
+                "Output should contain label '{label}'"
+            );
+        }
+    }
 }

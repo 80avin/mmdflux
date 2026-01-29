@@ -225,6 +225,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .collect();
 
     // --- Phase D: Scale dagre coordinates to ASCII ---
+    // When global minlen doubling is active (any edge has a label), dagre
+    // positions real nodes 2× further apart (doubled minlens → doubled rank
+    // gaps). We halve the primary-axis scale factor to compensate, keeping
+    // total diagram height approximately unchanged.
+    let ranks_doubled = !edge_labels.is_empty();
     let (scale_x, scale_y) = compute_ascii_scale_factors(
         &node_dims,
         dagre_config.rank_sep,
@@ -232,6 +237,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         config.v_spacing,
         config.h_spacing,
         is_vertical,
+        ranks_doubled,
     );
 
     // Find dagre bounding box min
@@ -503,6 +509,7 @@ fn compute_ascii_scale_factors(
     v_spacing: usize,
     h_spacing: usize,
     is_vertical: bool,
+    ranks_doubled: bool,
 ) -> (f64, f64) {
     let (total_w, total_h, max_w, max_h, count) = node_dims.values().fold(
         (0usize, 0usize, 0usize, 0usize, 0usize),
@@ -513,11 +520,27 @@ fn compute_ascii_scale_factors(
     let avg_h = total_h as f64 / count_f;
 
     if is_vertical {
-        let scale_primary = (max_h as f64 + v_spacing as f64) / (max_h as f64 + rank_sep);
+        // When ranks are doubled, dagre positions nodes 2× further apart.
+        // To compensate exactly, we need: eff_rs = max_h + 2 * rank_sep
+        // This gives scale_primary_new = scale_primary_old / 2, so that
+        // (2 * rank_sep) * scale_new = rank_sep * scale_old.
+        let effective_rank_sep = if ranks_doubled {
+            max_h as f64 + 2.0 * rank_sep
+        } else {
+            rank_sep
+        };
+        let scale_primary =
+            (max_h as f64 + v_spacing as f64) / (max_h as f64 + effective_rank_sep);
         let scale_cross = (avg_w + h_spacing as f64) / (avg_w + node_sep);
         (scale_cross, scale_primary)
     } else {
-        let scale_primary = (max_w as f64 + h_spacing as f64) / (max_w as f64 + rank_sep);
+        let effective_rank_sep = if ranks_doubled {
+            max_w as f64 + 2.0 * rank_sep
+        } else {
+            rank_sep
+        };
+        let scale_primary =
+            (max_w as f64 + h_spacing as f64) / (max_w as f64 + effective_rank_sep);
         let scale_cross = (avg_h + v_spacing as f64) / (avg_h + node_sep);
         (scale_primary, scale_cross)
     }
@@ -818,7 +841,7 @@ mod tests {
         dims.insert("B".into(), (7, 3));
         dims.insert("C".into(), (11, 3));
 
-        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true);
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true, false);
 
         let expected_sy = 6.0 / 53.0;
         let expected_sx = 13.0 / 59.0;
@@ -841,7 +864,7 @@ mod tests {
         dims.insert("A".into(), (9, 3));
         dims.insert("B".into(), (9, 3));
 
-        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 6.0, 3, 4, false);
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 6.0, 3, 4, false, false);
 
         let expected_sx = 13.0 / 59.0;
         let expected_sy = 6.0 / 9.0;
@@ -860,7 +883,7 @@ mod tests {
         let mut dims = HashMap::new();
         dims.insert("X".into(), (5, 3));
 
-        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true);
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true, false);
         assert!(sx > 0.0, "sx should be positive, got {sx}");
         assert!(sy > 0.0, "sy should be positive, got {sy}");
         assert!(sx.is_finite());
@@ -868,9 +891,37 @@ mod tests {
     }
 
     #[test]
+    fn scale_factors_halved_for_doubled_ranks() {
+        // With ranks_doubled=true, effective_rank_sep = max_h + 2*rank_sep = 3 + 100 = 103
+        // scale_y = (max_h + v_spacing) / (max_h + eff_rs) = 6/106
+        // This is exactly half of the non-doubled scale: 6/53 / 2 = 6/106
+        let mut dims = HashMap::new();
+        dims.insert("A".into(), (9, 3));
+        dims.insert("B".into(), (7, 3));
+
+        let (_, sy_normal) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true, false);
+        let (_, sy_doubled) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true, true);
+
+        // Doubled-rank scale should be exactly half of normal scale
+        let expected_sy = sy_normal / 2.0;
+        assert!(
+            (sy_doubled - expected_sy).abs() < 1e-6,
+            "sy_doubled: got {sy_doubled}, expected {expected_sy} (half of {sy_normal})"
+        );
+
+        // Verify: gap_new = 2*rank_sep*scale_doubled = gap_old = rank_sep*scale_normal
+        let gap_normal = 50.0 * sy_normal;
+        let gap_doubled = 100.0 * sy_doubled;
+        assert!(
+            (gap_normal - gap_doubled).abs() < 1e-6,
+            "Gaps should match: normal={gap_normal}, doubled={gap_doubled}"
+        );
+    }
+
+    #[test]
     fn scale_factors_empty_nodes() {
         let dims: HashMap<String, (usize, usize)> = HashMap::new();
-        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true);
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true, false);
         assert!(sx.is_finite());
         assert!(sy.is_finite());
     }
