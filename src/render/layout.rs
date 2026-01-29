@@ -706,7 +706,7 @@ fn convert_subgraph_bounds(
     let mut bounds = HashMap::new();
 
     for (sg_id, sg) in subgraphs {
-        if let Some(rect) = dagre_bounds.get(sg_id) {
+        let (draw_x, draw_y, draw_width, draw_height) = if let Some(rect) = dagre_bounds.get(sg_id) {
             // Dagre Rect: (x, y) is center, (width, height) is full span.
             let tl_dagre_x = rect.x - rect.width / 2.0;
             let tl_dagre_y = rect.y - rect.height / 2.0;
@@ -720,20 +720,10 @@ fn convert_subgraph_bounds(
             let draw_width = br_x.saturating_sub(tl_x).max(1);
             let draw_height = br_y.saturating_sub(tl_y).max(1);
 
-            bounds.insert(
-                sg_id.clone(),
-                SubgraphBounds {
-                    x: tl_x,
-                    y: tl_y,
-                    width: draw_width,
-                    height: draw_height,
-                    title: sg.title.clone(),
-                },
-            );
+            (tl_x, tl_y, draw_width, draw_height)
         } else {
             // Fallback: compute from member-node draw positions
             let border_padding: usize = 2;
-            let title_height: usize = 1;
 
             let mut min_x = usize::MAX;
             let mut min_y = usize::MAX;
@@ -756,21 +746,34 @@ fn convert_subgraph_bounds(
             }
 
             let border_x = min_x.saturating_sub(border_padding);
-            let border_y = min_y.saturating_sub(border_padding + title_height);
+            let border_y = min_y.saturating_sub(border_padding);
             let border_right = max_x + border_padding;
             let border_bottom = max_y + border_padding;
 
-            bounds.insert(
-                sg_id.clone(),
-                SubgraphBounds {
-                    x: border_x,
-                    y: border_y,
-                    width: border_right - border_x,
-                    height: border_bottom - border_y,
-                    title: sg.title.clone(),
-                },
-            );
+            (border_x, border_y, border_right - border_x, border_bottom - border_y)
+        };
+
+        // Enforce title-width minimum: ┌─ Title ─┐
+        // Overhead: 2 corners + "─ " prefix (2) + " ─" suffix (2) = 6
+        let min_title_width = sg.title.len() + 6;
+        let mut final_x = draw_x;
+        let mut final_width = draw_width;
+        if final_width < min_title_width {
+            let expand = min_title_width - final_width;
+            final_x = final_x.saturating_sub(expand / 2);
+            final_width = min_title_width;
         }
+
+        bounds.insert(
+            sg_id.clone(),
+            SubgraphBounds {
+                x: final_x,
+                y: draw_y,
+                width: final_width,
+                height: draw_height,
+                title: sg.title.clone(),
+            },
+        );
     }
 
     bounds
@@ -1547,6 +1550,36 @@ mod tests {
             b.width > 15,
             "Bounds should use dagre rect, not member-node fallback. Got width={}",
             b.width
+        );
+    }
+
+    // =========================================================================
+    // Title Width Enforcement Tests (Plan 0026, Task 2.3)
+    // =========================================================================
+
+    #[test]
+    fn test_subgraph_bounds_expanded_for_title() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[This Is A Very Long Title]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+
+        let bounds = layout
+            .subgraph_bounds
+            .values()
+            .next()
+            .expect("Expected subgraph bounds");
+
+        // Border must be wide enough for: corners (2) + "─ " (2) + title + " ─" (2)
+        let min_width = "This Is A Very Long Title".len() + 6;
+        assert!(
+            bounds.width >= min_width,
+            "Border width {} too narrow for title (need >= {})",
+            bounds.width,
+            min_width
         );
     }
 }

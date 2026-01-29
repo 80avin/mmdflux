@@ -195,7 +195,7 @@ mod tests {
             output.contains('┘') || output.contains('+'),
             "output should contain bottom-right corner: {output}"
         );
-        // Output should contain the title
+        // Output should contain the title (embedded in border)
         assert!(
             output.contains("Group"),
             "output should contain title: {output}"
