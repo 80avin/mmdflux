@@ -116,9 +116,10 @@ fn draw_edge_label_with_tracking(
                         };
                         (label_x, y.saturating_sub(1))
                     } else {
-                        let mid_y = (routed.start.y + routed.end.y) / 2;
+                        // Anchor y to source exit point, not averaged midpoint
+                        let anchor_y = routed.start.y.saturating_sub(1);
                         let mid_x = (routed.start.x + routed.end.x) / 2;
-                        (mid_x.saturating_sub(label_len / 2), mid_y)
+                        (mid_x.saturating_sub(label_len / 2), anchor_y)
                     }
                 } else {
                     // Short/straight path — keep existing inline placement
@@ -151,9 +152,10 @@ fn draw_edge_label_with_tracking(
                         };
                         (label_x, y.saturating_sub(1))
                     } else {
-                        let mid_y = (routed.start.y + routed.end.y) / 2;
+                        // Anchor y to source exit point, not averaged midpoint
+                        let anchor_y = routed.start.y.saturating_sub(1);
                         let mid_x = (routed.start.x + routed.end.x) / 2;
-                        (mid_x.saturating_sub(label_len / 2), mid_y)
+                        (mid_x.saturating_sub(label_len / 2), anchor_y)
                     }
                 } else {
                     // Short/straight path — keep existing inline placement
