@@ -46,6 +46,18 @@ pub use graph::DiGraph;
 use graph::LayoutGraph;
 pub use types::{Direction, EdgeLayout, LayoutConfig, LayoutResult, NodeId, Point, Rect};
 
+/// Set minlen=2 for edges that have labels, so ranking creates a gap for label dummy nodes.
+fn make_space_for_edge_labels(
+    lg: &mut LayoutGraph,
+    edge_labels: &HashMap<usize, normalize::EdgeLabelInfo>,
+) {
+    for &edge_idx in edge_labels.keys() {
+        if edge_idx < lg.edge_minlens.len() {
+            lg.edge_minlens[edge_idx] = 2;
+        }
+    }
+}
+
 /// Main entry point for layout computation.
 ///
 /// Takes a directed graph, configuration options, and a function to get node dimensions.
@@ -378,6 +390,26 @@ mod tests {
             result.edge_waypoints.contains_key(&ad_edge.index),
             "Should have waypoints for long edge"
         );
+    }
+
+    #[test]
+    fn test_make_space_sets_minlen_for_labeled_edges() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (5.0, 3.0));
+        graph.add_node("B", (5.0, 3.0));
+        graph.add_node("C", (5.0, 3.0));
+        graph.add_edge("A", "B"); // edge 0: labeled
+        graph.add_edge("B", "C"); // edge 1: unlabeled
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, normalize::EdgeLabelInfo::new(5.0, 1.0));
+
+        make_space_for_edge_labels(&mut lg, &edge_labels);
+
+        assert_eq!(lg.edge_minlens[0], 2); // labeled edge gets minlen=2
+        assert_eq!(lg.edge_minlens[1], 1); // unlabeled edge stays at 1
     }
 
     #[test]
