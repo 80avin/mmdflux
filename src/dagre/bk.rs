@@ -69,6 +69,7 @@ impl BlockAlignment {
     }
 
     /// Get all nodes in the block containing `node`.
+    #[cfg(test)]
     pub fn get_block_nodes(&self, node: NodeIndex) -> Vec<NodeIndex> {
         let root = self.get_root(node);
         let mut nodes = Vec::new();
