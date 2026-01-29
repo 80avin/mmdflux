@@ -574,6 +574,109 @@ mod spreading {
 }
 
 // =============================================================================
+// Direct Layout Integration Tests
+// =============================================================================
+
+mod direct_layout {
+    use mmdflux::render::{Layout, LayoutConfig, compute_layout_direct};
+
+    use super::*;
+
+    fn parse_and_build(name: &str) -> mmdflux::Diagram {
+        let input = load_fixture(name);
+        let flowchart = parse_flowchart(&input).expect("Failed to parse");
+        build_diagram(&flowchart)
+    }
+
+    fn layout_fixture(name: &str) -> Layout {
+        let diagram = parse_and_build(name);
+        let config = LayoutConfig::default();
+        compute_layout_direct(&diagram, &config)
+    }
+
+    #[test]
+    fn direct_simple_produces_valid_layout() {
+        let layout = layout_fixture("simple.mmd");
+
+        assert!(layout.width > 0, "canvas width must be positive");
+        assert!(layout.height > 0, "canvas height must be positive");
+        assert!(layout.draw_positions.contains_key("A"));
+        assert!(layout.draw_positions.contains_key("B"));
+        assert!(layout.node_bounds.contains_key("A"));
+        assert!(layout.node_bounds.contains_key("B"));
+    }
+
+    #[test]
+    fn direct_no_node_overlaps() {
+        let layout = layout_fixture("chain.mmd");
+
+        let bounds: Vec<_> = layout.node_bounds.values().collect();
+        for i in 0..bounds.len() {
+            for j in (i + 1)..bounds.len() {
+                let a = bounds[i];
+                let b = bounds[j];
+                let x_overlap = a.x < b.x + b.width && b.x < a.x + a.width;
+                let y_overlap = a.y < b.y + b.height && b.y < a.y + a.height;
+                assert!(
+                    !(x_overlap && y_overlap),
+                    "nodes overlap: {:?} vs {:?}",
+                    a,
+                    b
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn direct_nodes_within_canvas() {
+        let layout = layout_fixture("fan_out.mmd");
+
+        for (id, bounds) in &layout.node_bounds {
+            assert!(
+                bounds.x + bounds.width <= layout.width,
+                "node {} exceeds canvas width: {} + {} > {}",
+                id,
+                bounds.x,
+                bounds.width,
+                layout.width
+            );
+            assert!(
+                bounds.y + bounds.height <= layout.height,
+                "node {} exceeds canvas height: {} + {} > {}",
+                id,
+                bounds.y,
+                bounds.height,
+                layout.height
+            );
+        }
+    }
+
+    #[test]
+    fn direct_td_vertical_ordering() {
+        let layout = layout_fixture("simple.mmd");
+
+        let a_y = layout.draw_positions["A"].1;
+        let b_y = layout.draw_positions["B"].1;
+        assert!(
+            a_y < b_y,
+            "in TD layout, A (rank 0) should be above B (rank 1)"
+        );
+    }
+
+    #[test]
+    fn direct_lr_horizontal_ordering() {
+        let diagram = parse_and_build("left_right.mmd");
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        assert!(
+            layout.width > layout.height || layout.node_bounds.len() <= 2,
+            "LR layout should generally be wider than tall"
+        );
+    }
+}
+
+// =============================================================================
 // Baseline Snapshots
 // =============================================================================
 

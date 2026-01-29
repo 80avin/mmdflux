@@ -166,6 +166,326 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
     }
 }
 
+/// Compute the layout using the dagre algorithm with direct coordinate translation.
+///
+/// This uses uniform scale factors to translate dagre's float coordinates to ASCII
+/// character cells, replacing the stagger pipeline. The 3-step process:
+/// 1. Compute per-axis scale factors
+/// 2. Apply uniform scaling + rounding to all dagre coordinates
+/// 3. Enforce minimum spacing via collision repair
+pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout {
+    // --- Phase A: Build dagre graph (shared with compute_layout_dagre) ---
+    let mut dgraph = dagre::DiGraph::new();
+
+    let mut seen_nodes = std::collections::HashSet::new();
+    let mut ordered_node_ids = Vec::new();
+    for edge in &diagram.edges {
+        for node_id in [&edge.from, &edge.to] {
+            if !seen_nodes.contains(node_id) {
+                seen_nodes.insert(node_id.clone());
+                ordered_node_ids.push(node_id.clone());
+            }
+        }
+    }
+    for id in diagram.nodes.keys() {
+        if !seen_nodes.contains(id) {
+            ordered_node_ids.push(id.clone());
+        }
+    }
+
+    for id in &ordered_node_ids {
+        if let Some(node) = diagram.nodes.get(id) {
+            let dims = node_dimensions(node);
+            dgraph.add_node(id.as_str(), dims);
+        }
+    }
+
+    let mut edge_labels: HashMap<usize, dagre::normalize::EdgeLabelInfo> = HashMap::new();
+    for (edge_idx, edge) in diagram.edges.iter().enumerate() {
+        dgraph.add_edge(edge.from.as_str(), edge.to.as_str());
+        if let Some(ref label) = edge.label {
+            let label_width = label.len() + 2;
+            edge_labels.insert(
+                edge_idx,
+                dagre::normalize::EdgeLabelInfo::new(label_width as f64, 1.0),
+            );
+        }
+    }
+
+    let dagre_direction = match diagram.direction {
+        Direction::TopDown => DagreDirection::TopBottom,
+        Direction::BottomTop => DagreDirection::BottomTop,
+        Direction::LeftRight => DagreDirection::LeftRight,
+        Direction::RightLeft => DagreDirection::RightLeft,
+    };
+
+    let (node_sep, edge_sep) = match dagre_direction {
+        DagreDirection::LeftRight | DagreDirection::RightLeft => {
+            let total_height: f64 = diagram
+                .nodes
+                .values()
+                .map(|node| node_dimensions(node).1 as f64)
+                .sum();
+            let count = diagram.nodes.len().max(1) as f64;
+            let avg_height = total_height / count;
+            let ns = (avg_height * 2.0).max(6.0);
+            let es = (avg_height * 0.8).max(2.0);
+            (ns, es)
+        }
+        _ => (50.0, 20.0),
+    };
+
+    let dagre_config = DagreConfig {
+        direction: dagre_direction,
+        node_sep,
+        edge_sep,
+        rank_sep: 50.0,
+        margin: 10.0,
+        acyclic: true,
+    };
+
+    let result = dagre::layout_with_labels(
+        &dgraph,
+        &dagre_config,
+        |_, dims| (dims.0 as f64, dims.1 as f64),
+        &edge_labels,
+    );
+
+    // --- Phase B: Group nodes into layers ---
+    let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
+
+    let mut layer_coords: Vec<(String, f64, f64)> = result
+        .nodes
+        .iter()
+        .map(|(id, rect)| {
+            let primary = if is_vertical { rect.y } else { rect.x };
+            let secondary = if is_vertical { rect.x } else { rect.y };
+            (id.0.clone(), primary, secondary)
+        })
+        .collect();
+    layer_coords.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut layers: Vec<Vec<String>> = Vec::new();
+    let mut current_layer: Vec<String> = Vec::new();
+    let mut last_primary: Option<f64> = None;
+    for (id, primary, _) in &layer_coords {
+        if let Some(last) = last_primary {
+            if (*primary - last).abs() > 25.0 && !current_layer.is_empty() {
+                layers.push(std::mem::take(&mut current_layer));
+            }
+        }
+        current_layer.push(id.clone());
+        last_primary = Some(*primary);
+    }
+    if !current_layer.is_empty() {
+        layers.push(current_layer);
+    }
+
+    for layer in &mut layers {
+        layer.sort_by(|a, b| {
+            let a_sec = result
+                .nodes
+                .get(&dagre::NodeId(a.clone()))
+                .map(|r| if is_vertical { r.x } else { r.y })
+                .unwrap_or(0.0);
+            let b_sec = result
+                .nodes
+                .get(&dagre::NodeId(b.clone()))
+                .map(|r| if is_vertical { r.x } else { r.y })
+                .unwrap_or(0.0);
+            a_sec
+                .partial_cmp(&b_sec)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+    }
+
+    let grid_positions = compute_grid_positions(&layers);
+
+    // --- Phase C: Compute node dimensions ---
+    let node_dims: HashMap<String, (usize, usize)> = diagram
+        .nodes
+        .iter()
+        .map(|(id, node)| (id.clone(), node_dimensions(node)))
+        .collect();
+
+    // --- Phase D: Scale dagre coordinates to ASCII ---
+    let (scale_x, scale_y) = compute_ascii_scale_factors(
+        &node_dims,
+        dagre_config.rank_sep,
+        dagre_config.node_sep,
+        config.v_spacing,
+        config.h_spacing,
+        is_vertical,
+    );
+
+    // Find dagre bounding box min
+    let dagre_min_x = result
+        .nodes
+        .values()
+        .map(|r| r.x)
+        .fold(f64::INFINITY, f64::min);
+    let dagre_min_y = result
+        .nodes
+        .values()
+        .map(|r| r.y)
+        .fold(f64::INFINITY, f64::min);
+
+    // Scale each node's center, then compute top-left
+    let mut draw_positions: HashMap<String, (usize, usize)> = HashMap::new();
+    let mut node_bounds: HashMap<String, NodeBounds> = HashMap::new();
+
+    for (id, rect) in &result.nodes {
+        let node_id = &id.0;
+        if let Some(&(w, h)) = node_dims.get(node_id) {
+            let center_x = ((rect.x + rect.width / 2.0 - dagre_min_x) * scale_x).round() as usize;
+            let center_y = ((rect.y + rect.height / 2.0 - dagre_min_y) * scale_y).round() as usize;
+
+            let x = center_x.saturating_sub(w / 2) + config.padding + config.left_label_margin;
+            let y = center_y.saturating_sub(h / 2) + config.padding;
+
+            draw_positions.insert(node_id.clone(), (x, y));
+            node_bounds.insert(
+                node_id.clone(),
+                NodeBounds {
+                    x,
+                    y,
+                    width: w,
+                    height: h,
+                },
+            );
+        }
+    }
+
+    // --- Phase E: Collision repair ---
+    collision_repair(
+        &layers,
+        &mut draw_positions,
+        &node_dims,
+        is_vertical,
+        if is_vertical {
+            config.h_spacing
+        } else {
+            config.v_spacing
+        },
+    );
+
+    // Update node_bounds after collision repair
+    for (id, &(x, y)) in &draw_positions {
+        if let Some(&(w, h)) = node_dims.get(id) {
+            node_bounds.insert(
+                id.clone(),
+                NodeBounds {
+                    x,
+                    y,
+                    width: w,
+                    height: h,
+                },
+            );
+        }
+    }
+
+    // --- Phase F: Compute canvas size ---
+    let width = node_bounds
+        .values()
+        .map(|b| b.x + b.width)
+        .max()
+        .unwrap_or(0)
+        + config.padding
+        + config.right_label_margin;
+    let height = node_bounds
+        .values()
+        .map(|b| b.y + b.height)
+        .max()
+        .unwrap_or(0)
+        + config.padding;
+
+    // --- Phase G: Compute layer_starts from draw positions ---
+    let layer_starts: Vec<usize> = layers
+        .iter()
+        .map(|layer| {
+            layer
+                .iter()
+                .filter_map(|id| {
+                    draw_positions
+                        .get(id)
+                        .map(|&(x, y)| if is_vertical { y } else { x })
+                })
+                .min()
+                .unwrap_or(0)
+        })
+        .collect();
+
+    // --- Phase H: Transform waypoints and labels ---
+    let edge_waypoints_converted = transform_waypoints_direct(
+        &result.edge_waypoints,
+        &diagram.edges,
+        dagre_min_x,
+        dagre_min_y,
+        scale_x,
+        scale_y,
+        config.padding,
+        config.left_label_margin,
+        &layer_starts,
+        is_vertical,
+        width,
+        height,
+    );
+
+    let edge_label_positions_converted = transform_label_positions_direct(
+        &result.label_positions,
+        &diagram.edges,
+        dagre_min_x,
+        dagre_min_y,
+        scale_x,
+        scale_y,
+        config.padding,
+        config.left_label_margin,
+    );
+
+    // --- Phase I: Nudge waypoints that collide with nodes ---
+    let mut edge_waypoints_final = edge_waypoints_converted;
+    for waypoints in edge_waypoints_final.values_mut() {
+        for wp in waypoints.iter_mut() {
+            for bounds in node_bounds.values() {
+                let collides = wp.0 >= bounds.x
+                    && wp.0 < bounds.x + bounds.width
+                    && wp.1 >= bounds.y
+                    && wp.1 < bounds.y + bounds.height;
+                if collides {
+                    if is_vertical {
+                        wp.0 = bounds.x + bounds.width + 1;
+                    } else {
+                        wp.1 = bounds.y + bounds.height + 1;
+                    }
+                    break;
+                }
+            }
+            wp.0 = wp.0.min(width.saturating_sub(1));
+            wp.1 = wp.1.min(height.saturating_sub(1));
+        }
+    }
+
+    // --- Phase J: Collect node shapes and assemble Layout ---
+    let node_shapes: HashMap<String, Shape> = diagram
+        .nodes
+        .iter()
+        .map(|(id, node)| (id.clone(), node.shape))
+        .collect();
+
+    Layout {
+        grid_positions,
+        draw_positions,
+        node_bounds,
+        width,
+        height,
+        h_spacing: config.h_spacing,
+        v_spacing: config.v_spacing,
+        edge_waypoints: edge_waypoints_final,
+        edge_label_positions: edge_label_positions_converted,
+        node_shapes,
+    }
+}
+
 /// Compute the layout using the dagre algorithm.
 ///
 /// This uses the Sugiyama framework with:

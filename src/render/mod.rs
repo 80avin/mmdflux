@@ -13,7 +13,9 @@ mod shape;
 pub use canvas::Canvas;
 pub use chars::CharSet;
 pub use edge::{render_all_edges, render_all_edges_with_labels, render_edge};
-pub use layout::{Layout, LayoutConfig, compute_layout, compute_layout_dagre};
+pub use layout::{
+    Layout, LayoutConfig, compute_layout, compute_layout_dagre, compute_layout_direct,
+};
 pub use router::{Point, RoutedEdge, Segment, route_all_edges, route_edge};
 pub use shape::{NodeBounds, node_dimensions, render_node};
 
