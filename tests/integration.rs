@@ -306,7 +306,10 @@ mod rendering {
         assert!(
             label_line > a_line && label_line < b_line,
             "Label at line {} should be between A (line {}) and B (line {})\n{}",
-            label_line, a_line, b_line, output
+            label_line,
+            a_line,
+            b_line,
+            output
         );
     }
 
@@ -315,18 +318,42 @@ mod rendering {
         let output = render_fixture("git_workflow.mmd");
 
         // All node labels fully visible
-        assert!(output.contains("Working Dir"), "Missing 'Working Dir':\n{output}");
-        assert!(output.contains("Staging Area"), "Missing 'Staging Area':\n{output}");
-        assert!(output.contains("Local Repo"), "Missing 'Local Repo':\n{output}");
-        assert!(output.contains("Remote Repo"), "Missing 'Remote Repo':\n{output}");
+        assert!(
+            output.contains("Working Dir"),
+            "Missing 'Working Dir':\n{output}"
+        );
+        assert!(
+            output.contains("Staging Area"),
+            "Missing 'Staging Area':\n{output}"
+        );
+        assert!(
+            output.contains("Local Repo"),
+            "Missing 'Local Repo':\n{output}"
+        );
+        assert!(
+            output.contains("Remote Repo"),
+            "Missing 'Remote Repo':\n{output}"
+        );
 
         // All forward edge labels fully visible (not clipped by nodes)
-        assert!(output.contains("git add"), "Missing 'git add' label:\n{output}");
-        assert!(output.contains("git commit"), "Missing 'git commit' label:\n{output}");
-        assert!(output.contains("git push"), "Missing 'git push' label:\n{output}");
+        assert!(
+            output.contains("git add"),
+            "Missing 'git add' label:\n{output}"
+        );
+        assert!(
+            output.contains("git commit"),
+            "Missing 'git commit' label:\n{output}"
+        );
+        assert!(
+            output.contains("git push"),
+            "Missing 'git push' label:\n{output}"
+        );
 
         // Backward edge label
-        assert!(output.contains("git pull"), "Missing 'git pull' label:\n{output}");
+        assert!(
+            output.contains("git pull"),
+            "Missing 'git pull' label:\n{output}"
+        );
     }
 
     #[test]
@@ -1002,9 +1029,8 @@ mod label_edge_cases {
 
     #[test]
     fn long_label_renders_without_panic() {
-        let output = render_input(
-            "graph TD\n    A -->|this is a very long label that might overflow| B",
-        );
+        let output =
+            render_input("graph TD\n    A -->|this is a very long label that might overflow| B");
         // Should not panic; nodes should still render correctly
         assert!(!output.is_empty());
         assert!(output.contains(" A "), "Node A should render:\n{output}");
@@ -1015,9 +1041,8 @@ mod label_edge_cases {
 
     #[test]
     fn fan_out_with_labels() {
-        let output = render_input(
-            "graph TD\n    A -->|yes| B\n    A -->|no| C\n    A -->|maybe| D",
-        );
+        let output =
+            render_input("graph TD\n    A -->|yes| B\n    A -->|no| C\n    A -->|maybe| D");
         // All three labels should be visible
         assert!(output.contains("yes"), "Expected 'yes' label:\n{output}");
         assert!(output.contains("no"), "Expected 'no' label:\n{output}");
@@ -1080,9 +1105,8 @@ mod label_edge_cases {
 
     #[test]
     fn all_edges_labeled() {
-        let output = render_input(
-            "graph TD\n    A -->|start| B\n    B -->|process| C\n    C -->|end| D",
-        );
+        let output =
+            render_input("graph TD\n    A -->|start| B\n    B -->|process| C\n    C -->|end| D");
         // At least the last label should appear (via precomputed position)
         assert!(output.contains("end"), "Expected 'end' label:\n{output}");
         // All nodes should render (check for bordered node text)
@@ -1173,7 +1197,10 @@ fn backward_edge_label_position_td() {
     let lines: Vec<&str> = output.lines().collect();
     let retry_line = lines.iter().find(|l| l.contains("retry")).unwrap();
     let retry_col = retry_line.find("retry").unwrap();
-    assert!(retry_col > 5, "Label should be positioned away from left edge:\n{output}");
+    assert!(
+        retry_col > 5,
+        "Label should be positioned away from left edge:\n{output}"
+    );
 }
 
 #[test]
@@ -1198,7 +1225,10 @@ fn backward_edge_label_position_rl() {
 fn backward_and_forward_labels_coexist() {
     let output = render_input("graph TD\n    A -->|go| B\n    B -->|retry| A");
     assert!(output.contains("go"), "Forward label missing:\n{output}");
-    assert!(output.contains("retry"), "Backward label missing:\n{output}");
+    assert!(
+        output.contains("retry"),
+        "Backward label missing:\n{output}"
+    );
 }
 
 #[test]

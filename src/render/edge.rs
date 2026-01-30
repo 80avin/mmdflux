@@ -724,8 +724,13 @@ pub fn render_all_edges_with_labels(
                     let base_x = midpoint.x.saturating_sub(label_len / 2);
                     let base_y = midpoint.y;
                     let (safe_x, safe_y) = find_safe_label_position(
-                        canvas, base_x, base_y, label_len,
-                        diagram_direction, &placed_labels, false,
+                        canvas,
+                        base_x,
+                        base_y,
+                        label_len,
+                        diagram_direction,
+                        &placed_labels,
+                        false,
                     );
                     draw_label_direct(canvas, label, safe_x, safe_y)
                 } else {
@@ -774,12 +779,7 @@ pub fn render_all_edges_with_labels(
 /// Used for backward edge labels where the position is already computed
 /// relative to the routed path. Expands the canvas if the label would
 /// extend beyond the current bounds.
-fn draw_label_direct(
-    canvas: &mut Canvas,
-    label: &str,
-    x: usize,
-    y: usize,
-) -> Option<PlacedLabel> {
+fn draw_label_direct(canvas: &mut Canvas, label: &str, x: usize, y: usize) -> Option<PlacedLabel> {
     let label_len = label.chars().count();
 
     // Expand canvas if label extends beyond current width
@@ -1308,13 +1308,21 @@ mod tests {
 
     #[test]
     fn calc_label_single_vertical_segment_returns_midpoint() {
-        let segments = vec![Segment::Vertical { x: 5, y_start: 10, y_end: 20 }];
+        let segments = vec![Segment::Vertical {
+            x: 5,
+            y_start: 10,
+            y_end: 20,
+        }];
         assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 15 }));
     }
 
     #[test]
     fn calc_label_single_horizontal_segment_returns_midpoint() {
-        let segments = vec![Segment::Horizontal { y: 3, x_start: 0, x_end: 10 }];
+        let segments = vec![Segment::Horizontal {
+            y: 3,
+            x_start: 0,
+            x_end: 10,
+        }];
         assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 3 }));
     }
 
@@ -1322,8 +1330,16 @@ mod tests {
     fn calc_label_l_path_midpoint_at_corner() {
         // V(x=5, y 0->6) + H(y=6, x 5->11) = total 12, midpoint at 6
         let segments = vec![
-            Segment::Vertical { x: 5, y_start: 0, y_end: 6 },
-            Segment::Horizontal { y: 6, x_start: 5, x_end: 11 },
+            Segment::Vertical {
+                x: 5,
+                y_start: 0,
+                y_end: 6,
+            },
+            Segment::Horizontal {
+                y: 6,
+                x_start: 5,
+                x_end: 11,
+            },
         ];
         assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 6 }));
     }
@@ -1332,23 +1348,43 @@ mod tests {
     fn calc_label_z_path_midpoint_on_middle_segment() {
         // V(4) + H(10) + V(4) = 18, midpoint at 9 -> 4 into first, 5 into H -> (10, 4)
         let segments = vec![
-            Segment::Vertical { x: 5, y_start: 0, y_end: 4 },
-            Segment::Horizontal { y: 4, x_start: 5, x_end: 15 },
-            Segment::Vertical { x: 15, y_start: 4, y_end: 8 },
+            Segment::Vertical {
+                x: 5,
+                y_start: 0,
+                y_end: 4,
+            },
+            Segment::Horizontal {
+                y: 4,
+                x_start: 5,
+                x_end: 15,
+            },
+            Segment::Vertical {
+                x: 15,
+                y_start: 4,
+                y_end: 8,
+            },
         ];
         assert_eq!(calc_label_position(&segments), Some(Point { x: 10, y: 4 }));
     }
 
     #[test]
     fn calc_label_zero_length_path_returns_start() {
-        let segments = vec![Segment::Vertical { x: 5, y_start: 10, y_end: 10 }];
+        let segments = vec![Segment::Vertical {
+            x: 5,
+            y_start: 10,
+            y_end: 10,
+        }];
         assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 10 }));
     }
 
     #[test]
     fn calc_label_odd_total_length_rounds_down() {
         // Length 7, midpoint at offset 3
-        let segments = vec![Segment::Vertical { x: 5, y_start: 0, y_end: 7 }];
+        let segments = vec![Segment::Vertical {
+            x: 5,
+            y_start: 0,
+            y_end: 7,
+        }];
         assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 3 }));
     }
 
@@ -1356,9 +1392,21 @@ mod tests {
     fn calc_label_backward_edge_typical_shape() {
         // H(5) + V(12) + H(5) = 22, midpoint at 11 -> 5 into H, 6 into V -> (25, 9)
         let segments = vec![
-            Segment::Horizontal { y: 3, x_start: 20, x_end: 25 },
-            Segment::Vertical { x: 25, y_start: 3, y_end: 15 },
-            Segment::Horizontal { y: 15, x_start: 25, x_end: 20 },
+            Segment::Horizontal {
+                y: 3,
+                x_start: 20,
+                x_end: 25,
+            },
+            Segment::Vertical {
+                x: 25,
+                y_start: 3,
+                y_end: 15,
+            },
+            Segment::Horizontal {
+                y: 15,
+                x_start: 25,
+                x_end: 20,
+            },
         ];
         assert_eq!(calc_label_position(&segments), Some(Point { x: 25, y: 9 }));
     }
@@ -1367,15 +1415,18 @@ mod tests {
 
     #[test]
     fn backward_edge_label_near_routed_path_td() {
-        use crate::parser::parse_flowchart;
         use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
         use crate::render::{RenderOptions, render};
 
         let flowchart = parse_flowchart("graph TD\n    A --> B\n    B -->|retry| A").unwrap();
         let diagram = build_diagram(&flowchart);
         let output = render(&diagram, &RenderOptions::default());
 
-        assert!(output.contains("retry"), "Label should appear in output:\n{output}");
+        assert!(
+            output.contains("retry"),
+            "Label should appear in output:\n{output}"
+        );
 
         // In TD layout, backward edges route to the right of nodes.
         // The label should appear at a column position to the right of both nodes.

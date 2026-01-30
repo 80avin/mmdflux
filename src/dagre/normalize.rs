@@ -407,7 +407,6 @@ mod tests {
 
     #[test]
     fn test_normalize_short_edge() {
-
         // A -> B (spans 1 rank, should not be normalized)
         let mut lg = create_test_graph(&["A", "B"], &[("A", "B")]);
         acyclic::run(&mut lg);
@@ -426,7 +425,6 @@ mod tests {
 
     #[test]
     fn test_normalize_long_edge() {
-
         // A -> B -> C, but also A -> C (spans 2 ranks)
         let mut lg = create_test_graph(&["A", "B", "C"], &[("A", "B"), ("B", "C"), ("A", "C")]);
         acyclic::run(&mut lg);
@@ -459,7 +457,6 @@ mod tests {
 
     #[test]
     fn test_normalize_with_label() {
-
         // A -> B -> C -> D, and A -> D (spans 3 ranks, needs 2 dummies)
         let mut lg = create_test_graph(
             &["A", "B", "C", "D"],
@@ -493,7 +490,6 @@ mod tests {
 
     #[test]
     fn test_denormalize() {
-
         // A -> B -> C, and A -> C
         let mut lg = create_test_graph(&["A", "B", "C"], &[("A", "B"), ("B", "C"), ("A", "C")]);
         acyclic::run(&mut lg);
@@ -608,7 +604,6 @@ mod tests {
 
     #[test]
     fn test_short_edge_with_label_gets_dummy() {
-
         // A -> B, 1-rank span, but with label and minlen=2
         // After ranking: A=0, B=2 (due to minlen=2)
         // After normalization: one dummy at rank 1 with EdgeLabel type
@@ -652,7 +647,6 @@ mod tests {
 
     #[test]
     fn test_long_edge_with_label_gets_midpoint_dummy() {
-
         // A -> B -> C -> D, and A -> D with label (originally spans 3 ranks)
         // With minlen=2, A->D spans 4 ranks (A=0, D=4)
         let mut lg = create_test_graph(

@@ -6,10 +6,10 @@
 use std::collections::HashMap;
 
 use super::shape::{NodeBounds, node_dimensions};
-use crate::dagre::normalize::WaypointWithRank;
-use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig};
 #[cfg(test)]
 use crate::dagre::Point;
+use crate::dagre::normalize::WaypointWithRank;
+use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig};
 use crate::graph::{Diagram, Direction, Edge, Shape};
 
 /// Grid position of a node (layer/column in abstract grid coordinates).
@@ -446,8 +446,10 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                 } else {
                     // Odd rank → midpoint between right edge of source and left edge of target
                     let curr_end = layer_ends_raw.get(layer_idx).copied().unwrap_or(0);
-                    let next_start =
-                        layer_starts_raw.get(layer_idx + 1).copied().unwrap_or(curr_end);
+                    let next_start = layer_starts_raw
+                        .get(layer_idx + 1)
+                        .copied()
+                        .unwrap_or(curr_end);
                     (curr_end + next_start) / 2
                 }
             })
@@ -595,8 +597,7 @@ fn compute_ascii_scale_factors(
         } else {
             rank_sep
         };
-        let scale_primary =
-            (max_h as f64 + v_spacing as f64) / (max_h as f64 + effective_rank_sep);
+        let scale_primary = (max_h as f64 + v_spacing as f64) / (max_h as f64 + effective_rank_sep);
         let scale_cross = (avg_w + h_spacing as f64) / (avg_w + node_sep);
         (scale_cross, scale_primary)
     } else {
@@ -605,8 +606,7 @@ fn compute_ascii_scale_factors(
         } else {
             rank_sep
         };
-        let scale_primary =
-            (max_w as f64 + h_spacing as f64) / (max_w as f64 + effective_rank_sep);
+        let scale_primary = (max_w as f64 + h_spacing as f64) / (max_w as f64 + effective_rank_sep);
         let scale_cross = (avg_h + v_spacing as f64) / (avg_h + node_sep);
         (scale_primary, scale_cross)
     }
@@ -853,15 +853,9 @@ fn transform_label_positions_direct(
             let (scaled_x, scaled_y) = ctx.to_ascii(wp.point.x, wp.point.y);
 
             let pos = if is_vertical {
-                (
-                    scaled_x.min(canvas_width.saturating_sub(1)),
-                    layer_pos,
-                )
+                (scaled_x.min(canvas_width.saturating_sub(1)), layer_pos)
             } else {
-                (
-                    layer_pos,
-                    scaled_y.min(canvas_height.saturating_sub(1)),
-                )
+                (layer_pos, scaled_y.min(canvas_height.saturating_sub(1)))
             };
             converted.insert(key, pos);
         }
@@ -1251,9 +1245,8 @@ mod tests {
         };
         // layer_starts: rank 0 → y=0, rank 1 → y=8, rank 2 → y=16
         let layer_starts = vec![0, 8, 16];
-        let result = transform_label_positions_direct(
-            &labels, &edges, &ctx, &layer_starts, true, 50, 20,
-        );
+        let result =
+            transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
 
         let key = ("A".to_string(), "B".to_string());
         assert!(result.contains_key(&key));
@@ -1293,9 +1286,8 @@ mod tests {
             overhang_y: 0,
         };
         let layer_starts = vec![0, 8, 16];
-        let result = transform_label_positions_direct(
-            &labels, &edges, &ctx, &layer_starts, true, 50, 20,
-        );
+        let result =
+            transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
 
         let key = ("A".to_string(), "B".to_string());
         // x = 23 + 3 (left_label_margin) = 26
@@ -1317,9 +1309,8 @@ mod tests {
             overhang_y: 0,
         };
         let layer_starts: Vec<usize> = vec![];
-        let result = transform_label_positions_direct(
-            &labels, &edges, &ctx, &layer_starts, true, 50, 20,
-        );
+        let result =
+            transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
         assert!(result.is_empty());
     }
 
@@ -1384,9 +1375,8 @@ mod tests {
             overhang_y: 0,
         };
         let layer_starts = vec![0];
-        let result = transform_label_positions_direct(
-            &labels, &edges, &ctx, &layer_starts, true, 50, 20,
-        );
+        let result =
+            transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
 
         assert!(
             result.is_empty(),

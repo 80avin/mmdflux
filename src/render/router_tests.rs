@@ -804,102 +804,170 @@ fn test_generate_backward_waypoints_rl() {
 
 #[test]
 fn vertical_segment_length() {
-    let seg = Segment::Vertical { x: 5, y_start: 10, y_end: 20 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 10,
+        y_end: 20,
+    };
     assert_eq!(seg.length(), 10);
 }
 
 #[test]
 fn vertical_segment_length_reversed() {
-    let seg = Segment::Vertical { x: 5, y_start: 20, y_end: 10 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 20,
+        y_end: 10,
+    };
     assert_eq!(seg.length(), 10);
 }
 
 #[test]
 fn horizontal_segment_length() {
-    let seg = Segment::Horizontal { y: 3, x_start: 5, x_end: 15 };
+    let seg = Segment::Horizontal {
+        y: 3,
+        x_start: 5,
+        x_end: 15,
+    };
     assert_eq!(seg.length(), 10);
 }
 
 #[test]
 fn horizontal_segment_length_reversed() {
-    let seg = Segment::Horizontal { y: 3, x_start: 15, x_end: 5 };
+    let seg = Segment::Horizontal {
+        y: 3,
+        x_start: 15,
+        x_end: 5,
+    };
     assert_eq!(seg.length(), 10);
 }
 
 #[test]
 fn zero_length_segment() {
-    let seg = Segment::Vertical { x: 5, y_start: 10, y_end: 10 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 10,
+        y_end: 10,
+    };
     assert_eq!(seg.length(), 0);
 }
 
 #[test]
 fn start_point_vertical() {
-    let seg = Segment::Vertical { x: 5, y_start: 10, y_end: 20 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 10,
+        y_end: 20,
+    };
     assert_eq!(seg.start_point(), Point { x: 5, y: 10 });
 }
 
 #[test]
 fn end_point_vertical() {
-    let seg = Segment::Vertical { x: 5, y_start: 10, y_end: 20 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 10,
+        y_end: 20,
+    };
     assert_eq!(seg.end_point(), Point { x: 5, y: 20 });
 }
 
 #[test]
 fn start_point_horizontal() {
-    let seg = Segment::Horizontal { y: 3, x_start: 5, x_end: 15 };
+    let seg = Segment::Horizontal {
+        y: 3,
+        x_start: 5,
+        x_end: 15,
+    };
     assert_eq!(seg.start_point(), Point { x: 5, y: 3 });
 }
 
 #[test]
 fn end_point_horizontal() {
-    let seg = Segment::Horizontal { y: 3, x_start: 5, x_end: 15 };
+    let seg = Segment::Horizontal {
+        y: 3,
+        x_start: 5,
+        x_end: 15,
+    };
     assert_eq!(seg.end_point(), Point { x: 15, y: 3 });
 }
 
 #[test]
 fn point_at_offset_zero_is_start() {
-    let seg = Segment::Vertical { x: 5, y_start: 10, y_end: 20 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 10,
+        y_end: 20,
+    };
     assert_eq!(seg.point_at_offset(0), seg.start_point());
 }
 
 #[test]
 fn point_at_offset_length_is_end() {
-    let seg = Segment::Vertical { x: 5, y_start: 10, y_end: 20 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 10,
+        y_end: 20,
+    };
     assert_eq!(seg.point_at_offset(seg.length()), seg.end_point());
 }
 
 #[test]
 fn point_at_offset_midpoint_vertical() {
-    let seg = Segment::Vertical { x: 5, y_start: 10, y_end: 20 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 10,
+        y_end: 20,
+    };
     assert_eq!(seg.point_at_offset(5), Point { x: 5, y: 15 });
 }
 
 #[test]
 fn point_at_offset_midpoint_horizontal() {
-    let seg = Segment::Horizontal { y: 3, x_start: 0, x_end: 10 };
+    let seg = Segment::Horizontal {
+        y: 3,
+        x_start: 0,
+        x_end: 10,
+    };
     assert_eq!(seg.point_at_offset(5), Point { x: 5, y: 3 });
 }
 
 #[test]
 fn point_at_offset_reversed_vertical() {
-    let seg = Segment::Vertical { x: 5, y_start: 20, y_end: 10 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 20,
+        y_end: 10,
+    };
     assert_eq!(seg.point_at_offset(5), Point { x: 5, y: 15 });
 }
 
 #[test]
 fn point_at_offset_reversed_horizontal() {
-    let seg = Segment::Horizontal { y: 3, x_start: 15, x_end: 5 };
+    let seg = Segment::Horizontal {
+        y: 3,
+        x_start: 15,
+        x_end: 5,
+    };
     assert_eq!(seg.point_at_offset(5), Point { x: 10, y: 3 });
 }
 
 #[test]
 fn point_at_offset_clamped_beyond_length() {
-    let seg = Segment::Vertical { x: 5, y_start: 10, y_end: 20 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 10,
+        y_end: 20,
+    };
     assert_eq!(seg.point_at_offset(100), seg.end_point());
 }
 
 #[test]
 fn point_at_offset_zero_length_segment() {
-    let seg = Segment::Vertical { x: 5, y_start: 10, y_end: 10 };
+    let seg = Segment::Vertical {
+        x: 5,
+        y_start: 10,
+        y_end: 10,
+    };
     assert_eq!(seg.point_at_offset(0), Point { x: 5, y: 10 });
 }
