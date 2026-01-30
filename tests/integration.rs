@@ -1030,6 +1030,16 @@ mod label_edge_cases {
             output.contains("retry"),
             "Expected 'retry' label on backward edge:\n{output}"
         );
+        // Label should be to the right of nodes (path-midpoint placement)
+        let lines: Vec<&str> = output.lines().collect();
+        let node_line = lines.iter().find(|l| l.contains('A')).unwrap();
+        let node_right = node_line.rfind('A').unwrap_or(0);
+        let retry_line = lines.iter().find(|l| l.contains("retry")).unwrap();
+        let retry_col = retry_line.find("retry").unwrap();
+        assert!(
+            retry_col > node_right,
+            "Label should be to the right of nodes:\n{output}"
+        );
     }
 
     #[test]
@@ -1145,5 +1155,59 @@ mod label_edge_cases {
             line_count < 40,
             "multiple_cycles.mmd should be compact, got {line_count} lines"
         );
+    }
+}
+
+// === Backward edge label position tests (Plan 0027, Task 5.1) ===
+
+#[test]
+fn backward_edge_label_position_td() {
+    let output = render_input("graph TD\n    A --> B\n    B -->|retry| A");
+    assert!(output.contains("retry"), "Label missing:\n{output}");
+    let lines: Vec<&str> = output.lines().collect();
+    let retry_line = lines.iter().find(|l| l.contains("retry")).unwrap();
+    let retry_col = retry_line.find("retry").unwrap();
+    assert!(retry_col > 5, "Label should be positioned away from left edge:\n{output}");
+}
+
+#[test]
+fn backward_edge_label_position_bt() {
+    let output = render_input("graph BT\n    A --> B\n    B -->|retry| A");
+    assert!(output.contains("retry"), "Label missing:\n{output}");
+}
+
+#[test]
+fn backward_edge_label_position_lr() {
+    let output = render_input("graph LR\n    A --> B\n    B -->|retry| A");
+    assert!(output.contains("retry"), "Label missing:\n{output}");
+}
+
+#[test]
+fn backward_edge_label_position_rl() {
+    let output = render_input("graph RL\n    A --> B\n    B -->|retry| A");
+    assert!(output.contains("retry"), "Label missing:\n{output}");
+}
+
+#[test]
+fn backward_and_forward_labels_coexist() {
+    let output = render_input("graph TD\n    A -->|go| B\n    B -->|retry| A");
+    assert!(output.contains("go"), "Forward label missing:\n{output}");
+    assert!(output.contains("retry"), "Backward label missing:\n{output}");
+}
+
+#[test]
+fn backward_edge_label_does_not_overlap_nodes() {
+    let output = render_input("graph TD\n    Start --> End\n    End -->|back| Start");
+    assert!(output.contains("back"), "Label missing:\n{output}");
+    let lines: Vec<&str> = output.lines().collect();
+    for line in &lines {
+        if line.contains("back") {
+            let back_pos = line.find("back").unwrap();
+            let before_label = &line[..back_pos];
+            assert!(
+                !before_label.ends_with('│') && !before_label.ends_with('┐'),
+                "Label overlaps with node box:\n{output}"
+            );
+        }
     }
 }
