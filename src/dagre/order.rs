@@ -1143,7 +1143,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires post-rank insert_title_nodes() — re-enabled in task 3.1
     fn test_compound_ordering_single_child_rank_has_borders() {
         use crate::dagre::{border, nesting};
 
@@ -1163,6 +1162,7 @@ mod tests {
         rank::run(&mut lg);
         rank::normalize(&mut lg);
         nesting::cleanup(&mut lg);
+        nesting::insert_title_nodes(&mut lg);
         nesting::assign_rank_minmax(&mut lg);
         border::add_segments(&mut lg);
 

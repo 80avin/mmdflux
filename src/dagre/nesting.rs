@@ -243,8 +243,23 @@ mod tests {
         assert!(lg.border_bottom.contains_key(&sg1_idx));
     }
 
-    // test_nesting_run_adds_title_node_for_titled_compound removed:
-    // title nodes are now created post-rank by insert_title_nodes() (task 2.1)
+    #[test]
+    fn test_titled_compound_gets_title_node_after_insert() {
+        use crate::dagre::rank;
+
+        let mut lg = build_test_titled_compound_layout_graph();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+
+        run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        cleanup(&mut lg);
+        insert_title_nodes(&mut lg);
+
+        assert!(lg.border_title.contains_key(&sg1_idx));
+        let title_idx = lg.border_title[&sg1_idx];
+        assert_eq!(lg.node_ids[title_idx], NodeId::from("_tt_sg1"));
+    }
 
     #[test]
     fn test_nesting_run_no_title_node_for_untitled_compound() {
@@ -275,7 +290,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Requires post-rank insert_title_nodes() — re-enabled in task 3.1
     fn test_assign_rank_minmax_uses_title_rank_for_min() {
         use crate::dagre::rank;
 
@@ -286,6 +300,7 @@ mod tests {
         rank::run(&mut lg);
         rank::normalize(&mut lg);
         cleanup(&mut lg);
+        insert_title_nodes(&mut lg);
         assign_rank_minmax(&mut lg);
 
         let title_idx = lg.border_title[&sg1_idx];
