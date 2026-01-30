@@ -307,7 +307,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // This prevents clipping to zero, which would destroy the relative
     // separations computed by the layout algorithm (e.g., BK stagger).
     //
-    // Lesson (research/0015, Q5): rendering pipeline bugs can silently mask
+    // Lesson: rendering pipeline bugs can silently mask
     // correct layout output. The original saturating_sub here clipped wide
     // left-positioned nodes to x=0, collapsing BK-computed stagger. The fix
     // is a uniform coordinate-space translation that preserves all relative
