@@ -719,8 +719,15 @@ pub fn render_all_edges_with_labels(
 
             let placed = if routed.is_backward {
                 // For backward edges, compute label position from actual routed path
+                // Center on midpoint, then run collision avoidance like forward edges
                 if let Some(midpoint) = calc_label_position(&routed.segments) {
-                    draw_label_direct(canvas, label, midpoint.x, midpoint.y)
+                    let base_x = midpoint.x.saturating_sub(label_len / 2);
+                    let base_y = midpoint.y;
+                    let (safe_x, safe_y) = find_safe_label_position(
+                        canvas, base_x, base_y, label_len,
+                        diagram_direction, &placed_labels, false,
+                    );
+                    draw_label_direct(canvas, label, safe_x, safe_y)
                 } else {
                     draw_edge_label_with_tracking(
                         canvas,
