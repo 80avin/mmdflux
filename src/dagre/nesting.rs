@@ -37,6 +37,7 @@ pub fn run(lg: &mut LayoutGraph) {
         if lg.compound_titles.contains(&compound_idx) {
             let title_id = NodeId(format!("_tt_{}", compound_id));
             let title_idx = lg.add_nesting_node(title_id);
+            lg.parents[title_idx] = Some(compound_idx);
             lg.border_title.insert(compound_idx, title_idx);
         }
 
