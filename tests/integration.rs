@@ -873,6 +873,9 @@ mod all_fixtures {
         "simple_subgraph.mmd",
         "subgraph_edges.mmd",
         "multi_subgraph.mmd",
+        "nested_subgraph.mmd",
+        "nested_subgraph_only.mmd",
+        "nested_with_siblings.mmd",
     ];
 
     #[test]
@@ -1540,4 +1543,96 @@ fn test_render_titled_subgraph_title_not_overwritten_by_edge() {
     );
     assert!(output.contains("External"));
     assert!(output.contains("Internal"));
+}
+
+// =========================================================================
+// Nested Subgraph Tests (Plan 0032)
+// =========================================================================
+
+#[test]
+fn test_nested_subgraph_renders_both_borders() {
+    let output = render_fixture("nested_subgraph.mmd");
+    assert!(
+        output.contains("Outer"),
+        "Should contain outer border title:\n{}",
+        output
+    );
+    assert!(
+        output.contains("Inner"),
+        "Should contain inner border title:\n{}",
+        output
+    );
+}
+
+#[test]
+fn test_nested_subgraph_only_renders() {
+    let output = render_fixture("nested_subgraph_only.mmd");
+    assert!(
+        output.contains("Outer"),
+        "Should contain outer border title:\n{}",
+        output
+    );
+    assert!(
+        output.contains("Inner"),
+        "Should contain inner border title:\n{}",
+        output
+    );
+}
+
+#[test]
+fn test_nested_with_siblings_renders() {
+    let output = render_fixture("nested_with_siblings.mmd");
+    assert!(
+        output.contains("Outer"),
+        "Should contain outer border title:\n{}",
+        output
+    );
+    assert!(
+        output.contains("Left"),
+        "Should contain left border title:\n{}",
+        output
+    );
+    assert!(
+        output.contains("Right"),
+        "Should contain right border title:\n{}",
+        output
+    );
+}
+
+#[test]
+fn test_nested_subgraph_parent_tracking() {
+    let diagram = parse_and_build("nested_subgraph.mmd");
+    assert_eq!(diagram.subgraphs["inner"].parent, Some("outer".to_string()));
+    assert_eq!(diagram.subgraphs["outer"].parent, None);
+}
+
+#[test]
+fn test_nested_subgraph_bounds_containment() {
+    let (_, layout) = layout_fixture("nested_subgraph.mmd");
+    let outer = &layout.subgraph_bounds["outer"];
+    let inner = &layout.subgraph_bounds["inner"];
+    assert!(
+        outer.x <= inner.x,
+        "outer.x ({}) <= inner.x ({})",
+        outer.x,
+        inner.x
+    );
+    assert!(
+        outer.y <= inner.y,
+        "outer.y ({}) <= inner.y ({})",
+        outer.y,
+        inner.y
+    );
+    assert!(
+        outer.x + outer.width >= inner.x + inner.width,
+        "outer right ({}) >= inner right ({})",
+        outer.x + outer.width,
+        inner.x + inner.width
+    );
+    assert!(
+        outer.y + outer.height >= inner.y + inner.height,
+        "outer bottom ({}) >= inner bottom ({})",
+        outer.y + outer.height,
+        inner.y + inner.height
+    );
 }
