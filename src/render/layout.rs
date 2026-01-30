@@ -843,6 +843,7 @@ fn convert_subgraph_bounds(
     let mut visited: HashSet<String> = HashSet::new();
 
     // Recursively compute bounds for a subgraph, children first.
+    #[allow(clippy::too_many_arguments)]
     fn compute_bounds_recursive(
         sg_id: &str,
         subgraphs: &HashMap<String, crate::graph::Subgraph>,
@@ -1230,18 +1231,18 @@ fn ensure_sibling_gap(
             let mut needs_expand = false;
 
             for (child_id, child_sg) in subgraphs {
-                if child_sg.parent.as_deref() == Some(sg_id.as_str()) {
-                    if let Some(child_b) = bounds.get(child_id) {
-                        let child_right = child_b.x + child_b.width + border_padding;
-                        let child_bottom = child_b.y + child_b.height + border_padding;
-                        if child_right > max_right {
-                            max_right = child_right;
-                            needs_expand = true;
-                        }
-                        if child_bottom > max_bottom {
-                            max_bottom = child_bottom;
-                            needs_expand = true;
-                        }
+                if child_sg.parent.as_deref() == Some(sg_id.as_str())
+                    && let Some(child_b) = bounds.get(child_id)
+                {
+                    let child_right = child_b.x + child_b.width + border_padding;
+                    let child_bottom = child_b.y + child_b.height + border_padding;
+                    if child_right > max_right {
+                        max_right = child_right;
+                        needs_expand = true;
+                    }
+                    if child_bottom > max_bottom {
+                        max_bottom = child_bottom;
+                        needs_expand = true;
                     }
                 }
             }
