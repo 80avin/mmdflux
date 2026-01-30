@@ -313,32 +313,20 @@ mod rendering {
     #[test]
     fn git_workflow_renders() {
         let output = render_fixture("git_workflow.mmd");
-        // In LR layout with labels, some text may overlap
-        // Just verify rendering works and contains key elements
-        assert!(!output.is_empty());
-        // At least some node text should appear
-        assert!(
-            output.contains("Working") || output.contains("Staging") || output.contains("Local"),
-            "Should contain at least one node label fragment"
-        );
-    }
 
-    #[test]
-    fn git_workflow_forward_labels_visible() {
-        let output = render_fixture("git_workflow.mmd");
-        // Forward edge labels should be fully visible, not clipped by node boundaries
-        assert!(
-            output.contains("git commit"),
-            "Forward label 'git commit' should be fully visible:\n{output}"
-        );
-        assert!(
-            output.contains("git push"),
-            "Forward label 'git push' should be fully visible:\n{output}"
-        );
-        assert!(
-            output.contains("git add"),
-            "Forward label 'git add' should be fully visible:\n{output}"
-        );
+        // All node labels fully visible
+        assert!(output.contains("Working Dir"), "Missing 'Working Dir':\n{output}");
+        assert!(output.contains("Staging Area"), "Missing 'Staging Area':\n{output}");
+        assert!(output.contains("Local Repo"), "Missing 'Local Repo':\n{output}");
+        assert!(output.contains("Remote Repo"), "Missing 'Remote Repo':\n{output}");
+
+        // All forward edge labels fully visible (not clipped by nodes)
+        assert!(output.contains("git add"), "Missing 'git add' label:\n{output}");
+        assert!(output.contains("git commit"), "Missing 'git commit' label:\n{output}");
+        assert!(output.contains("git push"), "Missing 'git push' label:\n{output}");
+
+        // Backward edge label
+        assert!(output.contains("git pull"), "Missing 'git pull' label:\n{output}");
     }
 
     #[test]
