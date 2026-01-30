@@ -36,6 +36,36 @@ pub fn calc_label_position(segments: &[Segment]) -> Option<Point> {
     segments.last().map(|s| s.end_point())
 }
 
+/// Offset a label position from the path midpoint so it sits beside the edge.
+///
+/// Determines which segment type the midpoint falls on and offsets accordingly:
+/// - Vertical segment: label to the right (+2 cells for gap)
+/// - Horizontal segment: label above (-1 cell), centered on the midpoint
+fn offset_label_from_path(midpoint: &Point, segments: &[Segment], label_len: usize) -> (usize, usize) {
+    let total_length: usize = segments.iter().map(|s| s.length()).sum();
+    let target = total_length / 2;
+    let mut accumulated = 0;
+    let mut midpoint_on_vertical = true;
+
+    for seg in segments {
+        let seg_len = seg.length();
+        if accumulated + seg_len >= target {
+            midpoint_on_vertical = matches!(seg, Segment::Vertical { .. });
+            break;
+        }
+        accumulated += seg_len;
+    }
+
+    if midpoint_on_vertical {
+        // Place label to the right of the vertical edge line
+        (midpoint.x + 2, midpoint.y)
+    } else {
+        // Place label above the horizontal edge line, centered
+        let label_x = midpoint.x.saturating_sub(label_len / 2);
+        (label_x, midpoint.y.saturating_sub(1))
+    }
+}
+
 /// Render a routed edge onto the canvas.
 pub fn render_edge(
     canvas: &mut Canvas,
@@ -717,7 +747,22 @@ pub fn render_all_edges_with_labels(
                     && px.saturating_add(label_len) <= canvas.width()
             });
 
-            let placed = if let Some(&(pre_x, pre_y)) = precomputed {
+            let placed = if routed.is_backward {
+                // For backward edges, compute label position from actual routed path
+                if let Some(midpoint) = calc_label_position(&routed.segments) {
+                    let (label_x, label_y) =
+                        offset_label_from_path(&midpoint, &routed.segments, label_len);
+                    draw_label_direct(canvas, label, label_x, label_y)
+                } else {
+                    draw_edge_label_with_tracking(
+                        canvas,
+                        routed,
+                        label,
+                        diagram_direction,
+                        &placed_labels,
+                    )
+                }
+            } else if let Some(&(pre_x, pre_y)) = precomputed {
                 draw_label_at_position(canvas, label, pre_x, pre_y)
             } else {
                 draw_edge_label_with_tracking(
@@ -757,6 +802,39 @@ fn draw_label_at_position(
 
     Some(PlacedLabel {
         x: label_x,
+        y,
+        len: label_len,
+    })
+}
+
+/// Draw a label at an exact position (no centering adjustment).
+///
+/// Used for backward edge labels where the position is already computed
+/// relative to the routed path. Expands the canvas if the label would
+/// extend beyond the current bounds.
+fn draw_label_direct(
+    canvas: &mut Canvas,
+    label: &str,
+    x: usize,
+    y: usize,
+) -> Option<PlacedLabel> {
+    let label_len = label.chars().count();
+
+    // Expand canvas if label extends beyond current width
+    let needed_width = x + label_len;
+    if needed_width > canvas.width() {
+        canvas.expand_width(needed_width);
+    }
+
+    for (i, ch) in label.chars().enumerate() {
+        let cell_x = x + i;
+        if canvas.get(cell_x, y).is_some_and(|cell| !cell.is_node) {
+            canvas.set(cell_x, y, ch);
+        }
+    }
+
+    Some(PlacedLabel {
+        x,
         y,
         len: label_len,
     })
@@ -1292,5 +1370,34 @@ mod tests {
             Segment::Horizontal { y: 15, x_start: 25, x_end: 20 },
         ];
         assert_eq!(calc_label_position(&segments), Some(Point { x: 25, y: 9 }));
+    }
+
+    // === Rendering integration tests for backward edge labels (Task 4.1) ===
+
+    #[test]
+    fn backward_edge_label_near_routed_path_td() {
+        use crate::parser::parse_flowchart;
+        use crate::graph::build_diagram;
+        use crate::render::{RenderOptions, render};
+
+        let flowchart = parse_flowchart("graph TD\n    A --> B\n    B -->|retry| A").unwrap();
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &RenderOptions::default());
+
+        assert!(output.contains("retry"), "Label should appear in output:\n{output}");
+
+        // In TD layout, backward edges route to the right of nodes.
+        // The label should appear at a column position to the right of both nodes.
+        let lines: Vec<&str> = output.lines().collect();
+        let node_a_line = lines.iter().find(|l| l.contains('A')).unwrap();
+        let node_a_right = node_a_line.rfind('A').unwrap_or(0);
+
+        let retry_line = lines.iter().find(|l| l.contains("retry")).unwrap();
+        let retry_col = retry_line.find("retry").unwrap();
+
+        assert!(
+            retry_col > node_a_right,
+            "Label 'retry' at col {retry_col} should be right of node A ending at col {node_a_right}\n{output}"
+        );
     }
 }
