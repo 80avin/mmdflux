@@ -3,6 +3,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use clap::Parser;
+use mmdflux::parser::{DiagramType, detect_diagram_type};
 use mmdflux::render::{RenderOptions, render};
 use mmdflux::{build_diagram, parse_flowchart};
 
@@ -55,6 +56,13 @@ fn main() -> io::Result<()> {
 }
 
 fn render_input(input: &str, debug: bool, ascii_only: bool) -> Result<String, String> {
+    // Detect diagram type
+    match detect_diagram_type(input) {
+        Some(DiagramType::Flowchart) => {}
+        Some(dtype) => return Err(format!("unsupported diagram type: {:?}", dtype)),
+        None => return Err("unknown diagram type".to_string()),
+    }
+
     // Parse the flowchart
     let flowchart = parse_flowchart(input).map_err(|e| e.to_string())?;
 
