@@ -1473,3 +1473,71 @@ fn backward_edge_label_does_not_overlap_nodes() {
         }
     }
 }
+
+// =========================================================================
+// Multi-Subgraph Title Tests (Plan 0031)
+// =========================================================================
+
+#[test]
+fn test_render_titled_subgraph_shows_title() {
+    let input = r#"graph TD
+    subgraph sg1[Processing]
+        A[Step 1] --> B[Step 2]
+    end"#;
+    let output = render_input(input);
+
+    assert!(
+        output.contains("Processing"),
+        "Output should contain subgraph title 'Processing':\n{}",
+        output
+    );
+    assert!(output.contains("Step 1"));
+    assert!(output.contains("Step 2"));
+}
+
+#[test]
+fn test_render_multi_subgraph_titled() {
+    // Two titled subgraphs with a cross-edge.
+    // Note: multi-subgraph border overlap is a known pre-existing issue —
+    // this test verifies titles appear and layout completes without panic.
+    let input = r#"graph TD
+    subgraph sg1[Intake]
+        A[Read] --> B[Parse]
+    end
+    subgraph sg2[Emit]
+        C[Format] --> D[Write]
+    end
+    B --> C"#;
+    let output = render_input(input);
+
+    assert!(
+        output.contains("Intake"),
+        "Output should contain 'Intake' title:\n{}",
+        output
+    );
+    assert!(
+        output.contains("Emit"),
+        "Output should contain 'Emit' title:\n{}",
+        output
+    );
+    assert!(output.contains("Read"), "Missing 'Read':\n{}", output);
+    assert!(output.contains("Write"), "Missing 'Write':\n{}", output);
+}
+
+#[test]
+fn test_render_titled_subgraph_title_not_overwritten_by_edge() {
+    let input = r#"graph TD
+    D[External] --> A
+    subgraph sg1[Processing]
+        A[Internal] --> B[Next]
+    end"#;
+    let output = render_input(input);
+
+    assert!(
+        output.contains("Processing"),
+        "Title should not be overwritten by edge:\n{}",
+        output
+    );
+    assert!(output.contains("External"));
+    assert!(output.contains("Internal"));
+}

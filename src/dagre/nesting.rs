@@ -114,6 +114,13 @@ pub fn insert_title_nodes(lg: &mut LayoutGraph) {
         lg.ranks[title_idx] = title_rank;
         lg.parents[title_idx] = Some(compound_idx);
         lg.border_title.insert(compound_idx, title_idx);
+
+        // Add edge title → border_top so the title participates in
+        // ordering and positioning (without an edge it would float freely)
+        let edge_idx = lg.add_nesting_edge(title_idx, bt_idx, 0.0);
+        // Don't mark as nesting edge — it should survive cleanup and be
+        // visible to normalization, ordering, and positioning
+        let _ = edge_idx;
     }
 }
 
