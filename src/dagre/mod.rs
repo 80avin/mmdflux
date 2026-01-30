@@ -631,6 +631,25 @@ mod tests {
     }
 
     #[test]
+    fn test_layout_multi_level_compound_nesting() {
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("A", (40.0, 20.0));
+        g.add_node("B", (40.0, 20.0));
+        g.add_node("inner", (0.0, 0.0));
+        g.add_node("outer", (0.0, 0.0));
+        g.add_edge("A", "B");
+        g.set_parent("A", "inner");
+        g.set_parent("B", "inner");
+        g.set_parent("inner", "outer");
+
+        let config = LayoutConfig::default();
+        let result = layout(&g, &config, |_, dims| *dims);
+
+        assert!(result.nodes.contains_key(&"A".into()));
+        assert!(result.nodes.contains_key(&"B".into()));
+    }
+
+    #[test]
     fn test_layout_simple_graph_no_subgraph_bounds() {
         let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
         graph.add_node("A", (40.0, 20.0));

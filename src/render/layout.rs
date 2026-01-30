@@ -157,6 +157,13 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         }
     }
 
+    // Set parent relationships for nested subgraphs
+    for (sg_id, sg) in &diagram.subgraphs {
+        if let Some(ref parent_id) = sg.parent {
+            dgraph.set_parent(sg_id.as_str(), parent_id.as_str());
+        }
+    }
+
     let mut edge_labels: HashMap<usize, dagre::normalize::EdgeLabelInfo> = HashMap::new();
     for (edge_idx, edge) in diagram.edges.iter().enumerate() {
         dgraph.add_edge(edge.from.as_str(), edge.to.as_str());
@@ -1633,6 +1640,25 @@ mod tests {
         assert!(bounds.width > 0, "width should be positive");
         assert!(bounds.height > 0, "height should be positive");
         assert_eq!(bounds.title, "Group");
+    }
+
+    #[test]
+    fn test_nested_subgraph_layout_produces_both_bounds() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph outer[Outer]\nA[Node A]\nsubgraph inner[Inner]\nB[Node B]\nend\nend\nA --> B\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        assert!(
+            layout.subgraph_bounds.contains_key("outer"),
+            "should have outer bounds"
+        );
+        assert!(
+            layout.subgraph_bounds.contains_key("inner"),
+            "should have inner bounds"
+        );
     }
 
     #[test]
