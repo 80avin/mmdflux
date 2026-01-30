@@ -25,6 +25,8 @@ pub struct SubgraphBounds {
     pub height: usize,
     /// Display title for the subgraph.
     pub title: String,
+    /// Nesting depth (0 = top-level, 1 = nested once, etc.)
+    pub depth: usize,
 }
 
 /// Grid position of a node (layer/column in abstract grid coordinates).
@@ -984,6 +986,18 @@ fn convert_subgraph_bounds(
             }
         }
 
+        // Compute nesting depth by walking parent chain
+        let mut depth = 0;
+        let mut cur = sg_id;
+        while let Some(s) = subgraphs.get(cur) {
+            if let Some(ref p) = s.parent {
+                depth += 1;
+                cur = p;
+            } else {
+                break;
+            }
+        }
+
         bounds.insert(
             sg_id.to_string(),
             SubgraphBounds {
@@ -992,6 +1006,7 @@ fn convert_subgraph_bounds(
                 width: final_width,
                 height: final_height,
                 title: sg.title.clone(),
+                depth,
             },
         );
     }
@@ -1928,6 +1943,39 @@ mod tests {
     // =========================================================================
     // Nested Subgraph Tests (Plan 0032)
     // =========================================================================
+
+    #[test]
+    fn test_nested_borders_inner_visible() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+        use crate::render::{RenderOptions, render};
+
+        let input = "graph TD\nsubgraph outer[Outer]\nA\nsubgraph inner[Inner]\nB --> C\nend\nend\nA --> B\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &RenderOptions::default());
+        assert!(
+            output.contains("Outer"),
+            "Output should contain 'Outer' title"
+        );
+        assert!(
+            output.contains("Inner"),
+            "Output should contain 'Inner' title"
+        );
+    }
+
+    #[test]
+    fn test_nested_subgraph_depth_values() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph outer[Outer]\nA\nsubgraph inner[Inner]\nB\nend\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        assert_eq!(layout.subgraph_bounds["outer"].depth, 0);
+        assert_eq!(layout.subgraph_bounds["inner"].depth, 1);
+    }
 
     #[test]
     fn test_nested_subgraph_parent_contains_child_bounds() {

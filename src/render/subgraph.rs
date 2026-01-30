@@ -16,7 +16,11 @@ pub fn render_subgraph_borders(
     subgraph_bounds: &HashMap<String, SubgraphBounds>,
     charset: &CharSet,
 ) {
-    for bounds in subgraph_bounds.values() {
+    // Sort by depth: outer borders first (background), inner last (foreground)
+    let mut sorted_bounds: Vec<_> = subgraph_bounds.values().collect();
+    sorted_bounds.sort_by_key(|b| b.depth);
+
+    for bounds in sorted_bounds {
         let x = bounds.x;
         let y = bounds.y;
         let w = bounds.width;
@@ -90,6 +94,7 @@ mod tests {
             width: 13,
             height: 5,
             title: "Group".to_string(),
+            depth: 0,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -129,6 +134,7 @@ mod tests {
             width: 13,
             height: 5,
             title: "Group".to_string(),
+            depth: 0,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -155,6 +161,7 @@ mod tests {
             width: 10,
             height: 5,
             title: "Test".to_string(),
+            depth: 0,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -182,6 +189,7 @@ mod tests {
             width: 14,
             height: 5,
             title: "Group".to_string(),
+            depth: 0,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -216,6 +224,7 @@ mod tests {
             width: 16,
             height: 5,
             title: "TopGroup".to_string(),
+            depth: 0,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -243,6 +252,7 @@ mod tests {
             width: 8,
             height: 5,
             title: "Very Long Title".to_string(),
+            depth: 0,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
@@ -270,6 +280,7 @@ mod tests {
             width: 14,
             height: 5,
             title: " ".to_string(),
+            depth: 0,
         };
         let mut map = HashMap::new();
         map.insert("sg1".to_string(), bounds);
