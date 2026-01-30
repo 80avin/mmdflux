@@ -28,19 +28,29 @@ pub fn render_subgraph_borders(
 
         let inner_width = w.saturating_sub(2); // space between corners
         if !bounds.title.is_empty() && inner_width >= 5 {
-            // Prefix: "─ " (2 chars), Suffix: " ─" (2 chars) = 4 overhead
-            canvas.set_subgraph_border(x + 1, y, charset.horizontal);
-            canvas.set_subgraph_border(x + 2, y, ' ');
-
+            // Title section: "─ Title ─" = title.len() + 4 chars overhead
             let max_title_len = inner_width.saturating_sub(4);
             let title: String = bounds.title.chars().take(max_title_len).collect();
-            for (i, ch) in title.chars().enumerate() {
-                canvas.set_subgraph_title_char(x + 3 + i, y, ch);
+            let title_section_len = title.len() + 4; // "─ " + title + " ─"
+            let left_fill = (inner_width.saturating_sub(title_section_len)) / 2;
+
+            // Left horizontal fill
+            for i in 0..left_fill {
+                canvas.set_subgraph_border(x + 1 + i, y, charset.horizontal);
             }
-            let title_end = x + 3 + title.len();
+            // "─ " prefix
+            canvas.set_subgraph_border(x + 1 + left_fill, y, charset.horizontal);
+            canvas.set_subgraph_border(x + 1 + left_fill + 1, y, ' ');
+            // Centered title
+            let title_start = x + 1 + left_fill + 2;
+            for (i, ch) in title.chars().enumerate() {
+                canvas.set_subgraph_title_char(title_start + i, y, ch);
+            }
+            // " " suffix
+            let title_end = title_start + title.len();
             canvas.set_subgraph_border(title_end, y, ' ');
 
-            // Fill remaining with horizontal lines
+            // Right horizontal fill
             for dx in (title_end + 1)..(x + w - 1) {
                 canvas.set_subgraph_border(dx, y, charset.horizontal);
             }
@@ -92,13 +102,15 @@ mod tests {
         assert_eq!(canvas.get(2, 7).unwrap().ch, charset.corner_bl);
         assert_eq!(canvas.get(14, 7).unwrap().ch, charset.corner_br);
 
-        // Verify embedded title in top border: ┌─ Group ─...─┐
-        // x+1=3 → '─', x+2=4 → ' ', x+3..x+7=5..9 → "Group", x+8=10 → ' '
+        // Verify centered title in top border: ┌── Group ──┐
+        // left_fill=1: x+1=3 → '─', x+2=4 → '─' (prefix), x+3=5 → ' ',
+        // x+4..x+8=6..10 → "Group", x+9=11 → ' ', x+10..x+11=12..13 → '─'
         assert_eq!(canvas.get(3, 3).unwrap().ch, charset.horizontal);
-        assert_eq!(canvas.get(4, 3).unwrap().ch, ' ');
-        assert_eq!(canvas.get(5, 3).unwrap().ch, 'G');
-        assert_eq!(canvas.get(9, 3).unwrap().ch, 'p');
-        assert_eq!(canvas.get(10, 3).unwrap().ch, ' ');
+        assert_eq!(canvas.get(4, 3).unwrap().ch, charset.horizontal);
+        assert_eq!(canvas.get(5, 3).unwrap().ch, ' ');
+        assert_eq!(canvas.get(6, 3).unwrap().ch, 'G');
+        assert_eq!(canvas.get(10, 3).unwrap().ch, 'p');
+        assert_eq!(canvas.get(11, 3).unwrap().ch, ' ');
 
         // Verify vertical edges
         assert_eq!(canvas.get(2, 5).unwrap().ch, charset.vertical);
@@ -122,12 +134,12 @@ mod tests {
 
         render_subgraph_borders(&mut canvas, &map, &CharSet::unicode());
 
-        // Title embedded in top border row (y=3), not above it
-        assert_eq!(canvas.get(5, 3).unwrap().ch, 'G');
-        assert_eq!(canvas.get(6, 3).unwrap().ch, 'r');
-        assert_eq!(canvas.get(7, 3).unwrap().ch, 'o');
-        assert_eq!(canvas.get(8, 3).unwrap().ch, 'u');
-        assert_eq!(canvas.get(9, 3).unwrap().ch, 'p');
+        // Title centered in top border row (y=3), not above it
+        assert_eq!(canvas.get(6, 3).unwrap().ch, 'G');
+        assert_eq!(canvas.get(7, 3).unwrap().ch, 'r');
+        assert_eq!(canvas.get(8, 3).unwrap().ch, 'o');
+        assert_eq!(canvas.get(9, 3).unwrap().ch, 'u');
+        assert_eq!(canvas.get(10, 3).unwrap().ch, 'p');
 
         // Row above border should NOT have the title
         assert_ne!(canvas.get(5, 2).unwrap().ch, 'G');
