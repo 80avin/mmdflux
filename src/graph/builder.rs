@@ -112,6 +112,15 @@ fn convert_shape(shape_spec: &ShapeSpec) -> Shape {
         ShapeSpec::Rectangle(_) => Shape::Rectangle,
         ShapeSpec::Round(_) => Shape::Round,
         ShapeSpec::Diamond(_) => Shape::Diamond,
+        ShapeSpec::Stadium(_) => Shape::Stadium,
+        ShapeSpec::Subroutine(_) => Shape::Subroutine,
+        ShapeSpec::Cylinder(_) => Shape::Cylinder,
+        ShapeSpec::Circle(_) => Shape::Circle,
+        ShapeSpec::DoubleCircle(_) => Shape::DoubleCircle,
+        ShapeSpec::Hexagon(_) => Shape::Hexagon,
+        ShapeSpec::Asymmetric(_) => Shape::Asymmetric,
+        ShapeSpec::Trapezoid(_) => Shape::Trapezoid,
+        ShapeSpec::InvTrapezoid(_) => Shape::InvTrapezoid,
     }
 }
 

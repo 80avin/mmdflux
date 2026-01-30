@@ -327,6 +327,15 @@ fn parse_shape(pair: pest::iterators::Pair<Rule>) -> Option<ShapeSpec> {
             Rule::shape_rect => (Rule::text_rect, ShapeSpec::Rectangle),
             Rule::shape_round => (Rule::text_round, ShapeSpec::Round),
             Rule::shape_diamond => (Rule::text_diamond, ShapeSpec::Diamond),
+            Rule::shape_stadium => (Rule::text_stadium, ShapeSpec::Stadium),
+            Rule::shape_subroutine => (Rule::text_subroutine, ShapeSpec::Subroutine),
+            Rule::shape_cylinder => (Rule::text_cylinder, ShapeSpec::Cylinder),
+            Rule::shape_circle => (Rule::text_circle, ShapeSpec::Circle),
+            Rule::shape_double_circle => (Rule::text_double_circle, ShapeSpec::DoubleCircle),
+            Rule::shape_hexagon => (Rule::text_hexagon, ShapeSpec::Hexagon),
+            Rule::shape_asymmetric => (Rule::text_asymmetric, ShapeSpec::Asymmetric),
+            Rule::shape_trapezoid => (Rule::text_trapezoid, ShapeSpec::Trapezoid),
+            Rule::shape_inv_trapezoid => (Rule::text_inv_trapezoid, ShapeSpec::InvTrapezoid),
             _ => continue,
         };
         for text in inner.into_inner() {
@@ -698,6 +707,146 @@ mod tests {
         let result = parse_flowchart("graph TD\nA -->|\"yes\"| B\n").unwrap();
         let edges = result.edges();
         assert_eq!(edges[0].connector.label(), Some("yes"));
+    }
+
+    // Additional node shape tests (Task 2.1)
+    #[test]
+    fn test_parse_stadium_shape() {
+        let fc = parse_flowchart("graph TD\nA([Stadium])\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Stadium(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_subroutine_shape() {
+        let fc = parse_flowchart("graph TD\nA[[Subroutine]]\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Subroutine(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_cylinder_shape() {
+        let fc = parse_flowchart("graph TD\nA[(Database)]\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Cylinder(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_circle_shape() {
+        let fc = parse_flowchart("graph TD\nA((Circle))\n").unwrap();
+        assert!(matches!(fc.vertices()[0].shape, Some(ShapeSpec::Circle(_))));
+    }
+
+    #[test]
+    fn test_parse_double_circle_shape() {
+        let fc = parse_flowchart("graph TD\nA(((Double)))\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::DoubleCircle(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_hexagon_shape() {
+        let fc = parse_flowchart("graph TD\nA{{Hexagon}}\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Hexagon(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_asymmetric_shape() {
+        let fc = parse_flowchart("graph TD\nA>Flag]\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Asymmetric(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_trapezoid_shape() {
+        let fc = parse_flowchart("graph TD\nA[/Trapezoid\\]\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Trapezoid(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_inv_trapezoid_shape() {
+        let fc = parse_flowchart("graph TD\nA[\\InvTrapezoid/]\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::InvTrapezoid(_))
+        ));
+    }
+
+    // Style/class passthrough tests (Task 1.2)
+    #[test]
+    fn test_style_statement_ignored() {
+        let input = "graph TD\nA --> B\nstyle A fill:#f9f,stroke:#333\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_classdef_statement_ignored() {
+        let input = "graph TD\nA --> B\nclassDef warning fill:#ff0\nclass A warning\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_click_statement_ignored() {
+        let input = "graph TD\nA --> B\nclick A callback\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_linkstyle_statement_ignored() {
+        let input = "graph TD\nA --> B\nlinkStyle 0 stroke:#ff3,stroke-width:4px\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_style_keyword_node_ids_still_work() {
+        // Node IDs that start with style keywords should still parse as nodes
+        let input = "graph TD\nstyleA --> classB\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+        assert_eq!(result.edges()[0].from.id, "styleA");
+        assert_eq!(result.edges()[0].to.id, "classB");
+    }
+
+    // Semicolon separator tests (Task 1.1)
+    #[test]
+    fn test_semicolon_separator_two_statements() {
+        let input = "graph TD\nA --> B; B --> C\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 2);
+    }
+
+    #[test]
+    fn test_semicolon_separator_mixed_with_newlines() {
+        let input = "graph TD\nA --> B;\nB --> C\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 2);
+    }
+
+    #[test]
+    fn test_semicolon_separator_multiple() {
+        let input = "graph TD\nA --> B; B --> C; C --> D\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 3);
     }
 
     #[test]

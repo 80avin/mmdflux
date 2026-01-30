@@ -10,6 +10,24 @@ pub enum Shape {
     Round,
     /// Diamond/decision shape: {text}
     Diamond,
+    /// Stadium shape: ([text])
+    Stadium,
+    /// Subroutine shape: [[text]]
+    Subroutine,
+    /// Cylinder/database shape: [(text)]
+    Cylinder,
+    /// Circle shape: ((text))
+    Circle,
+    /// Double circle shape: (((text)))
+    DoubleCircle,
+    /// Hexagon shape: {{text}}
+    Hexagon,
+    /// Asymmetric/flag shape: >text]
+    Asymmetric,
+    /// Trapezoid shape: [/text\]
+    Trapezoid,
+    /// Inverse trapezoid shape: [\text/]
+    InvTrapezoid,
 }
 
 /// A node in the flowchart diagram.

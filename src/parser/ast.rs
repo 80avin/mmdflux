@@ -9,13 +9,42 @@ pub enum ShapeSpec {
     Round(String),
     /// Diamond: {text}
     Diamond(String),
+    /// Stadium: ([text])
+    Stadium(String),
+    /// Subroutine: [[text]]
+    Subroutine(String),
+    /// Cylinder: [(text)]
+    Cylinder(String),
+    /// Circle: ((text))
+    Circle(String),
+    /// Double circle: (((text)))
+    DoubleCircle(String),
+    /// Hexagon: {{text}}
+    Hexagon(String),
+    /// Asymmetric/flag: >text]
+    Asymmetric(String),
+    /// Trapezoid: [/text\]
+    Trapezoid(String),
+    /// Inverse trapezoid: [\text/]
+    InvTrapezoid(String),
 }
 
 impl ShapeSpec {
     /// Get the text content of the shape.
     pub fn text(&self) -> &str {
         match self {
-            ShapeSpec::Rectangle(s) | ShapeSpec::Round(s) | ShapeSpec::Diamond(s) => s,
+            ShapeSpec::Rectangle(s)
+            | ShapeSpec::Round(s)
+            | ShapeSpec::Diamond(s)
+            | ShapeSpec::Stadium(s)
+            | ShapeSpec::Subroutine(s)
+            | ShapeSpec::Cylinder(s)
+            | ShapeSpec::Circle(s)
+            | ShapeSpec::DoubleCircle(s)
+            | ShapeSpec::Hexagon(s)
+            | ShapeSpec::Asymmetric(s)
+            | ShapeSpec::Trapezoid(s)
+            | ShapeSpec::InvTrapezoid(s) => s,
         }
     }
 }
