@@ -158,8 +158,10 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
         }
     }
 
+    let has_explicit_title = title.is_some();
     SubgraphSpec {
         title: title.unwrap_or_else(|| id.clone()),
+        has_explicit_title,
         id,
         statements: body_statements,
     }

@@ -143,8 +143,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     }
 
     // Add subgraph compound nodes (zero dimensions, sized by border removal later)
-    for sg_id in diagram.subgraphs.keys() {
+    for (sg_id, sg) in &diagram.subgraphs {
         dgraph.add_node(sg_id.as_str(), (0, 0));
+        if sg.has_explicit_title {
+            dgraph.set_has_title(sg_id.as_str());
+        }
     }
 
     // Set parent relationships for compound nodes
@@ -824,8 +827,9 @@ fn convert_subgraph_bounds(
             continue;
         }
 
+        let title_extra: usize = if sg.has_explicit_title { 2 } else { 0 };
         let border_x = min_x.saturating_sub(border_padding);
-        let border_y = min_y.saturating_sub(border_padding);
+        let border_y = min_y.saturating_sub(border_padding + title_extra);
         let border_right = max_x + border_padding;
         let border_bottom = max_y + border_padding;
 
@@ -1779,6 +1783,7 @@ mod tests {
             Subgraph {
                 id: "sg1".to_string(),
                 title: "Left".to_string(),
+                has_explicit_title: true,
                 nodes: vec!["A".to_string()],
             },
         );
@@ -1787,6 +1792,7 @@ mod tests {
             Subgraph {
                 id: "sg2".to_string(),
                 title: "Right".to_string(),
+                has_explicit_title: true,
                 nodes: vec!["B".to_string()],
             },
         );
@@ -1837,6 +1843,7 @@ mod tests {
             Subgraph {
                 id: "sg1".to_string(),
                 title: "G".to_string(),
+                has_explicit_title: false,
                 nodes: vec!["A".to_string()],
             },
         );
@@ -1895,6 +1902,61 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_titled_subgraph_creates_title_rank() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = r#"graph TD
+    subgraph sg1[Processing]
+        A[Step 1] --> B[Step 2]
+    end"#;
+
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        assert!(layout.subgraph_bounds.contains_key("sg1"));
+        let bounds = &layout.subgraph_bounds["sg1"];
+        assert!(bounds.height > 0);
+    }
+
+    #[test]
+    fn test_subgraph_bounds_title_extends_top() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let titled_input = r#"graph TD
+    subgraph sg1[Processing]
+        A[Step 1] --> B[Step 2]
+    end"#;
+        let untitled_input = r#"graph TD
+    subgraph sg1
+        A[Step 1] --> B[Step 2]
+    end"#;
+
+        let titled_fc = parse_flowchart(titled_input).unwrap();
+        let titled_diagram = build_diagram(&titled_fc);
+        let untitled_fc = parse_flowchart(untitled_input).unwrap();
+        let untitled_diagram = build_diagram(&untitled_fc);
+
+        let config = LayoutConfig::default();
+        let titled_layout = compute_layout_direct(&titled_diagram, &config);
+        let untitled_layout = compute_layout_direct(&untitled_diagram, &config);
+
+        let titled_bounds = &titled_layout.subgraph_bounds["sg1"];
+        let untitled_bounds = &untitled_layout.subgraph_bounds["sg1"];
+
+        // Titled subgraph should be taller because the title rank adds space
+        assert!(
+            titled_bounds.height > untitled_bounds.height,
+            "Titled bounds height={} should be > untitled height={}",
+            titled_bounds.height,
+            untitled_bounds.height
+        );
+    }
+
     // =========================================================================
     // Backward Edge Containment Tests (Plan 0026, Task 5.1)
     // =========================================================================
@@ -1910,6 +1972,7 @@ mod tests {
             Subgraph {
                 id: "sg1".to_string(),
                 title: "G".to_string(),
+                has_explicit_title: true,
                 nodes: vec!["A".to_string(), "B".to_string()],
             },
         );

@@ -26,6 +26,8 @@ pub struct Subgraph {
     pub id: String,
     /// Display title.
     pub title: String,
+    /// Whether the title was explicitly set via bracket syntax `[Title]`.
+    pub has_explicit_title: bool,
     /// IDs of nodes belonging to this subgraph.
     pub nodes: Vec<String>,
 }
@@ -89,6 +91,7 @@ mod tests {
         let sg = Subgraph {
             id: "sg1".to_string(),
             title: "My Group".to_string(),
+            has_explicit_title: true,
             nodes: vec!["A".to_string(), "B".to_string()],
         };
         assert_eq!(sg.id, "sg1");
@@ -111,6 +114,7 @@ mod tests {
             Subgraph {
                 id: "sg1".to_string(),
                 title: "Group".to_string(),
+                has_explicit_title: true,
                 nodes: vec![],
             },
         );
