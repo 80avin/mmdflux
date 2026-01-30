@@ -738,7 +738,20 @@ pub fn render_all_edges_with_labels(
                     )
                 }
             } else if let Some(&(pre_x, pre_y)) = precomputed {
-                draw_label_at_position(canvas, label, pre_x, pre_y)
+                // Defensive safety net: route precomputed position through
+                // collision avoidance. When the midpoint formula is correct,
+                // find_safe_label_position returns the base position unchanged.
+                let base_x = pre_x.saturating_sub(label_len / 2);
+                let (safe_x, safe_y) = find_safe_label_position(
+                    canvas,
+                    base_x,
+                    pre_y,
+                    label_len,
+                    diagram_direction,
+                    &placed_labels,
+                    false,
+                );
+                draw_label_direct(canvas, label, safe_x, safe_y)
             } else {
                 draw_edge_label_with_tracking(
                     canvas,
@@ -754,32 +767,6 @@ pub fn render_all_edges_with_labels(
             }
         }
     }
-}
-
-/// Draw a label at a specific pre-computed position.
-fn draw_label_at_position(
-    canvas: &mut Canvas,
-    label: &str,
-    x: usize,
-    y: usize,
-) -> Option<PlacedLabel> {
-    let label_len = label.chars().count();
-    // Center the label on the given position
-    let label_x = x.saturating_sub(label_len / 2);
-
-    // Write the label only to non-node cells (but edge cells can be overwritten)
-    for (i, ch) in label.chars().enumerate() {
-        let cell_x = label_x + i;
-        if canvas.get(cell_x, y).is_some_and(|cell| !cell.is_node) {
-            canvas.set(cell_x, y, ch);
-        }
-    }
-
-    Some(PlacedLabel {
-        x: label_x,
-        y,
-        len: label_len,
-    })
 }
 
 /// Draw a label at an exact position (no centering adjustment).
@@ -1011,6 +998,35 @@ mod tests {
             a_line,
             b_line,
             output
+        );
+    }
+
+    #[test]
+    fn precomputed_label_avoids_node_overlap() {
+        // Build a LR diagram where nodes are wide enough that
+        // a precomputed label position could land on a node boundary.
+        // After rendering, verify the label text doesn't collide with node cells.
+        let output = crate::render::render(
+            &{
+                let mut d = Diagram::new(Direction::LeftRight);
+                d.add_node(Node::new("A").with_label("Working Dir"));
+                d.add_node(Node::new("B").with_label("Staging Area"));
+                d.add_node(Node::new("C").with_label("Local Repo"));
+                d.add_edge(Edge::new("A", "B").with_label("git add"));
+                d.add_edge(Edge::new("B", "C").with_label("git commit"));
+                d
+            },
+            &crate::render::RenderOptions { ascii_only: false },
+        );
+
+        // Both labels should be fully visible (not clipped by node boundaries)
+        assert!(
+            output.contains("git add"),
+            "Label 'git add' should be fully visible:\n{output}"
+        );
+        assert!(
+            output.contains("git commit"),
+            "Label 'git commit' should be fully visible:\n{output}"
         );
     }
 
