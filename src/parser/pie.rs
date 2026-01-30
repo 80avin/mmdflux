@@ -35,8 +35,7 @@ fn strip_quotes(s: &str) -> &str {
 
 /// Parse a pie chart diagram string.
 pub fn parse_pie(input: &str) -> Result<Pie, ParseError> {
-    let pairs =
-        PieParser::parse(Rule::pie_diagram, input).map_err(ParseError::from_pest_error)?;
+    let pairs = PieParser::parse(Rule::pie_diagram, input).map_err(ParseError::from_pest_error)?;
 
     let mut show_data = false;
     let mut title = None;

@@ -29,10 +29,8 @@ mod basic {
 
     #[test]
     fn three_sections() {
-        let result = parse_pie(
-            "pie\n\"Bandy\": 40\n\"Ice-Hockey\": 80\n\"Football\": 90\n",
-        )
-        .unwrap();
+        let result =
+            parse_pie("pie\n\"Bandy\": 40\n\"Ice-Hockey\": 80\n\"Football\": 90\n").unwrap();
         assert_eq!(result.sections.len(), 3);
         assert_eq!(result.sections[0].label, "Bandy");
         assert_eq!(result.sections[1].label, "Ice-Hockey");
@@ -66,10 +64,7 @@ mod title_and_flags {
 
     #[test]
     fn title_with_sections_and_values() {
-        let result = parse_pie(
-            "pie title sample wow\n\"GitHub\": 100\n\"GitLab\": 50\n",
-        )
-        .unwrap();
+        let result = parse_pie("pie title sample wow\n\"GitHub\": 100\n\"GitLab\": 50\n").unwrap();
         assert_eq!(result.title.as_deref(), Some("sample wow"));
         assert_eq!(result.sections[0].label, "GitHub");
         assert_eq!(result.sections[1].label, "GitLab");

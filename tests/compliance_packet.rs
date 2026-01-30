@@ -4,8 +4,8 @@
 //   - packages/parser/tests/packet.test.ts
 //   - cypress/integration/rendering/packet.spec.ts
 
-use mmdflux::parser::parse_packet;
 use mmdflux::parser::packet::PacketBlock;
+use mmdflux::parser::parse_packet;
 
 mod keywords {
     use super::*;

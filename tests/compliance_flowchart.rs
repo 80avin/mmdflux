@@ -12,7 +12,7 @@
 //
 // Tally: see bottom of file for pass/ignore counts.
 
-use mmdflux::parser::{parse_flowchart, ArrowHead, ShapeSpec, Statement, StrokeSpec};
+use mmdflux::parser::{ArrowHead, ShapeSpec, Statement, StrokeSpec, parse_flowchart};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -75,7 +75,10 @@ mod single_node {
         match &fc.statements[0] {
             Statement::Vertex(v) => {
                 assert_eq!(v.id, "A");
-                assert_eq!(v.shape, Some(ShapeSpec::Rectangle("This is the text".into())));
+                assert_eq!(
+                    v.shape,
+                    Some(ShapeSpec::Rectangle("This is the text".into()))
+                );
             }
             _ => panic!("expected vertex"),
         }
@@ -533,8 +536,9 @@ mod comments {
 // flow-direction.spec.js — Direction keywords
 // ===========================================================================
 mod direction {
-    use super::*;
     use mmdflux::parser::Direction;
+
+    use super::*;
 
     #[test]
     fn direction_td() {
@@ -731,8 +735,7 @@ mod subgraphs {
     #[test]
     #[ignore = "quoted subgraph title without brackets not supported"]
     fn quoted_subgraph_title() {
-        let _fc =
-            parse_flowchart("graph TB\nsubgraph \"Some Title\"\na1-->a2\nend\n").unwrap();
+        let _fc = parse_flowchart("graph TB\nsubgraph \"Some Title\"\na1-->a2\nend\n").unwrap();
     }
 }
 
