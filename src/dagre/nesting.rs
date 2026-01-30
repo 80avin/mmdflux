@@ -97,6 +97,26 @@ pub fn assign_rank_minmax(lg: &mut LayoutGraph) {
     }
 }
 
+/// Insert title dummy nodes at correct ranks after ranking is complete.
+///
+/// For each titled compound, creates a title node at `border_top_rank - 1`.
+/// Must be called after rank::run() + rank::normalize() + nesting::cleanup()
+/// and before assign_rank_minmax().
+pub fn insert_title_nodes(lg: &mut LayoutGraph) {
+    let compounds: Vec<usize> = lg.compound_titles.iter().copied().collect();
+    for compound_idx in compounds {
+        let compound_id = lg.node_ids[compound_idx].0.clone();
+        let bt_idx = lg.border_top[&compound_idx];
+        let title_rank = lg.ranks[bt_idx] - 1;
+
+        let title_id = NodeId(format!("_tt_{}", compound_id));
+        let title_idx = lg.add_nesting_node(title_id);
+        lg.ranks[title_idx] = title_rank;
+        lg.parents[title_idx] = Some(compound_idx);
+        lg.border_title.insert(compound_idx, title_idx);
+    }
+}
+
 /// Remove nesting edges and root node after ranking.
 ///
 /// Nesting edges are marked for removal (set to zero weight and flagged),
@@ -275,6 +295,93 @@ mod tests {
         assert_eq!(lg.min_rank[&sg1_idx], lg.ranks[title_idx]);
         // title rank should be strictly less than border_top rank
         assert!(lg.ranks[title_idx] < lg.ranks[top_idx]);
+    }
+
+    #[test]
+    fn test_insert_title_nodes_sets_correct_rank() {
+        use crate::dagre::rank;
+
+        let mut lg = build_test_titled_compound_layout_graph();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+
+        run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        cleanup(&mut lg);
+
+        let bt_rank_before = lg.ranks[lg.border_top[&sg1_idx]];
+
+        insert_title_nodes(&mut lg);
+
+        // Title node should exist
+        assert!(lg.border_title.contains_key(&sg1_idx));
+        let title_idx = lg.border_title[&sg1_idx];
+
+        // Title rank should be border_top_rank - 1
+        assert_eq!(lg.ranks[title_idx], bt_rank_before - 1);
+
+        // Title should be a child of the compound
+        assert_eq!(lg.parents[title_idx], Some(sg1_idx));
+    }
+
+    #[test]
+    fn test_insert_title_nodes_multi_subgraph_no_collision() {
+        use crate::dagre::rank;
+
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("A", (10.0, 10.0));
+        g.add_node("B", (10.0, 10.0));
+        g.add_node("C", (10.0, 10.0));
+        g.add_node("D", (10.0, 10.0));
+        g.add_node("sg1", (0.0, 0.0));
+        g.add_node("sg2", (0.0, 0.0));
+        g.add_edge("A", "B");
+        g.add_edge("C", "D");
+        g.add_edge("A", "C"); // cross-subgraph edge
+        g.set_parent("A", "sg1");
+        g.set_parent("B", "sg1");
+        g.set_parent("C", "sg2");
+        g.set_parent("D", "sg2");
+        g.set_has_title("sg1");
+        g.set_has_title("sg2");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
+        run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        cleanup(&mut lg);
+        insert_title_nodes(&mut lg);
+
+        let sg1_idx = lg.node_index[&"sg1".into()];
+        let sg2_idx = lg.node_index[&"sg2".into()];
+
+        let tt1 = lg.border_title[&sg1_idx];
+        let tt2 = lg.border_title[&sg2_idx];
+        let bt1 = lg.border_top[&sg1_idx];
+        let bt2 = lg.border_top[&sg2_idx];
+
+        // Each title is one rank above its own border_top
+        assert_eq!(lg.ranks[tt1], lg.ranks[bt1] - 1);
+        assert_eq!(lg.ranks[tt2], lg.ranks[bt2] - 1);
+
+        assert!(lg.ranks[tt1] >= 0);
+        assert!(lg.ranks[tt2] >= 0);
+    }
+
+    #[test]
+    fn test_insert_title_nodes_skips_untitled() {
+        use crate::dagre::rank;
+
+        let mut lg = build_test_compound_layout_graph();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+
+        run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        cleanup(&mut lg);
+        insert_title_nodes(&mut lg);
+
+        assert!(!lg.border_title.contains_key(&sg1_idx));
     }
 
     #[test]

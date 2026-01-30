@@ -111,9 +111,10 @@ where
     rank::run(&mut lg);
     rank::normalize(&mut lg);
 
-    // Compound: cleanup nesting edges and compute rank spans
+    // Compound: cleanup nesting edges, insert title nodes, compute rank spans
     if has_compound {
         nesting::cleanup(&mut lg);
+        nesting::insert_title_nodes(&mut lg);
         nesting::assign_rank_minmax(&mut lg);
     }
 
@@ -608,6 +609,25 @@ mod tests {
         let bounds = &result.subgraph_bounds["sg1"];
         assert!(bounds.width > 0.0, "Subgraph width should be positive");
         assert!(bounds.height > 0.0, "Subgraph height should be positive");
+    }
+
+    #[test]
+    fn test_layout_compound_titled_end_to_end() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("sg1", (0.0, 0.0));
+        graph.add_node("A", (40.0, 20.0));
+        graph.add_node("B", (40.0, 20.0));
+        graph.add_edge("A", "B");
+        graph.set_parent("A", "sg1");
+        graph.set_parent("B", "sg1");
+        graph.set_has_title("sg1");
+
+        let config = LayoutConfig::default();
+        let result = layout(&graph, &config, |_, dims| *dims);
+
+        assert!(result.nodes.contains_key(&"A".into()));
+        assert!(result.nodes.contains_key(&"B".into()));
+        assert!(result.subgraph_bounds.contains_key("sg1"));
     }
 
     #[test]
