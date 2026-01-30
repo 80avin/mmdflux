@@ -130,6 +130,20 @@ fn layout_config_for_diagram(diagram: &Diagram) -> LayoutConfig {
         }
     }
 
+    // Increase padding for nested subgraphs so outer borders have room
+    if diagram.has_subgraphs() {
+        let max_depth = diagram
+            .subgraphs
+            .keys()
+            .map(|id| diagram.subgraph_depth(id))
+            .max()
+            .unwrap_or(0);
+        if max_depth > 0 {
+            // Each nesting level needs border_padding (2) extra chars
+            config.padding += max_depth * 2;
+        }
+    }
+
     config
 }
 

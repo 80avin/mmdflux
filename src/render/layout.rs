@@ -998,6 +998,13 @@ fn convert_subgraph_bounds(
             }
         }
 
+        // Ensure nested subgraphs leave room for parent borders.
+        // Each nesting level needs border_padding chars of clearance.
+        let min_x_for_depth = depth * border_padding;
+        if final_x < min_x_for_depth {
+            final_x = min_x_for_depth;
+        }
+
         bounds.insert(
             sg_id.to_string(),
             SubgraphBounds {
