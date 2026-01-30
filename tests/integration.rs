@@ -1000,6 +1000,60 @@ mod subgraph_rendering {
     }
 
     #[test]
+    fn subgraph_edges_borders_do_not_overlap() {
+        let output = render_fixture("subgraph_edges.mmd");
+        let lines: Vec<&str> = output.lines().collect();
+
+        // Find the row containing sg1's bottom-left corner (└)
+        // and sg2's top-left corner (┌). They must be on separate rows.
+        let bottom_border_rows: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.contains('└'))
+            .map(|(i, _)| i)
+            .collect();
+        let top_border_rows: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.contains('┌'))
+            .map(|(i, _)| i)
+            .collect();
+
+        // sg1's bottom border (last └ row before sg2) should be strictly
+        // above sg2's top border (┌ row containing "Output" or second ┌)
+        // Simple check: no row should contain both └ and ┌ from different subgraphs
+        // More robust: the sg1 bottom-left corner row < sg2 top-left corner row
+        assert!(
+            !bottom_border_rows.is_empty(),
+            "Should have bottom border rows"
+        );
+        assert!(
+            !top_border_rows.is_empty(),
+            "Should have top border rows"
+        );
+
+        // Find sg1's bottom border (└ row) and sg2's top border (second ┌ row).
+        // sg1's top border is the first ┌ row. sg2's top border is the next ┌ row
+        // after sg1's content.
+        let first_top = lines.iter().position(|l| l.contains('┌')).unwrap();
+        let first_bottom = lines.iter().position(|l| l.contains('└')).unwrap();
+        let second_top = lines
+            .iter()
+            .enumerate()
+            .skip(first_bottom)
+            .position(|(_, l)| l.contains('┌'))
+            .map(|pos| pos + first_bottom);
+
+        if let Some(second_top) = second_top {
+            assert!(
+                second_top > first_bottom,
+                "Second subgraph top ({second_top}) should be below first subgraph \
+                bottom ({first_bottom})"
+            );
+        }
+    }
+
+    #[test]
     fn multi_subgraph_renders_both_groups() {
         let output = render_fixture("multi_subgraph.mmd");
         // LR layout may not display subgraph titles if the box is too compact

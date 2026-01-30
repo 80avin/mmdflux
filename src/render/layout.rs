@@ -711,11 +711,6 @@ fn convert_subgraph_bounds(
 
     for (sg_id, sg) in subgraphs {
         // Compute bounds from member-node draw positions.
-        // Note: dagre border-node Rects use center-based coordinates in dagre space,
-        // but the node draw positions are computed with a different formula
-        // (right-edge offset + overhang correction). Using to_ascii on dagre Rects
-        // produces incorrect positions because the coordinate frames don't match.
-        // The member-node draw positions are already in the correct draw space.
         let border_padding: usize = 2;
 
         let mut min_x = usize::MAX;
@@ -808,7 +803,109 @@ fn convert_subgraph_bounds(
         );
     }
 
+    // Post-hoc overlap resolution: ensure no two subgraph bounds overlap.
+    // For each overlapping pair, shrink the border that extends into the other's
+    // member-node region. This preserves the member-node-based approach while
+    // adding inter-subgraph awareness.
+    resolve_subgraph_overlap(&mut bounds);
+
     bounds
+}
+
+/// Resolve overlapping subgraph bounds by trimming borders at the midpoint
+/// of the overlap region. For vertically stacked subgraphs, trims the upper's
+/// bottom and the lower's top. For horizontally adjacent, trims left/right.
+fn resolve_subgraph_overlap(bounds: &mut HashMap<String, SubgraphBounds>) {
+    let ids: Vec<String> = bounds.keys().cloned().collect();
+    for i in 0..ids.len() {
+        for j in (i + 1)..ids.len() {
+            let (a_x, a_y, a_right, a_bottom) = {
+                let a = &bounds[&ids[i]];
+                (a.x, a.y, a.x + a.width, a.y + a.height)
+            };
+            let (b_x, b_y, b_right, b_bottom) = {
+                let b = &bounds[&ids[j]];
+                (b.x, b.y, b.x + b.width, b.y + b.height)
+            };
+
+            // Check for overlap (both axes must overlap for a true 2D overlap)
+            let x_overlap = a_x < b_right && b_x < a_right;
+            let y_overlap = a_y < b_bottom && b_y < a_bottom;
+
+            if !(x_overlap && y_overlap) {
+                continue;
+            }
+
+            // Determine the primary overlap axis (the one with less overlap)
+            let x_overlap_amount = a_right.min(b_right).saturating_sub(a_x.max(b_x));
+            let y_overlap_amount = a_bottom.min(b_bottom).saturating_sub(a_y.max(b_y));
+
+            if y_overlap_amount <= x_overlap_amount {
+                // Vertical overlap: trim the gap between upper and lower
+                let (upper_id, lower_id) = if a_y <= b_y {
+                    (&ids[i], &ids[j])
+                } else {
+                    (&ids[j], &ids[i])
+                };
+                let upper_bottom = {
+                    let u = &bounds[upper_id];
+                    u.y + u.height
+                };
+                let lower_top = bounds[lower_id].y;
+
+                if upper_bottom > lower_top {
+                    // Split the overlap: place the boundary at the midpoint
+                    let mid = lower_top + (upper_bottom - lower_top) / 2;
+                    let gap = 1; // minimum 1-cell gap between borders
+
+                    let upper = bounds.get_mut(upper_id).unwrap();
+                    let new_upper_bottom = mid.saturating_sub(gap / 2);
+                    if new_upper_bottom > upper.y {
+                        upper.height = new_upper_bottom - upper.y;
+                    }
+
+                    let lower = bounds.get_mut(lower_id).unwrap();
+                    let new_lower_top = mid + (gap + 1) / 2;
+                    if new_lower_top < lower.y + lower.height {
+                        let old_bottom = lower.y + lower.height;
+                        lower.y = new_lower_top;
+                        lower.height = old_bottom - new_lower_top;
+                    }
+                }
+            } else {
+                // Horizontal overlap: trim left/right
+                let (left_id, right_id) = if a_x <= b_x {
+                    (&ids[i], &ids[j])
+                } else {
+                    (&ids[j], &ids[i])
+                };
+                let left_right = {
+                    let l = &bounds[left_id];
+                    l.x + l.width
+                };
+                let right_left = bounds[right_id].x;
+
+                if left_right > right_left {
+                    let mid = right_left + (left_right - right_left) / 2;
+                    let gap = 1;
+
+                    let left = bounds.get_mut(left_id).unwrap();
+                    let new_left_right = mid.saturating_sub(gap / 2);
+                    if new_left_right > left.x {
+                        left.width = new_left_right - left.x;
+                    }
+
+                    let right = bounds.get_mut(right_id).unwrap();
+                    let new_right_left = mid + (gap + 1) / 2;
+                    if new_right_left < right.x + right.width {
+                        let old_right_edge = right.x + right.width;
+                        right.x = new_right_left;
+                        right.width = old_right_edge - new_right_left;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Nudge waypoints that overlap with node bounding boxes.
@@ -854,30 +951,20 @@ struct TransformContext {
 }
 
 impl TransformContext {
-    /// Transform a dagre center-based Rect to draw coordinates (x, y, width, height).
+    /// Transform a dagre top-left-based Rect to draw coordinates (x, y, width, height).
     ///
-    /// Uses the right-edge offset formula (`rect.x + rect.width/2`) that matches
-    /// how node positions are computed in `compute_layout()`. This differs from
-    /// `to_ascii()` which uses raw dagre coordinates without the width/height offset.
+    /// Transforms the top-left and bottom-right corners independently using
+    /// `to_ascii()`, then computes the draw rect between them. This ensures
+    /// the transformed rect faithfully represents the dagre bounding box in
+    /// draw space.
     fn to_ascii_rect(&self, rect: &Rect) -> (usize, usize, usize, usize) {
-        // Scale center using right-edge offset (matches node formula at line ~303)
-        let scaled_cx =
-            ((rect.x + rect.width / 2.0 - self.dagre_min_x) * self.scale_x).round() as usize;
-        let scaled_cy =
-            ((rect.y + rect.height / 2.0 - self.dagre_min_y) * self.scale_y).round() as usize;
-
-        // Scale extent
-        let scaled_w = (rect.width * self.scale_x).round().max(1.0) as usize;
-        let scaled_h = (rect.height * self.scale_y).round().max(1.0) as usize;
-
-        // Apply overhang and compute top-left
-        let center_x = scaled_cx + self.overhang_x;
-        let center_y = scaled_cy + self.overhang_y;
-        let draw_x =
-            center_x.saturating_sub(scaled_w / 2) + self.padding + self.left_label_margin;
-        let draw_y = center_y.saturating_sub(scaled_h / 2) + self.padding;
-
-        (draw_x, draw_y, scaled_w, scaled_h)
+        let (x1, y1) = self.to_ascii(rect.x, rect.y);
+        let (x2, y2) = self.to_ascii(rect.x + rect.width, rect.y + rect.height);
+        let draw_x = x1.min(x2);
+        let draw_y = y1.min(y2);
+        let draw_w = x1.max(x2) - draw_x;
+        let draw_h = y1.max(y2) - draw_y;
+        (draw_x, draw_y, draw_w.max(1), draw_h.max(1))
     }
 
     /// Transform a dagre (x, y) coordinate to ASCII draw coordinates.
@@ -1789,6 +1876,44 @@ mod tests {
     }
 
     // =========================================================================
+    // Non-overlap Tests (Plan 0028, Task 2.1)
+    // =========================================================================
+
+    #[test]
+    fn stacked_subgraphs_do_not_overlap() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\n\
+            subgraph sg1[Input]\nA[Data]\nB[Config]\nend\n\
+            subgraph sg2[Output]\nC[Result]\nD[Log]\nend\n\
+            A --> C\nB --> D";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+
+        let sg1 = &layout.subgraph_bounds["sg1"];
+        let sg2 = &layout.subgraph_bounds["sg2"];
+
+        let sg1_bottom = sg1.y + sg1.height;
+        let sg2_bottom = sg2.y + sg2.height;
+
+        // Determine which is "upper" and which is "lower"
+        let (upper, lower, upper_bottom) = if sg1.y < sg2.y {
+            (sg1, sg2, sg1_bottom)
+        } else {
+            (sg2, sg1, sg2_bottom)
+        };
+
+        // Upper subgraph's bottom must be strictly above lower's top
+        assert!(
+            upper_bottom <= lower.y,
+            "Subgraphs should not overlap vertically: upper bottom={upper_bottom}, lower top={}",
+            lower.y
+        );
+    }
+
+    // =========================================================================
     // Containment Tests (Plan 0028, Task 1.2)
     // =========================================================================
 
@@ -1802,32 +1927,53 @@ mod tests {
         let diagram = build_diagram(&flowchart);
         let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
 
-        let sg = &layout.subgraph_bounds["sg1"];
+        assert_subgraph_contains_members(&layout, "sg1", &["A", "B"]);
+    }
+
+    #[test]
+    fn stacked_subgraph_bounds_contain_member_nodes_after_overlap_resolution() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\n\
+            subgraph sg1[Input]\nA[Data]\nB[Config]\nend\n\
+            subgraph sg2[Output]\nC[Result]\nD[Log]\nend\n\
+            A --> C\nB --> D";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+
+        assert_subgraph_contains_members(&layout, "sg1", &["A", "B"]);
+        assert_subgraph_contains_members(&layout, "sg2", &["C", "D"]);
+    }
+
+    fn assert_subgraph_contains_members(layout: &Layout, sg_id: &str, members: &[&str]) {
+        let sg = &layout.subgraph_bounds[sg_id];
         let sg_right = sg.x + sg.width;
         let sg_bottom = sg.y + sg.height;
 
-        for member_id in &["A", "B"] {
+        for member_id in members {
             let nb = &layout.node_bounds[*member_id];
             let nb_right = nb.x + nb.width;
             let nb_bottom = nb.y + nb.height;
 
             assert!(
                 sg.x <= nb.x,
-                "sg1 left ({}) should be <= {member_id} left ({})",
+                "{sg_id} left ({}) should be <= {member_id} left ({})",
                 sg.x, nb.x
             );
             assert!(
                 sg.y <= nb.y,
-                "sg1 top ({}) should be <= {member_id} top ({})",
+                "{sg_id} top ({}) should be <= {member_id} top ({})",
                 sg.y, nb.y
             );
             assert!(
                 sg_right >= nb_right,
-                "sg1 right ({sg_right}) should be >= {member_id} right ({nb_right})"
+                "{sg_id} right ({sg_right}) should be >= {member_id} right ({nb_right})"
             );
             assert!(
                 sg_bottom >= nb_bottom,
-                "sg1 bottom ({sg_bottom}) should be >= {member_id} bottom ({nb_bottom})"
+                "{sg_id} bottom ({sg_bottom}) should be >= {member_id} bottom ({nb_bottom})"
             );
         }
     }
