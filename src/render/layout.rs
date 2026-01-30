@@ -1037,6 +1037,7 @@ fn convert_subgraph_bounds(
 
     // Post-hoc overlap resolution: ensure no two sibling subgraph bounds overlap.
     resolve_subgraph_overlap(&mut bounds, subgraphs);
+    ensure_sibling_gap(&mut bounds, subgraphs);
 
     bounds
 }
@@ -1161,6 +1162,94 @@ fn resolve_subgraph_overlap(
                         right.width = old_right_edge - new_right_left;
                     }
                 }
+            }
+        }
+    }
+}
+
+/// Ensure sibling subgraphs (same parent) have at least 1 cell of space between them.
+/// After nudging, re-expand any parent whose children now exceed its bounds.
+fn ensure_sibling_gap(
+    bounds: &mut HashMap<String, SubgraphBounds>,
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+) {
+    let ids: Vec<String> = bounds.keys().cloned().collect();
+    for i in 0..ids.len() {
+        for j in (i + 1)..ids.len() {
+            // Only process siblings (same parent)
+            let parent_i = subgraphs.get(&ids[i]).and_then(|s| s.parent.as_deref());
+            let parent_j = subgraphs.get(&ids[j]).and_then(|s| s.parent.as_deref());
+            if parent_i != parent_j {
+                continue;
+            }
+
+            let a = &bounds[&ids[i]];
+            let b = &bounds[&ids[j]];
+
+            // Check horizontal adjacency (touching or within 0 gap)
+            let a_right = a.x + a.width;
+            let b_right = b.x + b.width;
+            let y_overlap = a.y < b.y + b.height && b.y < a.y + a.height;
+
+            if y_overlap {
+                if a_right == b.x {
+                    let b_mut = bounds.get_mut(&ids[j]).unwrap();
+                    b_mut.x += 1;
+                } else if b_right == a.x {
+                    let a_mut = bounds.get_mut(&ids[i]).unwrap();
+                    a_mut.x += 1;
+                }
+            }
+
+            // Check vertical adjacency
+            let a = &bounds[&ids[i]];
+            let b = &bounds[&ids[j]];
+            let a_bottom = a.y + a.height;
+            let b_bottom = b.y + b.height;
+            let x_overlap = a.x < b.x + b.width && b.x < a.x + a.width;
+
+            if x_overlap {
+                if a_bottom == b.y {
+                    let b_mut = bounds.get_mut(&ids[j]).unwrap();
+                    b_mut.y += 1;
+                } else if b_bottom == a.y {
+                    let a_mut = bounds.get_mut(&ids[i]).unwrap();
+                    a_mut.y += 1;
+                }
+            }
+        }
+    }
+
+    // Re-expand parents to contain children after nudging
+    let border_padding: usize = 2;
+    for sg_id in subgraphs.keys() {
+        if let Some(parent_bounds) = bounds.get(sg_id).cloned() {
+            // Find all children of this subgraph
+            let mut max_right = parent_bounds.x + parent_bounds.width;
+            let mut max_bottom = parent_bounds.y + parent_bounds.height;
+            let mut needs_expand = false;
+
+            for (child_id, child_sg) in subgraphs {
+                if child_sg.parent.as_deref() == Some(sg_id.as_str()) {
+                    if let Some(child_b) = bounds.get(child_id) {
+                        let child_right = child_b.x + child_b.width + border_padding;
+                        let child_bottom = child_b.y + child_b.height + border_padding;
+                        if child_right > max_right {
+                            max_right = child_right;
+                            needs_expand = true;
+                        }
+                        if child_bottom > max_bottom {
+                            max_bottom = child_bottom;
+                            needs_expand = true;
+                        }
+                    }
+                }
+            }
+
+            if needs_expand {
+                let p = bounds.get_mut(sg_id).unwrap();
+                p.width = max_right - p.x;
+                p.height = max_bottom - p.y;
             }
         }
     }
