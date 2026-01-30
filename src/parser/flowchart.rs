@@ -3,7 +3,9 @@
 use pest::Parser;
 use pest_derive::Parser;
 
-use super::ast::{ConnectorSpec, EdgeSpec, ShapeSpec, Statement, SubgraphSpec, Vertex};
+use super::ast::{
+    ArrowHead, ConnectorSpec, EdgeSpec, ShapeSpec, Statement, StrokeSpec, SubgraphSpec, Vertex,
+};
 use super::error::ParseError;
 
 #[derive(Parser)]
@@ -234,7 +236,13 @@ fn parse_node_group(pair: pest::iterators::Pair<Rule>) -> Vec<Vertex> {
 }
 
 fn parse_edge_segment(pair: pest::iterators::Pair<Rule>) -> (ConnectorSpec, Vec<Vertex>) {
-    let mut connector = ConnectorSpec::SolidArrow;
+    let mut connector = ConnectorSpec {
+        stroke: StrokeSpec::Solid,
+        left: ArrowHead::None,
+        right: ArrowHead::Normal,
+        length: 1,
+        label: None,
+    };
     let mut nodes = Vec::new();
 
     for inner in pair.into_inner() {
@@ -253,53 +261,74 @@ fn parse_edge_segment(pair: pest::iterators::Pair<Rule>) -> (ConnectorSpec, Vec<
 }
 
 fn parse_connector(pair: pest::iterators::Pair<Rule>) -> ConnectorSpec {
+    let mut stroke = StrokeSpec::Solid;
+    let mut left = ArrowHead::None;
+    let mut right = ArrowHead::None;
+    let mut length: usize = 1;
+    let mut label = None;
+
     for inner in pair.into_inner() {
         match inner.as_rule() {
-            Rule::arrow_solid => return ConnectorSpec::SolidArrow,
-            Rule::arrow_solid_label => {
-                if let Some(label) = extract_edge_label(inner) {
-                    return ConnectorSpec::SolidArrowLabel(label);
+            Rule::link_solid => {
+                stroke = StrokeSpec::Solid;
+                for part in inner.into_inner() {
+                    match part.as_rule() {
+                        Rule::arrow_left => left = parse_arrow_head(part.as_str()),
+                        Rule::arrow_right => right = parse_arrow_head(part.as_str()),
+                        Rule::solid_dashes => length = part.as_str().len(),
+                        _ => {}
+                    }
                 }
-                return ConnectorSpec::SolidArrow;
             }
-            Rule::arrow_dotted => return ConnectorSpec::DottedArrow,
-            Rule::arrow_dotted_label => {
-                if let Some(label) = extract_edge_label(inner) {
-                    return ConnectorSpec::DottedArrowLabel(label);
+            Rule::link_dotted => {
+                stroke = StrokeSpec::Dotted;
+                for part in inner.into_inner() {
+                    match part.as_rule() {
+                        Rule::arrow_left => left = parse_arrow_head(part.as_str()),
+                        Rule::arrow_right => right = parse_arrow_head(part.as_str()),
+                        Rule::dotted_dots => length = part.as_str().len(),
+                        _ => {}
+                    }
                 }
-                return ConnectorSpec::DottedArrow;
             }
-            Rule::arrow_thick => return ConnectorSpec::ThickArrow,
-            Rule::arrow_thick_label => {
-                if let Some(label) = extract_edge_label(inner) {
-                    return ConnectorSpec::ThickArrowLabel(label);
+            Rule::link_thick => {
+                stroke = StrokeSpec::Thick;
+                for part in inner.into_inner() {
+                    match part.as_rule() {
+                        Rule::arrow_left => left = parse_arrow_head(part.as_str()),
+                        Rule::arrow_right => right = parse_arrow_head(part.as_str()),
+                        Rule::thick_equals => length = part.as_str().len(),
+                        _ => {}
+                    }
                 }
-                return ConnectorSpec::ThickArrow;
             }
-            Rule::line_open => return ConnectorSpec::OpenLine,
-            Rule::line_open_label => {
-                if let Some(label) = extract_edge_label(inner) {
-                    return ConnectorSpec::OpenLineLabel(label);
+            Rule::edge_label => {
+                for text in inner.into_inner() {
+                    if text.as_rule() == Rule::edge_label_text {
+                        label = Some(strip_quotes(text.as_str()).to_string());
+                    }
                 }
-                return ConnectorSpec::OpenLine;
             }
             _ => {}
         }
     }
-    ConnectorSpec::SolidArrow
+
+    ConnectorSpec {
+        stroke,
+        left,
+        right,
+        length,
+        label,
+    }
 }
 
-fn extract_edge_label(pair: pest::iterators::Pair<Rule>) -> Option<String> {
-    for inner in pair.into_inner() {
-        if inner.as_rule() == Rule::edge_label {
-            for text in inner.into_inner() {
-                if text.as_rule() == Rule::edge_label_text {
-                    return Some(strip_quotes(text.as_str()).to_string());
-                }
-            }
-        }
+fn parse_arrow_head(s: &str) -> ArrowHead {
+    match s {
+        ">" | "<" => ArrowHead::Normal,
+        "x" => ArrowHead::Cross,
+        "o" => ArrowHead::Circle,
+        _ => ArrowHead::None,
     }
-    None
 }
 
 fn parse_node(pair: pest::iterators::Pair<Rule>) -> Vertex {
@@ -327,6 +356,15 @@ fn parse_shape(pair: pest::iterators::Pair<Rule>) -> Option<ShapeSpec> {
             Rule::shape_rect => (Rule::text_rect, ShapeSpec::Rectangle),
             Rule::shape_round => (Rule::text_round, ShapeSpec::Round),
             Rule::shape_diamond => (Rule::text_diamond, ShapeSpec::Diamond),
+            Rule::shape_stadium => (Rule::text_stadium, ShapeSpec::Stadium),
+            Rule::shape_subroutine => (Rule::text_subroutine, ShapeSpec::Subroutine),
+            Rule::shape_cylinder => (Rule::text_cylinder, ShapeSpec::Cylinder),
+            Rule::shape_circle => (Rule::text_circle, ShapeSpec::Circle),
+            Rule::shape_double_circle => (Rule::text_double_circle, ShapeSpec::DoubleCircle),
+            Rule::shape_hexagon => (Rule::text_hexagon, ShapeSpec::Hexagon),
+            Rule::shape_asymmetric => (Rule::text_asymmetric, ShapeSpec::Asymmetric),
+            Rule::shape_trapezoid => (Rule::text_trapezoid, ShapeSpec::Trapezoid),
+            Rule::shape_inv_trapezoid => (Rule::text_inv_trapezoid, ShapeSpec::InvTrapezoid),
             _ => continue,
         };
         for text in inner.into_inner() {
@@ -455,7 +493,8 @@ mod tests {
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].from.id, "A");
         assert_eq!(edges[0].to.id, "B");
-        assert_eq!(edges[0].connector, ConnectorSpec::SolidArrow);
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Solid);
+        assert_eq!(edges[0].connector.right, ArrowHead::Normal);
     }
 
     #[test]
@@ -473,7 +512,8 @@ mod tests {
         let result = parse_flowchart("graph TD\nA -.-> B\n").unwrap();
         let edges = result.edges();
         assert_eq!(edges.len(), 1);
-        assert_eq!(edges[0].connector, ConnectorSpec::DottedArrow);
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Dotted);
+        assert_eq!(edges[0].connector.right, ArrowHead::Normal);
     }
 
     #[test]
@@ -481,7 +521,8 @@ mod tests {
         let result = parse_flowchart("graph TD\nA ==> B\n").unwrap();
         let edges = result.edges();
         assert_eq!(edges.len(), 1);
-        assert_eq!(edges[0].connector, ConnectorSpec::ThickArrow);
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Thick);
+        assert_eq!(edges[0].connector.right, ArrowHead::Normal);
     }
 
     #[test]
@@ -489,7 +530,8 @@ mod tests {
         let result = parse_flowchart("graph TD\nA --- B\n").unwrap();
         let edges = result.edges();
         assert_eq!(edges.len(), 1);
-        assert_eq!(edges[0].connector, ConnectorSpec::OpenLine);
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Solid);
+        assert_eq!(edges[0].connector.right, ArrowHead::None);
         assert!(!edges[0].connector.has_arrow());
     }
 
@@ -700,6 +742,146 @@ mod tests {
         assert_eq!(edges[0].connector.label(), Some("yes"));
     }
 
+    // Additional node shape tests (Task 2.1)
+    #[test]
+    fn test_parse_stadium_shape() {
+        let fc = parse_flowchart("graph TD\nA([Stadium])\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Stadium(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_subroutine_shape() {
+        let fc = parse_flowchart("graph TD\nA[[Subroutine]]\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Subroutine(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_cylinder_shape() {
+        let fc = parse_flowchart("graph TD\nA[(Database)]\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Cylinder(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_circle_shape() {
+        let fc = parse_flowchart("graph TD\nA((Circle))\n").unwrap();
+        assert!(matches!(fc.vertices()[0].shape, Some(ShapeSpec::Circle(_))));
+    }
+
+    #[test]
+    fn test_parse_double_circle_shape() {
+        let fc = parse_flowchart("graph TD\nA(((Double)))\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::DoubleCircle(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_hexagon_shape() {
+        let fc = parse_flowchart("graph TD\nA{{Hexagon}}\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Hexagon(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_asymmetric_shape() {
+        let fc = parse_flowchart("graph TD\nA>Flag]\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Asymmetric(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_trapezoid_shape() {
+        let fc = parse_flowchart("graph TD\nA[/Trapezoid\\]\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::Trapezoid(_))
+        ));
+    }
+
+    #[test]
+    fn test_parse_inv_trapezoid_shape() {
+        let fc = parse_flowchart("graph TD\nA[\\InvTrapezoid/]\n").unwrap();
+        assert!(matches!(
+            fc.vertices()[0].shape,
+            Some(ShapeSpec::InvTrapezoid(_))
+        ));
+    }
+
+    // Style/class passthrough tests (Task 1.2)
+    #[test]
+    fn test_style_statement_ignored() {
+        let input = "graph TD\nA --> B\nstyle A fill:#f9f,stroke:#333\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_classdef_statement_ignored() {
+        let input = "graph TD\nA --> B\nclassDef warning fill:#ff0\nclass A warning\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_click_statement_ignored() {
+        let input = "graph TD\nA --> B\nclick A callback\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_linkstyle_statement_ignored() {
+        let input = "graph TD\nA --> B\nlinkStyle 0 stroke:#ff3,stroke-width:4px\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_style_keyword_node_ids_still_work() {
+        // Node IDs that start with style keywords should still parse as nodes
+        let input = "graph TD\nstyleA --> classB\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+        assert_eq!(result.edges()[0].from.id, "styleA");
+        assert_eq!(result.edges()[0].to.id, "classB");
+    }
+
+    // Semicolon separator tests (Task 1.1)
+    #[test]
+    fn test_semicolon_separator_two_statements() {
+        let input = "graph TD\nA --> B; B --> C\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 2);
+    }
+
+    #[test]
+    fn test_semicolon_separator_mixed_with_newlines() {
+        let input = "graph TD\nA --> B;\nB --> C\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 2);
+    }
+
+    #[test]
+    fn test_semicolon_separator_multiple() {
+        let input = "graph TD\nA --> B; B --> C; C --> D\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 3);
+    }
+
     #[test]
     fn test_parse_subgraph_with_external_nodes() {
         let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\nC --> A\n";
@@ -713,5 +895,96 @@ mod tests {
         // External edge should also be present
         let edges = result.edges();
         assert!(!edges.is_empty(), "Expected external edge C --> A");
+    }
+
+    // Extended edge syntax tests (Task 5.1)
+    #[test]
+    fn test_long_solid_edge() {
+        let fc = parse_flowchart("graph TD\nA ----> B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.stroke, StrokeSpec::Solid);
+        assert_eq!(edge.connector.right, ArrowHead::Normal);
+        assert!(edge.connector.length > 1);
+    }
+
+    #[test]
+    fn test_bidirectional_arrow() {
+        let fc = parse_flowchart("graph TD\nA <--> B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.left, ArrowHead::Normal);
+        assert_eq!(edge.connector.right, ArrowHead::Normal);
+    }
+
+    #[test]
+    fn test_cross_arrow_right() {
+        let fc = parse_flowchart("graph TD\nA --x B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.right, ArrowHead::Cross);
+    }
+
+    #[test]
+    fn test_cross_arrow_both() {
+        let fc = parse_flowchart("graph TD\nA x--x B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.left, ArrowHead::Cross);
+        assert_eq!(edge.connector.right, ArrowHead::Cross);
+    }
+
+    #[test]
+    fn test_circle_arrow() {
+        let fc = parse_flowchart("graph TD\nA --o B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.right, ArrowHead::Circle);
+    }
+
+    #[test]
+    fn test_circle_arrow_both() {
+        let fc = parse_flowchart("graph TD\nA o--o B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.left, ArrowHead::Circle);
+        assert_eq!(edge.connector.right, ArrowHead::Circle);
+    }
+
+    #[test]
+    fn test_long_dotted_edge() {
+        let fc = parse_flowchart("graph TD\nA -..-> B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.stroke, StrokeSpec::Dotted);
+        assert_eq!(edge.connector.right, ArrowHead::Normal);
+    }
+
+    #[test]
+    fn test_long_thick_edge() {
+        let fc = parse_flowchart("graph TD\nA ===> B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.stroke, StrokeSpec::Thick);
+        assert_eq!(edge.connector.right, ArrowHead::Normal);
+    }
+
+    #[test]
+    fn test_dotted_bidirectional() {
+        let fc = parse_flowchart("graph TD\nA <-.-> B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.stroke, StrokeSpec::Dotted);
+        assert_eq!(edge.connector.left, ArrowHead::Normal);
+        assert_eq!(edge.connector.right, ArrowHead::Normal);
+    }
+
+    #[test]
+    fn test_thick_bidirectional() {
+        let fc = parse_flowchart("graph TD\nA <==> B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.stroke, StrokeSpec::Thick);
+        assert_eq!(edge.connector.left, ArrowHead::Normal);
+        assert_eq!(edge.connector.right, ArrowHead::Normal);
+    }
+
+    #[test]
+    fn test_extended_edge_with_label() {
+        let fc = parse_flowchart("graph TD\nA <-->|both ways| B\n").unwrap();
+        let edge = &fc.edges()[0];
+        assert_eq!(edge.connector.left, ArrowHead::Normal);
+        assert_eq!(edge.connector.right, ArrowHead::Normal);
+        assert_eq!(edge.connector.label(), Some("both ways"));
     }
 }

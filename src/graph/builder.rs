@@ -6,7 +6,8 @@ use super::diagram::{Diagram, Direction, Subgraph};
 use super::edge::{Arrow, Edge, Stroke};
 use super::node::{Node, Shape};
 use crate::parser::{
-    ConnectorSpec, Direction as ParseDirection, EdgeSpec, Flowchart, ShapeSpec, Statement, Vertex,
+    ArrowHead, ConnectorSpec, Direction as ParseDirection, EdgeSpec, Flowchart, ShapeSpec,
+    Statement, StrokeSpec, Vertex,
 };
 
 /// Build a Diagram from a parsed Flowchart.
@@ -112,6 +113,15 @@ fn convert_shape(shape_spec: &ShapeSpec) -> Shape {
         ShapeSpec::Rectangle(_) => Shape::Rectangle,
         ShapeSpec::Round(_) => Shape::Round,
         ShapeSpec::Diamond(_) => Shape::Diamond,
+        ShapeSpec::Stadium(_) => Shape::Stadium,
+        ShapeSpec::Subroutine(_) => Shape::Subroutine,
+        ShapeSpec::Cylinder(_) => Shape::Cylinder,
+        ShapeSpec::Circle(_) => Shape::Circle,
+        ShapeSpec::DoubleCircle(_) => Shape::DoubleCircle,
+        ShapeSpec::Hexagon(_) => Shape::Hexagon,
+        ShapeSpec::Asymmetric(_) => Shape::Asymmetric,
+        ShapeSpec::Trapezoid(_) => Shape::Trapezoid,
+        ShapeSpec::InvTrapezoid(_) => Shape::InvTrapezoid,
     }
 }
 
@@ -130,22 +140,20 @@ fn convert_edge(edge_spec: &EdgeSpec) -> Edge {
 }
 
 fn convert_connector(connector: &ConnectorSpec) -> (Stroke, Arrow, Option<String>) {
-    match connector {
-        ConnectorSpec::SolidArrow => (Stroke::Solid, Arrow::Normal, None),
-        ConnectorSpec::SolidArrowLabel(label) => {
-            (Stroke::Solid, Arrow::Normal, Some(label.clone()))
-        }
-        ConnectorSpec::DottedArrow => (Stroke::Dotted, Arrow::Normal, None),
-        ConnectorSpec::DottedArrowLabel(label) => {
-            (Stroke::Dotted, Arrow::Normal, Some(label.clone()))
-        }
-        ConnectorSpec::ThickArrow => (Stroke::Thick, Arrow::Normal, None),
-        ConnectorSpec::ThickArrowLabel(label) => {
-            (Stroke::Thick, Arrow::Normal, Some(label.clone()))
-        }
-        ConnectorSpec::OpenLine => (Stroke::Solid, Arrow::None, None),
-        ConnectorSpec::OpenLineLabel(label) => (Stroke::Solid, Arrow::None, Some(label.clone())),
-    }
+    let stroke = match connector.stroke {
+        StrokeSpec::Solid => Stroke::Solid,
+        StrokeSpec::Dotted => Stroke::Dotted,
+        StrokeSpec::Thick => Stroke::Thick,
+    };
+
+    // Map right arrow head to the graph-layer Arrow type.
+    // Cross and Circle are not yet rendered differently, so map to Normal.
+    let arrow = match connector.right {
+        ArrowHead::None => Arrow::None,
+        ArrowHead::Normal | ArrowHead::Cross | ArrowHead::Circle => Arrow::Normal,
+    };
+
+    (stroke, arrow, connector.label.clone())
 }
 
 #[cfg(test)]

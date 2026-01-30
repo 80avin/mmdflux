@@ -245,8 +245,8 @@ pub fn intersect_node(bounds: &NodeBounds, point: (usize, usize), shape: Shape) 
     let float_point = FloatPoint::from(point);
 
     let result = match shape {
-        Shape::Rectangle | Shape::Round => intersect_rect(bounds, float_point),
-        Shape::Diamond => intersect_diamond(bounds, float_point),
+        Shape::Diamond | Shape::Hexagon => intersect_diamond(bounds, float_point),
+        _ => intersect_rect(bounds, float_point),
     };
 
     result.to_usize()

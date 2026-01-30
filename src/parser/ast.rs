@@ -9,13 +9,42 @@ pub enum ShapeSpec {
     Round(String),
     /// Diamond: {text}
     Diamond(String),
+    /// Stadium: ([text])
+    Stadium(String),
+    /// Subroutine: [[text]]
+    Subroutine(String),
+    /// Cylinder: [(text)]
+    Cylinder(String),
+    /// Circle: ((text))
+    Circle(String),
+    /// Double circle: (((text)))
+    DoubleCircle(String),
+    /// Hexagon: {{text}}
+    Hexagon(String),
+    /// Asymmetric/flag: >text]
+    Asymmetric(String),
+    /// Trapezoid: [/text\]
+    Trapezoid(String),
+    /// Inverse trapezoid: [\text/]
+    InvTrapezoid(String),
 }
 
 impl ShapeSpec {
     /// Get the text content of the shape.
     pub fn text(&self) -> &str {
         match self {
-            ShapeSpec::Rectangle(s) | ShapeSpec::Round(s) | ShapeSpec::Diamond(s) => s,
+            ShapeSpec::Rectangle(s)
+            | ShapeSpec::Round(s)
+            | ShapeSpec::Diamond(s)
+            | ShapeSpec::Stadium(s)
+            | ShapeSpec::Subroutine(s)
+            | ShapeSpec::Cylinder(s)
+            | ShapeSpec::Circle(s)
+            | ShapeSpec::DoubleCircle(s)
+            | ShapeSpec::Hexagon(s)
+            | ShapeSpec::Asymmetric(s)
+            | ShapeSpec::Trapezoid(s)
+            | ShapeSpec::InvTrapezoid(s) => s,
         }
     }
 }
@@ -47,45 +76,54 @@ impl Vertex {
     }
 }
 
-/// Edge connector type from parsing.
+/// Stroke style of an edge connector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrokeSpec {
+    /// Solid line: --
+    Solid,
+    /// Dotted line: -.
+    Dotted,
+    /// Thick line: ==
+    Thick,
+}
+
+/// Arrow head type on one end of an edge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArrowHead {
+    /// No arrow head
+    None,
+    /// Normal arrow: > or <
+    Normal,
+    /// Cross arrow: x
+    Cross,
+    /// Circle arrow: o
+    Circle,
+}
+
+/// Edge connector parsed from Mermaid syntax.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConnectorSpec {
-    /// Solid arrow: -->
-    SolidArrow,
-    /// Solid arrow with label: --|label|>
-    SolidArrowLabel(String),
-    /// Dotted arrow: -.->
-    DottedArrow,
-    /// Dotted arrow with label: -.|label|.->
-    DottedArrowLabel(String),
-    /// Thick arrow: ==>
-    ThickArrow,
-    /// Thick arrow with label: ==|label|=>
-    ThickArrowLabel(String),
-    /// Open line (no arrow): ---
-    OpenLine,
-    /// Open line with label: --|label|-
-    OpenLineLabel(String),
+pub struct ConnectorSpec {
+    /// Line stroke style.
+    pub stroke: StrokeSpec,
+    /// Left (source-side) arrow head.
+    pub left: ArrowHead,
+    /// Right (target-side) arrow head.
+    pub right: ArrowHead,
+    /// Edge length (number of repeated characters, minimum 1).
+    pub length: usize,
+    /// Optional label text.
+    pub label: Option<String>,
 }
 
 impl ConnectorSpec {
     /// Get the label if present.
     pub fn label(&self) -> Option<&str> {
-        match self {
-            ConnectorSpec::SolidArrowLabel(s)
-            | ConnectorSpec::DottedArrowLabel(s)
-            | ConnectorSpec::ThickArrowLabel(s)
-            | ConnectorSpec::OpenLineLabel(s) => Some(s),
-            _ => None,
-        }
+        self.label.as_deref()
     }
 
-    /// Check if this connector has an arrow head.
+    /// Check if this connector has any arrow head (on either side).
     pub fn has_arrow(&self) -> bool {
-        !matches!(
-            self,
-            ConnectorSpec::OpenLine | ConnectorSpec::OpenLineLabel(_)
-        )
+        self.left != ArrowHead::None || self.right != ArrowHead::None
     }
 }
 

@@ -22,4 +22,4 @@ pub mod render;
 
 // Re-export commonly used items at the crate root
 pub use graph::{Diagram, Direction, Edge, Node, Shape, build_diagram};
-pub use parser::{Flowchart, ParseError, parse_flowchart};
+pub use parser::{DiagramType, Flowchart, ParseError, detect_diagram_type, parse_flowchart};
