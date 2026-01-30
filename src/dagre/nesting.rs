@@ -33,6 +33,13 @@ pub fn run(lg: &mut LayoutGraph) {
         let top_idx = lg.add_nesting_node(top_id);
         lg.border_top.insert(compound_idx, top_idx);
 
+        // Create title node for compounds with titles
+        if lg.compound_titles.contains(&compound_idx) {
+            let title_id = NodeId(format!("_tt_{}", compound_id));
+            let title_idx = lg.add_nesting_node(title_id);
+            lg.border_title.insert(compound_idx, title_idx);
+        }
+
         // Create border bottom node
         let bot_id = NodeId(format!("_bb_{}", compound_id));
         let bot_idx = lg.add_nesting_node(bot_id);
@@ -70,10 +77,20 @@ pub fn run(lg: &mut LayoutGraph) {
         let e = lg.add_nesting_edge(root_idx, idx, nesting_weight);
         lg.nesting_edges.insert(e);
     }
-    let border_tops: Vec<usize> = lg.border_top.values().copied().collect();
-    for top_idx in border_tops {
-        let e = lg.add_nesting_edge(root_idx, top_idx, nesting_weight);
-        lg.nesting_edges.insert(e);
+    let compound_indices_for_roots: Vec<usize> = lg.compound_nodes.iter().copied().collect();
+    for compound_idx in compound_indices_for_roots {
+        let top_idx = lg.border_top[&compound_idx];
+        if let Some(&title_idx) = lg.border_title.get(&compound_idx) {
+            // root → title → border_top
+            let e = lg.add_nesting_edge(root_idx, title_idx, nesting_weight);
+            lg.nesting_edges.insert(e);
+            let e = lg.add_nesting_edge(title_idx, top_idx, nesting_weight);
+            lg.nesting_edges.insert(e);
+        } else {
+            // root → border_top (existing behavior)
+            let e = lg.add_nesting_edge(root_idx, top_idx, nesting_weight);
+            lg.nesting_edges.insert(e);
+        }
     }
 }
 
@@ -84,7 +101,10 @@ pub fn run(lg: &mut LayoutGraph) {
 pub fn assign_rank_minmax(lg: &mut LayoutGraph) {
     let compound_indices: Vec<usize> = lg.compound_nodes.iter().copied().collect();
     for compound_idx in compound_indices {
-        if let Some(&top_idx) = lg.border_top.get(&compound_idx) {
+        // Use title rank if available, otherwise border_top
+        if let Some(&title_idx) = lg.border_title.get(&compound_idx) {
+            lg.min_rank.insert(compound_idx, lg.ranks[title_idx]);
+        } else if let Some(&top_idx) = lg.border_top.get(&compound_idx) {
             lg.min_rank.insert(compound_idx, lg.ranks[top_idx]);
         }
         if let Some(&bot_idx) = lg.border_bottom.get(&compound_idx) {
@@ -189,6 +209,40 @@ mod tests {
         assert_eq!(lg.node_count(), initial);
     }
 
+    fn build_test_titled_compound_layout_graph() -> LayoutGraph {
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("A", (10.0, 10.0));
+        g.add_node("B", (10.0, 10.0));
+        g.add_node("sg1", (0.0, 0.0));
+        g.add_edge("A", "B");
+        g.set_parent("A", "sg1");
+        g.set_parent("B", "sg1");
+        g.set_has_title("sg1");
+        LayoutGraph::from_digraph(&g, |_, dims| *dims)
+    }
+
+    #[test]
+    fn test_nesting_run_adds_title_node_for_titled_compound() {
+        let mut lg = build_test_titled_compound_layout_graph();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+
+        run(&mut lg);
+
+        assert!(lg.border_title.contains_key(&sg1_idx));
+        let title_idx = lg.border_title[&sg1_idx];
+        assert_eq!(lg.node_ids[title_idx], NodeId::from("_tt_sg1"));
+    }
+
+    #[test]
+    fn test_nesting_run_no_title_node_for_untitled_compound() {
+        let mut lg = build_test_compound_layout_graph();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+
+        run(&mut lg);
+
+        assert!(!lg.border_title.contains_key(&sg1_idx));
+    }
+
     #[test]
     fn test_assign_rank_minmax() {
         use crate::dagre::rank;
@@ -205,6 +259,28 @@ mod tests {
         assert!(lg.min_rank.contains_key(&sg1_idx));
         assert!(lg.max_rank.contains_key(&sg1_idx));
         assert!(lg.min_rank[&sg1_idx] <= lg.max_rank[&sg1_idx]);
+    }
+
+    #[test]
+    fn test_assign_rank_minmax_uses_title_rank_for_min() {
+        use crate::dagre::rank;
+
+        let mut lg = build_test_titled_compound_layout_graph();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+
+        run(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        cleanup(&mut lg);
+        assign_rank_minmax(&mut lg);
+
+        let title_idx = lg.border_title[&sg1_idx];
+        let top_idx = lg.border_top[&sg1_idx];
+
+        // min_rank should be the title's rank, not border_top's rank
+        assert_eq!(lg.min_rank[&sg1_idx], lg.ranks[title_idx]);
+        // title rank should be strictly less than border_top rank
+        assert!(lg.ranks[title_idx] < lg.ranks[top_idx]);
     }
 
     #[test]
