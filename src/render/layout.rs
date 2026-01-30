@@ -1789,6 +1789,7 @@ mod tests {
                 title: "Left".to_string(),
 
                 nodes: vec!["A".to_string()],
+                parent: None,
             },
         );
         subgraphs.insert(
@@ -1798,6 +1799,7 @@ mod tests {
                 title: "Right".to_string(),
 
                 nodes: vec!["B".to_string()],
+                parent: None,
             },
         );
 
@@ -1849,6 +1851,7 @@ mod tests {
                 title: "G".to_string(),
 
                 nodes: vec!["A".to_string()],
+                parent: None,
             },
         );
 
@@ -1943,6 +1946,7 @@ mod tests {
                 title: "G".to_string(),
 
                 nodes: vec!["A".to_string(), "B".to_string()],
+                parent: None,
             },
         );
 

@@ -28,6 +28,8 @@ pub struct Subgraph {
     pub title: String,
     /// IDs of nodes belonging to this subgraph.
     pub nodes: Vec<String>,
+    /// Parent subgraph ID (None if top-level).
+    pub parent: Option<String>,
 }
 
 /// A complete flowchart diagram.
@@ -78,6 +80,30 @@ impl Diagram {
     pub fn has_subgraphs(&self) -> bool {
         !self.subgraphs.is_empty()
     }
+
+    /// Return the IDs of subgraphs whose parent is `parent_id`.
+    pub fn subgraph_children(&self, parent_id: &str) -> Vec<&String> {
+        self.subgraphs
+            .values()
+            .filter(|sg| sg.parent.as_deref() == Some(parent_id))
+            .map(|sg| &sg.id)
+            .collect()
+    }
+
+    /// Return the nesting depth of a subgraph (0 = top-level).
+    pub fn subgraph_depth(&self, sg_id: &str) -> usize {
+        let mut depth = 0;
+        let mut current = sg_id;
+        while let Some(sg) = self.subgraphs.get(current) {
+            if let Some(ref parent) = sg.parent {
+                depth += 1;
+                current = parent;
+            } else {
+                break;
+            }
+        }
+        depth
+    }
 }
 
 #[cfg(test)]
@@ -91,10 +117,46 @@ mod tests {
             title: "My Group".to_string(),
 
             nodes: vec!["A".to_string(), "B".to_string()],
+            parent: None,
         };
         assert_eq!(sg.id, "sg1");
         assert_eq!(sg.title, "My Group");
         assert_eq!(sg.nodes.len(), 2);
+    }
+
+    #[test]
+    fn test_subgraph_children() {
+        use crate::graph::builder::build_diagram;
+        use crate::parser::parse_flowchart;
+        let input = "graph TD\nsubgraph outer[Outer]\nA\nsubgraph inner[Inner]\nB\nend\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let children = diagram.subgraph_children("outer");
+        assert_eq!(children.len(), 1);
+        assert!(children.contains(&&"inner".to_string()));
+        assert!(diagram.subgraph_children("inner").is_empty());
+    }
+
+    #[test]
+    fn test_subgraph_depth() {
+        use crate::graph::builder::build_diagram;
+        use crate::parser::parse_flowchart;
+        let input = "graph TD\nsubgraph outer[Outer]\nsubgraph inner[Inner]\nA\nend\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        assert_eq!(diagram.subgraph_depth("outer"), 0);
+        assert_eq!(diagram.subgraph_depth("inner"), 1);
+    }
+
+    #[test]
+    fn test_subgraph_has_parent_field() {
+        let sg = Subgraph {
+            id: "inner".to_string(),
+            title: "Inner".to_string(),
+            nodes: vec!["A".to_string()],
+            parent: Some("outer".to_string()),
+        };
+        assert_eq!(sg.parent, Some("outer".to_string()));
     }
 
     #[test]
@@ -114,6 +176,7 @@ mod tests {
                 title: "Group".to_string(),
 
                 nodes: vec![],
+                parent: None,
             },
         );
         assert!(diagram.has_subgraphs());

@@ -42,6 +42,7 @@ fn process_statements(
                         id: sg_spec.id.clone(),
                         title: sg_spec.title.clone(),
                         nodes: node_ids,
+                        parent: parent_subgraph.map(|s| s.to_string()),
                     },
                 );
             }
@@ -86,7 +87,7 @@ fn collect_node_ids(statements: &[Statement]) -> Vec<String> {
         let new_ids: Vec<String> = match stmt {
             Statement::Vertex(v) => vec![v.id.clone()],
             Statement::Edge(e) => vec![e.from.id.clone(), e.to.id.clone()],
-            Statement::Subgraph(_) => vec![],
+            Statement::Subgraph(sg) => collect_node_ids(&sg.statements),
         };
         for id in new_ids {
             if seen.insert(id.clone()) {
@@ -246,6 +247,26 @@ mod tests {
 
         assert_eq!(diagram.nodes.len(), 3);
         assert_eq!(diagram.edges.len(), 2);
+    }
+
+    #[test]
+    fn test_nested_subgraph_outer_contains_inner_nodes() {
+        let input = "graph TD\nsubgraph outer[Outer]\nsubgraph inner[Inner]\nA --> B\nend\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        assert!(diagram.subgraphs["outer"].nodes.contains(&"A".to_string()));
+        assert!(diagram.subgraphs["outer"].nodes.contains(&"B".to_string()));
+        assert!(diagram.subgraphs["inner"].nodes.contains(&"A".to_string()));
+        assert!(diagram.subgraphs["inner"].nodes.contains(&"B".to_string()));
+    }
+
+    #[test]
+    fn test_nested_subgraph_parent_set() {
+        let input = "graph TD\nsubgraph outer[Outer]\nsubgraph inner[Inner]\nA --> B\nend\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        assert_eq!(diagram.subgraphs["inner"].parent, Some("outer".to_string()));
+        assert_eq!(diagram.subgraphs["outer"].parent, None);
     }
 
     #[test]
