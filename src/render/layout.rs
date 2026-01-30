@@ -3,7 +3,7 @@
 //! Translates dagre float coordinates into ASCII character-grid positions using
 //! uniform scale factors, collision repair, and waypoint transformation.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::shape::{NodeBounds, node_dimensions};
 #[cfg(test)]
@@ -796,11 +796,26 @@ struct RawCenter {
     h: usize,
 }
 
+/// Build a map from parent subgraph ID to list of direct child subgraph IDs.
+fn build_children_map(
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+) -> HashMap<String, Vec<String>> {
+    let mut children: HashMap<String, Vec<String>> = HashMap::new();
+    for sg in subgraphs.values() {
+        if let Some(ref parent_id) = sg.parent {
+            children
+                .entry(parent_id.clone())
+                .or_default()
+                .push(sg.id.clone());
+        }
+    }
+    children
+}
+
 /// Convert subgraph member-node positions to draw-coordinate SubgraphBounds.
 ///
-/// Computes bounding boxes from member-node draw positions with fixed padding,
-/// enforces title-width minimums, expands for backward edges, then resolves
-/// any overlap between sibling subgraph bounds.
+/// Uses inside-out (bottom-up) computation: leaf subgraphs first, then parents
+/// expand to contain their children. This ensures proper nesting of bounds.
 fn convert_subgraph_bounds(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
     draw_positions: &HashMap<String, (usize, usize)>,
@@ -808,18 +823,76 @@ fn convert_subgraph_bounds(
     direction: crate::dagre::Direction,
     edges: &[crate::graph::Edge],
 ) -> HashMap<String, SubgraphBounds> {
-    let mut bounds = HashMap::new();
+    let children_map = build_children_map(subgraphs);
 
-    for (sg_id, sg) in subgraphs {
-        // Compute bounds from member-node draw positions.
+    // Collect the set of node IDs that belong to child subgraphs for each parent,
+    // so parent bounds only use their own direct nodes (not inherited from children).
+    let mut child_node_ids: HashMap<String, HashSet<String>> = HashMap::new();
+    for sg in subgraphs.values() {
+        if let Some(ref parent_id) = sg.parent {
+            let set = child_node_ids.entry(parent_id.clone()).or_default();
+            for node_id in &sg.nodes {
+                set.insert(node_id.clone());
+            }
+        }
+    }
+
+    let mut bounds: HashMap<String, SubgraphBounds> = HashMap::new();
+    let mut visited: HashSet<String> = HashSet::new();
+
+    // Recursively compute bounds for a subgraph, children first.
+    fn compute_bounds_recursive(
+        sg_id: &str,
+        subgraphs: &HashMap<String, crate::graph::Subgraph>,
+        children_map: &HashMap<String, Vec<String>>,
+        child_node_ids: &HashMap<String, HashSet<String>>,
+        draw_positions: &HashMap<String, (usize, usize)>,
+        node_dims: &HashMap<String, (usize, usize)>,
+        direction: crate::dagre::Direction,
+        edges: &[crate::graph::Edge],
+        bounds: &mut HashMap<String, SubgraphBounds>,
+        visited: &mut HashSet<String>,
+    ) {
+        if visited.contains(sg_id) {
+            return;
+        }
+        visited.insert(sg_id.to_string());
+
+        // Recurse into children first
+        if let Some(children) = children_map.get(sg_id) {
+            for child_id in children {
+                compute_bounds_recursive(
+                    child_id,
+                    subgraphs,
+                    children_map,
+                    child_node_ids,
+                    draw_positions,
+                    node_dims,
+                    direction,
+                    edges,
+                    bounds,
+                    visited,
+                );
+            }
+        }
+
+        let sg = match subgraphs.get(sg_id) {
+            Some(sg) => sg,
+            None => return,
+        };
+
         let border_padding: usize = 2;
-
         let mut min_x = usize::MAX;
         let mut min_y = usize::MAX;
         let mut max_x: usize = 0;
         let mut max_y: usize = 0;
 
+        // Include only direct nodes (not nodes belonging to child subgraphs)
+        let excluded = child_node_ids.get(sg_id);
         for node_id in &sg.nodes {
+            if excluded.is_some_and(|set| set.contains(node_id)) {
+                continue;
+            }
             if let (Some(&(x, y)), Some(&(w, h))) =
                 (draw_positions.get(node_id), node_dims.get(node_id))
             {
@@ -830,8 +903,20 @@ fn convert_subgraph_bounds(
             }
         }
 
+        // Include child subgraph bounds
+        if let Some(children) = children_map.get(sg_id) {
+            for child_id in children {
+                if let Some(child_bounds) = bounds.get(child_id) {
+                    min_x = min_x.min(child_bounds.x);
+                    min_y = min_y.min(child_bounds.y);
+                    max_x = max_x.max(child_bounds.x + child_bounds.width);
+                    max_y = max_y.max(child_bounds.y + child_bounds.height);
+                }
+            }
+        }
+
         if min_x == usize::MAX {
-            continue;
+            return;
         }
 
         let border_x = min_x.saturating_sub(border_padding);
@@ -864,8 +949,6 @@ fn convert_subgraph_bounds(
         }
 
         // Expand bounds if the subgraph contains backward edges.
-        // The router places backward edges BACKWARD_ROUTE_GAP cells past
-        // the rightmost node (TD/BT) or below the bottommost node (LR/RL).
         let has_backward = edges.iter().any(|e| {
             let from_in = sg.nodes.contains(&e.from);
             let to_in = sg.nodes.contains(&e.to);
@@ -890,7 +973,7 @@ fn convert_subgraph_bounds(
         if has_backward {
             use crate::dagre::Direction;
             use crate::render::router::BACKWARD_ROUTE_GAP;
-            let route_margin = BACKWARD_ROUTE_GAP + 2; // gap + buffer
+            let route_margin = BACKWARD_ROUTE_GAP + 2;
             match direction {
                 Direction::TopBottom | Direction::BottomTop => {
                     final_width += route_margin;
@@ -902,7 +985,7 @@ fn convert_subgraph_bounds(
         }
 
         bounds.insert(
-            sg_id.clone(),
+            sg_id.to_string(),
             SubgraphBounds {
                 x: final_x,
                 y: draw_y,
@@ -913,22 +996,65 @@ fn convert_subgraph_bounds(
         );
     }
 
-    // Post-hoc overlap resolution: ensure no two subgraph bounds overlap.
-    // For each overlapping pair, shrink the border that extends into the other's
-    // member-node region. This preserves the member-node-based approach while
-    // adding inter-subgraph awareness.
-    resolve_subgraph_overlap(&mut bounds);
+    // Process all subgraphs (recursion handles ordering)
+    let sg_ids: Vec<String> = subgraphs.keys().cloned().collect();
+    for sg_id in &sg_ids {
+        compute_bounds_recursive(
+            sg_id,
+            subgraphs,
+            &children_map,
+            &child_node_ids,
+            draw_positions,
+            node_dims,
+            direction,
+            edges,
+            &mut bounds,
+            &mut visited,
+        );
+    }
+
+    // Post-hoc overlap resolution: ensure no two sibling subgraph bounds overlap.
+    resolve_subgraph_overlap(&mut bounds, subgraphs);
 
     bounds
+}
+
+/// Check if `ancestor_id` is an ancestor of `descendant_id` in the subgraph hierarchy.
+fn is_ancestor(
+    ancestor_id: &str,
+    descendant_id: &str,
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+) -> bool {
+    let mut current = descendant_id;
+    while let Some(sg) = subgraphs.get(current) {
+        if let Some(ref parent) = sg.parent {
+            if parent == ancestor_id {
+                return true;
+            }
+            current = parent;
+        } else {
+            break;
+        }
+    }
+    false
 }
 
 /// Resolve overlapping subgraph bounds by trimming borders at the midpoint
 /// of the overlap region. For vertically stacked subgraphs, trims the upper's
 /// bottom and the lower's top. For horizontally adjacent, trims left/right.
-fn resolve_subgraph_overlap(bounds: &mut HashMap<String, SubgraphBounds>) {
+/// Skips nested pairs (ancestor/descendant) — only resolves sibling overlaps.
+fn resolve_subgraph_overlap(
+    bounds: &mut HashMap<String, SubgraphBounds>,
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+) {
     let ids: Vec<String> = bounds.keys().cloned().collect();
     for i in 0..ids.len() {
         for j in (i + 1)..ids.len() {
+            // Skip nested pairs — parent/child overlap is intentional
+            if is_ancestor(&ids[i], &ids[j], subgraphs) || is_ancestor(&ids[j], &ids[i], subgraphs)
+            {
+                continue;
+            }
             let (a_x, a_y, a_right, a_bottom) = {
                 let a = &bounds[&ids[i]];
                 (a.x, a.y, a.x + a.width, a.y + a.height)
@@ -1797,6 +1923,93 @@ mod tests {
             result.is_empty(),
             "out-of-bounds edge index should be skipped"
         );
+    }
+
+    // =========================================================================
+    // Nested Subgraph Tests (Plan 0032)
+    // =========================================================================
+
+    #[test]
+    fn test_nested_subgraph_parent_contains_child_bounds() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph outer[Outer]\nA\nsubgraph inner[Inner]\nB --> C\nend\nend\nA --> B\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let outer = &layout.subgraph_bounds["outer"];
+        let inner = &layout.subgraph_bounds["inner"];
+        // Parent must fully contain child
+        assert!(
+            outer.x <= inner.x,
+            "outer.x ({}) should be <= inner.x ({})",
+            outer.x,
+            inner.x
+        );
+        assert!(
+            outer.y <= inner.y,
+            "outer.y ({}) should be <= inner.y ({})",
+            outer.y,
+            inner.y
+        );
+        assert!(
+            outer.x + outer.width >= inner.x + inner.width,
+            "outer right ({}) should be >= inner right ({})",
+            outer.x + outer.width,
+            inner.x + inner.width
+        );
+        assert!(
+            outer.y + outer.height >= inner.y + inner.height,
+            "outer bottom ({}) should be >= inner bottom ({})",
+            outer.y + outer.height,
+            inner.y + inner.height
+        );
+    }
+
+    #[test]
+    fn test_nested_outer_only_subgraph_gets_bounds() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph outer[Outer]\nsubgraph inner[Inner]\nA --> B\nend\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        assert!(
+            layout.subgraph_bounds.contains_key("outer"),
+            "outer should have bounds"
+        );
+        let outer = &layout.subgraph_bounds["outer"];
+        assert!(outer.width > 0, "width should be positive");
+        assert!(outer.height > 0, "height should be positive");
+    }
+
+    #[test]
+    fn test_build_children_map() {
+        use crate::graph::Subgraph;
+        let mut subgraphs = HashMap::new();
+        subgraphs.insert(
+            "inner".to_string(),
+            Subgraph {
+                id: "inner".to_string(),
+                title: "Inner".to_string(),
+                nodes: vec!["A".to_string()],
+                parent: Some("outer".to_string()),
+            },
+        );
+        subgraphs.insert(
+            "outer".to_string(),
+            Subgraph {
+                id: "outer".to_string(),
+                title: "Outer".to_string(),
+                nodes: vec!["A".to_string()],
+                parent: None,
+            },
+        );
+        let children_map = build_children_map(&subgraphs);
+        assert_eq!(children_map["outer"], vec!["inner".to_string()]);
+        assert!(!children_map.contains_key("inner"));
     }
 
     // =========================================================================
