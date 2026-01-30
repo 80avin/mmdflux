@@ -3,7 +3,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use clap::Parser;
-use mmdflux::parser::{DiagramType, detect_diagram_type};
+use mmdflux::parser::{DiagramType, detect_diagram_type, parse_info, parse_packet, parse_pie};
 use mmdflux::render::{RenderOptions, render};
 use mmdflux::{build_diagram, parse_flowchart};
 
@@ -56,21 +56,21 @@ fn main() -> io::Result<()> {
 }
 
 fn render_input(input: &str, debug: bool, ascii_only: bool) -> Result<String, String> {
-    // Detect diagram type
+    // Detect diagram type and dispatch
     match detect_diagram_type(input) {
-        Some(DiagramType::Flowchart) => {}
-        Some(dtype) => return Err(format!("unsupported diagram type: {:?}", dtype)),
-        None => return Err("unknown diagram type".to_string()),
+        Some(DiagramType::Flowchart) => render_flowchart_diagram(input, debug, ascii_only),
+        Some(DiagramType::Info) => render_info_diagram(input),
+        Some(DiagramType::Pie) => render_pie_diagram(input),
+        Some(DiagramType::Packet) => render_packet_diagram(input),
+        None => Err("unknown diagram type".to_string()),
     }
+}
 
-    // Parse the flowchart
+fn render_flowchart_diagram(input: &str, debug: bool, ascii_only: bool) -> Result<String, String> {
     let flowchart = parse_flowchart(input).map_err(|e| e.to_string())?;
-
-    // Build the graph
     let diagram = build_diagram(&flowchart);
 
     if debug {
-        // Debug output: show parsed structure
         let mut output = String::new();
         output.push_str(&format!("Direction: {:?}\n", diagram.direction));
         output.push_str(&format!("Nodes ({}):\n", diagram.nodes.len()));
@@ -97,4 +97,57 @@ fn render_input(input: &str, debug: bool, ascii_only: bool) -> Result<String, St
         let options = RenderOptions { ascii_only };
         Ok(render(&diagram, &options))
     }
+}
+
+fn render_info_diagram(input: &str) -> Result<String, String> {
+    let info = parse_info(input).map_err(|e| e.to_string())?;
+    let mut output = String::new();
+    if let Some(title) = &info.title {
+        output.push_str(&format!("title: {}\n", title));
+    }
+    if info.show_info {
+        output.push_str("mmdflux v0.1.0\n");
+    }
+    Ok(output)
+}
+
+fn render_pie_diagram(input: &str) -> Result<String, String> {
+    let pie = parse_pie(input).map_err(|e| e.to_string())?;
+    let mut output = String::new();
+    if let Some(title) = &pie.title {
+        output.push_str(&format!("title: {}\n", title));
+    }
+    let total: f64 = pie.sections.iter().map(|s| s.value).sum();
+    for section in &pie.sections {
+        let pct = if total > 0.0 {
+            section.value / total * 100.0
+        } else {
+            0.0
+        };
+        output.push_str(&format!("  {}: {:.1}%\n", section.label, pct));
+    }
+    Ok(output)
+}
+
+fn render_packet_diagram(input: &str) -> Result<String, String> {
+    let packet = parse_packet(input).map_err(|e| e.to_string())?;
+    let mut output = String::new();
+    if let Some(title) = &packet.title {
+        output.push_str(&format!("title: {}\n", title));
+    }
+    for block in &packet.blocks {
+        match block {
+            mmdflux::parser::packet::PacketBlock::Range { start, end, label } => {
+                if let Some(e) = end {
+                    output.push_str(&format!("  {}-{}: {}\n", start, e, label));
+                } else {
+                    output.push_str(&format!("  {}: {}\n", start, label));
+                }
+            }
+            mmdflux::parser::packet::PacketBlock::Relative { bits, label } => {
+                output.push_str(&format!("  +{}: {}\n", bits, label));
+            }
+        }
+    }
+    Ok(output)
 }

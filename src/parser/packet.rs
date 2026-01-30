@@ -1,0 +1,204 @@
+//! Pest parser for Mermaid packet diagrams.
+
+use pest::Parser;
+use pest_derive::Parser;
+
+use super::error::ParseError;
+
+#[derive(Parser)]
+#[grammar = "parser/packet_grammar.pest"]
+pub struct PacketParser;
+
+/// A block in a packet diagram.
+#[derive(Debug, Clone)]
+pub enum PacketBlock {
+    /// Absolute bit range: `start-end: "label"` or single bit `start: "label"`
+    Range {
+        start: u32,
+        end: Option<u32>,
+        label: String,
+    },
+    /// Relative bits: `+bits: "label"`
+    Relative { bits: u32, label: String },
+}
+
+/// Parsed packet diagram.
+#[derive(Debug, Clone)]
+pub struct Packet {
+    pub title: Option<String>,
+    pub blocks: Vec<PacketBlock>,
+}
+
+/// Strip surrounding quotes (double or single) from a string.
+fn strip_quotes(s: &str) -> &str {
+    if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
+        &s[1..s.len() - 1]
+    } else {
+        s
+    }
+}
+
+/// Parse a packet diagram string.
+pub fn parse_packet(input: &str) -> Result<Packet, ParseError> {
+    let pairs =
+        PacketParser::parse(Rule::packet_diagram, input).map_err(ParseError::from_pest_error)?;
+
+    let mut title = None;
+    let mut blocks = Vec::new();
+
+    for pair in pairs {
+        if pair.as_rule() == Rule::packet_diagram {
+            for inner in pair.into_inner() {
+                match inner.as_rule() {
+                    Rule::title_stmt => {
+                        for t in inner.into_inner() {
+                            if t.as_rule() == Rule::title_text {
+                                title = Some(t.as_str().to_string());
+                            }
+                        }
+                    }
+                    Rule::packet_block => {
+                        let block = parse_block(inner);
+                        blocks.push(block);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    Ok(Packet { title, blocks })
+}
+
+fn parse_block(pair: pest::iterators::Pair<Rule>) -> PacketBlock {
+    let mut label = String::new();
+    let mut block = None;
+
+    for part in pair.into_inner() {
+        match part.as_rule() {
+            Rule::bit_spec => {
+                block = Some(parse_bit_spec(part));
+            }
+            Rule::string => {
+                let raw = part.into_inner().next().unwrap().as_str();
+                label = strip_quotes(raw).to_string();
+            }
+            _ => {}
+        }
+    }
+
+    match block {
+        Some(BitSpec::Range(start, end)) => PacketBlock::Range { start, end, label },
+        Some(BitSpec::Relative(bits)) => PacketBlock::Relative { bits, label },
+        None => PacketBlock::Range {
+            start: 0,
+            end: None,
+            label,
+        },
+    }
+}
+
+enum BitSpec {
+    Range(u32, Option<u32>),
+    Relative(u32),
+}
+
+fn parse_bit_spec(pair: pest::iterators::Pair<Rule>) -> BitSpec {
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::bit_range => {
+                let mut ints = inner.into_inner();
+                let start: u32 = ints.next().unwrap().as_str().parse().unwrap_or(0);
+                let end: u32 = ints.next().unwrap().as_str().parse().unwrap_or(0);
+                return BitSpec::Range(start, Some(end));
+            }
+            Rule::bit_relative => {
+                let val: u32 = inner
+                    .into_inner()
+                    .next()
+                    .unwrap()
+                    .as_str()
+                    .parse()
+                    .unwrap_or(0);
+                return BitSpec::Relative(val);
+            }
+            Rule::bit_single => {
+                let val: u32 = inner
+                    .into_inner()
+                    .next()
+                    .unwrap()
+                    .as_str()
+                    .parse()
+                    .unwrap_or(0);
+                return BitSpec::Range(val, None);
+            }
+            _ => {}
+        }
+    }
+    BitSpec::Range(0, None)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_packet_range_block() {
+        let result = parse_packet("packet-beta\n0-7: \"Header\"\n").unwrap();
+        assert_eq!(result.blocks.len(), 1);
+        match &result.blocks[0] {
+            PacketBlock::Range { start, end, label } => {
+                assert_eq!(*start, 0);
+                assert_eq!(*end, Some(7));
+                assert_eq!(label, "Header");
+            }
+            _ => panic!("Expected Range block"),
+        }
+    }
+
+    #[test]
+    fn test_parse_packet_single_bit() {
+        let result = parse_packet("packet-beta\n0: \"Flag\"\n").unwrap();
+        match &result.blocks[0] {
+            PacketBlock::Range {
+                start, end, label, ..
+            } => {
+                assert_eq!(*start, 0);
+                assert_eq!(*end, None);
+                assert_eq!(label, "Flag");
+            }
+            _ => panic!("Expected Range block"),
+        }
+    }
+
+    #[test]
+    fn test_parse_packet_relative_bits() {
+        let result = parse_packet("packet-beta\n+8: \"Data\"\n").unwrap();
+        match &result.blocks[0] {
+            PacketBlock::Relative { bits, label } => {
+                assert_eq!(*bits, 8);
+                assert_eq!(label, "Data");
+            }
+            _ => panic!("Expected Relative block"),
+        }
+    }
+
+    #[test]
+    fn test_parse_packet_multiple_blocks() {
+        let input = "packet-beta\n0-7: \"Header\"\n8-15: \"Payload\"\n+16: \"Padding\"\n";
+        let result = parse_packet(input).unwrap();
+        assert_eq!(result.blocks.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_packet_with_title() {
+        let result = parse_packet("packet-beta\ntitle My Packet\n0-7: \"Header\"\n").unwrap();
+        assert_eq!(result.title.as_deref(), Some("My Packet"));
+    }
+
+    #[test]
+    fn test_parse_packet_short_keyword() {
+        let result = parse_packet("packet\n0-7: \"Header\"\n").unwrap();
+        assert_eq!(result.blocks.len(), 1);
+    }
+}

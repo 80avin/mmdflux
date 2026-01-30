@@ -1,10 +1,16 @@
 mod ast;
 mod error;
 mod flowchart;
+pub mod info;
+pub mod packet;
+pub mod pie;
 
 pub use ast::*;
 pub use error::*;
 pub use flowchart::*;
+pub use info::parse_info;
+pub use packet::parse_packet;
+pub use pie::parse_pie;
 
 /// The type of Mermaid diagram detected from input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
