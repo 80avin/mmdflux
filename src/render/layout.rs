@@ -480,12 +480,9 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
 
     // --- Phase K: Convert subgraph bounds to draw coordinates ---
     let subgraph_bounds = convert_subgraph_bounds(
-        &result.subgraph_bounds,
         &diagram.subgraphs,
-        &ctx,
         &draw_positions,
         &node_dims,
-        config.padding,
         dagre_direction,
         &diagram.edges,
     );
@@ -691,19 +688,15 @@ struct RawCenter {
     h: usize,
 }
 
-/// Convert dagre subgraph bounds to draw-coordinate SubgraphBounds.
+/// Convert subgraph member-node positions to draw-coordinate SubgraphBounds.
 ///
-/// Uses dagre's border-node-derived Rect as the primary bounds source,
-/// transforming through TransformContext to get draw coordinates.
-/// Falls back to member-node bounding box with hardcoded padding
-/// when dagre bounds are unavailable.
+/// Computes bounding boxes from member-node draw positions with fixed padding,
+/// enforces title-width minimums, expands for backward edges, then resolves
+/// any overlap between sibling subgraph bounds.
 fn convert_subgraph_bounds(
-    _dagre_bounds: &HashMap<String, Rect>,
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
-    _ctx: &TransformContext,
     draw_positions: &HashMap<String, (usize, usize)>,
     node_dims: &HashMap<String, (usize, usize)>,
-    _padding: usize,
     direction: crate::dagre::Direction,
     edges: &[crate::graph::Edge],
 ) -> HashMap<String, SubgraphBounds> {
@@ -952,6 +945,7 @@ struct TransformContext {
 
 impl TransformContext {
     /// Transform a dagre top-left-based Rect to draw coordinates (x, y, width, height).
+    #[allow(dead_code)]
     ///
     /// Transforms the top-left and bottom-right corners independently using
     /// `to_ascii()`, then computes the draw rect between them. This ensures
@@ -1573,8 +1567,6 @@ mod tests {
     fn test_subgraph_bounds_no_overlap_from_separated_nodes() {
         use crate::graph::Subgraph;
 
-        let dagre_bounds = HashMap::new();
-
         let mut subgraphs = HashMap::new();
         subgraphs.insert(
             "sg1".to_string(),
@@ -1585,17 +1577,6 @@ mod tests {
             Subgraph { id: "sg2".to_string(), title: "Right".to_string(), nodes: vec!["B".to_string()] },
         );
 
-        let ctx = TransformContext {
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
-            scale_x: 0.2,
-            scale_y: 0.1,
-            padding: 1,
-            left_label_margin: 0,
-            overhang_x: 0,
-            overhang_y: 0,
-        };
-
         // Nodes far apart: A at x=5, B at x=25 (gap of 15, each 5 wide + 2 padding = 9 total)
         let mut draw_positions = HashMap::new();
         draw_positions.insert("A".to_string(), (5usize, 5usize));
@@ -1605,7 +1586,7 @@ mod tests {
         node_dims.insert("B".to_string(), (5usize, 3usize));
 
         let result = convert_subgraph_bounds(
-            &dagre_bounds, &subgraphs, &ctx, &draw_positions, &node_dims, 1,
+            &subgraphs, &draw_positions, &node_dims,
             crate::dagre::Direction::TopBottom, &[],
         );
 
@@ -1627,8 +1608,6 @@ mod tests {
     fn test_convert_subgraph_bounds_uses_member_node_positions() {
         use crate::graph::Subgraph;
 
-        let dagre_bounds = HashMap::new();
-
         let mut subgraphs = HashMap::new();
         subgraphs.insert(
             "sg1".to_string(),
@@ -1639,17 +1618,6 @@ mod tests {
             },
         );
 
-        let ctx = TransformContext {
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
-            scale_x: 0.2,
-            scale_y: 0.1,
-            padding: 1,
-            left_label_margin: 0,
-            overhang_x: 0,
-            overhang_y: 0,
-        };
-
         // Single node at (10,10) with size (5,3)
         let mut draw_positions = HashMap::new();
         draw_positions.insert("A".to_string(), (10usize, 10usize));
@@ -1657,12 +1625,9 @@ mod tests {
         node_dims.insert("A".to_string(), (5usize, 3usize));
 
         let result = convert_subgraph_bounds(
-            &dagre_bounds,
             &subgraphs,
-            &ctx,
             &draw_positions,
             &node_dims,
-            1,
             crate::dagre::Direction::TopBottom,
             &[],
         );
@@ -1726,19 +1691,6 @@ mod tests {
             },
         );
 
-        // No dagre bounds → use fallback path
-        let dagre_bounds = HashMap::new();
-        let ctx = TransformContext {
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
-            scale_x: 0.2,
-            scale_y: 0.1,
-            padding: 1,
-            left_label_margin: 0,
-            overhang_x: 0,
-            overhang_y: 0,
-        };
-
         // A at (5,5) size 8x3, B at (5,12) size 8x3 (TD layout: B below A)
         let mut draw_positions = HashMap::new();
         draw_positions.insert("A".to_string(), (5usize, 5usize));
@@ -1765,12 +1717,9 @@ mod tests {
         ];
 
         let result = convert_subgraph_bounds(
-            &dagre_bounds,
             &subgraphs,
-            &ctx,
             &draw_positions,
             &node_dims,
-            1,
             crate::dagre::Direction::TopBottom,
             &edges,
         );
