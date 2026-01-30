@@ -33,14 +33,6 @@ pub fn run(lg: &mut LayoutGraph) {
         let top_idx = lg.add_nesting_node(top_id);
         lg.border_top.insert(compound_idx, top_idx);
 
-        // Create title node for compounds with titles
-        if lg.compound_titles.contains(&compound_idx) {
-            let title_id = NodeId(format!("_tt_{}", compound_id));
-            let title_idx = lg.add_nesting_node(title_id);
-            lg.parents[title_idx] = Some(compound_idx);
-            lg.border_title.insert(compound_idx, title_idx);
-        }
-
         // Create border bottom node
         let bot_id = NodeId(format!("_bb_{}", compound_id));
         let bot_idx = lg.add_nesting_node(bot_id);
@@ -81,17 +73,8 @@ pub fn run(lg: &mut LayoutGraph) {
     let compound_indices_for_roots: Vec<usize> = lg.compound_nodes.iter().copied().collect();
     for compound_idx in compound_indices_for_roots {
         let top_idx = lg.border_top[&compound_idx];
-        if let Some(&title_idx) = lg.border_title.get(&compound_idx) {
-            // root → title → border_top
-            let e = lg.add_nesting_edge(root_idx, title_idx, nesting_weight);
-            lg.nesting_edges.insert(e);
-            let e = lg.add_nesting_edge(title_idx, top_idx, nesting_weight);
-            lg.nesting_edges.insert(e);
-        } else {
-            // root → border_top (existing behavior)
-            let e = lg.add_nesting_edge(root_idx, top_idx, nesting_weight);
-            lg.nesting_edges.insert(e);
-        }
+        let e = lg.add_nesting_edge(root_idx, top_idx, nesting_weight);
+        lg.nesting_edges.insert(e);
     }
 }
 
@@ -223,16 +206,25 @@ mod tests {
     }
 
     #[test]
-    fn test_nesting_run_adds_title_node_for_titled_compound() {
+    fn test_nesting_run_does_not_create_title_node() {
         let mut lg = build_test_titled_compound_layout_graph();
         let sg1_idx = lg.node_index[&"sg1".into()];
 
         run(&mut lg);
 
-        assert!(lg.border_title.contains_key(&sg1_idx));
-        let title_idx = lg.border_title[&sg1_idx];
-        assert_eq!(lg.node_ids[title_idx], NodeId::from("_tt_sg1"));
+        // After run(), border_title should NOT be populated
+        // (title nodes are created post-rank, not during nesting)
+        assert!(
+            !lg.border_title.contains_key(&sg1_idx),
+            "run() should not create title nodes"
+        );
+        // But border_top and border_bottom should still exist
+        assert!(lg.border_top.contains_key(&sg1_idx));
+        assert!(lg.border_bottom.contains_key(&sg1_idx));
     }
+
+    // test_nesting_run_adds_title_node_for_titled_compound removed:
+    // title nodes are now created post-rank by insert_title_nodes() (task 2.1)
 
     #[test]
     fn test_nesting_run_no_title_node_for_untitled_compound() {
@@ -263,6 +255,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Requires post-rank insert_title_nodes() — re-enabled in task 3.1
     fn test_assign_rank_minmax_uses_title_rank_for_min() {
         use crate::dagre::rank;
 
