@@ -123,6 +123,13 @@ fn parse_statement(pair: pest::iterators::Pair<Rule>) -> Vec<Statement> {
     statements
 }
 
+/// Strip surrounding double quotes from text (Mermaid convention).
+fn strip_quotes(s: &str) -> &str {
+    s.strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(s)
+}
+
 fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
     let mut id = String::new();
     let mut title = None;
@@ -139,13 +146,7 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
                         Rule::subgraph_title_bracket => {
                             for title_inner in spec_inner.into_inner() {
                                 if title_inner.as_rule() == Rule::subgraph_title_text {
-                                    let raw = title_inner.as_str();
-                                    // Strip surrounding double quotes (Mermaid convention)
-                                    let stripped = raw
-                                        .strip_prefix('"')
-                                        .and_then(|s| s.strip_suffix('"'))
-                                        .unwrap_or(raw);
-                                    title = Some(stripped.to_string());
+                                    title = Some(strip_quotes(title_inner.as_str()).to_string());
                                 }
                             }
                         }
@@ -293,7 +294,7 @@ fn extract_edge_label(pair: pest::iterators::Pair<Rule>) -> Option<String> {
         if inner.as_rule() == Rule::edge_label {
             for text in inner.into_inner() {
                 if text.as_rule() == Rule::edge_label_text {
-                    return Some(text.as_str().to_string());
+                    return Some(strip_quotes(text.as_str()).to_string());
                 }
             }
         }
@@ -330,7 +331,7 @@ fn parse_shape(pair: pest::iterators::Pair<Rule>) -> Option<ShapeSpec> {
         };
         for text in inner.into_inner() {
             if text.as_rule() == text_rule {
-                return Some(constructor(text.as_str().to_string()));
+                return Some(constructor(strip_quotes(text.as_str()).to_string()));
             }
         }
     }
@@ -660,6 +661,43 @@ mod tests {
             }
             _ => unreachable!(),
         }
+    }
+
+    #[test]
+    fn test_parse_node_quoted_text_strips_quotes() {
+        let result = parse_flowchart("graph TD\nA[\"Hello World\"]\n").unwrap();
+        let vertices = result.vertices();
+        assert_eq!(
+            vertices[0].shape,
+            Some(ShapeSpec::Rectangle("Hello World".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_node_round_quoted_text_strips_quotes() {
+        let result = parse_flowchart("graph TD\nA(\"Rounded\")\n").unwrap();
+        let vertices = result.vertices();
+        assert_eq!(
+            vertices[0].shape,
+            Some(ShapeSpec::Round("Rounded".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_node_diamond_quoted_text_strips_quotes() {
+        let result = parse_flowchart("graph TD\nA{\"Decision?\"}\n").unwrap();
+        let vertices = result.vertices();
+        assert_eq!(
+            vertices[0].shape,
+            Some(ShapeSpec::Diamond("Decision?".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_edge_label_quoted_text_strips_quotes() {
+        let result = parse_flowchart("graph TD\nA -->|\"yes\"| B\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges[0].connector.label(), Some("yes"));
     }
 
     #[test]
