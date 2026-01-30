@@ -72,33 +72,29 @@ node_group = { node ~ ("&" ~ node)* }
 edge_label_text = @{ (!"|" ~ ANY)+ }
 edge_label = { "|" ~ edge_label_text ~ "|" }
 
-// Edge connectors - order matters for parsing (longer matches first)
-// Solid arrows: --> or -->|label|
-arrow_solid_label = { "-->" ~ edge_label }
-arrow_solid = { "-->" }
+// Arrow heads (left and right ends)
+arrow_left = { "<" | "x" | "o" }
+arrow_right = { ">" | "x" | "o" }
 
-// Dotted arrows: -.-> or -.->|label|
-arrow_dotted_label = { "-.->" ~ edge_label }
-arrow_dotted = { "-.->" }
+// Solid edges: optional_left -- dashes -- optional_right
+// Minimum: --- (3 chars: dash-dash-dash for open) or --> (dash-dash-right for arrow)
+// Variable length: ----> (more dashes = longer)
+solid_dashes = @{ "-"+ }
+link_solid = { arrow_left? ~ "-" ~ solid_dashes ~ arrow_right? }
 
-// Thick arrows: ==> or ==>|label|
-arrow_thick_label = { "==>" ~ edge_label }
-arrow_thick = { "==>" }
+// Dotted edges: optional_left -. dots .- optional_right
+// Minimum: -.-> or -..-> (variable dots)
+dotted_dots = @{ "."+ }
+link_dotted = { arrow_left? ~ "-" ~ dotted_dots ~ "-" ~ arrow_right? }
 
-// Open lines (no arrow head): --- or ---|label|
-line_open_label = { "---" ~ edge_label }
-line_open = { "---" }
+// Thick edges: optional_left == equals == optional_right
+// Minimum: ==> or ===> (variable equals)
+thick_equals = @{ "="+ }
+link_thick = { arrow_left? ~ "=" ~ thick_equals ~ arrow_right? }
 
-// All edge types (order: labeled versions first, then plain)
+// Edge connector with optional label (label comes after the link)
 edge_connector = {
-    arrow_solid_label |
-    arrow_dotted_label |
-    arrow_thick_label |
-    line_open_label |
-    arrow_solid |
-    arrow_dotted |
-    arrow_thick |
-    line_open
+    (link_dotted | link_thick | link_solid) ~ edge_label?
 }
 
 // Edge segment: connector followed by node_group
