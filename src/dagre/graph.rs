@@ -412,12 +412,8 @@ impl LayoutGraph {
         idx
     }
 
-    /// Check if a node is a compound (subgraph) node.
-    pub fn is_compound(&self, idx: usize) -> bool {
-        self.compound_nodes.contains(&idx)
-    }
-
     /// Check if an edge exists between two node indices.
+    #[cfg(test)]
     pub fn has_edge(&self, from: usize, to: usize) -> bool {
         self.edges.iter().any(|&(f, t, _)| f == from && t == to)
     }

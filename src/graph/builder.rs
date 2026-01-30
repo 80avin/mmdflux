@@ -61,11 +61,12 @@ fn convert_direction(dir: ParseDirection) -> Direction {
 fn add_vertex_to_diagram(diagram: &mut Diagram, vertex: &Vertex, parent: Option<&str>) {
     if let Some(existing) = diagram.nodes.get_mut(&vertex.id) {
         // Update existing node if this vertex has more info
-        if vertex.shape.is_some() && existing.label == existing.id {
-            if let Some(shape_spec) = &vertex.shape {
-                existing.label = shape_spec.text().to_string();
-                existing.shape = convert_shape(shape_spec);
-            }
+        if vertex.shape.is_some()
+            && existing.label == existing.id
+            && let Some(shape_spec) = &vertex.shape
+        {
+            existing.label = shape_spec.text().to_string();
+            existing.shape = convert_shape(shape_spec);
         }
         // Set parent if provided and not already set
         if parent.is_some() && existing.parent.is_none() {

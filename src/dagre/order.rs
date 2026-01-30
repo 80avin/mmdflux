@@ -382,16 +382,16 @@ fn apply_compound_constraints(graph: &mut LayoutGraph, layer: &[usize]) {
         // Move left border to first position among children
         if let Some(left_nodes) = left_borders {
             for &left_border in left_nodes {
-                if let Some(current) = ordered.iter().position(|&n| n == left_border) {
-                    if current != first_child_pos {
-                        ordered.remove(current);
-                        let target = if current < first_child_pos {
-                            first_child_pos - 1
-                        } else {
-                            first_child_pos
-                        };
-                        ordered.insert(target, left_border);
-                    }
+                if let Some(current) = ordered.iter().position(|&n| n == left_border)
+                    && current != first_child_pos
+                {
+                    ordered.remove(current);
+                    let target = if current < first_child_pos {
+                        first_child_pos - 1
+                    } else {
+                        first_child_pos
+                    };
+                    ordered.insert(target, left_border);
                 }
             }
         }
@@ -412,17 +412,17 @@ fn apply_compound_constraints(graph: &mut LayoutGraph, layer: &[usize]) {
         // Move right border to last position among children
         if let Some(right_nodes) = right_borders {
             for &right_border in right_nodes {
-                if let Some(current) = ordered.iter().position(|&n| n == right_border) {
-                    if current != last_child_pos {
-                        ordered.remove(current);
-                        let target = if current <= last_child_pos {
-                            last_child_pos
-                        } else {
-                            last_child_pos + 1
-                        };
-                        let target = target.min(ordered.len());
-                        ordered.insert(target, right_border);
-                    }
+                if let Some(current) = ordered.iter().position(|&n| n == right_border)
+                    && current != last_child_pos
+                {
+                    ordered.remove(current);
+                    let target = if current <= last_child_pos {
+                        last_child_pos
+                    } else {
+                        last_child_pos + 1
+                    };
+                    let target = target.min(ordered.len());
+                    ordered.insert(target, right_border);
                 }
             }
         }

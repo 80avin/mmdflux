@@ -309,7 +309,7 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
         let chain_count = new_chain_edges.len();
         rebuilt_edges.extend(new_chain_edges);
         rebuilt_weights.extend(new_chain_weights);
-        rebuilt_minlens.extend(std::iter::repeat(1).take(chain_count));
+        rebuilt_minlens.extend(std::iter::repeat_n(1, chain_count));
 
         // Remap reversed_edges: removed edges drop out, surviving edges get new indices
         graph.reversed_edges = graph

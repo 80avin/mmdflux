@@ -968,7 +968,7 @@ fn resolve_subgraph_overlap(bounds: &mut HashMap<String, SubgraphBounds>) {
                     }
 
                     let lower = bounds.get_mut(lower_id).unwrap();
-                    let new_lower_top = mid + (gap + 1) / 2;
+                    let new_lower_top = mid + gap.div_ceil(2);
                     if new_lower_top < lower.y + lower.height {
                         let old_bottom = lower.y + lower.height;
                         lower.y = new_lower_top;
@@ -999,7 +999,7 @@ fn resolve_subgraph_overlap(bounds: &mut HashMap<String, SubgraphBounds>) {
                     }
 
                     let right = bounds.get_mut(right_id).unwrap();
-                    let new_right_left = mid + (gap + 1) / 2;
+                    let new_right_left = mid + gap.div_ceil(2);
                     if new_right_left < right.x + right.width {
                         let old_right_edge = right.x + right.width;
                         right.x = new_right_left;

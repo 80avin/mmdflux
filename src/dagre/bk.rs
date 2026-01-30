@@ -628,6 +628,7 @@ fn get_medians(neighbors: &[NodeIndex], prefer_left: bool) -> Vec<NodeIndex> {
 ///
 /// # Returns
 /// A CompactionResult with x-coordinates for all nodes
+#[cfg(test)]
 pub fn horizontal_compaction(
     graph: &LayoutGraph,
     alignment: &BlockAlignment,
@@ -689,15 +690,15 @@ fn horizontal_compaction_with_direction(
             // - Left borders: skip in left-biased alignments (UL, DL)
             // - Right borders: skip in right-biased alignments (UR, DR)
             // Reference: dagre.js positionX → horizontalCompaction
-            if let Some(dir) = direction {
-                if let Some(&bt) = graph.border_type.get(&root) {
-                    let skip = match bt {
-                        super::graph::BorderType::Left => dir.prefers_left(),
-                        super::graph::BorderType::Right => !dir.prefers_left(),
-                    };
-                    if skip {
-                        continue;
-                    }
+            if let Some(dir) = direction
+                && let Some(&bt) = graph.border_type.get(&root)
+            {
+                let skip = match bt {
+                    super::graph::BorderType::Left => dir.prefers_left(),
+                    super::graph::BorderType::Right => !dir.prefers_left(),
+                };
+                if skip {
+                    continue;
                 }
             }
 
