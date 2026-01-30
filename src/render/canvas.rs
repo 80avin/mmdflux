@@ -46,6 +46,8 @@ pub struct Cell {
     pub is_edge: bool,
     /// Whether this cell is part of a subgraph border (NOT protected from overwrite).
     pub is_subgraph_border: bool,
+    /// Whether this cell contains subgraph title text (protected from edge overwrite).
+    pub is_subgraph_title: bool,
 }
 
 impl Cell {
@@ -57,6 +59,7 @@ impl Cell {
             is_node: false,
             is_edge: false,
             is_subgraph_border: false,
+            is_subgraph_title: false,
         }
     }
 
@@ -68,6 +71,7 @@ impl Cell {
             is_node: false,
             is_edge: false,
             is_subgraph_border: false,
+            is_subgraph_title: false,
         }
     }
 }
@@ -122,6 +126,9 @@ impl Canvas {
     /// Returns `false` if the position is out of bounds.
     pub fn set(&mut self, x: usize, y: usize, ch: char) -> bool {
         if let Some(cell) = self.get_mut(x, y) {
+            if cell.is_subgraph_title {
+                return false;
+            }
             cell.ch = ch;
             true
         } else {
@@ -156,7 +163,7 @@ impl Canvas {
         charset: &CharSet,
     ) -> bool {
         if let Some(cell) = self.get_mut(x, y) {
-            if cell.is_node || charset.is_arrow(cell.ch) {
+            if cell.is_node || cell.is_subgraph_title || charset.is_arrow(cell.ch) {
                 return false;
             }
             // If overwriting a subgraph border, infer its connections first
@@ -191,6 +198,18 @@ impl Canvas {
         if let Some(cell) = self.get_mut(x, y) {
             cell.ch = ch;
             cell.is_subgraph_border = true;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Set a cell as a subgraph title character (protected from edge overwrite).
+    pub fn set_subgraph_title_char(&mut self, x: usize, y: usize, ch: char) -> bool {
+        if let Some(cell) = self.get_mut(x, y) {
+            cell.ch = ch;
+            cell.is_subgraph_border = true;
+            cell.is_subgraph_title = true;
             true
         } else {
             false
@@ -445,6 +464,76 @@ mod tests {
             cell.ch, '┼',
             "Edge crossing border should produce junction, got: {}",
             cell.ch
+        );
+    }
+
+    // =========================================================================
+    // Title Protection Tests (Plan 0028, Task 3.1)
+    // =========================================================================
+
+    #[test]
+    fn edge_does_not_overwrite_title_text() {
+        use crate::render::chars::CharSet;
+        let charset = CharSet::unicode();
+        let mut canvas = Canvas::new(20, 5);
+
+        // Simulate a subgraph border with embedded title at row 0: ┌─ Test ─┐
+        canvas.set_subgraph_border(0, 0, '┌');
+        canvas.set_subgraph_border(1, 0, '─');
+        canvas.set_subgraph_border(2, 0, ' ');
+        // Title characters
+        canvas.set_subgraph_title_char(3, 0, 'T');
+        canvas.set_subgraph_title_char(4, 0, 'e');
+        canvas.set_subgraph_title_char(5, 0, 's');
+        canvas.set_subgraph_title_char(6, 0, 't');
+        canvas.set_subgraph_border(7, 0, ' ');
+        canvas.set_subgraph_border(8, 0, '─');
+        canvas.set_subgraph_border(9, 0, '┐');
+
+        // Try to draw a vertical edge through the title at column 4
+        let conns = Connections {
+            up: true,
+            down: true,
+            left: false,
+            right: false,
+        };
+        let overwritten = canvas.set_with_connection(4, 0, conns, &charset);
+
+        // Title character should be protected
+        assert!(
+            !overwritten,
+            "Title character should not be overwritten by edge"
+        );
+        assert_eq!(
+            canvas.get(4, 0).unwrap().ch,
+            'e',
+            "Title 'e' should be preserved"
+        );
+    }
+
+    #[test]
+    fn edge_can_merge_with_non_title_border_segment() {
+        use crate::render::chars::CharSet;
+        let charset = CharSet::unicode();
+        let mut canvas = Canvas::new(20, 5);
+
+        // Place a horizontal border line segment (NOT title)
+        canvas.set_subgraph_border(5, 0, '─');
+
+        // A vertical edge should merge to form a junction
+        let conns = Connections {
+            up: true,
+            down: true,
+            left: false,
+            right: false,
+        };
+        let merged = canvas.set_with_connection(5, 0, conns, &charset);
+        assert!(merged, "Edge should merge with non-title border segment");
+        // Should produce a junction (┼ or similar)
+        assert_ne!(
+            canvas.get(5, 0).unwrap().ch,
+            '─',
+            "Should not remain a plain horizontal after edge merge"
         );
     }
 }

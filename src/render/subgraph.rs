@@ -35,7 +35,7 @@ pub fn render_subgraph_borders(
             let max_title_len = inner_width.saturating_sub(4);
             let title: String = bounds.title.chars().take(max_title_len).collect();
             for (i, ch) in title.chars().enumerate() {
-                canvas.set_subgraph_border(x + 3 + i, y, ch);
+                canvas.set_subgraph_title_char(x + 3 + i, y, ch);
             }
             let title_end = x + 3 + title.len();
             canvas.set_subgraph_border(title_end, y, ' ');

@@ -1054,6 +1054,22 @@ mod subgraph_rendering {
     }
 
     #[test]
+    fn subgraph_titles_preserved_with_cross_edges() {
+        let output = render_fixture("subgraph_edges.mmd");
+        // Both titles should be fully intact (not corrupted by edge arrows)
+        assert!(
+            output.contains("Input"),
+            "Input title should be intact in: {}",
+            output
+        );
+        assert!(
+            output.contains("Output"),
+            "Output title should be intact in: {}",
+            output
+        );
+    }
+
+    #[test]
     fn multi_subgraph_renders_both_groups() {
         let output = render_fixture("multi_subgraph.mmd");
         // LR layout may not display subgraph titles if the box is too compact
