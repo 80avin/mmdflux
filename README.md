@@ -123,10 +123,10 @@ Output:
 Input:
 ```
 graph TD
-subgraph sg1[Process]
-A[Start] --> B[Middle]
-end
-B --> C[End]
+    subgraph sg1[Process]
+        A[Start] --> B[Middle]
+    end
+    B --> C[End]
 ```
 
 Output:
@@ -155,15 +155,15 @@ Output:
 Input:
 ```
 graph LR
-subgraph outer[Outer]
-subgraph left[Left]
-A --> B
-end
-subgraph right[Right]
-C --> D
-end
-end
-B --> C
+    subgraph outer[Outer]
+        subgraph left[Left]
+            A --> B
+        end
+        subgraph right[Right]
+            C --> D
+        end
+    end
+    B --> C
 ```
 
 Output:
@@ -310,9 +310,9 @@ graph LR
 
 ```
 graph TD
-subgraph id[Title]
-    A --> B
-end
+    subgraph id[Title]
+        A --> B
+    end
 ```
 
 Subgraphs group nodes inside a bordered box with an optional title.
