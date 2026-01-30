@@ -105,10 +105,8 @@ pub struct EdgeSpec {
 pub struct SubgraphSpec {
     /// The subgraph identifier.
     pub id: String,
-    /// The display title.
+    /// The display title (defaults to id if not specified via bracket syntax).
     pub title: String,
-    /// Whether the title was explicitly set via bracket syntax `[Title]`.
-    pub has_explicit_title: bool,
     /// Statements contained within the subgraph.
     pub statements: Vec<Statement>,
 }
@@ -133,12 +131,10 @@ mod tests {
         let sg = SubgraphSpec {
             id: "sg1".to_string(),
             title: "My Group".to_string(),
-            has_explicit_title: true,
             statements: vec![],
         };
         assert_eq!(sg.id, "sg1");
         assert_eq!(sg.title, "My Group");
-        assert!(sg.has_explicit_title);
         assert!(sg.statements.is_empty());
     }
 
@@ -147,7 +143,6 @@ mod tests {
         let sg = SubgraphSpec {
             id: "sg1".to_string(),
             title: "Title".to_string(),
-            has_explicit_title: true,
             statements: vec![Statement::Vertex(Vertex {
                 id: "A".to_string(),
                 shape: None,

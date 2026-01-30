@@ -41,7 +41,6 @@ fn process_statements(
                     Subgraph {
                         id: sg_spec.id.clone(),
                         title: sg_spec.title.clone(),
-                        has_explicit_title: sg_spec.has_explicit_title,
                         nodes: node_ids,
                     },
                 );
