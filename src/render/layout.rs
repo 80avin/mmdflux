@@ -2401,7 +2401,7 @@ mod tests {
             width: 40.0,
             height: 20.0,
         };
-        let (x, y, w, h) = ctx.to_ascii_rect(&rect);
+        let (_x, _y, w, h) = ctx.to_ascii_rect(&rect);
         assert!(w > 0, "width should be positive, got {w}");
         assert!(h > 0, "height should be positive, got {h}");
     }
@@ -2497,7 +2497,7 @@ mod tests {
         let sg2_bottom = sg2.y + sg2.height;
 
         // Determine which is "upper" and which is "lower"
-        let (upper, lower, upper_bottom) = if sg1.y < sg2.y {
+        let (_upper, lower, upper_bottom) = if sg1.y < sg2.y {
             (sg1, sg2, sg1_bottom)
         } else {
             (sg2, sg1, sg2_bottom)

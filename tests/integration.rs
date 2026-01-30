@@ -1101,7 +1101,7 @@ mod subgraph_rendering {
         // Find sg1's bottom border (└ row) and sg2's top border (second ┌ row).
         // sg1's top border is the first ┌ row. sg2's top border is the next ┌ row
         // after sg1's content.
-        let first_top = lines.iter().position(|l| l.contains('┌')).unwrap();
+        let _first_top = lines.iter().position(|l| l.contains('┌')).unwrap();
         let first_bottom = lines.iter().position(|l| l.contains('└')).unwrap();
         let second_top = lines
             .iter()
