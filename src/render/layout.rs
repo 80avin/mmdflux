@@ -143,9 +143,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     }
 
     // Add subgraph compound nodes (zero dimensions, sized by border removal later)
-    for sg_id in diagram.subgraphs.keys() {
+    for (sg_id, sg) in &diagram.subgraphs {
         dgraph.add_node(sg_id.as_str(), (0, 0));
-        dgraph.set_has_title(sg_id.as_str());
+        if !sg.title.trim().is_empty() {
+            dgraph.set_has_title(sg_id.as_str());
+        }
     }
 
     // Set parent relationships for compound nodes
@@ -839,11 +841,16 @@ fn convert_subgraph_bounds(
 
         // Enforce title-width minimum: ┌─ Title ─┐
         // Overhead: 2 corners + "─ " prefix (2) + " ─" suffix (2) = 6
-        let min_title_width = sg.title.len() + 6;
+        let has_visible_title = !sg.title.trim().is_empty();
+        let min_title_width = if has_visible_title {
+            sg.title.len() + 6
+        } else {
+            0
+        };
         let mut final_x = draw_x;
         let mut final_width = draw_width;
         let mut final_height = draw_height;
-        if final_width < min_title_width {
+        if min_title_width > 0 && final_width < min_title_width {
             let expand = min_title_width - final_width;
             final_x = final_x.saturating_sub(expand / 2);
             final_width = min_title_width;

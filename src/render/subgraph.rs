@@ -27,7 +27,8 @@ pub fn render_subgraph_borders(
         canvas.set_subgraph_border(x + w - 1, y, charset.corner_tr);
 
         let inner_width = w.saturating_sub(2); // space between corners
-        if !bounds.title.is_empty() && inner_width >= 5 {
+        let has_visible_title = !bounds.title.is_empty() && !bounds.title.trim().is_empty();
+        if has_visible_title && inner_width >= 5 {
             // Title section: "─ Title ─" = title.len() + 4 chars overhead
             let max_title_len = inner_width.saturating_sub(4);
             let title: String = bounds.title.chars().take(max_title_len).collect();
@@ -257,5 +258,37 @@ mod tests {
         // Border corners should still be intact
         assert!(output.contains("┌"), "Top-left corner should exist");
         assert!(output.contains("┐"), "Top-right corner should exist");
+    }
+
+    #[test]
+    fn test_render_subgraph_whitespace_title_renders_no_title() {
+        let charset = CharSet::unicode();
+        let mut canvas = Canvas::new(20, 7);
+        let bounds = SubgraphBounds {
+            x: 2,
+            y: 2,
+            width: 14,
+            height: 5,
+            title: " ".to_string(),
+        };
+        let mut map = HashMap::new();
+        map.insert("sg1".to_string(), bounds);
+
+        render_subgraph_borders(&mut canvas, &map, &charset);
+
+        // Top border should be plain horizontal line, no title text
+        let output = canvas.to_string();
+        let lines: Vec<&str> = output.lines().collect();
+        assert!(
+            !lines[0].contains("─  ─"),
+            "Should not have title gaps in border, got: {}",
+            lines[0]
+        );
+        // Should just be corner + horizontal fill + corner
+        assert!(
+            lines[0].contains("┌────────────┐"),
+            "Expected plain top border, got: {}",
+            lines[0]
+        );
     }
 }

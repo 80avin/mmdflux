@@ -139,7 +139,13 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
                         Rule::subgraph_title_bracket => {
                             for title_inner in spec_inner.into_inner() {
                                 if title_inner.as_rule() == Rule::subgraph_title_text {
-                                    title = Some(title_inner.as_str().to_string());
+                                    let raw = title_inner.as_str();
+                                    // Strip surrounding double quotes (Mermaid convention)
+                                    let stripped = raw
+                                        .strip_prefix('"')
+                                        .and_then(|s| s.strip_suffix('"'))
+                                        .unwrap_or(raw);
+                                    title = Some(stripped.to_string());
                                 }
                             }
                         }
@@ -627,6 +633,30 @@ mod tests {
             Statement::Subgraph(sg) => {
                 assert_eq!(sg.id, "sg1");
                 assert_eq!(sg.title, "sg1"); // title defaults to id
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_quoted_title_strips_quotes() {
+        let input = "graph TD\nsubgraph sg1[\"My Group\"]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.title, "My Group");
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_space_title_for_untitled() {
+        let input = "graph TD\nsubgraph sg1[\" \"]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.title, " ");
             }
             _ => unreachable!(),
         }
