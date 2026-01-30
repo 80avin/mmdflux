@@ -36,36 +36,6 @@ pub fn calc_label_position(segments: &[Segment]) -> Option<Point> {
     segments.last().map(|s| s.end_point())
 }
 
-/// Offset a label position from the path midpoint so it sits beside the edge.
-///
-/// Determines which segment type the midpoint falls on and offsets accordingly:
-/// - Vertical segment: label to the right (+2 cells for gap)
-/// - Horizontal segment: label above (-1 cell), centered on the midpoint
-fn offset_label_from_path(midpoint: &Point, segments: &[Segment], label_len: usize) -> (usize, usize) {
-    let total_length: usize = segments.iter().map(|s| s.length()).sum();
-    let target = total_length / 2;
-    let mut accumulated = 0;
-    let mut midpoint_on_vertical = true;
-
-    for seg in segments {
-        let seg_len = seg.length();
-        if accumulated + seg_len >= target {
-            midpoint_on_vertical = matches!(seg, Segment::Vertical { .. });
-            break;
-        }
-        accumulated += seg_len;
-    }
-
-    if midpoint_on_vertical {
-        // Place label to the right of the vertical edge line
-        (midpoint.x + 2, midpoint.y)
-    } else {
-        // Place label above the horizontal edge line, centered
-        let label_x = midpoint.x.saturating_sub(label_len / 2);
-        (label_x, midpoint.y.saturating_sub(1))
-    }
-}
-
 /// Render a routed edge onto the canvas.
 pub fn render_edge(
     canvas: &mut Canvas,
@@ -750,9 +720,7 @@ pub fn render_all_edges_with_labels(
             let placed = if routed.is_backward {
                 // For backward edges, compute label position from actual routed path
                 if let Some(midpoint) = calc_label_position(&routed.segments) {
-                    let (label_x, label_y) =
-                        offset_label_from_path(&midpoint, &routed.segments, label_len);
-                    draw_label_direct(canvas, label, label_x, label_y)
+                    draw_label_direct(canvas, label, midpoint.x, midpoint.y)
                 } else {
                     draw_edge_label_with_tracking(
                         canvas,
