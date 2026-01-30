@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use super::shape::{NodeBounds, node_dimensions};
 use crate::dagre::normalize::WaypointWithRank;
-use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Point};
+use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Point, Rect};
 use crate::graph::{Diagram, Direction, Edge, Shape};
 
 /// Bounding box for a subgraph border in draw coordinates.
@@ -698,7 +698,7 @@ struct RawCenter {
 /// Falls back to member-node bounding box with hardcoded padding
 /// when dagre bounds are unavailable.
 fn convert_subgraph_bounds(
-    _dagre_bounds: &HashMap<String, crate::dagre::Rect>,
+    _dagre_bounds: &HashMap<String, Rect>,
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
     _ctx: &TransformContext,
     draw_positions: &HashMap<String, (usize, usize)>,
@@ -854,6 +854,32 @@ struct TransformContext {
 }
 
 impl TransformContext {
+    /// Transform a dagre center-based Rect to draw coordinates (x, y, width, height).
+    ///
+    /// Uses the right-edge offset formula (`rect.x + rect.width/2`) that matches
+    /// how node positions are computed in `compute_layout()`. This differs from
+    /// `to_ascii()` which uses raw dagre coordinates without the width/height offset.
+    fn to_ascii_rect(&self, rect: &Rect) -> (usize, usize, usize, usize) {
+        // Scale center using right-edge offset (matches node formula at line ~303)
+        let scaled_cx =
+            ((rect.x + rect.width / 2.0 - self.dagre_min_x) * self.scale_x).round() as usize;
+        let scaled_cy =
+            ((rect.y + rect.height / 2.0 - self.dagre_min_y) * self.scale_y).round() as usize;
+
+        // Scale extent
+        let scaled_w = (rect.width * self.scale_x).round().max(1.0) as usize;
+        let scaled_h = (rect.height * self.scale_y).round().max(1.0) as usize;
+
+        // Apply overhang and compute top-left
+        let center_x = scaled_cx + self.overhang_x;
+        let center_y = scaled_cy + self.overhang_y;
+        let draw_x =
+            center_x.saturating_sub(scaled_w / 2) + self.padding + self.left_label_margin;
+        let draw_y = center_y.saturating_sub(scaled_h / 2) + self.padding;
+
+        (draw_x, draw_y, scaled_w, scaled_h)
+    }
+
     /// Transform a dagre (x, y) coordinate to ASCII draw coordinates.
     fn to_ascii(&self, dagre_x: f64, dagre_y: f64) -> (usize, usize) {
         let x = ((dagre_x - self.dagre_min_x) * self.scale_x).round() as usize
@@ -1671,5 +1697,138 @@ mod tests {
             "Bounds should expand for backward edge. Got width={}",
             b.width
         );
+    }
+
+    // =========================================================================
+    // to_ascii_rect() Tests (Plan 0028, Task 1.1)
+    // =========================================================================
+
+    #[test]
+    fn to_ascii_rect_at_dagre_minimum() {
+        // A rect centered at the dagre minimum should produce draw coords near origin + padding
+        let ctx = TransformContext {
+            dagre_min_x: 50.0,
+            dagre_min_y: 30.0,
+            scale_x: 0.2,
+            scale_y: 0.1,
+            overhang_x: 2,
+            overhang_y: 1,
+            padding: 1,
+            left_label_margin: 0,
+        };
+        let rect = Rect {
+            x: 50.0,
+            y: 30.0,
+            width: 40.0,
+            height: 20.0,
+        };
+        let (x, y, w, h) = ctx.to_ascii_rect(&rect);
+        assert!(w > 0, "width should be positive, got {w}");
+        assert!(h > 0, "height should be positive, got {h}");
+    }
+
+    #[test]
+    fn to_ascii_rect_offset_from_minimum() {
+        // A rect offset from dagre minimum should have proportionally offset draw coords
+        let ctx = TransformContext {
+            dagre_min_x: 0.0,
+            dagre_min_y: 0.0,
+            scale_x: 0.2,
+            scale_y: 0.1,
+            overhang_x: 0,
+            overhang_y: 0,
+            padding: 0,
+            left_label_margin: 0,
+        };
+        let rect1 = Rect {
+            x: 50.0,
+            y: 50.0,
+            width: 40.0,
+            height: 20.0,
+        };
+        let rect2 = Rect {
+            x: 100.0,
+            y: 100.0,
+            width: 40.0,
+            height: 20.0,
+        };
+        let (x1, y1, _, _) = ctx.to_ascii_rect(&rect1);
+        let (x2, y2, _, _) = ctx.to_ascii_rect(&rect2);
+        assert!(x2 > x1, "rect2 should be further right: x2={x2} vs x1={x1}");
+        assert!(y2 > y1, "rect2 should be further down: y2={y2} vs y1={y1}");
+    }
+
+    #[test]
+    fn to_ascii_rect_dimensions_scale_with_dagre_size() {
+        let ctx = TransformContext {
+            dagre_min_x: 0.0,
+            dagre_min_y: 0.0,
+            scale_x: 0.5,
+            scale_y: 0.5,
+            overhang_x: 0,
+            overhang_y: 0,
+            padding: 0,
+            left_label_margin: 0,
+        };
+        let small = Rect {
+            x: 50.0,
+            y: 50.0,
+            width: 20.0,
+            height: 10.0,
+        };
+        let large = Rect {
+            x: 50.0,
+            y: 50.0,
+            width: 60.0,
+            height: 30.0,
+        };
+        let (_, _, w1, h1) = ctx.to_ascii_rect(&small);
+        let (_, _, w2, h2) = ctx.to_ascii_rect(&large);
+        assert!(w2 > w1, "larger rect should have larger width: w2={w2} vs w1={w1}");
+        assert!(h2 > h1, "larger rect should have larger height: h2={h2} vs h1={h1}");
+    }
+
+    // =========================================================================
+    // Containment Tests (Plan 0028, Task 1.2)
+    // =========================================================================
+
+    #[test]
+    fn subgraph_bounds_contain_member_node_bounds() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Group]\nA[Node1]\nB[Node2]\nend\nA --> B";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+
+        let sg = &layout.subgraph_bounds["sg1"];
+        let sg_right = sg.x + sg.width;
+        let sg_bottom = sg.y + sg.height;
+
+        for member_id in &["A", "B"] {
+            let nb = &layout.node_bounds[*member_id];
+            let nb_right = nb.x + nb.width;
+            let nb_bottom = nb.y + nb.height;
+
+            assert!(
+                sg.x <= nb.x,
+                "sg1 left ({}) should be <= {member_id} left ({})",
+                sg.x, nb.x
+            );
+            assert!(
+                sg.y <= nb.y,
+                "sg1 top ({}) should be <= {member_id} top ({})",
+                sg.y, nb.y
+            );
+            assert!(
+                sg_right >= nb_right,
+                "sg1 right ({sg_right}) should be >= {member_id} right ({nb_right})"
+            );
+            assert!(
+                sg_bottom >= nb_bottom,
+                "sg1 bottom ({sg_bottom}) should be >= {member_id} bottom ({nb_bottom})"
+            );
+        }
     }
 }
