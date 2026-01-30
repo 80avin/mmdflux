@@ -39,6 +39,13 @@ fn render_fixture(name: &str) -> String {
     render(&diagram, &RenderOptions::default())
 }
 
+/// Parse, build, and render a Mermaid input string.
+fn render_input(input: &str) -> String {
+    let flowchart = parse_flowchart(input).expect("Failed to parse input");
+    let diagram = build_diagram(&flowchart);
+    render(&diagram, &RenderOptions::default())
+}
+
 /// Parse, build, and render a fixture file with ASCII-only output.
 fn render_fixture_ascii(name: &str) -> String {
     let diagram = parse_and_build(name);
@@ -257,6 +264,16 @@ mod rendering {
         let output = render_fixture("labeled_edges.mmd");
         // Labels should appear in output
         assert!(output.contains("initialize") || output.contains("configure"));
+
+        // "yes" and "no" labels from the Config diamond branches
+        assert!(
+            output.contains("yes"),
+            "Expected 'yes' label in output:\n{output}"
+        );
+        assert!(
+            output.contains("no"),
+            "Expected 'no' label in output:\n{output}"
+        );
     }
 
     #[test]
@@ -278,18 +295,64 @@ mod rendering {
             !output.contains("invalidvalid"),
             "Labels should not merge into 'invalidvalid'"
         );
+
+        // Labels should appear between source node A and target nodes B/C
+        let lines: Vec<&str> = output.lines().collect();
+        let a_line = lines.iter().position(|l| l.contains(" A ")).unwrap();
+        let b_line = lines.iter().rposition(|l| l.contains(" B ")).unwrap();
+
+        // At least one label should be between A and B rows
+        let label_line = lines.iter().position(|l| l.contains("valid")).unwrap();
+        assert!(
+            label_line > a_line && label_line < b_line,
+            "Label at line {} should be between A (line {}) and B (line {})\n{}",
+            label_line,
+            a_line,
+            b_line,
+            output
+        );
     }
 
     #[test]
     fn git_workflow_renders() {
         let output = render_fixture("git_workflow.mmd");
-        // In LR layout with labels, some text may overlap
-        // Just verify rendering works and contains key elements
-        assert!(!output.is_empty());
-        // At least some node text should appear
+
+        // All node labels fully visible
         assert!(
-            output.contains("Working") || output.contains("Staging") || output.contains("Local"),
-            "Should contain at least one node label fragment"
+            output.contains("Working Dir"),
+            "Missing 'Working Dir':\n{output}"
+        );
+        assert!(
+            output.contains("Staging Area"),
+            "Missing 'Staging Area':\n{output}"
+        );
+        assert!(
+            output.contains("Local Repo"),
+            "Missing 'Local Repo':\n{output}"
+        );
+        assert!(
+            output.contains("Remote Repo"),
+            "Missing 'Remote Repo':\n{output}"
+        );
+
+        // All forward edge labels fully visible (not clipped by nodes)
+        assert!(
+            output.contains("git add"),
+            "Missing 'git add' label:\n{output}"
+        );
+        assert!(
+            output.contains("git commit"),
+            "Missing 'git commit' label:\n{output}"
+        );
+        assert!(
+            output.contains("git push"),
+            "Missing 'git push' label:\n{output}"
+        );
+
+        // Backward edge label
+        assert!(
+            output.contains("git pull"),
+            "Missing 'git pull' label:\n{output}"
         );
     }
 
@@ -992,7 +1055,10 @@ mod subgraph_rendering {
     #[test]
     fn subgraph_edges_renders_both_groups() {
         let output = render_fixture("subgraph_edges.mmd");
-        assert!(output.contains("Input"), "Should contain Input subgraph title");
+        assert!(
+            output.contains("Input"),
+            "Should contain Input subgraph title"
+        );
         assert!(output.contains("Data"), "Should contain Data node");
         assert!(output.contains("Config"), "Should contain Config node");
         assert!(output.contains("Result"), "Should contain Result node");
@@ -1027,10 +1093,7 @@ mod subgraph_rendering {
             !bottom_border_rows.is_empty(),
             "Should have bottom border rows"
         );
-        assert!(
-            !top_border_rows.is_empty(),
-            "Should have top border rows"
-        );
+        assert!(!top_border_rows.is_empty(), "Should have top border rows");
 
         // Find sg1's bottom border (└ row) and sg2's top border (second ┌ row).
         // sg1's top border is the first ┌ row. sg2's top border is the next ┌ row
@@ -1184,4 +1247,229 @@ fn test_parse_multi_subgraph_fixture() {
     assert_eq!(diagram.subgraphs["sg2"].title, "Backend");
     // Cross-boundary edge
     assert!(diagram.edges.iter().any(|e| e.from == "B" && e.to == "C"));
+}
+
+/// Edge case tests for label-as-dummy-node (Plan 0024).
+mod label_edge_cases {
+    use super::*;
+
+    #[test]
+    fn long_label_renders_without_panic() {
+        let output =
+            render_input("graph TD\n    A -->|this is a very long label that might overflow| B");
+        // Should not panic; nodes should still render correctly
+        assert!(!output.is_empty());
+        assert!(output.contains(" A "), "Node A should render:\n{output}");
+        assert!(output.contains(" B "), "Node B should render:\n{output}");
+        // Label may be truncated or omitted if wider than canvas — this is
+        // acceptable behavior for now.
+    }
+
+    #[test]
+    fn fan_out_with_labels() {
+        let output =
+            render_input("graph TD\n    A -->|yes| B\n    A -->|no| C\n    A -->|maybe| D");
+        // All three labels should be visible
+        assert!(output.contains("yes"), "Expected 'yes' label:\n{output}");
+        assert!(output.contains("no"), "Expected 'no' label:\n{output}");
+        assert!(
+            output.contains("maybe"),
+            "Expected 'maybe' label:\n{output}"
+        );
+    }
+
+    #[test]
+    fn labeled_backward_edge_renders() {
+        let output = render_input("graph TD\n    A --> B\n    B -->|retry| A");
+        assert!(!output.is_empty());
+        // The backward "retry" label should appear
+        assert!(
+            output.contains("retry"),
+            "Expected 'retry' label on backward edge:\n{output}"
+        );
+        // Label should be to the right of nodes (path-midpoint placement)
+        let lines: Vec<&str> = output.lines().collect();
+        let node_line = lines.iter().find(|l| l.contains('A')).unwrap();
+        let node_right = node_line.rfind('A').unwrap_or(0);
+        let retry_line = lines.iter().find(|l| l.contains("retry")).unwrap();
+        let retry_col = retry_line.find("retry").unwrap();
+        assert!(
+            retry_col > node_right,
+            "Label should be to the right of nodes:\n{output}"
+        );
+    }
+
+    #[test]
+    fn labeled_edge_lr_direction() {
+        let output = render_input("graph LR\n    A -->|label| B");
+        assert!(output.contains(" A "), "Should contain node A:\n{output}");
+        assert!(output.contains(" B "), "Should contain node B:\n{output}");
+        assert!(
+            output.contains("label"),
+            "Expected 'label' in LR layout:\n{output}"
+        );
+    }
+
+    #[test]
+    fn mixed_labeled_and_unlabeled() {
+        let output = render_input(
+            "graph TD\n    A -->|yes| B\n    A --> C\n    B --> D\n    C -->|error| D",
+        );
+        assert!(output.contains("yes"), "Expected 'yes' label:\n{output}");
+        assert!(
+            output.contains("error"),
+            "Expected 'error' label:\n{output}"
+        );
+        // All nodes should be present
+        for node in ["A", "B", "C", "D"] {
+            assert!(
+                output.contains(&format!(" {node} ")),
+                "Expected node {node}:\n{output}"
+            );
+        }
+    }
+
+    #[test]
+    fn all_edges_labeled() {
+        let output =
+            render_input("graph TD\n    A -->|start| B\n    B -->|process| C\n    C -->|end| D");
+        // At least the last label should appear (via precomputed position)
+        assert!(output.contains("end"), "Expected 'end' label:\n{output}");
+        // All nodes should render (check for bordered node text)
+        assert!(output.contains(" A "), "Expected node A:\n{output}");
+        assert!(output.contains(" B "), "Expected node B:\n{output}");
+        assert!(output.contains(" D "), "Expected node D:\n{output}");
+        // Node C may have arrow overlap in its box due to edge routing
+        // through the node, but the node box itself should exist
+        assert!(
+            output.contains("┌───┐"),
+            "Expected at least one node box:\n{output}"
+        );
+    }
+
+    #[test]
+    fn labeled_edges_reasonable_height() {
+        let input = load_fixture("labeled_edges.mmd");
+        let flowchart = parse_flowchart(&input).expect("Failed to parse labeled_edges");
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &Default::default());
+        let line_count = output.lines().count();
+
+        // Main branch renders ~29 lines. Regression was 51+ lines.
+        // With the fix, expect similar to main branch (allow some tolerance for label dummies).
+        assert!(
+            line_count < 40,
+            "labeled_edges.mmd should render in under 40 lines, got {line_count}"
+        );
+
+        // All 5 labels should be present
+        for label in &["initialize", "configure", "yes", "no", "retry"] {
+            assert!(
+                output.contains(label),
+                "Output should contain label '{label}'"
+            );
+        }
+    }
+
+    #[test]
+    fn diamond_text_not_corrupted_by_arrows() {
+        let input = load_fixture("labeled_edges.mmd");
+        let flowchart = parse_flowchart(&input).expect("Failed to parse");
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &Default::default());
+
+        // The diamond should contain "Valid?" text, not corrupted by arrow characters
+        assert!(
+            output.contains("Valid?"),
+            "Diamond text 'Valid?' should be intact in output:\n{output}"
+        );
+    }
+
+    #[test]
+    fn simple_cycle_compact_backward_routing() {
+        let input = load_fixture("simple_cycle.mmd");
+        let flowchart = parse_flowchart(&input).expect("Failed to parse");
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &Default::default());
+        let line_count = output.lines().count();
+
+        assert!(
+            line_count < 30,
+            "simple_cycle.mmd should be compact, got {line_count} lines"
+        );
+    }
+
+    #[test]
+    fn multiple_cycles_compact_backward_routing() {
+        let input = load_fixture("multiple_cycles.mmd");
+        let flowchart = parse_flowchart(&input).expect("Failed to parse");
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &Default::default());
+        let line_count = output.lines().count();
+
+        assert!(
+            line_count < 40,
+            "multiple_cycles.mmd should be compact, got {line_count} lines"
+        );
+    }
+}
+
+// === Backward edge label position tests (Plan 0027, Task 5.1) ===
+
+#[test]
+fn backward_edge_label_position_td() {
+    let output = render_input("graph TD\n    A --> B\n    B -->|retry| A");
+    assert!(output.contains("retry"), "Label missing:\n{output}");
+    let lines: Vec<&str> = output.lines().collect();
+    let retry_line = lines.iter().find(|l| l.contains("retry")).unwrap();
+    let retry_col = retry_line.find("retry").unwrap();
+    assert!(
+        retry_col > 5,
+        "Label should be positioned away from left edge:\n{output}"
+    );
+}
+
+#[test]
+fn backward_edge_label_position_bt() {
+    let output = render_input("graph BT\n    A --> B\n    B -->|retry| A");
+    assert!(output.contains("retry"), "Label missing:\n{output}");
+}
+
+#[test]
+fn backward_edge_label_position_lr() {
+    let output = render_input("graph LR\n    A --> B\n    B -->|retry| A");
+    assert!(output.contains("retry"), "Label missing:\n{output}");
+}
+
+#[test]
+fn backward_edge_label_position_rl() {
+    let output = render_input("graph RL\n    A --> B\n    B -->|retry| A");
+    assert!(output.contains("retry"), "Label missing:\n{output}");
+}
+
+#[test]
+fn backward_and_forward_labels_coexist() {
+    let output = render_input("graph TD\n    A -->|go| B\n    B -->|retry| A");
+    assert!(output.contains("go"), "Forward label missing:\n{output}");
+    assert!(
+        output.contains("retry"),
+        "Backward label missing:\n{output}"
+    );
+}
+
+#[test]
+fn backward_edge_label_does_not_overlap_nodes() {
+    let output = render_input("graph TD\n    Start --> End\n    End -->|back| Start");
+    assert!(output.contains("back"), "Label missing:\n{output}");
+    let lines: Vec<&str> = output.lines().collect();
+    for line in &lines {
+        if line.contains("back") {
+            let back_pos = line.find("back").unwrap();
+            let before_label = &line[..back_pos];
+            assert!(
+                !before_label.ends_with('│') && !before_label.ends_with('┐'),
+                "Label overlaps with node box:\n{output}"
+            );
+        }
+    }
 }

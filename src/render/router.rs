@@ -53,6 +53,57 @@ pub enum Segment {
     },
 }
 
+impl Segment {
+    /// Manhattan length of this segment.
+    pub fn length(&self) -> usize {
+        match self {
+            Segment::Vertical { y_start, y_end, .. } => y_start.abs_diff(*y_end),
+            Segment::Horizontal { x_start, x_end, .. } => x_start.abs_diff(*x_end),
+        }
+    }
+
+    /// Start point of this segment.
+    pub fn start_point(&self) -> Point {
+        match self {
+            Segment::Vertical { x, y_start, .. } => Point { x: *x, y: *y_start },
+            Segment::Horizontal { y, x_start, .. } => Point { x: *x_start, y: *y },
+        }
+    }
+
+    /// End point of this segment.
+    pub fn end_point(&self) -> Point {
+        match self {
+            Segment::Vertical { x, y_end, .. } => Point { x: *x, y: *y_end },
+            Segment::Horizontal { y, x_end, .. } => Point { x: *x_end, y: *y },
+        }
+    }
+
+    /// Point at a given offset from start along the segment direction.
+    /// Clamps to segment bounds if offset exceeds length.
+    pub fn point_at_offset(&self, offset: usize) -> Point {
+        match self {
+            Segment::Vertical { x, y_start, y_end } => {
+                let clamped = offset.min(y_start.abs_diff(*y_end));
+                let y = if *y_end >= *y_start {
+                    y_start + clamped
+                } else {
+                    y_start - clamped
+                };
+                Point { x: *x, y }
+            }
+            Segment::Horizontal { y, x_start, x_end } => {
+                let clamped = offset.min(x_start.abs_diff(*x_end));
+                let x = if *x_end >= *x_start {
+                    x_start + clamped
+                } else {
+                    x_start - clamped
+                };
+                Point { x, y: *y }
+            }
+        }
+    }
+}
+
 /// A complete routed path for an edge.
 #[derive(Debug, Clone)]
 pub struct RoutedEdge {
@@ -66,6 +117,8 @@ pub struct RoutedEdge {
     pub segments: Vec<Segment>,
     /// Direction from which the edge enters the target node (for arrow drawing).
     pub entry_direction: AttachDirection,
+    /// Whether this edge goes backward in the layout direction.
+    pub is_backward: bool,
 }
 
 /// Direction for attachment points.
@@ -300,6 +353,7 @@ fn route_edge_with_waypoints(
         end,
         segments,
         entry_direction,
+        is_backward,
     })
 }
 
@@ -359,6 +413,7 @@ fn route_backward_with_synthetic_waypoints(
         end,
         segments,
         entry_direction,
+        is_backward: true,
     })
 }
 
@@ -423,6 +478,7 @@ fn route_edge_direct(
         end,
         segments,
         entry_direction,
+        is_backward,
     })
 }
 

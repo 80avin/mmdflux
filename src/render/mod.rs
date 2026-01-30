@@ -212,7 +212,13 @@ mod tests {
         // Should not contain subgraph border artifacts (no ┌ corners
         // that aren't part of node shapes)
         // Simple check: output should contain nodes and edges
-        assert!(output.contains('A'), "output should contain node A: {output}");
-        assert!(output.contains('B'), "output should contain node B: {output}");
+        assert!(
+            output.contains('A'),
+            "output should contain node A: {output}"
+        );
+        assert!(
+            output.contains('B'),
+            "output should contain node B: {output}"
+        );
     }
 }

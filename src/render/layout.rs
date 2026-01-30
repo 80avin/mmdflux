@@ -6,8 +6,10 @@
 use std::collections::HashMap;
 
 use super::shape::{NodeBounds, node_dimensions};
+#[cfg(test)]
+use crate::dagre::Point;
 use crate::dagre::normalize::WaypointWithRank;
-use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Point, Rect};
+use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Rect};
 use crate::graph::{Diagram, Direction, Edge, Shape};
 
 /// Bounding box for a subgraph border in draw coordinates.
@@ -260,6 +262,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .collect();
 
     // --- Phase D: Scale dagre coordinates to ASCII ---
+    // When global minlen doubling is active (any edge has a label), dagre
+    // positions real nodes 2× further apart (doubled minlens → doubled rank
+    // gaps). We halve the primary-axis scale factor to compensate, keeping
+    // total diagram height approximately unchanged.
+    let ranks_doubled = !edge_labels.is_empty();
     let (scale_x, scale_y) = compute_ascii_scale_factors(
         &node_dims,
         dagre_config.rank_sep,
@@ -267,6 +274,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         config.v_spacing,
         config.h_spacing,
         is_vertical,
+        ranks_doubled,
     );
 
     // Find dagre bounding box min
@@ -421,7 +429,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     };
 
     // --- Phase G: Compute layer_starts from draw positions ---
-    let layer_starts: Vec<usize> = layers
+    // layer_starts maps layer index → primary-axis draw coordinate for that layer.
+    let layer_starts_raw: Vec<usize> = layers
         .iter()
         .map(|layer| {
             layer
@@ -435,6 +444,56 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                 .unwrap_or(0)
         })
         .collect();
+
+    // Compute max right/bottom edge per layer (primary-axis position + dimension).
+    // Used for odd-rank interpolation to place labels in the gap between layers.
+    let layer_ends_raw: Vec<usize> = layers
+        .iter()
+        .map(|layer| {
+            layer
+                .iter()
+                .filter_map(|id| {
+                    let &(x, y) = draw_positions.get(id)?;
+                    let &(w, h) = node_dims.get(id)?;
+                    if is_vertical {
+                        Some(y + h)
+                    } else {
+                        Some(x + w)
+                    }
+                })
+                .max()
+                .unwrap_or(0)
+        })
+        .collect();
+
+    // When ranks are doubled (labels present), real nodes sit at even dagre ranks
+    // (0, 2, 4, ...) and dummies/labels at odd ranks (1, 3, 5, ...).
+    // Build rank_positions: dagre_rank → draw coordinate.
+    // Even ranks map to layer_starts_raw[rank/2].
+    // Odd ranks interpolate between the right edge of the source layer and
+    // the left edge of the target layer, placing labels in the gap between nodes.
+    let layer_starts: Vec<usize> = if ranks_doubled && layer_starts_raw.len() >= 2 {
+        let max_rank = layer_starts_raw.len() * 2 - 1;
+        (0..=max_rank)
+            .map(|rank| {
+                let layer_idx = rank / 2;
+                if rank % 2 == 0 {
+                    // Even rank → real node layer
+                    layer_starts_raw.get(layer_idx).copied().unwrap_or(0)
+                } else {
+                    // Odd rank → midpoint between right edge of source and left edge of target
+                    let curr_end = layer_ends_raw.get(layer_idx).copied().unwrap_or(0);
+                    let next_start = layer_starts_raw
+                        .get(layer_idx + 1)
+                        .copied()
+                        .unwrap_or(curr_end);
+                    (curr_end + next_start) / 2
+                }
+            })
+            .collect()
+    } else {
+        layer_starts_raw
+    };
 
     // --- Phase H: Transform waypoints and labels ---
     let ctx = TransformContext {
@@ -458,11 +517,35 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         height,
     );
 
-    let edge_label_positions_converted =
-        transform_label_positions_direct(&result.label_positions, &diagram.edges, &ctx);
+    let edge_label_positions_converted = transform_label_positions_direct(
+        &result.label_positions,
+        &diagram.edges,
+        &ctx,
+        &layer_starts,
+        is_vertical,
+        width,
+        height,
+    );
 
-    // --- Phase I: Nudge waypoints that collide with nodes ---
+    // --- Phase I: Strip dagre waypoints from backward edges ---
+    // When ranks are doubled (labels present), backward edges get inflated dagre
+    // waypoints from normalization dummies that create tall vertical columns.
+    // Strip them so the router falls through to synthetic compact routing via
+    // generate_backward_waypoints().
     let mut edge_waypoints_final = edge_waypoints_converted;
+    if ranks_doubled {
+        for edge in &diagram.edges {
+            let key = (edge.from.clone(), edge.to.clone());
+            if let (Some(from_b), Some(to_b)) =
+                (node_bounds.get(&edge.from), node_bounds.get(&edge.to))
+                && crate::render::router::is_backward_edge(from_b, to_b, diagram.direction)
+            {
+                edge_waypoints_final.remove(&key);
+            }
+        }
+    }
+
+    // --- Phase I.5: Nudge waypoints that collide with nodes ---
     nudge_colliding_waypoints(
         &mut edge_waypoints_final,
         &node_bounds,
@@ -549,6 +632,7 @@ fn compute_ascii_scale_factors(
     v_spacing: usize,
     h_spacing: usize,
     is_vertical: bool,
+    ranks_doubled: bool,
 ) -> (f64, f64) {
     let (total_w, total_h, max_w, max_h, count) = node_dims.values().fold(
         (0usize, 0usize, 0usize, 0usize, 0usize),
@@ -559,11 +643,25 @@ fn compute_ascii_scale_factors(
     let avg_h = total_h as f64 / count_f;
 
     if is_vertical {
-        let scale_primary = (max_h as f64 + v_spacing as f64) / (max_h as f64 + rank_sep);
+        // When ranks are doubled, dagre positions nodes 2× further apart.
+        // To compensate exactly, we need: eff_rs = max_h + 2 * rank_sep
+        // This gives scale_primary_new = scale_primary_old / 2, so that
+        // (2 * rank_sep) * scale_new = rank_sep * scale_old.
+        let effective_rank_sep = if ranks_doubled {
+            max_h as f64 + 2.0 * rank_sep
+        } else {
+            rank_sep
+        };
+        let scale_primary = (max_h as f64 + v_spacing as f64) / (max_h as f64 + effective_rank_sep);
         let scale_cross = (avg_w + h_spacing as f64) / (avg_w + node_sep);
         (scale_cross, scale_primary)
     } else {
-        let scale_primary = (max_w as f64 + h_spacing as f64) / (max_w as f64 + rank_sep);
+        let effective_rank_sep = if ranks_doubled {
+            max_w as f64 + 2.0 * rank_sep
+        } else {
+            rank_sep
+        };
+        let scale_primary = (max_w as f64 + h_spacing as f64) / (max_w as f64 + effective_rank_sep);
         let scale_cross = (avg_h + v_spacing as f64) / (avg_h + node_sep);
         (scale_primary, scale_cross)
     }
@@ -731,8 +829,12 @@ fn convert_subgraph_bounds(
         let border_right = max_x + border_padding;
         let border_bottom = max_y + border_padding;
 
-        let (draw_x, draw_y, draw_width, draw_height) =
-            (border_x, border_y, border_right - border_x, border_bottom - border_y);
+        let (draw_x, draw_y, draw_width, draw_height) = (
+            border_x,
+            border_y,
+            border_right - border_x,
+            border_bottom - border_y,
+        );
 
         // Enforce title-width minimum: ┌─ Title ─┐
         // Overhead: 2 corners + "─ " prefix (2) + " ─" suffix (2) = 6
@@ -1016,19 +1118,35 @@ fn transform_waypoints_direct(
     converted
 }
 
-/// Transform dagre label positions to ASCII draw coordinates using uniform
-/// scale factors, matching the same transformation applied to nodes and waypoints.
+/// Transform dagre label positions to ASCII draw coordinates.
+///
+/// The primary axis (Y for TD/BT, X for LR/RL) uses rank-based snapping via
+/// `layer_starts[rank]`, matching how `transform_waypoints_direct()` works.
+/// The cross axis uses uniform scaling from dagre coordinates.
 fn transform_label_positions_direct(
-    label_positions: &HashMap<usize, Point>,
+    label_positions: &HashMap<usize, WaypointWithRank>,
     edges: &[Edge],
     ctx: &TransformContext,
+    layer_starts: &[usize],
+    is_vertical: bool,
+    canvas_width: usize,
+    canvas_height: usize,
 ) -> HashMap<(String, String), (usize, usize)> {
     let mut converted = HashMap::new();
 
-    for (edge_idx, pos) in label_positions {
+    for (edge_idx, wp) in label_positions {
         if let Some(edge) = edges.get(*edge_idx) {
             let key = (edge.from.clone(), edge.to.clone());
-            converted.insert(key, ctx.to_ascii(pos.x, pos.y));
+            let rank_idx = wp.rank as usize;
+            let layer_pos = layer_starts.get(rank_idx).copied().unwrap_or(0);
+            let (scaled_x, scaled_y) = ctx.to_ascii(wp.point.x, wp.point.y);
+
+            let pos = if is_vertical {
+                (scaled_x.min(canvas_width.saturating_sub(1)), layer_pos)
+            } else {
+                (layer_pos, scaled_y.min(canvas_height.saturating_sub(1)))
+            };
+            converted.insert(key, pos);
         }
     }
 
@@ -1055,7 +1173,7 @@ mod tests {
         dims.insert("B".into(), (7, 3));
         dims.insert("C".into(), (11, 3));
 
-        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true);
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true, false);
 
         let expected_sy = 6.0 / 53.0;
         let expected_sx = 13.0 / 59.0;
@@ -1078,7 +1196,7 @@ mod tests {
         dims.insert("A".into(), (9, 3));
         dims.insert("B".into(), (9, 3));
 
-        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 6.0, 3, 4, false);
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 6.0, 3, 4, false, false);
 
         let expected_sx = 13.0 / 59.0;
         let expected_sy = 6.0 / 9.0;
@@ -1097,7 +1215,7 @@ mod tests {
         let mut dims = HashMap::new();
         dims.insert("X".into(), (5, 3));
 
-        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true);
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true, false);
         assert!(sx > 0.0, "sx should be positive, got {sx}");
         assert!(sy > 0.0, "sy should be positive, got {sy}");
         assert!(sx.is_finite());
@@ -1105,9 +1223,37 @@ mod tests {
     }
 
     #[test]
+    fn scale_factors_halved_for_doubled_ranks() {
+        // With ranks_doubled=true, effective_rank_sep = max_h + 2*rank_sep = 3 + 100 = 103
+        // scale_y = (max_h + v_spacing) / (max_h + eff_rs) = 6/106
+        // This is exactly half of the non-doubled scale: 6/53 / 2 = 6/106
+        let mut dims = HashMap::new();
+        dims.insert("A".into(), (9, 3));
+        dims.insert("B".into(), (7, 3));
+
+        let (_, sy_normal) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true, false);
+        let (_, sy_doubled) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true, true);
+
+        // Doubled-rank scale should be exactly half of normal scale
+        let expected_sy = sy_normal / 2.0;
+        assert!(
+            (sy_doubled - expected_sy).abs() < 1e-6,
+            "sy_doubled: got {sy_doubled}, expected {expected_sy} (half of {sy_normal})"
+        );
+
+        // Verify: gap_new = 2*rank_sep*scale_doubled = gap_old = rank_sep*scale_normal
+        let gap_normal = 50.0 * sy_normal;
+        let gap_doubled = 100.0 * sy_doubled;
+        assert!(
+            (gap_normal - gap_doubled).abs() < 1e-6,
+            "Gaps should match: normal={gap_normal}, doubled={gap_doubled}"
+        );
+    }
+
+    #[test]
     fn scale_factors_empty_nodes() {
         let dims: HashMap<String, (usize, usize)> = HashMap::new();
-        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true);
+        let (sx, sy) = compute_ascii_scale_factors(&dims, 50.0, 50.0, 3, 4, true, false);
         assert!(sx.is_finite());
         assert!(sy.is_finite());
     }
@@ -1368,7 +1514,13 @@ mod tests {
         }];
 
         let mut labels = HashMap::new();
-        labels.insert(0usize, Point { x: 150.0, y: 100.0 });
+        labels.insert(
+            0usize,
+            WaypointWithRank {
+                point: Point { x: 150.0, y: 100.0 },
+                rank: 1,
+            },
+        );
 
         let ctx = TransformContext {
             dagre_min_x: 50.0,
@@ -1380,11 +1532,16 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let result = transform_label_positions_direct(&labels, &edges, &ctx);
+        // layer_starts: rank 0 → y=0, rank 1 → y=8, rank 2 → y=16
+        let layer_starts = vec![0, 8, 16];
+        let result =
+            transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
 
         let key = ("A".to_string(), "B".to_string());
         assert!(result.contains_key(&key));
-        assert_eq!(result[&key], (23, 7));
+        // x uses uniform scale: (150-50)*0.22 + 1 = 23
+        // y = layer_starts[rank=1] = 8
+        assert_eq!(result[&key], (23, 8));
     }
 
     #[test]
@@ -1399,7 +1556,13 @@ mod tests {
         }];
 
         let mut labels = HashMap::new();
-        labels.insert(0usize, Point { x: 150.0, y: 100.0 });
+        labels.insert(
+            0usize,
+            WaypointWithRank {
+                point: Point { x: 150.0, y: 100.0 },
+                rank: 1,
+            },
+        );
 
         let ctx = TransformContext {
             dagre_min_x: 50.0,
@@ -1411,16 +1574,19 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let result = transform_label_positions_direct(&labels, &edges, &ctx);
+        let layer_starts = vec![0, 8, 16];
+        let result =
+            transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
 
         let key = ("A".to_string(), "B".to_string());
+        // x = 23 + 3 (left_label_margin) = 26
         assert_eq!(result[&key].0, 26);
     }
 
     #[test]
     fn label_transform_empty_input() {
         let edges: Vec<Edge> = vec![];
-        let labels: HashMap<usize, Point> = HashMap::new();
+        let labels: HashMap<usize, WaypointWithRank> = HashMap::new();
         let ctx = TransformContext {
             dagre_min_x: 0.0,
             dagre_min_y: 0.0,
@@ -1431,7 +1597,9 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let result = transform_label_positions_direct(&labels, &edges, &ctx);
+        let layer_starts: Vec<usize> = vec![];
+        let result =
+            transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
         assert!(result.is_empty());
     }
 
@@ -1528,6 +1696,36 @@ mod tests {
     }
 
     #[test]
+    fn label_position_within_canvas_bounds() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\n    A -->|yes| B";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+
+        // Label position should exist
+        let key = ("A".to_string(), "B".to_string());
+        assert!(
+            layout.edge_label_positions.contains_key(&key),
+            "Should have precomputed label position for A->B, got keys: {:?}",
+            layout.edge_label_positions.keys().collect::<Vec<_>>()
+        );
+
+        let (lx, ly) = layout.edge_label_positions[&key];
+        // Should be within canvas bounds
+        assert!(
+            lx < layout.width && ly < layout.height,
+            "Label position ({}, {}) should be within canvas ({}, {})",
+            lx,
+            ly,
+            layout.width,
+            layout.height
+        );
+    }
+
+    #[test]
     fn label_transform_skips_missing_edge() {
         use crate::graph::{Arrow, Stroke};
         let edges = vec![Edge {
@@ -1539,7 +1737,13 @@ mod tests {
         }];
 
         let mut labels = HashMap::new();
-        labels.insert(5usize, Point { x: 100.0, y: 100.0 });
+        labels.insert(
+            5usize,
+            WaypointWithRank {
+                point: Point { x: 100.0, y: 100.0 },
+                rank: 0,
+            },
+        );
 
         let ctx = TransformContext {
             dagre_min_x: 0.0,
@@ -1551,7 +1755,9 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        let result = transform_label_positions_direct(&labels, &edges, &ctx);
+        let layer_starts = vec![0];
+        let result =
+            transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
 
         assert!(
             result.is_empty(),
@@ -1570,11 +1776,19 @@ mod tests {
         let mut subgraphs = HashMap::new();
         subgraphs.insert(
             "sg1".to_string(),
-            Subgraph { id: "sg1".to_string(), title: "Left".to_string(), nodes: vec!["A".to_string()] },
+            Subgraph {
+                id: "sg1".to_string(),
+                title: "Left".to_string(),
+                nodes: vec!["A".to_string()],
+            },
         );
         subgraphs.insert(
             "sg2".to_string(),
-            Subgraph { id: "sg2".to_string(), title: "Right".to_string(), nodes: vec!["B".to_string()] },
+            Subgraph {
+                id: "sg2".to_string(),
+                title: "Right".to_string(),
+                nodes: vec!["B".to_string()],
+            },
         );
 
         // Nodes far apart: A at x=5, B at x=25 (gap of 15, each 5 wide + 2 padding = 9 total)
@@ -1586,8 +1800,11 @@ mod tests {
         node_dims.insert("B".to_string(), (5usize, 3usize));
 
         let result = convert_subgraph_bounds(
-            &subgraphs, &draw_positions, &node_dims,
-            crate::dagre::Direction::TopBottom, &[],
+            &subgraphs,
+            &draw_positions,
+            &node_dims,
+            crate::dagre::Direction::TopBottom,
+            &[],
         );
 
         let a = &result["sg1"];
@@ -1599,8 +1816,14 @@ mod tests {
         assert!(
             no_x_overlap || no_y_overlap,
             "Bounds should not overlap: sg1=({},{} {}x{}) sg2=({},{} {}x{})",
-            a.x, a.y, a.width, a.height,
-            b.x, b.y, b.width, b.height
+            a.x,
+            a.y,
+            a.width,
+            a.height,
+            b.x,
+            b.y,
+            b.width,
+            b.height
         );
     }
 
@@ -1820,8 +2043,14 @@ mod tests {
         };
         let (_, _, w1, h1) = ctx.to_ascii_rect(&small);
         let (_, _, w2, h2) = ctx.to_ascii_rect(&large);
-        assert!(w2 > w1, "larger rect should have larger width: w2={w2} vs w1={w1}");
-        assert!(h2 > h1, "larger rect should have larger height: h2={h2} vs h1={h1}");
+        assert!(
+            w2 > w1,
+            "larger rect should have larger width: w2={w2} vs w1={w1}"
+        );
+        assert!(
+            h2 > h1,
+            "larger rect should have larger height: h2={h2} vs h1={h1}"
+        );
     }
 
     // =========================================================================
@@ -1909,12 +2138,14 @@ mod tests {
             assert!(
                 sg.x <= nb.x,
                 "{sg_id} left ({}) should be <= {member_id} left ({})",
-                sg.x, nb.x
+                sg.x,
+                nb.x
             );
             assert!(
                 sg.y <= nb.y,
                 "{sg_id} top ({}) should be <= {member_id} top ({})",
-                sg.y, nb.y
+                sg.y,
+                nb.y
             );
             assert!(
                 sg_right >= nb_right,

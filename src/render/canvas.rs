@@ -107,6 +107,18 @@ impl Canvas {
         self.height
     }
 
+    /// Expand the canvas width if the new width exceeds the current width.
+    ///
+    /// New cells are initialized to empty (space) characters.
+    pub fn expand_width(&mut self, new_width: usize) {
+        if new_width > self.width {
+            for row in &mut self.cells {
+                row.resize(new_width, Cell::empty());
+            }
+            self.width = new_width;
+        }
+    }
+
     /// Get the cell at the given position.
     ///
     /// Returns `None` if the position is out of bounds.

@@ -106,11 +106,14 @@ mod tests {
     #[test]
     fn test_diagram_has_subgraphs() {
         let mut diagram = Diagram::new(Direction::TopDown);
-        diagram.subgraphs.insert("sg1".to_string(), Subgraph {
-            id: "sg1".to_string(),
-            title: "Group".to_string(),
-            nodes: vec![],
-        });
+        diagram.subgraphs.insert(
+            "sg1".to_string(),
+            Subgraph {
+                id: "sg1".to_string(),
+                title: "Group".to_string(),
+                nodes: vec![],
+            },
+        );
         assert!(diagram.has_subgraphs());
     }
 }

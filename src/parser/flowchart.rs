@@ -598,7 +598,11 @@ mod tests {
     fn test_parse_subgraph_with_title() {
         let input = "graph TD\nsubgraph sg1[My Group]\nA --> B\nend\n";
         let result = parse_flowchart(input).unwrap();
-        let subgraphs: Vec<_> = result.statements.iter().filter(|s| matches!(s, Statement::Subgraph(_))).collect();
+        let subgraphs: Vec<_> = result
+            .statements
+            .iter()
+            .filter(|s| matches!(s, Statement::Subgraph(_)))
+            .collect();
         assert_eq!(subgraphs.len(), 1, "Expected 1 subgraph statement");
         match &subgraphs[0] {
             Statement::Subgraph(sg) => {
@@ -613,7 +617,11 @@ mod tests {
     fn test_parse_subgraph_without_title() {
         let input = "graph TD\nsubgraph sg1\nA --> B\nend\n";
         let result = parse_flowchart(input).unwrap();
-        let subgraphs: Vec<_> = result.statements.iter().filter(|s| matches!(s, Statement::Subgraph(_))).collect();
+        let subgraphs: Vec<_> = result
+            .statements
+            .iter()
+            .filter(|s| matches!(s, Statement::Subgraph(_)))
+            .collect();
         assert_eq!(subgraphs.len(), 1, "Expected 1 subgraph statement");
         match &subgraphs[0] {
             Statement::Subgraph(sg) => {
@@ -628,7 +636,11 @@ mod tests {
     fn test_parse_subgraph_with_external_nodes() {
         let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\nC --> A\n";
         let result = parse_flowchart(input).unwrap();
-        let subgraphs: Vec<_> = result.statements.iter().filter(|s| matches!(s, Statement::Subgraph(_))).collect();
+        let subgraphs: Vec<_> = result
+            .statements
+            .iter()
+            .filter(|s| matches!(s, Statement::Subgraph(_)))
+            .collect();
         assert_eq!(subgraphs.len(), 1);
         // External edge should also be present
         let edges = result.edges();

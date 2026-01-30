@@ -170,13 +170,6 @@ fn generate_dummy_id() -> NodeId {
     NodeId::from(format!("_d{}", id))
 }
 
-/// Reset the dummy counter (for testing).
-#[cfg(test)]
-#[allow(dead_code)]
-fn reset_dummy_counter() {
-    DUMMY_COUNTER.store(0, std::sync::atomic::Ordering::Relaxed);
-}
-
 /// Normalize long edges by inserting dummy nodes.
 ///
 /// This function processes each edge and, if it spans more than one rank,
@@ -296,10 +289,11 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
         graph.dummy_chains.push(chain);
     }
 
-    // Phase 2: Rebuild edges, edge_weights, and reversed_edges
+    // Phase 2: Rebuild edges, edge_weights, edge_minlens, and reversed_edges
     if !edges_to_remove.is_empty() {
         let mut rebuilt_edges = Vec::new();
         let mut rebuilt_weights = Vec::new();
+        let mut rebuilt_minlens = Vec::new();
         let mut old_to_new: HashMap<usize, usize> = HashMap::new();
 
         for (old_pos, &edge) in graph.edges.iter().enumerate() {
@@ -307,12 +301,15 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
                 old_to_new.insert(old_pos, rebuilt_edges.len());
                 rebuilt_edges.push(edge);
                 rebuilt_weights.push(graph.edge_weights[old_pos]);
+                rebuilt_minlens.push(graph.edge_minlens[old_pos]);
             }
         }
 
-        // Append chain edges (none are reversed)
+        // Append chain edges (none are reversed) — minlen=1 for chain edges
+        let chain_count = new_chain_edges.len();
         rebuilt_edges.extend(new_chain_edges);
         rebuilt_weights.extend(new_chain_weights);
+        rebuilt_minlens.extend(std::iter::repeat(1).take(chain_count));
 
         // Remap reversed_edges: removed edges drop out, surviving edges get new indices
         graph.reversed_edges = graph
@@ -323,6 +320,7 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
 
         graph.edges = rebuilt_edges;
         graph.edge_weights = rebuilt_weights;
+        graph.edge_minlens = rebuilt_minlens;
     }
 }
 
@@ -372,8 +370,12 @@ pub(crate) fn denormalize(graph: &LayoutGraph) -> HashMap<usize, Vec<WaypointWit
 /// Get the label position for an edge if it has a label dummy.
 ///
 /// # Returns
-/// The (x, y) center position of the label, or None if the edge has no label.
-pub(crate) fn get_label_position(graph: &LayoutGraph, edge_index: usize) -> Option<Point> {
+/// The center position of the label with rank information, or None if the edge has no label.
+/// The rank is needed so the render layer can snap the primary axis to `layer_starts`.
+pub(crate) fn get_label_position(
+    graph: &LayoutGraph,
+    edge_index: usize,
+) -> Option<WaypointWithRank> {
     for chain in &graph.dummy_chains {
         if chain.edge_index == edge_index
             && let Some(label_idx) = chain.label_dummy_index
@@ -382,9 +384,13 @@ pub(crate) fn get_label_position(graph: &LayoutGraph, edge_index: usize) -> Opti
             if let Some(&idx) = graph.node_index.get(dummy_id) {
                 let pos = graph.positions[idx];
                 let dims = graph.dimensions[idx];
-                return Some(Point {
-                    x: pos.x + dims.0 / 2.0,
-                    y: pos.y + dims.1 / 2.0,
+                let rank = graph.ranks[idx];
+                return Some(WaypointWithRank {
+                    point: Point {
+                        x: pos.x + dims.0 / 2.0,
+                        y: pos.y + dims.1 / 2.0,
+                    },
+                    rank,
                 });
             }
         }
@@ -412,7 +418,6 @@ mod tests {
 
     #[test]
     fn test_normalize_short_edge() {
-        reset_dummy_counter();
         // A -> B (spans 1 rank, should not be normalized)
         let mut lg = create_test_graph(&["A", "B"], &[("A", "B")]);
         acyclic::run(&mut lg);
@@ -431,7 +436,6 @@ mod tests {
 
     #[test]
     fn test_normalize_long_edge() {
-        reset_dummy_counter();
         // A -> B -> C, but also A -> C (spans 2 ranks)
         let mut lg = create_test_graph(&["A", "B", "C"], &[("A", "B"), ("B", "C"), ("A", "C")]);
         acyclic::run(&mut lg);
@@ -464,7 +468,6 @@ mod tests {
 
     #[test]
     fn test_normalize_with_label() {
-        reset_dummy_counter();
         // A -> B -> C -> D, and A -> D (spans 3 ranks, needs 2 dummies)
         let mut lg = create_test_graph(
             &["A", "B", "C", "D"],
@@ -498,7 +501,6 @@ mod tests {
 
     #[test]
     fn test_denormalize() {
-        reset_dummy_counter();
         // A -> B -> C, and A -> C
         let mut lg = create_test_graph(&["A", "B", "C"], &[("A", "B"), ("B", "C"), ("A", "C")]);
         acyclic::run(&mut lg);
@@ -609,6 +611,88 @@ mod tests {
         assert_eq!(info.width, 0.0);
         assert_eq!(info.height, 0.0);
         assert_eq!(info.label_pos, LabelPos::Center);
+    }
+
+    #[test]
+    fn test_short_edge_with_label_gets_dummy() {
+        // A -> B, 1-rank span, but with label and minlen=2
+        // After ranking: A=0, B=2 (due to minlen=2)
+        // After normalization: one dummy at rank 1 with EdgeLabel type
+        let mut lg = create_test_graph(&["A", "B"], &[("A", "B")]);
+        acyclic::run(&mut lg);
+
+        // Simulate make_space_for_edge_labels: set minlen=2 for edge 0
+        lg.edge_minlens[0] = 2;
+
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        let a_idx = lg.node_index[&NodeId::from("A")];
+        let b_idx = lg.node_index[&NodeId::from("B")];
+        assert_eq!(lg.ranks[a_idx], 0);
+        assert_eq!(lg.ranks[b_idx], 2, "B should be at rank 2 due to minlen=2");
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, EdgeLabelInfo::new(5.0, 1.0));
+        run(&mut lg, &edge_labels);
+
+        // Should have one dummy chain for A->B
+        assert_eq!(lg.dummy_chains.len(), 1);
+        assert_eq!(lg.dummy_chains[0].dummy_ids.len(), 1);
+
+        // The chain should have a label dummy
+        assert!(lg.dummy_chains[0].label_dummy_index.is_some());
+
+        // Label dummy should have the correct dimensions
+        let label_idx = lg.dummy_chains[0].label_dummy_index.unwrap();
+        let label_dummy_id = &lg.dummy_chains[0].dummy_ids[label_idx];
+        let label_dummy = lg.dummy_nodes.get(label_dummy_id).unwrap();
+        assert!(label_dummy.is_label());
+        assert_eq!(label_dummy.width, 5.0);
+        assert_eq!(label_dummy.height, 1.0);
+
+        // Label dummy should be at rank 1 (midpoint of 0 and 2)
+        let dummy_idx = lg.node_index[label_dummy_id];
+        assert_eq!(lg.ranks[dummy_idx], 1);
+    }
+
+    #[test]
+    fn test_long_edge_with_label_gets_midpoint_dummy() {
+        // A -> B -> C -> D, and A -> D with label (originally spans 3 ranks)
+        // With minlen=2, A->D spans 4 ranks (A=0, D=4)
+        let mut lg = create_test_graph(
+            &["A", "B", "C", "D"],
+            &[("A", "B"), ("B", "C"), ("C", "D"), ("A", "D")],
+        );
+        acyclic::run(&mut lg);
+
+        // edge index 3 is A->D, set minlen=2 for label
+        lg.edge_minlens[3] = 2;
+
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(3, EdgeLabelInfo::new(7.0, 1.0));
+        run(&mut lg, &edge_labels);
+
+        // A->D should produce a chain with a label dummy
+        let labeled_chain = lg
+            .dummy_chains
+            .iter()
+            .find(|c| c.edge_index == 3 && c.label_dummy_index.is_some());
+        assert!(
+            labeled_chain.is_some(),
+            "Should have a chain with label dummy for A->D"
+        );
+
+        let chain = labeled_chain.unwrap();
+        let label_idx = chain.label_dummy_index.unwrap();
+        let label_dummy_id = &chain.dummy_ids[label_idx];
+        let label_dummy = lg.dummy_nodes.get(label_dummy_id).unwrap();
+        assert!(label_dummy.is_label());
+        assert_eq!(label_dummy.width, 7.0);
+        assert_eq!(label_dummy.height, 1.0);
     }
 
     #[test]

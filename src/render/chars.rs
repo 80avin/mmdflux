@@ -113,27 +113,76 @@ impl CharSet {
     /// for unrecognized characters.
     pub fn infer_connections(&self, ch: char) -> Connections {
         if ch == self.horizontal {
-            Connections { left: true, right: true, ..Connections::none() }
+            Connections {
+                left: true,
+                right: true,
+                ..Connections::none()
+            }
         } else if ch == self.vertical {
-            Connections { up: true, down: true, ..Connections::none() }
+            Connections {
+                up: true,
+                down: true,
+                ..Connections::none()
+            }
         } else if ch == self.corner_tl {
-            Connections { down: true, right: true, ..Connections::none() }
+            Connections {
+                down: true,
+                right: true,
+                ..Connections::none()
+            }
         } else if ch == self.corner_tr {
-            Connections { down: true, left: true, ..Connections::none() }
+            Connections {
+                down: true,
+                left: true,
+                ..Connections::none()
+            }
         } else if ch == self.corner_bl {
-            Connections { up: true, right: true, ..Connections::none() }
+            Connections {
+                up: true,
+                right: true,
+                ..Connections::none()
+            }
         } else if ch == self.corner_br {
-            Connections { up: true, left: true, ..Connections::none() }
+            Connections {
+                up: true,
+                left: true,
+                ..Connections::none()
+            }
         } else if ch == self.tee_down {
-            Connections { down: true, left: true, right: true, ..Connections::none() }
+            Connections {
+                down: true,
+                left: true,
+                right: true,
+                ..Connections::none()
+            }
         } else if ch == self.tee_up {
-            Connections { up: true, left: true, right: true, ..Connections::none() }
+            Connections {
+                up: true,
+                left: true,
+                right: true,
+                ..Connections::none()
+            }
         } else if ch == self.tee_right {
-            Connections { up: true, down: true, right: true, ..Connections::none() }
+            Connections {
+                up: true,
+                down: true,
+                right: true,
+                ..Connections::none()
+            }
         } else if ch == self.tee_left {
-            Connections { up: true, down: true, left: true, ..Connections::none() }
+            Connections {
+                up: true,
+                down: true,
+                left: true,
+                ..Connections::none()
+            }
         } else if ch == self.cross {
-            Connections { up: true, down: true, left: true, right: true }
+            Connections {
+                up: true,
+                down: true,
+                left: true,
+                right: true,
+            }
         } else {
             Connections::none()
         }

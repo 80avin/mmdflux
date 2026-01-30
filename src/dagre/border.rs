@@ -99,12 +99,16 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
         let top_idx = lg.border_top.get(&compound_idx).copied();
         let bot_idx = lg.border_bottom.get(&compound_idx).copied();
 
-        let y_min = top_idx
-            .map(|i| lg.positions[i].y)
-            .unwrap_or_else(|| left.iter().map(|&i| lg.positions[i].y).fold(f64::INFINITY, f64::min));
-        let y_max = bot_idx
-            .map(|i| lg.positions[i].y)
-            .unwrap_or_else(|| left.iter().map(|&i| lg.positions[i].y).fold(f64::NEG_INFINITY, f64::max));
+        let y_min = top_idx.map(|i| lg.positions[i].y).unwrap_or_else(|| {
+            left.iter()
+                .map(|&i| lg.positions[i].y)
+                .fold(f64::INFINITY, f64::min)
+        });
+        let y_max = bot_idx.map(|i| lg.positions[i].y).unwrap_or_else(|| {
+            left.iter()
+                .map(|&i| lg.positions[i].y)
+                .fold(f64::NEG_INFINITY, f64::max)
+        });
 
         let width = (x_max - x_min).max(0.0);
         let height = (y_max - y_min).max(0.0);
@@ -128,8 +132,7 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
 mod tests {
     use super::*;
     use crate::dagre::graph::DiGraph;
-    use crate::dagre::nesting;
-    use crate::dagre::rank;
+    use crate::dagre::{nesting, rank};
 
     fn build_ranked_compound_graph() -> LayoutGraph {
         let mut g: DiGraph<(f64, f64)> = DiGraph::new();
@@ -209,10 +212,16 @@ mod tests {
 
         // Give border nodes some positions
         for &idx in lg.border_left.get(&sg1_idx).unwrap() {
-            lg.positions[idx] = super::super::types::Point { x: 10.0, y: lg.ranks[idx] as f64 * 50.0 };
+            lg.positions[idx] = super::super::types::Point {
+                x: 10.0,
+                y: lg.ranks[idx] as f64 * 50.0,
+            };
         }
         for &idx in lg.border_right.get(&sg1_idx).unwrap() {
-            lg.positions[idx] = super::super::types::Point { x: 100.0, y: lg.ranks[idx] as f64 * 50.0 };
+            lg.positions[idx] = super::super::types::Point {
+                x: 100.0,
+                y: lg.ranks[idx] as f64 * 50.0,
+            };
         }
         if let Some(&top) = lg.border_top.get(&sg1_idx) {
             lg.positions[top] = super::super::types::Point { x: 50.0, y: 0.0 };

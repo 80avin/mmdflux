@@ -143,9 +143,10 @@ mod tests {
         let sg = SubgraphSpec {
             id: "sg1".to_string(),
             title: "Title".to_string(),
-            statements: vec![
-                Statement::Vertex(Vertex { id: "A".to_string(), shape: None }),
-            ],
+            statements: vec![Statement::Vertex(Vertex {
+                id: "A".to_string(),
+                shape: None,
+            })],
         };
         let stmt = Statement::Subgraph(sg);
         match &stmt {

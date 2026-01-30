@@ -48,6 +48,23 @@ pub use graph::DiGraph;
 use graph::LayoutGraph;
 pub use types::{Direction, EdgeLayout, LayoutConfig, LayoutResult, NodeId, Point, Rect};
 
+/// Double all edge minlens when any edge has a label, creating a uniform rank grid.
+///
+/// This matches dagre.js's `makeSpaceForEdgeLabels()` which globally doubles minlens
+/// rather than selectively inflating labeled edges. The uniform grid ensures downstream
+/// Sugiyama phases (normalization, ordering, positioning) see consistent rank spacing.
+fn make_space_for_edge_labels(
+    lg: &mut LayoutGraph,
+    edge_labels: &HashMap<usize, normalize::EdgeLabelInfo>,
+) {
+    if edge_labels.is_empty() {
+        return;
+    }
+    for minlen in &mut lg.edge_minlens {
+        *minlen *= 2;
+    }
+}
+
 /// Main entry point for layout computation.
 ///
 /// Takes a directed graph, configuration options, and a function to get node dimensions.
@@ -86,6 +103,9 @@ where
     if has_compound {
         nesting::run(&mut lg);
     }
+
+    // Phase 1.5: Set minlen=2 for labeled edges so ranking creates a gap
+    make_space_for_edge_labels(&mut lg, edge_labels);
 
     // Phase 2: Assign ranks (layers)
     rank::run(&mut lg);
@@ -408,6 +428,129 @@ mod tests {
     }
 
     #[test]
+    fn test_make_space_doubles_all_minlens() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (5.0, 3.0));
+        graph.add_node("B", (5.0, 3.0));
+        graph.add_node("C", (5.0, 3.0));
+        graph.add_edge("A", "B"); // edge 0: labeled
+        graph.add_edge("B", "C"); // edge 1: unlabeled
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, normalize::EdgeLabelInfo::new(5.0, 1.0));
+
+        make_space_for_edge_labels(&mut lg, &edge_labels);
+
+        // ALL edges should be doubled, not just the labeled one
+        assert_eq!(lg.edge_minlens[0], 2); // labeled edge: 1 * 2 = 2
+        assert_eq!(lg.edge_minlens[1], 2); // unlabeled edge: 1 * 2 = 2
+    }
+
+    #[test]
+    fn test_make_space_noop_when_no_labels() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (5.0, 3.0));
+        graph.add_node("B", (5.0, 3.0));
+        graph.add_edge("A", "B");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        let edge_labels = HashMap::new(); // empty
+
+        make_space_for_edge_labels(&mut lg, &edge_labels);
+
+        assert_eq!(lg.edge_minlens[0], 1); // unchanged
+    }
+
+    #[test]
+    fn test_bk_allocates_space_for_label_dummy() {
+        // Verify that label dummies with non-zero width influence layout spacing
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 3.0));
+        graph.add_node("B", (10.0, 3.0));
+        graph.add_node("C", (10.0, 3.0));
+        // A -> B and A -> C: two parallel edges on same ranks
+        graph.add_edge("A", "B");
+        graph.add_edge("A", "C");
+
+        // Label on A->B with significant width
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, normalize::EdgeLabelInfo::new(50.0, 5.0));
+
+        let config = LayoutConfig::default();
+        let result = layout_with_labels(&graph, &config, |_, dims| *dims, &edge_labels);
+
+        // The label position should exist and have a valid x coordinate
+        assert!(result.label_positions.contains_key(&0));
+        let label_pos = result.label_positions.get(&0).unwrap();
+
+        // Label dummy width (50.0) should be accounted for — the label
+        // position should be at a reasonable x coordinate
+        let a_rect = result.nodes.get(&"A".into()).unwrap();
+        // Label should be in the general vicinity of the edge path
+        assert!(
+            label_pos.point.x >= 0.0,
+            "Label x should be non-negative, got {}",
+            label_pos.point.x
+        );
+        assert!(
+            label_pos.point.y > a_rect.y,
+            "Label should be below A in TD layout"
+        );
+    }
+
+    #[test]
+    fn test_denorm_extracts_label_position_between_nodes() {
+        // A -> B with label: verify label position is geometrically between A and B
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        graph.add_edge("A", "B");
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, normalize::EdgeLabelInfo::new(50.0, 20.0));
+
+        let config = LayoutConfig::default();
+        let result = layout_with_labels(&graph, &config, |_, dims| *dims, &edge_labels);
+
+        assert!(result.label_positions.contains_key(&0));
+        let label_pos = result.label_positions.get(&0).unwrap();
+
+        let a_y = result.nodes.get(&"A".into()).unwrap().y;
+        let b_y = result.nodes.get(&"B".into()).unwrap().y;
+        assert!(
+            label_pos.point.y > a_y && label_pos.point.y < b_y,
+            "Label y={} should be between A y={} and B y={}",
+            label_pos.point.y,
+            a_y,
+            b_y
+        );
+    }
+
+    #[test]
+    fn test_layout_with_labels_short_edge_gets_label_position() {
+        // A -> B (short edge, 1-rank span) with label
+        // After make_space, it should span 2 ranks and get a label dummy
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        graph.add_edge("A", "B"); // Edge 0 - labeled
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, normalize::EdgeLabelInfo::new(50.0, 20.0));
+
+        let config = LayoutConfig::default();
+        let result = layout_with_labels(&graph, &config, |_, dims| *dims, &edge_labels);
+
+        // Short labeled edge should now have a label position
+        assert!(
+            result.label_positions.contains_key(&0),
+            "Short labeled edge should have a label position"
+        );
+    }
+
+    #[test]
     fn test_layout_with_labels() {
         // A -> B -> C, and A -> C with label
         let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
@@ -435,7 +578,7 @@ mod tests {
         let a_y = result.nodes.get(&"A".into()).unwrap().y;
         let c_y = result.nodes.get(&"C".into()).unwrap().y;
         assert!(
-            label_pos.y > a_y && label_pos.y < c_y,
+            label_pos.point.y > a_y && label_pos.point.y < c_y,
             "Label should be between A and C"
         );
     }

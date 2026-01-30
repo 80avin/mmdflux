@@ -7,6 +7,35 @@ use super::chars::CharSet;
 use super::router::{AttachDirection, Point, RoutedEdge, Segment};
 use crate::graph::{Arrow, Direction, Stroke};
 
+/// Calculate the label position at the midpoint of a routed path.
+///
+/// Walks the segments by Manhattan distance and returns the point at 50%
+/// of the total path length. Returns `None` if the path has no segments.
+pub fn calc_label_position(segments: &[Segment]) -> Option<Point> {
+    if segments.is_empty() {
+        return None;
+    }
+
+    let total_length: usize = segments.iter().map(|s| s.length()).sum();
+    if total_length == 0 {
+        return Some(segments[0].start_point());
+    }
+
+    let target = total_length / 2;
+    let mut accumulated = 0usize;
+
+    for seg in segments {
+        let seg_len = seg.length();
+        if accumulated + seg_len >= target {
+            let offset_in_seg = target - accumulated;
+            return Some(seg.point_at_offset(offset_in_seg));
+        }
+        accumulated += seg_len;
+    }
+
+    segments.last().map(|s| s.end_point())
+}
+
 /// Render a routed edge onto the canvas.
 pub fn render_edge(
     canvas: &mut Canvas,
@@ -571,6 +600,13 @@ fn draw_arrow_with_entry(
     entry_direction: AttachDirection,
     charset: &CharSet,
 ) {
+    // Protect node content from being overwritten by arrows
+    if let Some(cell) = canvas.get(point.x, point.y)
+        && cell.is_node
+    {
+        return;
+    }
+
     // Arrow points in the direction the edge enters FROM
     // Entry from Top means edge is going down, so arrow points down
     // Entry from Right means edge is going left, so arrow points left
@@ -681,8 +717,46 @@ pub fn render_all_edges_with_labels(
                     && px.saturating_add(label_len) <= canvas.width()
             });
 
-            let placed = if let Some(&(pre_x, pre_y)) = precomputed {
-                draw_label_at_position(canvas, label, pre_x, pre_y)
+            let placed = if routed.is_backward {
+                // For backward edges, compute label position from actual routed path
+                // Center on midpoint, then run collision avoidance like forward edges
+                if let Some(midpoint) = calc_label_position(&routed.segments) {
+                    let base_x = midpoint.x.saturating_sub(label_len / 2);
+                    let base_y = midpoint.y;
+                    let (safe_x, safe_y) = find_safe_label_position(
+                        canvas,
+                        base_x,
+                        base_y,
+                        label_len,
+                        diagram_direction,
+                        &placed_labels,
+                        false,
+                    );
+                    draw_label_direct(canvas, label, safe_x, safe_y)
+                } else {
+                    draw_edge_label_with_tracking(
+                        canvas,
+                        routed,
+                        label,
+                        diagram_direction,
+                        &placed_labels,
+                    )
+                }
+            } else if let Some(&(pre_x, pre_y)) = precomputed {
+                // Defensive safety net: route precomputed position through
+                // collision avoidance. When the midpoint formula is correct,
+                // find_safe_label_position returns the base position unchanged.
+                let base_x = pre_x.saturating_sub(label_len / 2);
+                let (safe_x, safe_y) = find_safe_label_position(
+                    canvas,
+                    base_x,
+                    pre_y,
+                    label_len,
+                    diagram_direction,
+                    &placed_labels,
+                    false,
+                );
+                draw_label_direct(canvas, label, safe_x, safe_y)
             } else {
                 draw_edge_label_with_tracking(
                     canvas,
@@ -700,27 +774,29 @@ pub fn render_all_edges_with_labels(
     }
 }
 
-/// Draw a label at a specific pre-computed position.
-fn draw_label_at_position(
-    canvas: &mut Canvas,
-    label: &str,
-    x: usize,
-    y: usize,
-) -> Option<PlacedLabel> {
+/// Draw a label at an exact position (no centering adjustment).
+///
+/// Used for backward edge labels where the position is already computed
+/// relative to the routed path. Expands the canvas if the label would
+/// extend beyond the current bounds.
+fn draw_label_direct(canvas: &mut Canvas, label: &str, x: usize, y: usize) -> Option<PlacedLabel> {
     let label_len = label.chars().count();
-    // Center the label on the given position
-    let label_x = x.saturating_sub(label_len / 2);
 
-    // Write the label only to non-node cells (but edge cells can be overwritten)
+    // Expand canvas if label extends beyond current width
+    let needed_width = x + label_len;
+    if needed_width > canvas.width() {
+        canvas.expand_width(needed_width);
+    }
+
     for (i, ch) in label.chars().enumerate() {
-        let cell_x = label_x + i;
+        let cell_x = x + i;
         if canvas.get(cell_x, y).is_some_and(|cell| !cell.is_node) {
             canvas.set(cell_x, y, ch);
         }
     }
 
     Some(PlacedLabel {
-        x: label_x,
+        x,
         y,
         len: label_len,
     })
@@ -887,19 +963,90 @@ mod tests {
         diagram.add_node(Node::new("B").with_label("End"));
         diagram.add_edge(Edge::new("A", "B").with_label("Yes"));
 
+        let output = crate::render::render(
+            &diagram,
+            &crate::render::RenderOptions { ascii_only: false },
+        );
+        // Should contain the label
+        assert!(output.contains("Yes"));
+    }
+
+    #[test]
+    fn test_label_rendered_at_precomputed_position() {
+        let output = crate::render::render(
+            &{
+                let mut d = Diagram::new(Direction::TopDown);
+                d.add_node(Node::new("A").with_label("A"));
+                d.add_node(Node::new("B").with_label("B"));
+                d.add_edge(Edge::new("A", "B").with_label("yes"));
+                d
+            },
+            &crate::render::RenderOptions { ascii_only: false },
+        );
+
+        assert!(output.contains("yes"), "Label 'yes' should be rendered");
+
+        // Label should appear between A and B rows
+        let lines: Vec<&str> = output.lines().collect();
+        let a_line = lines.iter().position(|l| l.contains('A')).unwrap();
+        let b_line = lines.iter().rposition(|l| l.contains('B')).unwrap();
+        let yes_line = lines.iter().position(|l| l.contains("yes")).unwrap();
+        assert!(
+            yes_line > a_line && yes_line < b_line,
+            "Label at line {} should be between A (line {}) and B (line {})\n{}",
+            yes_line,
+            a_line,
+            b_line,
+            output
+        );
+    }
+
+    #[test]
+    fn precomputed_label_avoids_node_overlap() {
+        // Build a LR diagram where nodes are wide enough that
+        // a precomputed label position could land on a node boundary.
+        // After rendering, verify the label text doesn't collide with node cells.
+        let output = crate::render::render(
+            &{
+                let mut d = Diagram::new(Direction::LeftRight);
+                d.add_node(Node::new("A").with_label("Working Dir"));
+                d.add_node(Node::new("B").with_label("Staging Area"));
+                d.add_node(Node::new("C").with_label("Local Repo"));
+                d.add_edge(Edge::new("A", "B").with_label("git add"));
+                d.add_edge(Edge::new("B", "C").with_label("git commit"));
+                d
+            },
+            &crate::render::RenderOptions { ascii_only: false },
+        );
+
+        // Both labels should be fully visible (not clipped by node boundaries)
+        assert!(
+            output.contains("git add"),
+            "Label 'git add' should be fully visible:\n{output}"
+        );
+        assert!(
+            output.contains("git commit"),
+            "Label 'git commit' should be fully visible:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_labeled_edge_has_waypoints() {
+        // Verify a labeled short edge (A->B) now produces waypoints
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("Start"));
+        diagram.add_node(Node::new("B").with_label("End"));
+        diagram.add_edge(Edge::new("A", "B").with_label("yes"));
+
         let config = LayoutConfig::default();
         let layout = compute_layout_direct(&diagram, &config);
 
-        let mut canvas = Canvas::new(layout.width, layout.height);
-        let charset = CharSet::unicode();
-
-        let routed =
-            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
-        render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
-
-        let output = canvas.to_string();
-        // Should contain the label
-        assert!(output.contains("Yes"));
+        // The A->B edge should have waypoints from the label dummy
+        let edge_key = ("A".to_string(), "B".to_string());
+        assert!(
+            layout.edge_waypoints.contains_key(&edge_key),
+            "Labeled short edge should have waypoints from label dummy"
+        );
     }
 
     #[test]
@@ -1113,6 +1260,186 @@ mod tests {
         assert!(
             chosen.is_none(),
             "Should return None when no horizontal segments exist"
+        );
+    }
+
+    #[test]
+    fn draw_arrow_does_not_overwrite_node_content() {
+        let charset = CharSet::unicode();
+        let mut canvas = Canvas::new(10, 10);
+
+        // Mark a cell as node content
+        canvas.set(5, 5, 'X');
+        canvas.mark_as_node(5, 5);
+
+        // Try to draw an arrow at the same position
+        let point = Point { x: 5, y: 5 };
+        draw_arrow_with_entry(&mut canvas, &point, AttachDirection::Top, &charset);
+
+        // The cell should still contain 'X', not an arrow
+        let cell = canvas.get(5, 5).unwrap();
+        assert_eq!(cell.ch, 'X', "Arrow should not overwrite node content");
+        assert!(cell.is_node, "Cell should still be marked as node");
+    }
+
+    #[test]
+    fn draw_arrow_writes_on_non_node_cell() {
+        let charset = CharSet::unicode();
+        let mut canvas = Canvas::new(10, 10);
+
+        // Draw an arrow on an empty cell (no node)
+        let point = Point { x: 5, y: 5 };
+        draw_arrow_with_entry(&mut canvas, &point, AttachDirection::Top, &charset);
+
+        // Should succeed — arrow should be drawn
+        let cell = canvas.get(5, 5).unwrap();
+        assert_eq!(
+            cell.ch, charset.arrow_down,
+            "Arrow should be drawn on empty cell"
+        );
+    }
+
+    // === calc_label_position tests (Task 2.1) ===
+
+    #[test]
+    fn calc_label_empty_segments_returns_none() {
+        assert_eq!(calc_label_position(&[]), None);
+    }
+
+    #[test]
+    fn calc_label_single_vertical_segment_returns_midpoint() {
+        let segments = vec![Segment::Vertical {
+            x: 5,
+            y_start: 10,
+            y_end: 20,
+        }];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 15 }));
+    }
+
+    #[test]
+    fn calc_label_single_horizontal_segment_returns_midpoint() {
+        let segments = vec![Segment::Horizontal {
+            y: 3,
+            x_start: 0,
+            x_end: 10,
+        }];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 3 }));
+    }
+
+    #[test]
+    fn calc_label_l_path_midpoint_at_corner() {
+        // V(x=5, y 0->6) + H(y=6, x 5->11) = total 12, midpoint at 6
+        let segments = vec![
+            Segment::Vertical {
+                x: 5,
+                y_start: 0,
+                y_end: 6,
+            },
+            Segment::Horizontal {
+                y: 6,
+                x_start: 5,
+                x_end: 11,
+            },
+        ];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 6 }));
+    }
+
+    #[test]
+    fn calc_label_z_path_midpoint_on_middle_segment() {
+        // V(4) + H(10) + V(4) = 18, midpoint at 9 -> 4 into first, 5 into H -> (10, 4)
+        let segments = vec![
+            Segment::Vertical {
+                x: 5,
+                y_start: 0,
+                y_end: 4,
+            },
+            Segment::Horizontal {
+                y: 4,
+                x_start: 5,
+                x_end: 15,
+            },
+            Segment::Vertical {
+                x: 15,
+                y_start: 4,
+                y_end: 8,
+            },
+        ];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 10, y: 4 }));
+    }
+
+    #[test]
+    fn calc_label_zero_length_path_returns_start() {
+        let segments = vec![Segment::Vertical {
+            x: 5,
+            y_start: 10,
+            y_end: 10,
+        }];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 10 }));
+    }
+
+    #[test]
+    fn calc_label_odd_total_length_rounds_down() {
+        // Length 7, midpoint at offset 3
+        let segments = vec![Segment::Vertical {
+            x: 5,
+            y_start: 0,
+            y_end: 7,
+        }];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 5, y: 3 }));
+    }
+
+    #[test]
+    fn calc_label_backward_edge_typical_shape() {
+        // H(5) + V(12) + H(5) = 22, midpoint at 11 -> 5 into H, 6 into V -> (25, 9)
+        let segments = vec![
+            Segment::Horizontal {
+                y: 3,
+                x_start: 20,
+                x_end: 25,
+            },
+            Segment::Vertical {
+                x: 25,
+                y_start: 3,
+                y_end: 15,
+            },
+            Segment::Horizontal {
+                y: 15,
+                x_start: 25,
+                x_end: 20,
+            },
+        ];
+        assert_eq!(calc_label_position(&segments), Some(Point { x: 25, y: 9 }));
+    }
+
+    // === Rendering integration tests for backward edge labels (Task 4.1) ===
+
+    #[test]
+    fn backward_edge_label_near_routed_path_td() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+        use crate::render::{RenderOptions, render};
+
+        let flowchart = parse_flowchart("graph TD\n    A --> B\n    B -->|retry| A").unwrap();
+        let diagram = build_diagram(&flowchart);
+        let output = render(&diagram, &RenderOptions::default());
+
+        assert!(
+            output.contains("retry"),
+            "Label should appear in output:\n{output}"
+        );
+
+        // In TD layout, backward edges route to the right of nodes.
+        // The label should appear at a column position to the right of both nodes.
+        let lines: Vec<&str> = output.lines().collect();
+        let node_a_line = lines.iter().find(|l| l.contains('A')).unwrap();
+        let node_a_right = node_a_line.rfind('A').unwrap_or(0);
+
+        let retry_line = lines.iter().find(|l| l.contains("retry")).unwrap();
+        let retry_col = retry_line.find("retry").unwrap();
+
+        assert!(
+            retry_col > node_a_right,
+            "Label 'retry' at col {retry_col} should be right of node A ending at col {node_a_right}\n{output}"
         );
     }
 }

@@ -943,12 +943,8 @@ fn compute_all_alignments(
 
     for direction in AlignmentDirection::all() {
         let alignment = vertical_alignment(graph, conflicts, direction);
-        let compaction = horizontal_compaction_with_direction(
-            graph,
-            &alignment,
-            config,
-            Some(direction),
-        );
+        let compaction =
+            horizontal_compaction_with_direction(graph, &alignment, config, Some(direction));
         results.insert(direction, compaction);
     }
 
@@ -2418,10 +2414,7 @@ mod tests {
         assert!(xs.contains_key(&d));
 
         // B and C should be separated
-        assert!(
-            (xs[&b] - xs[&c]).abs() > 1.0,
-            "B and C should be separated"
-        );
+        assert!((xs[&b] - xs[&c]).abs() > 1.0, "B and C should be separated");
     }
 
     #[test]
