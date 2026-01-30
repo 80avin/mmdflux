@@ -324,6 +324,24 @@ mod rendering {
     }
 
     #[test]
+    fn git_workflow_forward_labels_visible() {
+        let output = render_fixture("git_workflow.mmd");
+        // Forward edge labels should be fully visible, not clipped by node boundaries
+        assert!(
+            output.contains("git commit"),
+            "Forward label 'git commit' should be fully visible:\n{output}"
+        );
+        assert!(
+            output.contains("git push"),
+            "Forward label 'git push' should be fully visible:\n{output}"
+        );
+        assert!(
+            output.contains("git add"),
+            "Forward label 'git add' should be fully visible:\n{output}"
+        );
+    }
+
+    #[test]
     fn http_request_renders() {
         let output = render_fixture("http_request.mmd");
         // Due to cycle handling, node order may vary. Check for presence of key elements.

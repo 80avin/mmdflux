@@ -408,11 +408,33 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         })
         .collect();
 
+    // Compute max right/bottom edge per layer (primary-axis position + dimension).
+    // Used for odd-rank interpolation to place labels in the gap between layers.
+    let layer_ends_raw: Vec<usize> = layers
+        .iter()
+        .map(|layer| {
+            layer
+                .iter()
+                .filter_map(|id| {
+                    let &(x, y) = draw_positions.get(id)?;
+                    let &(w, h) = node_dims.get(id)?;
+                    if is_vertical {
+                        Some(y + h)
+                    } else {
+                        Some(x + w)
+                    }
+                })
+                .max()
+                .unwrap_or(0)
+        })
+        .collect();
+
     // When ranks are doubled (labels present), real nodes sit at even dagre ranks
     // (0, 2, 4, ...) and dummies/labels at odd ranks (1, 3, 5, ...).
     // Build rank_positions: dagre_rank → draw coordinate.
     // Even ranks map to layer_starts_raw[rank/2].
-    // Odd ranks interpolate between adjacent layers.
+    // Odd ranks interpolate between the right edge of the source layer and
+    // the left edge of the target layer, placing labels in the gap between nodes.
     let layer_starts: Vec<usize> = if ranks_doubled && layer_starts_raw.len() >= 2 {
         let max_rank = layer_starts_raw.len() * 2 - 1;
         (0..=max_rank)
@@ -422,10 +444,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                     // Even rank → real node layer
                     layer_starts_raw.get(layer_idx).copied().unwrap_or(0)
                 } else {
-                    // Odd rank → midpoint between adjacent layers
-                    let curr = layer_starts_raw.get(layer_idx).copied().unwrap_or(0);
-                    let next = layer_starts_raw.get(layer_idx + 1).copied().unwrap_or(curr);
-                    (curr + next) / 2
+                    // Odd rank → midpoint between right edge of source and left edge of target
+                    let curr_end = layer_ends_raw.get(layer_idx).copied().unwrap_or(0);
+                    let next_start =
+                        layer_starts_raw.get(layer_idx + 1).copied().unwrap_or(curr_end);
+                    (curr_end + next_start) / 2
                 }
             })
             .collect()
