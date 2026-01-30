@@ -16,6 +16,8 @@ pub struct DiGraph<N> {
     edges: Vec<(NodeId, NodeId)>,
     node_index: HashMap<NodeId, usize>,
     parents: HashMap<NodeId, NodeId>,
+    /// Node IDs of compounds with non-empty titles.
+    nodes_with_title: HashSet<NodeId>,
 }
 
 impl<N> Default for DiGraph<N> {
@@ -31,6 +33,7 @@ impl<N> DiGraph<N> {
             edges: Vec::new(),
             node_index: HashMap::new(),
             parents: HashMap::new(),
+            nodes_with_title: HashSet::new(),
         }
     }
 
@@ -121,6 +124,14 @@ impl<N> DiGraph<N> {
     pub fn parents_map(&self) -> &HashMap<NodeId, NodeId> {
         &self.parents
     }
+
+    pub fn set_has_title(&mut self, node: impl Into<NodeId>) {
+        self.nodes_with_title.insert(node.into());
+    }
+
+    pub fn has_title(&self, node: impl Into<NodeId>) -> bool {
+        self.nodes_with_title.contains(&node.into())
+    }
 }
 
 /// Border node type (left or right border of a compound node).
@@ -189,6 +200,9 @@ pub(crate) struct LayoutGraph {
     /// Bottom border node index for compound nodes.
     pub border_bottom: HashMap<usize, usize>,
 
+    /// Title border node index for compound nodes with titles.
+    pub border_title: HashMap<usize, usize>,
+
     /// Left border node indices per rank for compound nodes.
     pub border_left: HashMap<usize, Vec<usize>>,
 
@@ -211,6 +225,9 @@ pub(crate) struct LayoutGraph {
 
     /// Node indices that are compound (subgraph) nodes.
     pub compound_nodes: HashSet<usize>,
+
+    /// Compound node indices that have non-empty titles.
+    pub compound_titles: HashSet<usize>,
 }
 
 impl LayoutGraph {
@@ -247,6 +264,13 @@ impl LayoutGraph {
 
         let edge_weights = vec![1.0; edge_count];
 
+        // Build compound_titles set
+        let compound_titles: HashSet<usize> = graph
+            .nodes_with_title
+            .iter()
+            .filter_map(|id| node_index.get(id).copied())
+            .collect();
+
         // Build parent index mapping and compound node set
         let mut parents = vec![None; n];
         let mut compound_nodes = HashSet::new();
@@ -277,6 +301,7 @@ impl LayoutGraph {
             max_rank: HashMap::new(),
             border_top: HashMap::new(),
             border_bottom: HashMap::new(),
+            border_title: HashMap::new(),
             border_left: HashMap::new(),
             border_right: HashMap::new(),
             border_type: HashMap::new(),
@@ -284,6 +309,7 @@ impl LayoutGraph {
             nesting_edges: HashSet::new(),
             excluded_edges: HashSet::new(),
             compound_nodes,
+            compound_titles,
         }
     }
 
@@ -574,6 +600,45 @@ mod tests {
         assert_eq!(lg.parents[b_idx], Some(sg1_idx));
         assert_eq!(lg.parents[sg1_idx], None);
         assert!(lg.compound_nodes.contains(&sg1_idx));
+    }
+
+    #[test]
+    fn test_digraph_set_has_title() {
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("sg1", (0.0, 0.0));
+        g.set_has_title("sg1");
+        assert!(g.has_title("sg1"));
+    }
+
+    #[test]
+    fn test_compound_titles_propagated_to_layout_graph() {
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("A", (10.0, 10.0));
+        g.add_node("sg1", (0.0, 0.0));
+        g.set_parent("A", "sg1");
+        g.set_has_title("sg1");
+        let lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
+        let sg1_idx = lg.node_index[&"sg1".into()];
+        assert!(lg.compound_titles.contains(&sg1_idx));
+    }
+
+    #[test]
+    fn test_untitled_compound_not_in_compound_titles() {
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("A", (10.0, 10.0));
+        g.add_node("sg1", (0.0, 0.0));
+        g.set_parent("A", "sg1");
+        let lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
+        let sg1_idx = lg.node_index[&"sg1".into()];
+        assert!(!lg.compound_titles.contains(&sg1_idx));
+    }
+
+    #[test]
+    fn test_layout_graph_border_title_initially_empty() {
+        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
+        g.add_node("A", (10.0, 10.0));
+        let lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
+        assert!(lg.border_title.is_empty());
     }
 
     #[test]
