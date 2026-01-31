@@ -98,6 +98,46 @@ fn extract_self_edges(lg: &mut LayoutGraph) {
     }
 }
 
+/// Insert dummy nodes for self-edges after ordering, before positioning.
+///
+/// Each self-edge gets a small dummy at the same rank, ordered right after
+/// the self-edge's node. The BK algorithm will position it adjacent to the
+/// node, establishing the loop extent.
+fn insert_self_edge_dummies(lg: &mut LayoutGraph) {
+    for (i, se) in lg.self_edges.clone().iter().enumerate() {
+        let node_rank = lg.ranks[se.node_index];
+        let node_order = lg.order[se.node_index];
+        let dummy_id: NodeId = format!("_self_edge_dummy_{}", i).into();
+        let dummy_idx = lg.node_ids.len();
+
+        // Add dummy node to all parallel arrays
+        lg.node_ids.push(dummy_id.clone());
+        lg.node_index.insert(dummy_id.clone(), dummy_idx);
+        lg.ranks.push(node_rank);
+        lg.positions.push(Point::default());
+        lg.dimensions.push((1.0, 1.0));
+        lg.parents.push(lg.parents[se.node_index]);
+
+        // Insert into ordering: place dummy right after the node
+        // Shift all nodes at this rank with order > node_order
+        for idx in 0..lg.order.len() - 1 {
+            // -1 because we haven't pushed yet
+            if lg.ranks[idx] == node_rank && lg.order[idx] > node_order {
+                lg.order[idx] += 1;
+            }
+        }
+        lg.order.push(node_order + 1);
+
+        // Register as dummy
+        lg.dummy_nodes.insert(
+            dummy_id,
+            normalize::DummyNode::edge(se.orig_edge_index, node_rank),
+        );
+
+        lg.self_edges[i].dummy_index = Some(dummy_idx);
+    }
+}
+
 /// Main entry point for layout computation.
 ///
 /// Takes a directed graph, configuration options, and a function to get node dimensions.
@@ -173,6 +213,9 @@ where
 
     // Phase 3: Reduce crossings (now includes dummy nodes and border segments)
     order::run(&mut lg);
+
+    // Phase 3.5: Insert self-edge dummies (after ordering, before positioning)
+    insert_self_edge_dummies(&mut lg);
 
     // Phase 4: Assign coordinates
     position::run(&mut lg, config);
@@ -765,6 +808,73 @@ mod tests {
         let config = LayoutConfig::default();
         let result = layout(&graph, &config, |_, dims| *dims);
         assert!(result.nodes.contains_key(&"A".into()));
+    }
+
+    #[test]
+    fn test_insert_self_edge_dummy_creates_node() {
+        let mut lg = build_lg_from_edges(&[("A", "B"), ("A", "A")]);
+        extract_self_edges(&mut lg);
+        // Simulate ranking and ordering
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        normalize::run(&mut lg, &HashMap::new());
+        order::run(&mut lg);
+
+        let node_count_before = lg.node_ids.len();
+        assert_eq!(lg.self_edges.len(), 1);
+
+        insert_self_edge_dummies(&mut lg);
+
+        assert_eq!(lg.node_ids.len(), node_count_before + 1);
+        assert!(lg.self_edges[0].dummy_index.is_some());
+    }
+
+    #[test]
+    fn test_insert_self_edge_dummy_same_rank() {
+        let mut lg = build_lg_from_edges(&[("A", "B"), ("A", "A")]);
+        let a_idx = lg.node_index[&"A".into()];
+        extract_self_edges(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        normalize::run(&mut lg, &HashMap::new());
+        order::run(&mut lg);
+
+        let node_rank = lg.ranks[a_idx];
+        insert_self_edge_dummies(&mut lg);
+
+        let dummy_idx = lg.self_edges[0].dummy_index.unwrap();
+        assert_eq!(lg.ranks[dummy_idx], node_rank);
+    }
+
+    #[test]
+    fn test_insert_self_edge_dummy_order_after_node() {
+        let mut lg = build_lg_from_edges(&[("A", "B"), ("A", "A")]);
+        let a_idx = lg.node_index[&"A".into()];
+        extract_self_edges(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        normalize::run(&mut lg, &HashMap::new());
+        order::run(&mut lg);
+
+        let node_order = lg.order[a_idx];
+        insert_self_edge_dummies(&mut lg);
+
+        let dummy_idx = lg.self_edges[0].dummy_index.unwrap();
+        assert_eq!(lg.order[dummy_idx], node_order + 1);
+    }
+
+    #[test]
+    fn test_layout_self_edge_dummy_not_in_result_nodes() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 5.0));
+        graph.add_node("B", (10.0, 5.0));
+        graph.add_edge("A", "B");
+        graph.add_edge("A", "A");
+        let result = layout(&graph, &LayoutConfig::default(), |_, dims| *dims);
+        // Dummy should not appear in result nodes
+        assert_eq!(result.nodes.len(), 2);
+        assert!(result.nodes.contains_key(&"A".into()));
+        assert!(result.nodes.contains_key(&"B".into()));
     }
 
     #[test]
