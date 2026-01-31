@@ -4,7 +4,7 @@
 //! to ancestors in the DFS tree. This preserves the natural forward flow
 //! of the graph better than minimum feedback arc set algorithms.
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 use super::graph::LayoutGraph;
 
@@ -29,7 +29,7 @@ pub fn run(graph: &mut LayoutGraph) {
     // DFS state
     let mut visited = vec![false; n];
     let mut in_stack = vec![false; n]; // Nodes currently in the recursion stack
-    let mut back_edges: HashSet<usize> = HashSet::new();
+    let mut back_edges: BTreeSet<usize> = BTreeSet::new();
 
     // Run DFS from each unvisited node (handles disconnected components)
     for start in 0..n {
@@ -47,7 +47,7 @@ fn dfs_find_back_edges(
     adj: &[Vec<(usize, usize)>],
     visited: &mut [bool],
     in_stack: &mut [bool],
-    back_edges: &mut HashSet<usize>,
+    back_edges: &mut BTreeSet<usize>,
 ) {
     visited[node] = true;
     in_stack[node] = true;

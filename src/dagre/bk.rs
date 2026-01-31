@@ -961,11 +961,13 @@ fn find_smallest_width(
     let mut best_dir = AlignmentDirection::UL;
     let mut best_width = f64::INFINITY;
 
-    for (dir, result) in results {
-        let width = calculate_width(graph, result, direction);
-        if width < best_width {
-            best_width = width;
-            best_dir = *dir;
+    for dir in AlignmentDirection::all() {
+        if let Some(result) = results.get(&dir) {
+            let width = calculate_width(graph, result, direction);
+            if width < best_width {
+                best_width = width;
+                best_dir = dir;
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 //! Graph representation for layout computation.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 
 use petgraph::stable_graph::StableDiGraph;
 
@@ -17,7 +17,7 @@ pub struct DiGraph<N> {
     node_index: HashMap<NodeId, usize>,
     parents: HashMap<NodeId, NodeId>,
     /// Node IDs of compounds with non-empty titles.
-    nodes_with_title: HashSet<NodeId>,
+    nodes_with_title: BTreeSet<NodeId>,
 }
 
 impl<N> Default for DiGraph<N> {
@@ -33,7 +33,7 @@ impl<N> DiGraph<N> {
             edges: Vec::new(),
             node_index: HashMap::new(),
             parents: HashMap::new(),
-            nodes_with_title: HashSet::new(),
+            nodes_with_title: BTreeSet::new(),
         }
     }
 
@@ -155,7 +155,7 @@ pub(crate) struct LayoutGraph {
     pub node_index: HashMap<NodeId, usize>,
 
     /// Reversed edges (for cycle removal).
-    pub reversed_edges: HashSet<usize>,
+    pub reversed_edges: BTreeSet<usize>,
 
     /// Rank (layer) assigned to each node.
     pub ranks: Vec<i32>,
@@ -216,18 +216,18 @@ pub(crate) struct LayoutGraph {
     pub nesting_root: Option<usize>,
 
     /// Edge indices that are nesting edges (to be removed after ranking).
-    pub nesting_edges: HashSet<usize>,
+    pub nesting_edges: BTreeSet<usize>,
 
     /// Edge indices excluded from effective_edges (nesting edges after cleanup).
     /// These edges exist in the `edges` vec but are ignored by downstream phases
     /// (normalization, ordering, BK alignment).
-    pub excluded_edges: HashSet<usize>,
+    pub excluded_edges: BTreeSet<usize>,
 
     /// Node indices that are compound (subgraph) nodes.
-    pub compound_nodes: HashSet<usize>,
+    pub compound_nodes: BTreeSet<usize>,
 
     /// Compound node indices that have non-empty titles.
-    pub compound_titles: HashSet<usize>,
+    pub compound_titles: BTreeSet<usize>,
 
     /// Minimum rank span for each edge. Default 1 for all edges.
     pub edge_minlens: Vec<i32>,
@@ -271,7 +271,7 @@ impl LayoutGraph {
         let edge_weights = vec![1.0; edge_count];
 
         // Build compound_titles set
-        let compound_titles: HashSet<usize> = graph
+        let compound_titles: BTreeSet<usize> = graph
             .nodes_with_title
             .iter()
             .filter_map(|id| node_index.get(id).copied())
@@ -279,7 +279,7 @@ impl LayoutGraph {
 
         // Build parent index mapping and compound node set
         let mut parents = vec![None; n];
-        let mut compound_nodes = HashSet::new();
+        let mut compound_nodes = BTreeSet::new();
         for (child_id, parent_id) in graph.parents_map() {
             if let (Some(&child_idx), Some(&parent_idx)) =
                 (node_index.get(child_id), node_index.get(parent_id))
@@ -293,7 +293,7 @@ impl LayoutGraph {
             node_ids,
             edges,
             node_index,
-            reversed_edges: HashSet::new(),
+            reversed_edges: BTreeSet::new(),
             ranks: vec![0; n],
             order: (0..n).collect(),
             positions: vec![Point::default(); n],
@@ -312,8 +312,8 @@ impl LayoutGraph {
             border_right: HashMap::new(),
             border_type: HashMap::new(),
             nesting_root: None,
-            nesting_edges: HashSet::new(),
-            excluded_edges: HashSet::new(),
+            nesting_edges: BTreeSet::new(),
+            excluded_edges: BTreeSet::new(),
             compound_nodes,
             compound_titles,
             edge_minlens: vec![1; edge_count],

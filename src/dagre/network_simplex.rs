@@ -4,7 +4,7 @@
 //! Reference: Gansner et al., "A Technique for Drawing Directed Graphs"
 //! Dagre.js: lib/rank/network-simplex.js, lib/rank/feasible-tree.js
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 
 use super::graph::LayoutGraph;
 use super::rank;
@@ -34,7 +34,7 @@ pub(crate) struct SpanningTree {
     /// Cut value for tree edges, indexed by child node (populated in Phase 5).
     pub cut_value: Vec<f64>,
     /// Set of edge indices that are in the tree.
-    pub tree_edges: HashSet<usize>,
+    pub tree_edges: BTreeSet<usize>,
 }
 
 impl SpanningTree {
@@ -47,7 +47,7 @@ impl SpanningTree {
             low: vec![0; n],
             lim: vec![0; n],
             cut_value: vec![0.0; n],
-            tree_edges: HashSet::new(),
+            tree_edges: BTreeSet::new(),
         }
     }
 

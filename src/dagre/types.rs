@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use super::normalize::WaypointWithRank;
 
 /// Unique identifier for a node.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct NodeId(pub String);
 
 impl From<&str> for NodeId {

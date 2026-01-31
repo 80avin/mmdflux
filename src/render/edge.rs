@@ -617,7 +617,23 @@ fn draw_arrow_with_entry(
         AttachDirection::Right => charset.arrow_left,
     };
 
-    canvas.set(point.x, point.y, arrow_char);
+    // If the arrow position is a subgraph title cell, nudge it one cell inward
+    // (in the direction the edge is traveling). This gives the arrowhead a visible
+    // position inside the subgraph border rather than corrupting the title text.
+    let (ax, ay) = if let Some(cell) = canvas.get(point.x, point.y)
+        && cell.is_subgraph_title
+    {
+        match entry_direction {
+            AttachDirection::Top => (point.x, point.y + 1),
+            AttachDirection::Bottom => (point.x, point.y.saturating_sub(1)),
+            AttachDirection::Left => (point.x + 1, point.y),
+            AttachDirection::Right => (point.x.saturating_sub(1), point.y),
+        }
+    } else {
+        (point.x, point.y)
+    };
+
+    canvas.set(ax, ay, arrow_char);
 }
 
 /// Draw an arrow at the given point (legacy function for tests).
