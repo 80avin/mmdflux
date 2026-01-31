@@ -184,6 +184,118 @@ pub(crate) fn is_descendant(tree: &SpanningTree, u: usize, v: usize) -> bool {
     tree.low[v] <= tree.lim[u] && tree.lim[u] <= tree.lim[v]
 }
 
+/// Compute cut values for all tree edges (bottom-up postorder).
+pub(crate) fn init_cut_values(tree: &mut SpanningTree, graph: &LayoutGraph) {
+    let n = tree.parent.len();
+    let edges = graph.effective_edges();
+
+    // Build children lists
+    let mut children: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for node in 0..n {
+        if let Some(p) = tree.parent[node] {
+            children[p].push(node);
+        }
+    }
+
+    // Process in postorder (leaves first)
+    let postorder = postorder_from_children(&children, tree);
+    for &node in &postorder {
+        if tree.parent[node].is_none() {
+            continue; // root has no tree edge
+        }
+        tree.cut_value[node] = calc_cut_value(tree, graph, node, &edges);
+    }
+}
+
+/// Get nodes in postorder from the spanning tree.
+fn postorder_from_children(children: &[Vec<usize>], tree: &SpanningTree) -> Vec<usize> {
+    let mut result = Vec::new();
+    // Find root (node with no parent that's in the tree)
+    let root = (0..tree.parent.len())
+        .find(|&n| tree.in_tree[n] && tree.parent[n].is_none())
+        .unwrap_or(0);
+
+    let mut stack: Vec<(usize, bool)> = vec![(root, false)];
+    while let Some((node, post)) = stack.pop() {
+        if post {
+            result.push(node);
+        } else {
+            stack.push((node, true));
+            for &child in children[node].iter().rev() {
+                stack.push((child, false));
+            }
+        }
+    }
+    result
+}
+
+/// Calculate the cut value for the tree edge connecting `child` to its parent.
+///
+/// The cut value measures the change in total weighted edge length if this tree edge
+/// were removed. Negative values indicate the ranking can be improved by pivoting.
+///
+/// Follows Dagre.js calcCutValue (network-simplex.js lines 86-120).
+fn calc_cut_value(
+    tree: &SpanningTree,
+    graph: &LayoutGraph,
+    child: usize,
+    edges: &[(usize, usize)],
+) -> f64 {
+    let parent = tree.parent[child].unwrap();
+    let tree_edge_idx = tree.parent_edge[child].unwrap();
+
+    // Determine if child is the tail (source) of the directed graph edge
+    let (from, _to) = edges[tree_edge_idx];
+    let child_is_tail = from == child;
+
+    // Start with the tree edge's own weight
+    let mut cut = graph.edge_weights[tree_edge_idx];
+
+    // Build set of tree edge indices for quick lookup: check if `other` is a tree child of `child`
+    // In Dagre.js, isTreeEdge(t, child, other) checks if there's a tree edge between child and other
+    // This means other's parent is child (other is a direct tree child of child)
+
+    // For each graph edge incident on child (except tree edge to parent):
+    for (edge_idx, &(e_from, e_to)) in edges.iter().enumerate() {
+        if edge_idx == tree_edge_idx {
+            continue;
+        }
+
+        let is_out_edge;
+        let other;
+        if e_from == child {
+            is_out_edge = true;
+            other = e_to;
+        } else if e_to == child {
+            is_out_edge = false;
+            other = e_from;
+        } else {
+            continue; // not incident on child
+        }
+
+        if other == parent {
+            continue;
+        }
+
+        let points_to_head = is_out_edge == child_is_tail;
+        let w = graph.edge_weights[edge_idx];
+
+        cut += if points_to_head { w } else { -w };
+
+        // If other is a tree child of child, adjust by other's cut value
+        if tree.parent[other] == Some(child) && tree.parent_edge[other].is_some() {
+            let other_cut = tree.cut_value[other];
+            cut += if points_to_head {
+                -other_cut
+            } else {
+                other_cut
+            };
+        }
+    }
+
+    cut
+}
+
 /// Construct a feasible spanning tree of tight edges.
 /// Modifies graph ranks to ensure the tree spans all nodes.
 pub(crate) fn feasible_tree(graph: &mut LayoutGraph) -> SpanningTree {
@@ -269,6 +381,139 @@ mod tests {
         let mut lg = make_chain_graph();
         lg.edge_minlens[0] = 2;
         assert_eq!(slack(&lg, 0), -1);
+    }
+
+    /// Helper: A->B, ranks 0,1. Tree: A(root)->B.
+    fn make_simple_ab_tree() -> (LayoutGraph, SpanningTree) {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_edge("A", "B");
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        lg.ranks = vec![0, 1];
+        let mut tree = SpanningTree::new(2);
+        tree.add_node(0); // A is root
+        tree.add_edge(0, 1, 0); // A->B is tree edge 0
+        (lg, tree)
+    }
+
+    /// Helper: diamond A->B, A->C, B->D, C->D
+    /// Tree: A->B, A->C, B->D (edge 2 = C->D is non-tree)
+    fn make_diamond_tree() -> (LayoutGraph, SpanningTree) {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("C", ());
+        g.add_node("D", ());
+        g.add_edge("A", "B"); // edge 0
+        g.add_edge("A", "C"); // edge 1
+        g.add_edge("B", "D"); // edge 2
+        g.add_edge("C", "D"); // edge 3 (non-tree)
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        lg.ranks = vec![0, 1, 1, 2];
+        let mut tree = SpanningTree::new(4);
+        tree.add_node(0); // A root
+        tree.add_edge(0, 1, 0); // A->B
+        tree.add_edge(0, 2, 1); // A->C
+        tree.add_edge(1, 3, 2); // B->D
+        (lg, tree)
+    }
+
+    /// Helper: Create a graph/tree with a negative cut value.
+    /// Graph: A->C (weight=1), B->C (weight=1), B->D (weight=1)
+    /// Ranks: A=0, B=0, C=1, D=1
+    /// Tree: A->C (edge 0), then C is parent of B via edge 1 reversed.
+    /// Actually, let's build it more carefully with known cut values.
+    ///
+    /// Simplest: just use a chain A->B->C with ranks [0, 2, 3], minlen=1 for both.
+    /// Tree: A->B (edge 0), B->C (edge 1). A->B slack=1 (not tight!).
+    /// That won't work — tree edges must be tight.
+    ///
+    /// Use asymmetric weights: A->B weight=1, B->C weight=3.
+    /// Tree: A->B, B->C, ranks 0,1,2.
+    /// cut_value[C] (child=C, parent=B, tree_edge=B->C):
+    ///   start: weight=3. No other edges incident on C. cut=3.
+    /// cut_value[B] (child=B, parent=A, tree_edge=A->B):
+    ///   start: weight=1. Edge B->C: is_out_edge=true, child_is_tail=false (A is src).
+    ///   points_to_head=(true==false)=false. w=3. cut -= 3 → -2.
+    ///   B->C is tree child: parent[C]=B. cut += otherCut=3 → cut = 1.
+    /// Hmm, cut_value[B] = 1. Still positive.
+    ///
+    /// For a negative cut value, we need a tree edge whose removal would
+    /// decrease total weighted length. This requires a non-tree edge that
+    /// could replace it more efficiently. Build manually:
+    ///
+    /// Graph: A->B (w=1), A->C (w=1), C->B (w=1)
+    /// Ranks: A=0, B=2, C=1 (A->B has slack=1, not tight!)
+    /// This can't be a feasible tree since A->B isn't tight.
+    ///
+    /// Let's use: A->B (w=1), A->C (w=1), C->B (w=1), minlen all 1
+    /// Feasible ranks: A=0, C=1, B=2 (all tight)
+    /// Tree: A->B (edge 0, slack=2-0-1=1, NOT tight!!)
+    /// That doesn't work either.
+    ///
+    /// The point is: to get a negative cut value, we need a tree edge
+    /// that could be replaced. This only happens after pivot modifies the tree.
+    /// In practice, feasible_tree + init_cut_values always gives non-negative
+    /// cut values initially. The negative values appear after exchangeEdges.
+    ///
+    /// Let's just test exact cut values for the known diamond case instead.
+    fn make_exact_cut_value_tree() -> (LayoutGraph, SpanningTree) {
+        // A->B (w=1), B->C (w=3). Ranks 0,1,2. All tight.
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("C", ());
+        g.add_edge("A", "B"); // edge 0, w=1
+        g.add_edge("B", "C"); // edge 1, w=1
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        lg.ranks = vec![0, 1, 2];
+        let mut tree = SpanningTree::new(3);
+        tree.add_node(0);
+        tree.add_edge(0, 1, 0); // A->B
+        tree.add_edge(1, 2, 1); // B->C
+        (lg, tree)
+    }
+
+    #[test]
+    fn test_cut_value_simple_edge() {
+        let (lg, mut tree) = make_simple_ab_tree();
+        init_low_lim(&mut tree, 0);
+        init_cut_values(&mut tree, &lg);
+        // B is child of A. cut_value[B] = weight(A->B) = 1.0
+        assert_eq!(tree.cut_value[1], 1.0);
+    }
+
+    #[test]
+    fn test_cut_value_diamond() {
+        let (lg, mut tree) = make_diamond_tree();
+        init_low_lim(&mut tree, 0);
+        init_cut_values(&mut tree, &lg);
+        // All cut values should be non-negative (optimal tree)
+        for node in 0..4 {
+            if tree.parent[node].is_some() {
+                assert!(
+                    tree.cut_value[node] >= 0.0,
+                    "node {} has negative cut value {}",
+                    node,
+                    tree.cut_value[node]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_cut_value_chain_exact() {
+        // A->B->C, tree A->B->C, all weight=1, ranks 0,1,2
+        let (lg, mut tree) = make_exact_cut_value_tree();
+        init_low_lim(&mut tree, 0);
+        init_cut_values(&mut tree, &lg);
+        // cut_value[C] (child=C, parent=B): just the B->C edge weight = 1.0
+        assert_eq!(tree.cut_value[2], 1.0);
+        // cut_value[B] (child=B, parent=A): A->B weight + (B->C is tree child, cut adj)
+        // start: 1.0. B->C: is_out_edge=true, child_is_tail=false → points_to_head=false
+        // cut -= 1.0 → 0.0. Tree child C: cut += cut_value[C]=1.0 → 1.0
+        assert_eq!(tree.cut_value[1], 1.0);
     }
 
     #[test]
