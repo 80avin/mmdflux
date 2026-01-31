@@ -36,6 +36,7 @@ mod bk;
 pub(crate) mod border;
 mod graph;
 pub(crate) mod nesting;
+pub(crate) mod network_simplex;
 pub mod normalize;
 mod order;
 mod position;
