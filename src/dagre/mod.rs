@@ -138,6 +138,146 @@ fn insert_self_edge_dummies(lg: &mut LayoutGraph) {
     }
 }
 
+/// Compute 6-point orthogonal loop paths for self-edges using positioned node/dummy coordinates.
+fn position_self_edges(lg: &LayoutGraph, config: &LayoutConfig) -> Vec<SelfEdgeLayout> {
+    let gap = 1.0;
+
+    lg.self_edges
+        .iter()
+        .filter_map(|se| {
+            let dummy_idx = se.dummy_index?;
+            let node_pos = lg.positions[se.node_index];
+            let (nw, nh) = lg.dimensions[se.node_index];
+            let dummy_pos = lg.positions[dummy_idx];
+
+            let node_id = lg.node_ids[se.node_index].clone();
+            let node_cx = node_pos.x + nw / 2.0;
+            let node_cy = node_pos.y + nh / 2.0;
+
+            let points = match config.direction {
+                Direction::TopBottom => {
+                    let loop_x = dummy_pos.x + 0.5;
+                    let bot = node_pos.y + nh;
+                    let top = node_pos.y;
+                    vec![
+                        Point { x: node_cx, y: bot },
+                        Point {
+                            x: node_cx,
+                            y: bot + gap,
+                        },
+                        Point {
+                            x: loop_x,
+                            y: bot + gap,
+                        },
+                        Point {
+                            x: loop_x,
+                            y: top - gap,
+                        },
+                        Point {
+                            x: node_cx,
+                            y: top - gap,
+                        },
+                        Point { x: node_cx, y: top },
+                    ]
+                }
+                Direction::BottomTop => {
+                    let loop_x = dummy_pos.x + 0.5;
+                    let top = node_pos.y;
+                    let bot = node_pos.y + nh;
+                    vec![
+                        Point { x: node_cx, y: top },
+                        Point {
+                            x: node_cx,
+                            y: top - gap,
+                        },
+                        Point {
+                            x: loop_x,
+                            y: top - gap,
+                        },
+                        Point {
+                            x: loop_x,
+                            y: bot + gap,
+                        },
+                        Point {
+                            x: node_cx,
+                            y: bot + gap,
+                        },
+                        Point { x: node_cx, y: bot },
+                    ]
+                }
+                Direction::LeftRight => {
+                    let loop_y = dummy_pos.y + 0.5;
+                    let right = node_pos.x + nw;
+                    let left = node_pos.x;
+                    vec![
+                        Point {
+                            x: right,
+                            y: node_cy,
+                        },
+                        Point {
+                            x: right + gap,
+                            y: node_cy,
+                        },
+                        Point {
+                            x: right + gap,
+                            y: loop_y,
+                        },
+                        Point {
+                            x: left - gap,
+                            y: loop_y,
+                        },
+                        Point {
+                            x: left - gap,
+                            y: node_cy,
+                        },
+                        Point {
+                            x: left,
+                            y: node_cy,
+                        },
+                    ]
+                }
+                Direction::RightLeft => {
+                    let loop_y = dummy_pos.y + 0.5;
+                    let left = node_pos.x;
+                    let right = node_pos.x + nw;
+                    vec![
+                        Point {
+                            x: left,
+                            y: node_cy,
+                        },
+                        Point {
+                            x: left - gap,
+                            y: node_cy,
+                        },
+                        Point {
+                            x: left - gap,
+                            y: loop_y,
+                        },
+                        Point {
+                            x: right + gap,
+                            y: loop_y,
+                        },
+                        Point {
+                            x: right + gap,
+                            y: node_cy,
+                        },
+                        Point {
+                            x: right,
+                            y: node_cy,
+                        },
+                    ]
+                }
+            };
+
+            Some(SelfEdgeLayout {
+                node: node_id,
+                edge_index: se.orig_edge_index,
+                points,
+            })
+        })
+        .collect()
+}
+
 /// Main entry point for layout computation.
 ///
 /// Takes a directed graph, configuration options, and a function to get node dimensions.
@@ -219,6 +359,9 @@ where
 
     // Phase 4: Assign coordinates
     position::run(&mut lg, config);
+
+    // Phase 4.5: Compute self-edge loop paths
+    let self_edge_layouts = position_self_edges(&lg, config);
 
     // Compound: extract subgraph bounding boxes from border node positions
     let subgraph_bounds = if has_compound {
@@ -363,7 +506,7 @@ where
         edge_waypoints,
         label_positions,
         subgraph_bounds,
-        self_edges: vec![],
+        self_edges: self_edge_layouts,
     }
 }
 
@@ -861,6 +1004,58 @@ mod tests {
 
         let dummy_idx = lg.self_edges[0].dummy_index.unwrap();
         assert_eq!(lg.order[dummy_idx], node_order + 1);
+    }
+
+    #[test]
+    fn test_layout_result_contains_self_edge_layout() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 5.0));
+        graph.add_edge("A", "A");
+        let result = layout(&graph, &LayoutConfig::default(), |_, dims| *dims);
+        assert_eq!(result.self_edges.len(), 1);
+        assert_eq!(result.self_edges[0].node, "A".into());
+        assert_eq!(result.self_edges[0].points.len(), 6);
+    }
+
+    #[test]
+    fn test_layout_result_no_self_edges_when_none_exist() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 5.0));
+        graph.add_node("B", (10.0, 5.0));
+        graph.add_edge("A", "B");
+        let result = layout(&graph, &LayoutConfig::default(), |_, dims| *dims);
+        assert!(result.self_edges.is_empty());
+    }
+
+    #[test]
+    fn test_position_self_edges_td_produces_6_points() {
+        let mut lg = build_lg_from_edges(&[("A", "B"), ("A", "A")]);
+        let a_idx = lg.node_index[&"A".into()];
+        extract_self_edges(&mut lg);
+        rank::run(&mut lg);
+        rank::normalize(&mut lg);
+        normalize::run(&mut lg, &HashMap::new());
+        order::run(&mut lg);
+        insert_self_edge_dummies(&mut lg);
+        let config = LayoutConfig::default(); // TopBottom
+        position::run(&mut lg, &config);
+        let layouts = position_self_edges(&lg, &config);
+        assert_eq!(layouts.len(), 1);
+        assert_eq!(layouts[0].points.len(), 6);
+
+        // Verify exit from bottom, enter from top (TD)
+        let node_pos = lg.positions[a_idx];
+        let (_nw, nh) = lg.dimensions[a_idx];
+        let bot = node_pos.y + nh;
+        let top = node_pos.y;
+        assert!(
+            layouts[0].points[0].y >= bot - 0.1,
+            "first point should exit bottom"
+        );
+        assert!(
+            layouts[0].points[5].y <= top + 0.1,
+            "last point should enter top"
+        );
     }
 
     #[test]
