@@ -1636,3 +1636,95 @@ fn test_nested_subgraph_bounds_containment() {
         inner.y + inner.height
     );
 }
+
+// ==========================================
+// Self-edge (A --> A) tests
+// ==========================================
+
+#[test]
+fn test_self_loop_renders_without_crash() {
+    let output = render_fixture("self_loop.mmd");
+    assert!(!output.trim().is_empty());
+    assert!(output.contains("Process"));
+}
+
+#[test]
+fn test_self_loop_has_loop_segments() {
+    let output = render_input("graph TD\n    A --> A");
+    // Should have vertical line segments forming the loop
+    assert!(
+        output.contains('│') || output.contains('|'),
+        "should have vertical segments"
+    );
+    // Should have horizontal line segments
+    assert!(
+        output.contains('─') || output.contains('-'),
+        "should have horizontal segments"
+    );
+}
+
+#[test]
+fn test_self_loop_node_appears_once() {
+    let output = render_input("graph TD\n    A[Unique] --> A");
+    let count = output.matches("Unique").count();
+    assert_eq!(count, 1, "node label should appear exactly once");
+}
+
+#[test]
+fn test_self_loop_with_label() {
+    let output = render_fixture("self_loop_labeled.mmd");
+    assert!(output.contains("retry"), "label text should appear");
+    assert!(output.contains("done"), "other label should appear");
+}
+
+#[test]
+fn test_self_loop_all_directions() {
+    for dir in &["TD", "BT", "LR", "RL"] {
+        let input = format!("graph {}\n    A --> A", dir);
+        let output = render_input(&input);
+        assert!(
+            !output.trim().is_empty(),
+            "direction {} should produce non-empty output",
+            dir
+        );
+        assert!(
+            output.contains('A'),
+            "direction {} should contain node label",
+            dir
+        );
+    }
+}
+
+#[test]
+fn test_self_loop_with_normal_edges() {
+    let output = render_fixture("self_loop_with_others.mmd");
+    assert!(output.contains("Start"));
+    assert!(output.contains("Process"));
+    assert!(output.contains("End"));
+}
+
+#[test]
+fn test_self_loop_on_isolated_node() {
+    let output = render_input("graph TD\n    A --> A");
+    assert!(output.contains('A'));
+}
+
+#[test]
+fn test_self_loop_with_backward_edge() {
+    // A->B->A cycle plus B->B self-loop
+    let output = render_input("graph TD\n    A --> B\n    B --> A\n    B --> B");
+    assert!(output.contains('A'));
+    assert!(output.contains('B'));
+}
+
+#[test]
+fn test_self_loop_ascii_mode() {
+    let diagram = parse_and_build("self_loop.mmd");
+    let output = render(&diagram, &RenderOptions { ascii_only: true });
+    // Should use ASCII characters, no Unicode box drawing
+    assert!(!output.contains('┌'), "should not have Unicode box drawing");
+    assert!(
+        !output.contains('─'),
+        "should not have Unicode horizontal line"
+    );
+}
