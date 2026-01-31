@@ -26,6 +26,14 @@ impl std::fmt::Display for NodeId {
     }
 }
 
+/// Ranking algorithm selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Ranker {
+    #[default]
+    NetworkSimplex,
+    LongestPath,
+}
+
 /// Direction of the hierarchical layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Direction {
@@ -98,6 +106,9 @@ pub struct LayoutConfig {
 
     /// Whether to apply layout optimization for acyclic graphs.
     pub acyclic: bool,
+
+    /// Ranking algorithm to use.
+    pub ranker: Ranker,
 }
 
 impl Default for LayoutConfig {
@@ -109,6 +120,7 @@ impl Default for LayoutConfig {
             rank_sep: 50.0,
             margin: 10.0,
             acyclic: true,
+            ranker: Ranker::default(),
         }
     }
 }
@@ -190,6 +202,12 @@ pub struct EdgeLayout {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ranker_default_is_network_simplex() {
+        let config = LayoutConfig::default();
+        assert_eq!(config.ranker, Ranker::NetworkSimplex);
+    }
 
     #[test]
     fn test_self_edge_struct() {

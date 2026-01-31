@@ -1106,7 +1106,7 @@ mod tests {
     use super::*;
     use crate::dagre::graph::DiGraph;
     use crate::dagre::normalize::{DummyNode, DummyType, LabelPos};
-    use crate::dagre::{order, rank};
+    use crate::dagre::{LayoutConfig, order, rank};
 
     /// Test helper: check if two nodes are in the same block
     fn same_block(alignment: &BlockAlignment, v: NodeIndex, w: NodeIndex) -> bool {
@@ -1132,7 +1132,7 @@ mod tests {
         graph.add_edge("C", "D");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         // Set order within layers: B before C
@@ -1479,7 +1479,7 @@ mod tests {
         graph.add_edge("B", "C");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         // Set order within layers (all alone in their layers)
@@ -1629,7 +1629,7 @@ mod tests {
         graph.add_node("A", (100.0, 50.0));
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         let conflicts = ConflictSet::new();
 
@@ -1908,7 +1908,7 @@ mod tests {
         graph.add_node("A", (100.0, 50.0));
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         let config = BKConfig::default();
@@ -2210,7 +2210,7 @@ mod tests {
         graph.add_edge("Step2", "End");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         order::run(&mut lg);
 
@@ -2354,7 +2354,7 @@ mod tests {
 
         let mut lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
         nesting::run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         nesting::cleanup(&mut lg);
         nesting::assign_rank_minmax(&mut lg);

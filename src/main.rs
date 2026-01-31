@@ -2,7 +2,8 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+use mmdflux::dagre::Ranker;
 use mmdflux::parser::{DiagramType, detect_diagram_type, parse_info, parse_packet, parse_pie};
 use mmdflux::render::{RenderOptions, render};
 use mmdflux::{build_diagram, parse_flowchart};
@@ -25,6 +26,25 @@ struct Cli {
     /// Use ASCII-only characters instead of Unicode box-drawing
     #[arg(long)]
     ascii: bool,
+
+    /// Ranking algorithm
+    #[arg(long, value_enum, default_value_t = RankerArg::NetworkSimplex)]
+    ranker: RankerArg,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum RankerArg {
+    NetworkSimplex,
+    LongestPath,
+}
+
+impl RankerArg {
+    fn to_ranker(self) -> Ranker {
+        match self {
+            RankerArg::NetworkSimplex => Ranker::NetworkSimplex,
+            RankerArg::LongestPath => Ranker::LongestPath,
+        }
+    }
 }
 
 fn main() -> io::Result<()> {
@@ -39,7 +59,7 @@ fn main() -> io::Result<()> {
         }
     };
 
-    let output = match render_input(&input, cli.debug, cli.ascii) {
+    let output = match render_input(&input, cli.debug, cli.ascii, cli.ranker) {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Error: {}", e);
@@ -55,10 +75,15 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn render_input(input: &str, debug: bool, ascii_only: bool) -> Result<String, String> {
+fn render_input(
+    input: &str,
+    debug: bool,
+    ascii_only: bool,
+    ranker: RankerArg,
+) -> Result<String, String> {
     // Detect diagram type and dispatch
     match detect_diagram_type(input) {
-        Some(DiagramType::Flowchart) => render_flowchart_diagram(input, debug, ascii_only),
+        Some(DiagramType::Flowchart) => render_flowchart_diagram(input, debug, ascii_only, ranker),
         Some(DiagramType::Info) => render_info_diagram(input),
         Some(DiagramType::Pie) => render_pie_diagram(input),
         Some(DiagramType::Packet) => render_packet_diagram(input),
@@ -66,7 +91,12 @@ fn render_input(input: &str, debug: bool, ascii_only: bool) -> Result<String, St
     }
 }
 
-fn render_flowchart_diagram(input: &str, debug: bool, ascii_only: bool) -> Result<String, String> {
+fn render_flowchart_diagram(
+    input: &str,
+    debug: bool,
+    ascii_only: bool,
+    ranker: RankerArg,
+) -> Result<String, String> {
     let flowchart = parse_flowchart(input).map_err(|e| e.to_string())?;
     let diagram = build_diagram(&flowchart);
 
@@ -94,7 +124,10 @@ fn render_flowchart_diagram(input: &str, debug: bool, ascii_only: bool) -> Resul
         }
         Ok(output)
     } else {
-        let options = RenderOptions { ascii_only };
+        let options = RenderOptions {
+            ascii_only,
+            ranker: Some(ranker.to_ranker()),
+        };
         Ok(render(&diagram, &options))
     }
 }

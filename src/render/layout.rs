@@ -111,6 +111,8 @@ pub struct LayoutConfig {
     pub left_label_margin: usize,
     /// Extra right margin for edge labels on right branches.
     pub right_label_margin: usize,
+    /// Ranking algorithm override.
+    pub ranker: Option<crate::dagre::types::Ranker>,
 }
 
 impl Default for LayoutConfig {
@@ -121,6 +123,7 @@ impl Default for LayoutConfig {
             padding: 1,
             left_label_margin: 0,
             right_label_margin: 0,
+            ranker: None,
         }
     }
 }
@@ -222,6 +225,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         rank_sep: 50.0,
         margin: 10.0,
         acyclic: true,
+        ranker: config.ranker.unwrap_or_default(),
     };
 
     let result = dagre::layout_with_labels(

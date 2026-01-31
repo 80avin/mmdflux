@@ -485,8 +485,8 @@ fn count_crossings_between(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::NodeId;
     use crate::dagre::graph::DiGraph;
+    use crate::dagre::{LayoutConfig, NodeId};
 
     fn setup_graph_and_run(
         nodes: &[&str],
@@ -501,7 +501,7 @@ mod tests {
         }
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         let layers = rank::by_rank(&lg);
         (lg, layers)
@@ -534,7 +534,7 @@ mod tests {
         graph.add_edge("B", "C");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         run(&mut lg);
@@ -560,7 +560,7 @@ mod tests {
         graph.add_edge("A", "C");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         let layers = rank::by_rank(&lg);
@@ -623,7 +623,7 @@ mod tests {
         graph.add_edge("C", "D");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         init_order(&mut lg);
@@ -653,7 +653,7 @@ mod tests {
         graph.add_edge("C", "D");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         init_order(&mut lg);
@@ -680,7 +680,7 @@ mod tests {
         graph.add_edge("B", "C");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         run(&mut lg);
@@ -718,7 +718,7 @@ mod tests {
         graph.add_edge("E", "F");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         run(&mut lg);
@@ -746,7 +746,7 @@ mod tests {
         graph.add_node("B", ());
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         run(&mut lg);
@@ -785,7 +785,7 @@ mod tests {
         graph.add_edge("B", "E");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         run(&mut lg);
@@ -810,7 +810,7 @@ mod tests {
         graph.add_edge("C", "D");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         run(&mut lg);
@@ -834,7 +834,7 @@ mod tests {
         graph.add_edge("C", "D");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         run(&mut lg);
@@ -860,7 +860,7 @@ mod tests {
         graph.add_edge("Y", "C");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         let x = lg.node_index[&NodeId::from("X")];
@@ -896,7 +896,7 @@ mod tests {
         graph.add_edge("A", "C");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         assert!(lg.edge_weights.iter().all(|&w| w == 1.0));
@@ -925,7 +925,7 @@ mod tests {
         graph.add_edge("Y", "B");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         // Set non-uniform weight on the X->A edge
@@ -985,7 +985,7 @@ mod tests {
 
         let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
         nesting::run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         nesting::cleanup(&mut lg);
         nesting::assign_rank_minmax(&mut lg);
@@ -1065,7 +1065,7 @@ mod tests {
 
         let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
         nesting::run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         nesting::cleanup(&mut lg);
         nesting::assign_rank_minmax(&mut lg);
@@ -1128,7 +1128,7 @@ mod tests {
         graph.add_edge("C", "D");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         run(&mut lg);
@@ -1159,7 +1159,7 @@ mod tests {
 
         let mut lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
         nesting::run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         nesting::cleanup(&mut lg);
         nesting::insert_title_nodes(&mut lg);

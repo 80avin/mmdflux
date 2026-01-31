@@ -965,7 +965,10 @@ mod tests {
 
         let output = crate::render::render(
             &diagram,
-            &crate::render::RenderOptions { ascii_only: false },
+            &crate::render::RenderOptions {
+                ascii_only: false,
+                ..Default::default()
+            },
         );
         // Should contain the label
         assert!(output.contains("Yes"));
@@ -981,7 +984,10 @@ mod tests {
                 d.add_edge(Edge::new("A", "B").with_label("yes"));
                 d
             },
-            &crate::render::RenderOptions { ascii_only: false },
+            &crate::render::RenderOptions {
+                ascii_only: false,
+                ..Default::default()
+            },
         );
 
         assert!(output.contains("yes"), "Label 'yes' should be rendered");
@@ -1016,7 +1022,10 @@ mod tests {
                 d.add_edge(Edge::new("B", "C").with_label("git commit"));
                 d
             },
-            &crate::render::RenderOptions { ascii_only: false },
+            &crate::render::RenderOptions {
+                ascii_only: false,
+                ..Default::default()
+            },
         );
 
         // Both labels should be fully visible (not clipped by node boundaries)

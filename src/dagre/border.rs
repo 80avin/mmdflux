@@ -132,7 +132,7 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
 mod tests {
     use super::*;
     use crate::dagre::graph::DiGraph;
-    use crate::dagre::{nesting, rank};
+    use crate::dagre::{LayoutConfig, nesting, rank};
 
     fn build_ranked_compound_graph() -> LayoutGraph {
         let mut g: DiGraph<(f64, f64)> = DiGraph::new();
@@ -148,7 +148,7 @@ mod tests {
 
         let mut lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
         nesting::run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         nesting::cleanup(&mut lg);
         nesting::assign_rank_minmax(&mut lg);

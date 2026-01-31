@@ -47,7 +47,7 @@ use std::collections::HashMap;
 pub use graph::DiGraph;
 use graph::LayoutGraph;
 pub use types::{
-    Direction, EdgeLayout, LayoutConfig, LayoutResult, NodeId, Point, Rect, SelfEdge,
+    Direction, EdgeLayout, LayoutConfig, LayoutResult, NodeId, Point, Ranker, Rect, SelfEdge,
     SelfEdgeLayout,
 };
 
@@ -324,7 +324,7 @@ where
     make_space_for_edge_labels(&mut lg, edge_labels);
 
     // Phase 2: Assign ranks (layers)
-    rank::run(&mut lg);
+    rank::run(&mut lg, config);
     rank::normalize(&mut lg);
 
     // Compound: cleanup nesting edges, insert title nodes, compute rank spans
@@ -958,7 +958,7 @@ mod tests {
         let mut lg = build_lg_from_edges(&[("A", "B"), ("A", "A")]);
         extract_self_edges(&mut lg);
         // Simulate ranking and ordering
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         normalize::run(&mut lg, &HashMap::new());
         order::run(&mut lg);
@@ -977,7 +977,7 @@ mod tests {
         let mut lg = build_lg_from_edges(&[("A", "B"), ("A", "A")]);
         let a_idx = lg.node_index[&"A".into()];
         extract_self_edges(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         normalize::run(&mut lg, &HashMap::new());
         order::run(&mut lg);
@@ -994,7 +994,7 @@ mod tests {
         let mut lg = build_lg_from_edges(&[("A", "B"), ("A", "A")]);
         let a_idx = lg.node_index[&"A".into()];
         extract_self_edges(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         normalize::run(&mut lg, &HashMap::new());
         order::run(&mut lg);
@@ -1032,7 +1032,7 @@ mod tests {
         let mut lg = build_lg_from_edges(&[("A", "B"), ("A", "A")]);
         let a_idx = lg.node_index[&"A".into()];
         extract_self_edges(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         normalize::run(&mut lg, &HashMap::new());
         order::run(&mut lg);

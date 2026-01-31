@@ -25,6 +25,8 @@ use crate::graph::{Diagram, Direction};
 pub struct RenderOptions {
     /// Use ASCII-only characters instead of Unicode box-drawing.
     pub ascii_only: bool,
+    /// Ranking algorithm override. None uses the default (NetworkSimplex).
+    pub ranker: Option<crate::dagre::types::Ranker>,
 }
 
 /// Render a diagram to ASCII art.
@@ -48,7 +50,8 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
     };
 
     // Step 1: Compute layout with direction-aware spacing
-    let config = layout_config_for_diagram(diagram);
+    let mut config = layout_config_for_diagram(diagram);
+    config.ranker = options.ranker;
     let layout = compute_layout_direct(diagram, &config);
 
     // Step 2: Create canvas

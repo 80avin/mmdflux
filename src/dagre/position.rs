@@ -222,7 +222,7 @@ mod tests {
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
         acyclic::run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         order::run(&mut lg);
         run(&mut lg, config);

@@ -146,6 +146,7 @@ pub fn cleanup(lg: &mut LayoutGraph) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dagre::LayoutConfig;
     use crate::dagre::graph::{DiGraph, LayoutGraph};
 
     fn build_test_compound_layout_graph() -> LayoutGraph {
@@ -258,7 +259,7 @@ mod tests {
         let sg1_idx = lg.node_index[&"sg1".into()];
 
         run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         cleanup(&mut lg);
         insert_title_nodes(&mut lg);
@@ -285,7 +286,7 @@ mod tests {
         let mut lg = build_test_compound_layout_graph();
         let sg1_idx = lg.node_index[&"sg1".into()];
         run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         cleanup(&mut lg);
 
@@ -304,7 +305,7 @@ mod tests {
         let sg1_idx = lg.node_index[&"sg1".into()];
 
         run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         cleanup(&mut lg);
         insert_title_nodes(&mut lg);
@@ -327,7 +328,7 @@ mod tests {
         let sg1_idx = lg.node_index[&"sg1".into()];
 
         run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         cleanup(&mut lg);
 
@@ -369,7 +370,7 @@ mod tests {
 
         let mut lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
         run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         cleanup(&mut lg);
         insert_title_nodes(&mut lg);
@@ -398,7 +399,7 @@ mod tests {
         let sg1_idx = lg.node_index[&"sg1".into()];
 
         run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
         cleanup(&mut lg);
         insert_title_nodes(&mut lg);
@@ -411,7 +412,7 @@ mod tests {
         use crate::dagre::rank;
 
         let mut lg = build_test_simple_layout_graph();
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         assign_rank_minmax(&mut lg);

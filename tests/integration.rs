@@ -49,7 +49,13 @@ fn render_input(input: &str) -> String {
 /// Parse, build, and render a fixture file with ASCII-only output.
 fn render_fixture_ascii(name: &str) -> String {
     let diagram = parse_and_build(name);
-    render(&diagram, &RenderOptions { ascii_only: true })
+    render(
+        &diagram,
+        &RenderOptions {
+            ascii_only: true,
+            ..Default::default()
+        },
+    )
 }
 
 /// Assert that all values in the slice are distinct.
@@ -1720,7 +1726,13 @@ fn test_self_loop_with_backward_edge() {
 #[test]
 fn test_self_loop_ascii_mode() {
     let diagram = parse_and_build("self_loop.mmd");
-    let output = render(&diagram, &RenderOptions { ascii_only: true });
+    let output = render(
+        &diagram,
+        &RenderOptions {
+            ascii_only: true,
+            ..Default::default()
+        },
+    );
     // Should use ASCII characters, no Unicode box drawing
     assert!(!output.contains('┌'), "should not have Unicode box drawing");
     assert!(

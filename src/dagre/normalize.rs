@@ -402,7 +402,7 @@ pub(crate) fn get_label_position(
 mod tests {
     use super::*;
     use crate::dagre::graph::{DiGraph, LayoutGraph};
-    use crate::dagre::{acyclic, rank};
+    use crate::dagre::{LayoutConfig, acyclic, rank};
 
     /// Helper to create a layout graph for testing.
     fn create_test_graph(nodes: &[&str], edges: &[(&str, &str)]) -> LayoutGraph {
@@ -421,7 +421,7 @@ mod tests {
         // A -> B (spans 1 rank, should not be normalized)
         let mut lg = create_test_graph(&["A", "B"], &[("A", "B")]);
         acyclic::run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         let edge_labels = HashMap::new();
@@ -439,7 +439,7 @@ mod tests {
         // A -> B -> C, but also A -> C (spans 2 ranks)
         let mut lg = create_test_graph(&["A", "B", "C"], &[("A", "B"), ("B", "C"), ("A", "C")]);
         acyclic::run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         // Verify ranks: A=0, B=1, C=2
@@ -474,7 +474,7 @@ mod tests {
             &[("A", "B"), ("B", "C"), ("C", "D"), ("A", "D")],
         );
         acyclic::run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         // Create label info for edge A->D (which should be edge index 3)
@@ -504,7 +504,7 @@ mod tests {
         // A -> B -> C, and A -> C
         let mut lg = create_test_graph(&["A", "B", "C"], &[("A", "B"), ("B", "C"), ("A", "C")]);
         acyclic::run(&mut lg);
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         let edge_labels = HashMap::new();
@@ -624,7 +624,7 @@ mod tests {
         // Simulate make_space_for_edge_labels: set minlen=2 for edge 0
         lg.edge_minlens[0] = 2;
 
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         let a_idx = lg.node_index[&NodeId::from("A")];
@@ -669,7 +669,7 @@ mod tests {
         // edge index 3 is A->D, set minlen=2 for label
         lg.edge_minlens[3] = 2;
 
-        rank::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
         let mut edge_labels = HashMap::new();

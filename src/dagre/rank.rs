@@ -6,9 +6,18 @@
 use std::collections::VecDeque;
 
 use super::graph::LayoutGraph;
+use super::types::{LayoutConfig, Ranker};
+
+/// Assign ranks to nodes by dispatching to the configured ranker.
+pub fn run(graph: &mut LayoutGraph, config: &LayoutConfig) {
+    match config.ranker {
+        Ranker::NetworkSimplex => longest_path(graph), // TODO: replace with network simplex
+        Ranker::LongestPath => longest_path(graph),
+    }
+}
 
 /// Assign ranks to nodes using longest-path algorithm.
-pub fn run(graph: &mut LayoutGraph) {
+pub fn longest_path(graph: &mut LayoutGraph) {
     let n = graph.node_ids.len();
     if n == 0 {
         return;
@@ -100,6 +109,23 @@ mod tests {
     use crate::dagre::graph::DiGraph;
 
     #[test]
+    fn test_run_with_longest_path_config() {
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_edge("A", "B");
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        let config = LayoutConfig {
+            ranker: Ranker::LongestPath,
+            ..Default::default()
+        };
+        run(&mut lg, &config);
+        normalize(&mut lg);
+        assert_eq!(lg.ranks[lg.node_index[&"A".into()]], 0);
+        assert_eq!(lg.ranks[lg.node_index[&"B".into()]], 1);
+    }
+
+    #[test]
     fn test_rank_linear_chain() {
         let mut graph: DiGraph<()> = DiGraph::new();
         graph.add_node("A", ());
@@ -109,7 +135,7 @@ mod tests {
         graph.add_edge("B", "C");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        run(&mut lg);
+        run(&mut lg, &LayoutConfig::default());
         normalize(&mut lg);
 
         // A=0, B=1, C=2
@@ -131,7 +157,7 @@ mod tests {
         graph.add_edge("C", "D");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        run(&mut lg);
+        run(&mut lg, &LayoutConfig::default());
         normalize(&mut lg);
 
         // A=0, B=C=1, D=2
@@ -150,7 +176,7 @@ mod tests {
         // No edges - all disconnected
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        run(&mut lg);
+        run(&mut lg, &LayoutConfig::default());
         normalize(&mut lg);
 
         // All should be at rank 0
@@ -172,7 +198,7 @@ mod tests {
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
         lg.edge_minlens[0] = 2; // A->B needs minlen=2
 
-        run(&mut lg);
+        run(&mut lg, &LayoutConfig::default());
         normalize(&mut lg);
 
         let a = lg.node_index[&"A".into()];
@@ -197,7 +223,7 @@ mod tests {
         graph.add_edge("C", "D");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        run(&mut lg);
+        run(&mut lg, &LayoutConfig::default());
         normalize(&mut lg);
 
         let layers = by_rank(&lg);
