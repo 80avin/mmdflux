@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use super::intersect::{
     NodeFace, calculate_attachment_points, classify_face, spread_points_on_face,
 };
-use super::layout::Layout;
+use super::layout::{Layout, SelfEdgeDrawData};
 use super::shape::NodeBounds;
 use crate::graph::{Direction, Edge, Shape};
 
@@ -119,6 +119,8 @@ pub struct RoutedEdge {
     pub entry_direction: AttachDirection,
     /// Whether this edge goes backward in the layout direction.
     pub is_backward: bool,
+    /// Whether this is a self-edge (source == target).
+    pub is_self_edge: bool,
 }
 
 /// Direction for attachment points.
@@ -354,6 +356,7 @@ fn route_edge_with_waypoints(
         segments,
         entry_direction,
         is_backward,
+        is_self_edge: false,
     })
 }
 
@@ -414,6 +417,7 @@ fn route_backward_with_synthetic_waypoints(
         segments,
         entry_direction,
         is_backward: true,
+        is_self_edge: false,
     })
 }
 
@@ -479,6 +483,7 @@ fn route_edge_direct(
         segments,
         entry_direction,
         is_backward,
+        is_self_edge: false,
     })
 }
 
@@ -962,6 +967,10 @@ pub fn compute_attachment_plan(
     let mut face_groups: FaceGroupMap = HashMap::new();
 
     for (i, edge) in edges.iter().enumerate() {
+        // Skip self-edges — they are routed separately
+        if edge.from == edge.to {
+            continue;
+        }
         let src_bounds = match layout.get_bounds(&edge.from) {
             Some(b) => b,
             None => continue,
@@ -1072,6 +1081,71 @@ pub fn compute_attachment_plan(
     overrides
 }
 
+/// Route a self-edge as orthogonal segments from pre-computed draw-coordinate points.
+fn route_self_edge(data: &SelfEdgeDrawData, edge: &Edge, direction: Direction) -> RoutedEdge {
+    let mut segments = Vec::new();
+
+    for window in data.points.windows(2) {
+        let (x1, y1) = window[0];
+        let (x2, y2) = window[1];
+
+        if y1 == y2 {
+            segments.push(Segment::Horizontal {
+                y: y1,
+                x_start: x1.min(x2),
+                x_end: x1.max(x2),
+            });
+        } else if x1 == x2 {
+            segments.push(Segment::Vertical {
+                x: x1,
+                y_start: y1.min(y2),
+                y_end: y1.max(y2),
+            });
+        } else {
+            // Diagonal — split into L-shape (shouldn't happen with orthogonal points)
+            segments.push(Segment::Vertical {
+                x: x1,
+                y_start: y1.min(y2),
+                y_end: y1.max(y2),
+            });
+            segments.push(Segment::Horizontal {
+                y: y2,
+                x_start: x1.min(x2),
+                x_end: x1.max(x2),
+            });
+        }
+    }
+
+    let start = data
+        .points
+        .first()
+        .map(|&(x, y)| Point::new(x, y))
+        .unwrap_or(Point::new(0, 0));
+    let end = data
+        .points
+        .last()
+        .map(|&(x, y)| Point::new(x, y))
+        .unwrap_or(Point::new(0, 0));
+
+    // Entry direction: the arrow enters the node from the direction of the last segment
+    let entry_direction = match direction {
+        Direction::TopDown => AttachDirection::Top, // enters top face from above
+        Direction::BottomTop => AttachDirection::Bottom, // enters bottom face from below
+        Direction::LeftRight => AttachDirection::Left, // enters left face from left
+        Direction::RightLeft => AttachDirection::Right, // enters right face from right
+    };
+
+    RoutedEdge {
+        edge: edge.clone(),
+        start,
+        end,
+        segments,
+        entry_direction,
+        is_backward: false,
+        is_self_edge: true,
+    }
+}
+
 /// Route all edges in the layout.
 pub fn route_all_edges(
     edges: &[Edge],
@@ -1081,17 +1155,35 @@ pub fn route_all_edges(
     // Pre-pass: compute attachment plan for edges sharing a face
     let plan = compute_attachment_plan(edges, layout, diagram_direction);
 
-    edges
+    let mut routed: Vec<RoutedEdge> = edges
         .iter()
         .enumerate()
         .filter_map(|(i, edge)| {
+            // Skip self-edges in normal routing
+            if edge.from == edge.to {
+                return None;
+            }
             let (src_override, tgt_override) = plan
                 .get(&i)
                 .map(|ov| (ov.source, ov.target))
                 .unwrap_or((None, None));
             route_edge(edge, layout, diagram_direction, src_override, tgt_override)
         })
-        .collect()
+        .collect();
+
+    // Route self-edges separately using pre-computed loop points
+    for se_data in &layout.self_edges {
+        if let Some(edge) = edges
+            .iter()
+            .find(|e| e.from == e.to && e.from == se_data.node_id)
+        {
+            if !se_data.points.is_empty() {
+                routed.push(route_self_edge(se_data, edge, diagram_direction));
+            }
+        }
+    }
+
+    routed
 }
 
 #[cfg(test)]

@@ -29,6 +29,17 @@ pub struct SubgraphBounds {
     pub depth: usize,
 }
 
+/// Draw-coordinate data for a self-edge loop.
+#[derive(Debug, Clone)]
+pub struct SelfEdgeDrawData {
+    /// Node ID the self-edge loops on.
+    pub node_id: String,
+    /// Original edge index.
+    pub edge_index: usize,
+    /// Draw-coordinate points for the orthogonal loop.
+    pub points: Vec<(usize, usize)>,
+}
+
 /// Grid position of a node (layer/column in abstract grid coordinates).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GridPos {
@@ -75,6 +86,9 @@ pub struct Layout {
     /// Key: subgraph ID, Value: bounds with title.
     /// Empty for diagrams without subgraphs.
     pub subgraph_bounds: HashMap<String, SubgraphBounds>,
+
+    /// Self-edge loop data in draw coordinates.
+    pub self_edges: Vec<SelfEdgeDrawData>,
 }
 
 impl Layout {
@@ -582,12 +596,98 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         &diagram.edges,
     );
 
+    // --- Phase L: Compute self-edge loop paths in draw coordinates ---
+    // We use node bounds directly rather than transforming dagre-space loop points,
+    // because the dagre gap (1.0) would collapse to 0 after ASCII scaling.
+    let self_edges: Vec<SelfEdgeDrawData> = result
+        .self_edges
+        .iter()
+        .filter_map(|sel| {
+            let bounds = node_bounds.get(&sel.node.0)?;
+            let loop_margin = 2; // gap between node edge and loop line
+            let loop_extent = 3; // how far the loop extends beyond the node
+
+            let points = match dagre_direction {
+                DagreDirection::TopBottom => {
+                    let cx = bounds.center_x();
+                    let right = bounds.x + bounds.width + loop_extent;
+                    let bot = bounds.y + bounds.height + loop_margin;
+                    let top = bounds.y.saturating_sub(loop_margin);
+                    vec![
+                        (cx, bounds.y + bounds.height), // exit bottom
+                        (cx, bot),                      // down
+                        (right, bot),                   // right
+                        (right, top),                   // up
+                        (cx, top),                      // left
+                        (cx, bounds.y),                 // enter top
+                    ]
+                }
+                DagreDirection::BottomTop => {
+                    let cx = bounds.center_x();
+                    let right = bounds.x + bounds.width + loop_extent;
+                    let top = bounds.y.saturating_sub(loop_margin);
+                    let bot = bounds.y + bounds.height + loop_margin;
+                    vec![
+                        (cx, bounds.y),                 // exit top
+                        (cx, top),                      // up
+                        (right, top),                   // right
+                        (right, bot),                   // down
+                        (cx, bot),                      // left
+                        (cx, bounds.y + bounds.height), // enter bottom
+                    ]
+                }
+                DagreDirection::LeftRight => {
+                    let cy = bounds.center_y();
+                    let bot = bounds.y + bounds.height + loop_extent;
+                    let right = bounds.x + bounds.width + loop_margin;
+                    let left = bounds.x.saturating_sub(loop_margin);
+                    vec![
+                        (bounds.x + bounds.width, cy), // exit right
+                        (right, cy),                   // right
+                        (right, bot),                  // down
+                        (left, bot),                   // left
+                        (left, cy),                    // up
+                        (bounds.x, cy),                // enter left
+                    ]
+                }
+                DagreDirection::RightLeft => {
+                    let cy = bounds.center_y();
+                    let bot = bounds.y + bounds.height + loop_extent;
+                    let left = bounds.x.saturating_sub(loop_margin);
+                    let right = bounds.x + bounds.width + loop_margin;
+                    vec![
+                        (bounds.x, cy),                // exit left
+                        (left, cy),                    // left
+                        (left, bot),                   // down
+                        (right, bot),                  // right
+                        (right, cy),                   // up
+                        (bounds.x + bounds.width, cy), // enter right
+                    ]
+                }
+            };
+
+            Some(SelfEdgeDrawData {
+                node_id: sel.node.0.clone(),
+                edge_index: sel.edge_index,
+                points,
+            })
+        })
+        .collect();
+
     // Expand canvas to fit subgraph borders (which extend beyond member nodes)
     let mut width = width;
     let mut height = height;
     for sb in subgraph_bounds.values() {
         width = width.max(sb.x + sb.width + config.padding);
         height = height.max(sb.y + sb.height + config.padding);
+    }
+
+    // Expand canvas to fit self-edge loops
+    for se in &self_edges {
+        for &(x, y) in &se.points {
+            width = width.max(x + config.padding + 1);
+            height = height.max(y + config.padding + 1);
+        }
     }
 
     Layout {
@@ -602,6 +702,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         edge_label_positions: edge_label_positions_converted,
         node_shapes,
         subgraph_bounds,
+        self_edges,
     }
 }
 
