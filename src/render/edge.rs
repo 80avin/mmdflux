@@ -717,7 +717,7 @@ pub fn render_all_edges_with_labels(
                     && px.saturating_add(label_len) <= canvas.width()
             });
 
-            let placed = if routed.is_backward {
+            let placed = if routed.is_self_edge || routed.is_backward {
                 // For backward edges, compute label position from actual routed path
                 // Center on midpoint, then run collision avoidance like forward edges
                 if let Some(midpoint) = calc_label_position(&routed.segments) {
