@@ -1,7 +1,8 @@
 //! Phase 2: Assign nodes to ranks (layers).
 //!
-//! Uses a longest-path algorithm via Kahn's topological sort.
-//! For optimal results, network simplex would be used (Dagre's approach).
+//! Dispatches to the configured ranking algorithm:
+//! - NetworkSimplex (default): optimal rank assignment minimizing total edge length
+//! - LongestPath: fast heuristic via Kahn's topological sort
 
 use std::collections::VecDeque;
 
@@ -11,7 +12,7 @@ use super::types::{LayoutConfig, Ranker};
 /// Assign ranks to nodes by dispatching to the configured ranker.
 pub fn run(graph: &mut LayoutGraph, config: &LayoutConfig) {
     match config.ranker {
-        Ranker::NetworkSimplex => longest_path(graph), // TODO: replace with network simplex
+        Ranker::NetworkSimplex => super::network_simplex::run(graph),
         Ranker::LongestPath => longest_path(graph),
     }
 }

@@ -115,11 +115,12 @@ fn tight_tree(tree: &mut SpanningTree, graph: &LayoutGraph, adj: &[Vec<(usize, u
 }
 
 /// Find the edge with minimum absolute slack that crosses the tree boundary
-/// (one endpoint in tree, one outside). Returns (edge_idx, delta) where delta
+/// (one endpoint in tree, one outside). Returns Some((edge_idx, delta)) where delta
 /// is the value to add to all tree node ranks to make this edge tight.
-fn find_min_slack_crossing(tree: &SpanningTree, graph: &LayoutGraph) -> (usize, i32) {
+/// Returns None if no crossing edge exists (disconnected graph).
+fn find_min_slack_crossing(tree: &SpanningTree, graph: &LayoutGraph) -> Option<(usize, i32)> {
     let edges = graph.effective_edges();
-    let mut best_edge = 0;
+    let mut best_edge = None;
     let mut best_slack = i32::MAX;
 
     for (edge_idx, &(from, to)) in edges.iter().enumerate() {
@@ -131,9 +132,11 @@ fn find_min_slack_crossing(tree: &SpanningTree, graph: &LayoutGraph) -> (usize, 
         let s = slack(graph, edge_idx).abs();
         if s < best_slack {
             best_slack = s;
-            best_edge = edge_idx;
+            best_edge = Some(edge_idx);
         }
     }
+
+    let best_edge = best_edge?;
 
     // Compute delta: we need rank(to) - rank(from) - minlen = 0
     // If from is in tree: shift tree ranks by +slack (make edge tight)
@@ -146,7 +149,7 @@ fn find_min_slack_crossing(tree: &SpanningTree, graph: &LayoutGraph) -> (usize, 
         -raw_slack
     };
 
-    (best_edge, delta)
+    Some((best_edge, delta))
 }
 
 /// Shift all tree node ranks by delta.
@@ -319,14 +322,41 @@ pub(crate) fn feasible_tree(graph: &mut LayoutGraph) -> SpanningTree {
     // Start from node 0
     tree.add_node(0);
 
+    let max_iters = n * 2; // Safety limit
+    let mut iters = 0;
     loop {
         let size = tight_tree(&mut tree, graph, &adj);
         if size >= n {
             break;
         }
         // Find min-slack edge crossing tree boundary and shift ranks
-        let (_edge_idx, delta) = find_min_slack_crossing(&tree, graph);
-        shift_ranks(&tree, graph, delta);
+        match find_min_slack_crossing(&tree, graph) {
+            Some((_edge_idx, delta)) => {
+                if delta == 0 {
+                    // No progress possible — force-add remaining nodes
+                    for node in 0..n {
+                        tree.add_node(node);
+                    }
+                    break;
+                }
+                shift_ranks(&tree, graph, delta);
+            }
+            None => {
+                // Disconnected graph — add remaining nodes directly
+                for node in 0..n {
+                    tree.add_node(node);
+                }
+                break;
+            }
+        }
+        iters += 1;
+        if iters >= max_iters {
+            // Safety: force-add remaining nodes
+            for node in 0..n {
+                tree.add_node(node);
+            }
+            break;
+        }
     }
 
     tree
@@ -335,7 +365,11 @@ pub(crate) fn feasible_tree(graph: &mut LayoutGraph) -> SpanningTree {
 /// Run network simplex ranking on the graph.
 /// Assigns optimal ranks minimizing total weighted edge length.
 pub(crate) fn run(graph: &mut LayoutGraph) {
-    if graph.node_count() == 0 {
+    let n = graph.node_count();
+    let edge_count = graph.effective_edges().len();
+    if n <= 1 || edge_count == 0 {
+        // No optimization possible — just use longest-path
+        rank::longest_path(graph);
         return;
     }
 
@@ -369,12 +403,7 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
 
 /// Find a tree edge with negative cut value. Returns the child node of that edge.
 fn leave_edge(tree: &SpanningTree) -> Option<usize> {
-    for node in 0..tree.parent.len() {
-        if tree.parent[node].is_some() && tree.cut_value[node] < 0.0 {
-            return Some(node);
-        }
-    }
-    None
+    (0..tree.parent.len()).find(|&node| tree.parent[node].is_some() && tree.cut_value[node] < 0.0)
 }
 
 /// Find the non-tree edge with minimum slack that should enter the tree.
