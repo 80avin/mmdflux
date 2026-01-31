@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use petgraph::stable_graph::StableDiGraph;
 
 use super::normalize::{DummyChain, DummyNode};
-use super::types::{NodeId, Point};
+use super::types::{NodeId, Point, SelfEdge};
 
 /// A directed graph for layout.
 ///
@@ -231,6 +231,9 @@ pub(crate) struct LayoutGraph {
 
     /// Minimum rank span for each edge. Default 1 for all edges.
     pub edge_minlens: Vec<i32>,
+
+    /// Self-edges extracted before the acyclic phase and reinserted after ordering.
+    pub self_edges: Vec<SelfEdge>,
 }
 
 impl LayoutGraph {
@@ -314,6 +317,7 @@ impl LayoutGraph {
             compound_nodes,
             compound_titles,
             edge_minlens: vec![1; edge_count],
+            self_edges: Vec::new(),
         }
     }
 
@@ -621,6 +625,14 @@ mod tests {
         let lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
         let sg1_idx = lg.node_index[&"sg1".into()];
         assert!(lg.compound_titles.contains(&sg1_idx));
+    }
+
+    #[test]
+    fn test_layout_graph_self_edges_default_empty() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        assert!(lg.self_edges.is_empty());
     }
 
     #[test]

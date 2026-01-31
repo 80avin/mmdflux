@@ -46,7 +46,10 @@ use std::collections::HashMap;
 
 pub use graph::DiGraph;
 use graph::LayoutGraph;
-pub use types::{Direction, EdgeLayout, LayoutConfig, LayoutResult, NodeId, Point, Rect};
+pub use types::{
+    Direction, EdgeLayout, LayoutConfig, LayoutResult, NodeId, Point, Rect, SelfEdge,
+    SelfEdgeLayout,
+};
 
 /// Double all edge minlens when any edge has a label, creating a uniform rank grid.
 ///
@@ -284,6 +287,7 @@ where
         edge_waypoints,
         label_positions,
         subgraph_bounds,
+        self_edges: vec![],
     }
 }
 

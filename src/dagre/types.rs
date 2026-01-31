@@ -147,6 +147,31 @@ pub struct LayoutResult {
     /// Key: subgraph node ID string, Value: bounding rectangle.
     /// Empty for graphs without subgraphs.
     pub subgraph_bounds: HashMap<String, Rect>,
+
+    /// Self-edge layout data (loops where source == target).
+    pub self_edges: Vec<SelfEdgeLayout>,
+}
+
+/// A self-edge (A → A) stashed before layout, reinserted after ordering.
+#[derive(Debug, Clone)]
+pub struct SelfEdge {
+    /// Index of the node in LayoutGraph.
+    pub node_index: usize,
+    /// Original edge index in the input graph.
+    pub orig_edge_index: usize,
+    /// Index of the dummy node (set during Phase 3).
+    pub dummy_index: Option<usize>,
+}
+
+/// Layout result data for a self-edge after positioning.
+#[derive(Debug, Clone)]
+pub struct SelfEdgeLayout {
+    /// Node ID the self-edge loops on.
+    pub node: NodeId,
+    /// Original edge index.
+    pub edge_index: usize,
+    /// Points defining the orthogonal loop path.
+    pub points: Vec<Point>,
 }
 
 /// Layout information for a single edge.
@@ -160,4 +185,48 @@ pub struct EdgeLayout {
     pub points: Vec<Point>,
     /// Original edge index (for preserving metadata).
     pub index: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_self_edge_struct() {
+        let se = SelfEdge {
+            node_index: 0,
+            orig_edge_index: 2,
+            dummy_index: None,
+        };
+        assert_eq!(se.node_index, 0);
+        assert_eq!(se.orig_edge_index, 2);
+        assert!(se.dummy_index.is_none());
+    }
+
+    #[test]
+    fn test_self_edge_layout_struct() {
+        let sel = SelfEdgeLayout {
+            node: "A".into(),
+            edge_index: 0,
+            points: vec![Point { x: 1.0, y: 2.0 }, Point { x: 3.0, y: 4.0 }],
+        };
+        assert_eq!(sel.node, "A".into());
+        assert_eq!(sel.points.len(), 2);
+    }
+
+    #[test]
+    fn test_layout_result_self_edges_field() {
+        let result = LayoutResult {
+            nodes: HashMap::new(),
+            edges: vec![],
+            reversed_edges: vec![],
+            width: 0.0,
+            height: 0.0,
+            edge_waypoints: HashMap::new(),
+            label_positions: HashMap::new(),
+            subgraph_bounds: HashMap::new(),
+            self_edges: vec![],
+        };
+        assert!(result.self_edges.is_empty());
+    }
 }
