@@ -871,10 +871,11 @@ fn build_block_graph(
             let right_root = alignment.get_root(right);
 
             if left_root != right_root {
-                // Skip separation edges between a border node and a sibling
-                // child of the same compound. Border segment nodes would
-                // otherwise push real nodes apart, causing stagger in straight
-                // vertical chains inside a subgraph.
+                // Skip separation edges between border nodes and children
+                // of the same compound, but only when that compound has no
+                // sibling compounds. This preserves compact single-subgraph
+                // layouts while maintaining the constraint chain needed for
+                // multi-subgraph separation.
                 if is_border_sibling_pair(graph, left, right) {
                     continue;
                 }
@@ -887,13 +888,12 @@ fn build_block_graph(
     bg
 }
 
-/// Check if two adjacent nodes are a border node and a child of the same compound.
+/// Check if two adjacent nodes are a border node and a child of the same compound,
+/// AND that compound has no sibling compounds (no other compounds share the same parent).
 ///
-/// Returns true when one node is a border segment node and the other is a
-/// non-border child of the same compound (same parent). In that case, the
-/// block graph should not create a separation edge between them, because
-/// the border's only purpose is defining the subgraph bounding box — it
-/// should not exert horizontal pressure on real child nodes.
+/// Returns true only for border-child pairs within compounds that have no siblings.
+/// When sibling compounds exist, the separation edge is needed to maintain the
+/// constraint chain that keeps sibling subgraph contents separated.
 fn is_border_sibling_pair(graph: &LayoutGraph, left: NodeIndex, right: NodeIndex) -> bool {
     let left_is_border = graph.border_type.contains_key(&left);
     let right_is_border = graph.border_type.contains_key(&right);
@@ -906,14 +906,24 @@ fn is_border_sibling_pair(graph: &LayoutGraph, left: NodeIndex, right: NodeIndex
     // Both must share the same parent compound
     let left_parent = graph.parents.get(left).copied().flatten();
     let right_parent = graph.parents.get(right).copied().flatten();
+    if left_parent.is_none() || left_parent != right_parent {
+        return false;
+    }
 
-    left_parent.is_some() && left_parent == right_parent
+    let compound = left_parent.unwrap();
+
+    // Check if this compound has sibling compounds (sharing the same grandparent).
+    // If siblings exist, don't skip — the constraint chain is needed.
+    let grandparent = graph.parents.get(compound).copied().flatten();
+    !graph.compound_nodes.iter().any(|&other| {
+        other != compound && graph.parents.get(other).copied().flatten() == grandparent
+    })
 }
 
 /// Get the separation value for a node: `edge_sep` for dummy nodes, `node_sep` for real nodes.
 #[inline]
 fn separation_for(graph: &LayoutGraph, node: NodeIndex, config: &BKConfig) -> f64 {
-    if is_dummy(graph, node) {
+    if is_dummy(graph, node) || graph.border_type.contains_key(&node) {
         config.edge_sep
     } else {
         config.node_sep
@@ -1106,7 +1116,7 @@ pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::graph::DiGraph;
+    use crate::dagre::graph::{BorderType, DiGraph};
     use crate::dagre::normalize::{DummyNode, DummyType, LabelPos};
     use crate::dagre::{LayoutConfig, order, rank};
 
@@ -2421,6 +2431,41 @@ mod tests {
     }
 
     #[test]
+    fn test_separation_for_border_node() {
+        // Build a minimal LayoutGraph with a compound structure including border nodes.
+        // Border nodes are tracked in border_type but NOT in dummy_nodes.
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("child", (100.0, 50.0));
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        rank::run(&mut lg, &LayoutConfig::default());
+
+        // Add a border node via add_nesting_node (does NOT add to dummy_nodes)
+        let border_idx = lg.add_nesting_node("border_left".into());
+        lg.border_type.insert(border_idx, BorderType::Left);
+
+        let child_idx = lg.node_index[&"child".into()];
+
+        let config = BKConfig {
+            edge_sep: 20.0,
+            node_sep: 50.0,
+            ..Default::default()
+        };
+
+        // Border node should use edge_sep (20.0), not node_sep (50.0)
+        let border_sep = separation_for(&lg, border_idx, &config);
+        assert_eq!(
+            border_sep, 20.0,
+            "border nodes should use edge_sep, not node_sep"
+        );
+
+        // Regular child node should still use node_sep
+        let child_sep = separation_for(&lg, child_idx, &config);
+        assert_eq!(child_sep, 50.0, "regular nodes should use node_sep");
+    }
+
+    #[test]
     fn test_build_block_graph_adjacent_same_root_no_edge() {
         let lg = make_diamond_graph();
         let layers = get_layers(&lg);
@@ -2439,5 +2484,38 @@ mod tests {
 
         // B and C are adjacent in layer 1 but same root → no edge
         assert_eq!(bg.successors(b).len(), 0);
+    }
+
+    #[test]
+    fn test_is_border_sibling_pair_skips_only_without_siblings() {
+        // Build a graph with one compound (no siblings) — should skip
+        let mut lg = make_diamond_graph();
+        let b = lg.node_index[&"B".into()];
+
+        // Add a compound parent for B
+        let parent_idx = lg.add_nesting_node("sg_parent".into());
+        lg.compound_nodes.insert(parent_idx);
+        lg.parents[b] = Some(parent_idx);
+
+        // Add a border node as child of the same compound
+        let border_idx = lg.add_nesting_node("border_left".into());
+        lg.border_type.insert(border_idx, BorderType::Left);
+        lg.parents[border_idx] = Some(parent_idx);
+
+        // Single compound — should skip (return true)
+        assert!(
+            is_border_sibling_pair(&lg, border_idx, b),
+            "should skip for compound without siblings"
+        );
+
+        // Add a sibling compound with the same grandparent (None)
+        let sibling_idx = lg.add_nesting_node("sg_sibling".into());
+        lg.compound_nodes.insert(sibling_idx);
+
+        // Now the compound has a sibling — should NOT skip (return false)
+        assert!(
+            !is_border_sibling_pair(&lg, border_idx, b),
+            "should not skip when compound has siblings"
+        );
     }
 }

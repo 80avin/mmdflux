@@ -1740,3 +1740,47 @@ fn test_self_loop_ascii_mode() {
         "should not have Unicode horizontal line"
     );
 }
+
+// === Compound graph external node positioning tests ===
+
+#[test]
+fn test_sibling_subgraph_nodes_distinct_x() {
+    // A (us-east) and C (us-west) are at the same rank but in different subgraphs.
+    // They should have distinct x-coordinates (not collapsed on top of each other).
+    let (_, layout) = layout_fixture("external_node_subgraph.mmd");
+    let a_cx = layout.node_bounds["A"].center_x();
+    let c_cx = layout.node_bounds["C"].center_x();
+    assert_ne!(
+        a_cx, c_cx,
+        "Sibling subgraph nodes should have distinct x: A={}, C={}",
+        a_cx, c_cx
+    );
+}
+
+#[test]
+fn test_external_node_not_far_from_targets() {
+    // E connects to A (us-east) and C (us-west).
+    // E should be reasonably close to the A-C range, not pushed far away.
+    // Ideally E would be centered between A and C, but the current layout
+    // positions E near the left subgraph border. This test verifies E isn't
+    // wildly offset (the original bug had E ~150 chars away from the subgraphs).
+    let (_, layout) = layout_fixture("external_node_subgraph.mmd");
+    let a_cx = layout.node_bounds["A"].center_x();
+    let c_cx = layout.node_bounds["C"].center_x();
+    let e_cx = layout.node_bounds["E"].center_x();
+    let min_x = a_cx.min(c_cx);
+    let max_x = a_cx.max(c_cx);
+    let range = max_x - min_x;
+    // E should be within 2x the A-C range of the midpoint
+    let midpoint = (min_x + max_x) / 2;
+    let distance = (e_cx as isize - midpoint as isize).unsigned_abs();
+    assert!(
+        distance <= range * 2,
+        "External node E ({}) is too far from A ({}) - C ({}) range (distance {} > {})",
+        e_cx,
+        a_cx,
+        c_cx,
+        distance,
+        range * 2
+    );
+}
