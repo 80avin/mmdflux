@@ -68,6 +68,36 @@ fn make_space_for_edge_labels(
     }
 }
 
+/// Remove self-edges (from == to) from the graph before the Sugiyama pipeline.
+///
+/// Self-edges confuse cycle detection and ranking. They are stashed on
+/// `lg.self_edges` and removed from `lg.edges` (and parallel arrays).
+fn extract_self_edges(lg: &mut LayoutGraph) {
+    debug_assert!(
+        lg.reversed_edges.is_empty(),
+        "extract_self_edges must run before acyclic::run()"
+    );
+
+    let mut to_remove = Vec::new();
+    for (pos, &(from, to, orig_idx)) in lg.edges.iter().enumerate() {
+        if from == to {
+            lg.self_edges.push(SelfEdge {
+                node_index: from,
+                orig_edge_index: orig_idx,
+                dummy_index: None,
+            });
+            to_remove.push(pos);
+        }
+    }
+
+    // Remove in reverse order to preserve indices
+    for &pos in to_remove.iter().rev() {
+        lg.edges.remove(pos);
+        lg.edge_weights.remove(pos);
+        lg.edge_minlens.remove(pos);
+    }
+}
+
 /// Main entry point for layout computation.
 ///
 /// Takes a directed graph, configuration options, and a function to get node dimensions.
@@ -96,6 +126,9 @@ where
     let mut lg = LayoutGraph::from_digraph(graph, get_dimensions);
     let original_node_count = lg.node_ids.len();
     let has_compound = !lg.compound_nodes.is_empty();
+
+    // Phase 0: Remove self-edges before acyclic detection
+    extract_self_edges(&mut lg);
 
     // Phase 1: Make graph acyclic
     if config.acyclic {
@@ -666,6 +699,86 @@ mod tests {
         assert!(
             result.subgraph_bounds.is_empty(),
             "Simple graph should have no subgraph bounds"
+        );
+    }
+
+    // --- Self-edge extraction tests ---
+
+    fn build_lg_from_edges(edges: &[(&str, &str)]) -> LayoutGraph {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        let mut seen = std::collections::HashSet::new();
+        for (from, to) in edges {
+            if seen.insert(*from) {
+                graph.add_node(*from, (10.0, 5.0));
+            }
+            if seen.insert(*to) {
+                graph.add_node(*to, (10.0, 5.0));
+            }
+            graph.add_edge(*from, *to);
+        }
+        LayoutGraph::from_digraph(&graph, |_, dims| *dims)
+    }
+
+    #[test]
+    fn test_extract_self_edges_single() {
+        let mut lg = build_lg_from_edges(&[("A", "A")]);
+        assert_eq!(lg.edges.len(), 1);
+        extract_self_edges(&mut lg);
+        assert_eq!(lg.self_edges.len(), 1);
+        assert_eq!(lg.self_edges[0].node_index, lg.node_index[&"A".into()]);
+        assert!(lg.edges.is_empty(), "self-edge should be removed");
+    }
+
+    #[test]
+    fn test_extract_self_edges_mixed() {
+        let mut lg = build_lg_from_edges(&[("A", "B"), ("A", "A"), ("B", "C")]);
+        assert_eq!(lg.edges.len(), 3);
+        extract_self_edges(&mut lg);
+        assert_eq!(lg.self_edges.len(), 1);
+        assert_eq!(lg.edges.len(), 2, "only non-self edges remain");
+        // Parallel arrays should be in sync
+        assert_eq!(lg.edge_weights.len(), 2);
+        assert_eq!(lg.edge_minlens.len(), 2);
+    }
+
+    #[test]
+    fn test_extract_self_edges_none() {
+        let mut lg = build_lg_from_edges(&[("A", "B")]);
+        extract_self_edges(&mut lg);
+        assert!(lg.self_edges.is_empty());
+        assert_eq!(lg.edges.len(), 1);
+    }
+
+    #[test]
+    fn test_extract_self_edges_multiple() {
+        let mut lg = build_lg_from_edges(&[("A", "A"), ("B", "B"), ("A", "B")]);
+        extract_self_edges(&mut lg);
+        assert_eq!(lg.self_edges.len(), 2);
+        assert_eq!(lg.edges.len(), 1);
+    }
+
+    #[test]
+    fn test_layout_with_self_edge_does_not_panic() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 5.0));
+        graph.add_edge("A", "A");
+        let config = LayoutConfig::default();
+        let result = layout(&graph, &config, |_, dims| *dims);
+        assert!(result.nodes.contains_key(&"A".into()));
+    }
+
+    #[test]
+    fn test_layout_self_edge_not_in_reversed_edges() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 5.0));
+        graph.add_node("B", (10.0, 5.0));
+        graph.add_edge("A", "B");
+        graph.add_edge("A", "A");
+        let result = layout(&graph, &LayoutConfig::default(), |_, dims| *dims);
+        // Self-edge orig index is 1. It should not appear in reversed_edges.
+        assert!(
+            !result.reversed_edges.contains(&1),
+            "self-edge should not be in reversed_edges"
         );
     }
 }
