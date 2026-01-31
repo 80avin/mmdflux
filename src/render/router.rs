@@ -1176,10 +1176,9 @@ pub fn route_all_edges(
         if let Some(edge) = edges
             .iter()
             .find(|e| e.from == e.to && e.from == se_data.node_id)
+            && !se_data.points.is_empty()
         {
-            if !se_data.points.is_empty() {
-                routed.push(route_self_edge(se_data, edge, diagram_direction));
-            }
+            routed.push(route_self_edge(se_data, edge, diagram_direction));
         }
     }
 
