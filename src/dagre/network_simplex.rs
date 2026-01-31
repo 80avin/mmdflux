@@ -4,7 +4,10 @@
 //! Reference: Gansner et al., "A Technique for Drawing Directed Graphs"
 //! Dagre.js: lib/rank/network-simplex.js, lib/rank/feasible-tree.js
 
+use std::collections::{HashSet, VecDeque};
+
 use super::graph::LayoutGraph;
+use super::rank;
 
 /// Compute slack for edge at `edge_idx`: rank(target) - rank(source) - minlen.
 /// A tight edge has slack = 0.
@@ -30,6 +33,8 @@ pub(crate) struct SpanningTree {
     pub lim: Vec<i32>,
     /// Cut value for tree edges, indexed by child node (populated in Phase 5).
     pub cut_value: Vec<f64>,
+    /// Set of edge indices that are in the tree.
+    pub tree_edges: HashSet<usize>,
 }
 
 impl SpanningTree {
@@ -42,6 +47,7 @@ impl SpanningTree {
             low: vec![0; n],
             lim: vec![0; n],
             cut_value: vec![0.0; n],
+            tree_edges: HashSet::new(),
         }
     }
 
@@ -56,6 +62,13 @@ impl SpanningTree {
         self.add_node(child);
         self.parent[child] = Some(parent);
         self.parent_edge[child] = Some(edge_idx);
+        self.tree_edges.insert(edge_idx);
+    }
+
+    fn root(&self) -> usize {
+        (0..self.parent.len())
+            .find(|&n| self.in_tree[n] && self.parent[n].is_none())
+            .unwrap_or(0)
     }
 
     pub fn node_count(&self) -> usize {
@@ -317,6 +330,213 @@ pub(crate) fn feasible_tree(graph: &mut LayoutGraph) -> SpanningTree {
     }
 
     tree
+}
+
+/// Run network simplex ranking on the graph.
+/// Assigns optimal ranks minimizing total weighted edge length.
+pub(crate) fn run(graph: &mut LayoutGraph) {
+    if graph.node_count() == 0 {
+        return;
+    }
+
+    // Step 1: Get initial feasible ranking via longest-path
+    rank::longest_path(graph);
+
+    // Step 2: Build feasible spanning tree of tight edges
+    let mut tree = feasible_tree(graph);
+
+    // Step 3: Compute low/lim and cut values
+    let root = tree.root();
+    init_low_lim(&mut tree, root);
+    init_cut_values(&mut tree, graph);
+
+    // Step 4: Pivot loop — exchange tree edges until optimal
+    let max_iters = graph.node_count() * graph.effective_edges().len().max(1);
+    let mut iters = 0;
+
+    while let Some(leave_node) = leave_edge(&tree) {
+        let enter_idx = enter_edge(&tree, graph, leave_node);
+        exchange_edges(&mut tree, graph, leave_node, enter_idx);
+        iters += 1;
+        if iters >= max_iters {
+            break; // Safety limit
+        }
+    }
+
+    // Normalize ranks to start at 0
+    rank::normalize(graph);
+}
+
+/// Find a tree edge with negative cut value. Returns the child node of that edge.
+fn leave_edge(tree: &SpanningTree) -> Option<usize> {
+    for node in 0..tree.parent.len() {
+        if tree.parent[node].is_some() && tree.cut_value[node] < 0.0 {
+            return Some(node);
+        }
+    }
+    None
+}
+
+/// Find the non-tree edge with minimum slack that should enter the tree.
+///
+/// The entering edge must cross the same cut as the leaving edge.
+/// Follows Dagre.js enterEdge (lines 156-192).
+fn enter_edge(tree: &SpanningTree, graph: &LayoutGraph, leave_node: usize) -> usize {
+    let edges = graph.effective_edges();
+    let parent = tree.parent[leave_node].unwrap();
+    let leave_edge_idx = tree.parent_edge[leave_node].unwrap();
+
+    // Determine direction: is leave_node the tail (source) of the directed edge?
+    let (from, _to) = edges[leave_edge_idx];
+    let leave_is_tail = from == leave_node;
+
+    // Determine which side of the cut is the "tail" side
+    // If leave_node.lim > parent.lim, the tail side is the parent's subtree (flip)
+    let flip = tree.lim[leave_node] > tree.lim[parent];
+
+    let tail_node = if flip != leave_is_tail {
+        leave_node
+    } else {
+        parent
+    };
+
+    let mut best_edge = None;
+    let mut best_slack = i32::MAX;
+
+    for (edge_idx, &(e_from, e_to)) in edges.iter().enumerate() {
+        if tree.tree_edges.contains(&edge_idx) {
+            continue; // skip tree edges
+        }
+
+        // Check if this edge crosses the cut:
+        // tail side descendant for source XOR flip
+        let from_desc = is_descendant(tree, e_from, tail_node);
+        let to_desc = is_descendant(tree, e_to, tail_node);
+
+        // We want edges where source is on tail side and target is on head side (or vice versa with flip)
+        if from_desc == to_desc {
+            continue; // both on same side
+        }
+
+        let s = slack(graph, edge_idx);
+        if s < best_slack {
+            best_slack = s;
+            best_edge = Some(edge_idx);
+        }
+    }
+
+    best_edge.expect("enter_edge: no crossing edge found")
+}
+
+/// Exchange leave and enter edges in the tree, recompute everything.
+///
+/// Follows Dagre.js exchangeEdges: remove leave edge, add enter edge,
+/// then reinitialize low/lim, cut values, and ranks.
+fn exchange_edges(
+    tree: &mut SpanningTree,
+    graph: &mut LayoutGraph,
+    leave_node: usize,
+    enter_edge_idx: usize,
+) {
+    let leave_edge_idx = tree.parent_edge[leave_node].unwrap();
+
+    // Remove leave edge from tree
+    tree.tree_edges.remove(&leave_edge_idx);
+    tree.parent[leave_node] = None;
+    tree.parent_edge[leave_node] = None;
+
+    // Add enter edge to tree
+    tree.tree_edges.insert(enter_edge_idx);
+
+    // Rebuild parent pointers from tree edges via DFS
+    rebuild_parent_pointers(tree, graph);
+
+    // Recompute low/lim and cut values
+    let root = tree.root();
+    init_low_lim(tree, root);
+    init_cut_values(tree, graph);
+
+    // Update ranks from the tree
+    update_ranks(tree, graph);
+}
+
+/// Rebuild parent pointers from the set of tree edges using DFS.
+fn rebuild_parent_pointers(tree: &mut SpanningTree, graph: &LayoutGraph) {
+    let n = tree.parent.len();
+    let edges = graph.effective_edges();
+
+    // Clear all parent pointers
+    for i in 0..n {
+        tree.parent[i] = None;
+        tree.parent_edge[i] = None;
+    }
+
+    // Build undirected adjacency from tree edges only
+    let mut adj: Vec<Vec<(usize, usize)>> = vec![Vec::new(); n];
+    for &edge_idx in &tree.tree_edges {
+        let (from, to) = edges[edge_idx];
+        adj[from].push((to, edge_idx));
+        adj[to].push((from, edge_idx));
+    }
+
+    // DFS from root (node 0 or first in-tree node)
+    let root = (0..n).find(|&i| tree.in_tree[i]).unwrap_or(0);
+    let mut visited = vec![false; n];
+    let mut stack = vec![root];
+    visited[root] = true;
+
+    while let Some(node) = stack.pop() {
+        for &(neighbor, edge_idx) in &adj[node] {
+            if !visited[neighbor] {
+                visited[neighbor] = true;
+                tree.parent[neighbor] = Some(node);
+                tree.parent_edge[neighbor] = Some(edge_idx);
+                stack.push(neighbor);
+            }
+        }
+    }
+}
+
+/// Update ranks by traversing the tree from root.
+/// Each child's rank is set relative to its parent based on the directed edge.
+fn update_ranks(tree: &SpanningTree, graph: &mut LayoutGraph) {
+    let n = graph.node_count();
+    let edges = graph.effective_edges();
+    let root = tree.root();
+
+    // Build children lists
+    let mut children: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for node in 0..n {
+        if let Some(p) = tree.parent[node] {
+            children[p].push(node);
+        }
+    }
+
+    // BFS from root
+    let mut queue = VecDeque::new();
+    queue.push_back(root);
+    let mut visited = vec![false; n];
+    visited[root] = true;
+
+    while let Some(node) = queue.pop_front() {
+        for &child in &children[node] {
+            if visited[child] {
+                continue;
+            }
+            let edge_idx = tree.parent_edge[child].unwrap();
+            let (from, _to) = edges[edge_idx];
+            let minlen = graph.edge_minlens[edge_idx];
+            if from == child {
+                // child is source → rank[child] = rank[parent] - minlen
+                graph.ranks[child] = graph.ranks[node] - minlen;
+            } else {
+                // child is target → rank[child] = rank[parent] + minlen
+                graph.ranks[child] = graph.ranks[node] + minlen;
+            }
+            visited[child] = true;
+            queue.push_back(child);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -610,5 +830,140 @@ mod tests {
         let tree = feasible_tree(&mut lg);
         let tree_edge_count = tree.parent_edge.iter().filter(|e| e.is_some()).count();
         assert_eq!(tree_edge_count, 3); // n-1 = 4-1 = 3
+    }
+
+    // --- Phase 6: Pivot loop tests ---
+
+    fn total_edge_length(lg: &LayoutGraph) -> i32 {
+        let edges = lg.effective_edges();
+        edges
+            .iter()
+            .enumerate()
+            .map(|(i, &(from, to))| (lg.ranks[to] - lg.ranks[from]) * lg.edge_weights[i] as i32)
+            .sum()
+    }
+
+    #[test]
+    fn test_network_simplex_linear_chain() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("C", ());
+        g.add_edge("A", "B");
+        g.add_edge("B", "C");
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        run(&mut lg);
+        assert_eq!(lg.ranks[lg.node_index[&"A".into()]], 0);
+        assert_eq!(lg.ranks[lg.node_index[&"B".into()]], 1);
+        assert_eq!(lg.ranks[lg.node_index[&"C".into()]], 2);
+    }
+
+    #[test]
+    fn test_network_simplex_diamond() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("C", ());
+        g.add_node("D", ());
+        g.add_edge("A", "B");
+        g.add_edge("A", "C");
+        g.add_edge("B", "D");
+        g.add_edge("C", "D");
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        run(&mut lg);
+        assert_eq!(lg.ranks[lg.node_index[&"A".into()]], 0);
+        assert_eq!(lg.ranks[lg.node_index[&"B".into()]], 1);
+        assert_eq!(lg.ranks[lg.node_index[&"C".into()]], 1);
+        assert_eq!(lg.ranks[lg.node_index[&"D".into()]], 2);
+    }
+
+    #[test]
+    fn test_network_simplex_free_floating_source() {
+        // A->B->C->D, E->D
+        // Longest-path: E=0 (pushed to min), but network simplex should pull E up
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("C", ());
+        g.add_node("D", ());
+        g.add_node("E", ());
+        g.add_edge("A", "B");
+        g.add_edge("B", "C");
+        g.add_edge("C", "D");
+        g.add_edge("E", "D");
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        run(&mut lg);
+
+        let e = lg.node_index[&"E".into()];
+        let d = lg.node_index[&"D".into()];
+        // E should be at rank D-1 (minimizes E->D length)
+        assert_eq!(
+            lg.ranks[d] - lg.ranks[e],
+            1,
+            "E->D should span exactly 1 rank, E={}, D={}",
+            lg.ranks[e],
+            lg.ranks[d]
+        );
+    }
+
+    #[test]
+    fn test_network_simplex_total_edge_length_optimal() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("C", ());
+        g.add_node("D", ());
+        g.add_node("E", ());
+        g.add_edge("A", "B");
+        g.add_edge("B", "C");
+        g.add_edge("C", "D");
+        g.add_edge("E", "D");
+
+        // Network simplex
+        let mut lg_ns = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        run(&mut lg_ns);
+        let total_ns = total_edge_length(&lg_ns);
+
+        // Longest-path
+        let mut lg_lp = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        rank::longest_path(&mut lg_lp);
+        let total_lp = total_edge_length(&lg_lp);
+
+        assert!(
+            total_ns <= total_lp,
+            "network simplex ({}) should be <= longest-path ({})",
+            total_ns,
+            total_lp
+        );
+    }
+
+    #[test]
+    fn test_network_simplex_terminates() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        for name in ["A", "B", "C", "D", "E", "F", "G", "H"] {
+            g.add_node(name, ());
+        }
+        g.add_edge("A", "B");
+        g.add_edge("A", "C");
+        g.add_edge("B", "D");
+        g.add_edge("C", "D");
+        g.add_edge("D", "E");
+        g.add_edge("D", "F");
+        g.add_edge("E", "G");
+        g.add_edge("F", "G");
+        g.add_edge("G", "H");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        run(&mut lg); // Should terminate without panic
+
+        // Verify feasibility: all edges respect minlen
+        let edges = lg.effective_edges();
+        for (i, &(from, to)) in edges.iter().enumerate() {
+            assert!(
+                lg.ranks[to] - lg.ranks[from] >= lg.edge_minlens[i],
+                "edge {} violates minlen",
+                i
+            );
+        }
     }
 }
