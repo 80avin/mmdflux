@@ -145,6 +145,45 @@ fn shift_ranks(tree: &SpanningTree, graph: &mut LayoutGraph, delta: i32) {
     }
 }
 
+/// Assign low/lim DFS numbering for O(1) descendant queries.
+/// After calling this, `is_descendant(tree, u, v)` returns true iff u is in v's subtree.
+pub(crate) fn init_low_lim(tree: &mut SpanningTree, root: usize) {
+    let n = tree.parent.len();
+    // Build children lists from parent pointers
+    let mut children: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for node in 0..n {
+        if let Some(p) = tree.parent[node] {
+            children[p].push(node);
+        }
+    }
+
+    // Iterative DFS with pre/post numbering.
+    // low[v] = counter before visiting children
+    // lim[v] = counter after all children, then counter += 1
+    let mut counter = 1i32;
+    // Stack entries: (node, phase). phase=false means first visit, phase=true means post-visit.
+    let mut stack: Vec<(usize, bool)> = vec![(root, false)];
+
+    while let Some((node, post)) = stack.pop() {
+        if post {
+            tree.lim[node] = counter;
+            counter += 1;
+        } else {
+            tree.low[node] = counter;
+            stack.push((node, true));
+            // Push children in reverse order so leftmost child is processed first
+            for &child in children[node].iter().rev() {
+                stack.push((child, false));
+            }
+        }
+    }
+}
+
+/// Check if u is a descendant of v in the spanning tree.
+pub(crate) fn is_descendant(tree: &SpanningTree, u: usize, v: usize) -> bool {
+    tree.low[v] <= tree.lim[u] && tree.lim[u] <= tree.lim[v]
+}
+
 /// Construct a feasible spanning tree of tight edges.
 /// Modifies graph ranks to ensure the tree spans all nodes.
 pub(crate) fn feasible_tree(graph: &mut LayoutGraph) -> SpanningTree {
@@ -230,6 +269,52 @@ mod tests {
         let mut lg = make_chain_graph();
         lg.edge_minlens[0] = 2;
         assert_eq!(slack(&lg, 0), -1);
+    }
+
+    #[test]
+    fn test_low_lim_single_node() {
+        let mut tree = SpanningTree::new(1);
+        tree.add_node(0);
+        init_low_lim(&mut tree, 0);
+        assert_eq!(tree.low[0], 1);
+        assert_eq!(tree.lim[0], 1);
+    }
+
+    #[test]
+    fn test_low_lim_linear_chain() {
+        // Tree: 0 -> 1 -> 2 (0 is root)
+        let mut tree = SpanningTree::new(3);
+        tree.in_tree = vec![true; 3];
+        tree.size = 3;
+        tree.parent = vec![None, Some(0), Some(1)];
+        tree.parent_edge = vec![None, Some(0), Some(1)];
+        init_low_lim(&mut tree, 0);
+
+        assert!(is_descendant(&tree, 2, 0)); // 2 is descendant of 0
+        assert!(is_descendant(&tree, 1, 0)); // 1 is descendant of 0
+        assert!(is_descendant(&tree, 2, 1)); // 2 is descendant of 1
+        assert!(!is_descendant(&tree, 0, 1)); // 0 is NOT descendant of 1
+        assert!(!is_descendant(&tree, 0, 2)); // 0 is NOT descendant of 2
+    }
+
+    #[test]
+    fn test_low_lim_branching_tree() {
+        // Tree:    0
+        //         / \
+        //        1   2
+        //        |
+        //        3
+        let mut tree = SpanningTree::new(4);
+        tree.in_tree = vec![true; 4];
+        tree.size = 4;
+        tree.parent = vec![None, Some(0), Some(0), Some(1)];
+        tree.parent_edge = vec![None, Some(0), Some(1), Some(2)];
+        init_low_lim(&mut tree, 0);
+
+        assert!(is_descendant(&tree, 3, 1)); // 3 under 1
+        assert!(is_descendant(&tree, 3, 0)); // 3 under 0
+        assert!(!is_descendant(&tree, 3, 2)); // 3 NOT under 2
+        assert!(!is_descendant(&tree, 2, 1)); // 2 NOT under 1
     }
 
     #[test]
