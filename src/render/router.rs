@@ -1127,12 +1127,11 @@ fn route_self_edge(data: &SelfEdgeDrawData, edge: &Edge, direction: Direction) -
         .map(|&(x, y)| Point::new(x, y))
         .unwrap_or(Point::new(0, 0));
 
-    // Entry direction: the arrow enters the node from the direction of the last segment
+    // Entry direction: the arrow enters from the side where the loop is.
+    // TD/BT: loop is on the right face. LR/RL: loop is on the bottom face.
     let entry_direction = match direction {
-        Direction::TopDown => AttachDirection::Top, // enters top face from above
-        Direction::BottomTop => AttachDirection::Bottom, // enters bottom face from below
-        Direction::LeftRight => AttachDirection::Left, // enters left face from left
-        Direction::RightLeft => AttachDirection::Right, // enters right face from right
+        Direction::TopDown | Direction::BottomTop => AttachDirection::Right,
+        Direction::LeftRight | Direction::RightLeft => AttachDirection::Bottom,
     };
 
     RoutedEdge {

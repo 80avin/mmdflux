@@ -604,64 +604,62 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .iter()
         .filter_map(|sel| {
             let bounds = node_bounds.get(&sel.node.0)?;
-            let loop_margin = 2; // gap between node edge and loop line
-            let loop_extent = 3; // how far the loop extends beyond the node
+            let loop_extent = 3; // how far the loop extends beyond the node edge
 
+            // Dagre.js places self-edge loops on the right face (TD/BT) or
+            // bottom face (LR/RL), matching the "order" dimension where the
+            // dummy node is placed after the self-edge node.
             let points = match dagre_direction {
                 DagreDirection::TopBottom => {
-                    let cx = bounds.center_x();
-                    let right = bounds.x + bounds.width + loop_extent;
-                    let bot = bounds.y + bounds.height + loop_margin;
-                    let top = bounds.y.saturating_sub(loop_margin);
+                    // Loop on right face: exit top-right, loop right, enter bottom-right
+                    let right = bounds.x + bounds.width;
+                    let loop_x = right + loop_extent;
+                    let top_y = bounds.y;
+                    let bot_y = bounds.y + bounds.height - 1;
                     vec![
-                        (cx, bounds.y + bounds.height), // exit bottom
-                        (cx, bot),                      // down
-                        (right, bot),                   // right
-                        (right, top),                   // up
-                        (cx, top),                      // left
-                        (cx, bounds.y),                 // enter top
+                        (right, top_y),  // exit right face at top
+                        (loop_x, top_y), // go right
+                        (loop_x, bot_y), // go down
+                        (right, bot_y),  // enter right face at bottom
                     ]
                 }
                 DagreDirection::BottomTop => {
-                    let cx = bounds.center_x();
-                    let right = bounds.x + bounds.width + loop_extent;
-                    let top = bounds.y.saturating_sub(loop_margin);
-                    let bot = bounds.y + bounds.height + loop_margin;
+                    // Loop on right face: exit bottom-right, loop right, enter top-right
+                    let right = bounds.x + bounds.width;
+                    let loop_x = right + loop_extent;
+                    let top_y = bounds.y;
+                    let bot_y = bounds.y + bounds.height - 1;
                     vec![
-                        (cx, bounds.y),                 // exit top
-                        (cx, top),                      // up
-                        (right, top),                   // right
-                        (right, bot),                   // down
-                        (cx, bot),                      // left
-                        (cx, bounds.y + bounds.height), // enter bottom
+                        (right, bot_y),  // exit right face at bottom
+                        (loop_x, bot_y), // go right
+                        (loop_x, top_y), // go up
+                        (right, top_y),  // enter right face at top
                     ]
                 }
                 DagreDirection::LeftRight => {
-                    let cy = bounds.center_y();
-                    let bot = bounds.y + bounds.height + loop_extent;
-                    let right = bounds.x + bounds.width + loop_margin;
-                    let left = bounds.x.saturating_sub(loop_margin);
+                    // Loop on bottom face: exit bottom-right, loop down, enter bottom-left
+                    let bot = bounds.y + bounds.height;
+                    let loop_y = bot + loop_extent;
+                    let left_x = bounds.x;
+                    let right_x = bounds.x + bounds.width - 1;
                     vec![
-                        (bounds.x + bounds.width, cy), // exit right
-                        (right, cy),                   // right
-                        (right, bot),                  // down
-                        (left, bot),                   // left
-                        (left, cy),                    // up
-                        (bounds.x, cy),                // enter left
+                        (right_x, bot),    // exit bottom face at right
+                        (right_x, loop_y), // go down
+                        (left_x, loop_y),  // go left
+                        (left_x, bot),     // enter bottom face at left
                     ]
                 }
                 DagreDirection::RightLeft => {
-                    let cy = bounds.center_y();
-                    let bot = bounds.y + bounds.height + loop_extent;
-                    let left = bounds.x.saturating_sub(loop_margin);
-                    let right = bounds.x + bounds.width + loop_margin;
+                    // Loop on bottom face: exit bottom-left, loop down, enter bottom-right
+                    let bot = bounds.y + bounds.height;
+                    let loop_y = bot + loop_extent;
+                    let left_x = bounds.x;
+                    let right_x = bounds.x + bounds.width - 1;
                     vec![
-                        (bounds.x, cy),                // exit left
-                        (left, cy),                    // left
-                        (left, bot),                   // down
-                        (right, bot),                  // right
-                        (right, cy),                   // up
-                        (bounds.x + bounds.width, cy), // enter right
+                        (left_x, bot),     // exit bottom face at left
+                        (left_x, loop_y),  // go down
+                        (right_x, loop_y), // go right
+                        (right_x, bot),    // enter bottom face at right
                     ]
                 }
             };
