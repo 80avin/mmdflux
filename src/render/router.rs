@@ -672,6 +672,11 @@ fn entry_direction_from_segments(segments: &[Segment]) -> AttachDirection {
     }
 }
 
+/// Minimum horizontal offset (in characters) to trigger side-preference routing.
+/// When an edge has horizontal offset greater than this threshold, we use
+/// asymmetric routing to avoid the congested middle region of the diagram.
+const LARGE_HORIZONTAL_OFFSET_THRESHOLD: usize = 15;
+
 /// Build an orthogonal path that ends with a segment matching the approach direction.
 ///
 /// The final segment orientation determines the arrow direction:
@@ -683,6 +688,10 @@ fn entry_direction_from_segments(segments: &[Segment]) -> AttachDirection {
 /// - Second segment moves in the cross direction to reach the target
 ///
 /// This ensures the arrow glyph visually matches the line direction entering the target.
+///
+/// For edges with large horizontal offset (source far from target horizontally),
+/// the routing is adjusted to place the horizontal segment closer to the target,
+/// avoiding the congested middle region of the diagram.
 fn build_orthogonal_path_for_direction(
     start: Point,
     end: Point,
@@ -716,7 +725,7 @@ fn build_orthogonal_path_for_direction(
         Direction::TopDown | Direction::BottomTop => {
             // Vertical layouts: V-H-V (Z-shape) to enter target from top/bottom
             // Final segment is vertical, so arrow will be ▼ or ▲
-            let mid_y = (start.y + end.y) / 2;
+            let mid_y = compute_mid_y_for_vertical_layout(start, end, direction);
             vec![
                 Segment::Vertical {
                     x: start.x,
@@ -757,6 +766,59 @@ fn build_orthogonal_path_for_direction(
                 },
             ]
         }
+    }
+}
+
+/// Compute the Y coordinate for the horizontal segment in a Z-shaped path.
+///
+/// For edges with large horizontal offset (source far right, target more centered),
+/// we place the horizontal segment closer to the target to avoid routing through
+/// the congested middle region of the diagram. This creates an asymmetric Z-path
+/// that "hugs" the bottom (for TD) or top (for BT).
+///
+/// For normal edges, uses the standard midpoint calculation.
+fn compute_mid_y_for_vertical_layout(start: Point, end: Point, direction: Direction) -> usize {
+    let horizontal_offset = start.x.abs_diff(end.x);
+
+    // Check if this edge has a large horizontal offset
+    if horizontal_offset > LARGE_HORIZONTAL_OFFSET_THRESHOLD {
+        // Determine if source is to the right of target (right-to-left routing)
+        let is_right_to_left = start.x > end.x;
+
+        if is_right_to_left {
+            // For right-to-left edges with large offset:
+            // Place the horizontal segment closer to the target to avoid
+            // crossing through the congested middle of the diagram.
+            //
+            // For TD: place horizontal near the bottom (closer to end.y)
+            // For BT: place horizontal near the top (closer to end.y, which is lower)
+            match direction {
+                Direction::TopDown => {
+                    // TD: end.y > start.y, so we want mid_y close to end.y
+                    // Leave room for the final vertical segment (at least 2 rows)
+                    let target_mid = end.y.saturating_sub(2);
+                    // But don't go above the standard midpoint (avoid going too high)
+                    let standard_mid = (start.y + end.y) / 2;
+                    target_mid.max(standard_mid)
+                }
+                Direction::BottomTop => {
+                    // BT: end.y < start.y, so we want mid_y close to end.y
+                    // Leave room for the final vertical segment (at least 2 rows)
+                    let target_mid = end.y + 2;
+                    // But don't go below the standard midpoint
+                    let standard_mid = (start.y + end.y) / 2;
+                    target_mid.min(standard_mid)
+                }
+                _ => (start.y + end.y) / 2,
+            }
+        } else {
+            // Left-to-right edges: use standard midpoint
+            // (these typically don't have the same congestion issue)
+            (start.y + end.y) / 2
+        }
+    } else {
+        // Normal edges: use standard midpoint
+        (start.y + end.y) / 2
     }
 }
 
