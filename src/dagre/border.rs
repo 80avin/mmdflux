@@ -9,6 +9,80 @@ use std::collections::HashMap;
 use super::graph::{BorderType, LayoutGraph};
 use super::types::{NodeId, Rect};
 
+fn debug_border_nodes(lg: &LayoutGraph) {
+    if !std::env::var("MMDFLUX_DEBUG_BORDER_NODES").is_ok_and(|v| v == "1") {
+        return;
+    }
+
+    let mut compounds: Vec<usize> = lg.compound_nodes.iter().copied().collect();
+    compounds.sort_by_key(|&idx| lg.node_ids[idx].0.clone());
+
+    eprintln!("[border_nodes] layout positions");
+    for compound_idx in compounds {
+        let left = match lg.border_left.get(&compound_idx) {
+            Some(nodes) => nodes,
+            None => continue,
+        };
+        let right = match lg.border_right.get(&compound_idx) {
+            Some(nodes) => nodes,
+            None => continue,
+        };
+
+        let name = &lg.node_ids[compound_idx].0;
+        let min_rank = lg.min_rank.get(&compound_idx).copied();
+        let max_rank = lg.max_rank.get(&compound_idx).copied();
+        eprintln!(
+            "[border_nodes] {} min_rank={:?} max_rank={:?}",
+            name, min_rank, max_rank
+        );
+
+        if let Some(&top_idx) = lg.border_top.get(&compound_idx) {
+            let pos = lg.positions[top_idx];
+            eprintln!(
+                "[border_nodes]   top {} rank={} order={} x={:.2} y={:.2}",
+                lg.node_ids[top_idx].0,
+                lg.ranks[top_idx],
+                lg.order[top_idx],
+                pos.x,
+                pos.y
+            );
+        }
+
+        if let Some(&bot_idx) = lg.border_bottom.get(&compound_idx) {
+            let pos = lg.positions[bot_idx];
+            eprintln!(
+                "[border_nodes]   bottom {} rank={} order={} x={:.2} y={:.2}",
+                lg.node_ids[bot_idx].0,
+                lg.ranks[bot_idx],
+                lg.order[bot_idx],
+                pos.x,
+                pos.y
+            );
+        }
+
+        let count = left.len().min(right.len());
+        for i in 0..count {
+            let left_idx = left[i];
+            let right_idx = right[i];
+            let rank = lg.ranks[left_idx];
+            let left_pos = lg.positions[left_idx];
+            let right_pos = lg.positions[right_idx];
+            eprintln!(
+                "[border_nodes]   rank {}: left {} order={} x={:.2} y={:.2} right {} order={} x={:.2} y={:.2}",
+                rank,
+                lg.node_ids[left_idx].0,
+                lg.order[left_idx],
+                left_pos.x,
+                left_pos.y,
+                lg.node_ids[right_idx].0,
+                lg.order[right_idx],
+                right_pos.x,
+                right_pos.y
+            );
+        }
+    }
+}
+
 /// Create left and right border nodes for each rank in each compound node's span.
 ///
 /// Border nodes are linked vertically (consecutive ranks) and assigned the
@@ -69,6 +143,8 @@ pub fn add_segments(lg: &mut LayoutGraph) {
 /// Returns a map from compound node ID to its bounding rectangle. The bounding box
 /// is computed from the positioned border nodes.
 pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
+    debug_border_nodes(lg);
+
     let mut bounds = HashMap::new();
 
     let compound_indices: Vec<usize> = lg.compound_nodes.iter().copied().collect();
