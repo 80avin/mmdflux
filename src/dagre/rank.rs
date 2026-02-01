@@ -144,6 +144,33 @@ pub fn by_rank(graph: &LayoutGraph) -> Vec<Vec<usize>> {
     layers
 }
 
+/// Get nodes grouped by rank, filtered by a predicate.
+pub fn by_rank_filtered<F>(graph: &LayoutGraph, mut predicate: F) -> Vec<Vec<usize>>
+where
+    F: FnMut(usize) -> bool,
+{
+    let mut max_rank: Option<i32> = None;
+    for (node, &rank) in graph.ranks.iter().enumerate() {
+        if predicate(node) {
+            max_rank = Some(max_rank.map_or(rank, |m| m.max(rank)));
+        }
+    }
+
+    let Some(max_rank) = max_rank else {
+        return Vec::new();
+    };
+
+    let mut layers: Vec<Vec<usize>> = vec![Vec::new(); max_rank as usize + 1];
+
+    for (node, &rank) in graph.ranks.iter().enumerate() {
+        if predicate(node) {
+            layers[rank as usize].push(node);
+        }
+    }
+
+    layers
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

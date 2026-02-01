@@ -10,7 +10,7 @@ use super::types::{Direction, LayoutConfig, Point};
 
 /// Assign positions to all nodes.
 pub fn run(graph: &mut LayoutGraph, config: &LayoutConfig) {
-    let layers = rank::by_rank(graph);
+    let layers = rank::by_rank_filtered(graph, |node| graph.is_position_node(node));
 
     // Sort each layer by the computed order
     let sorted_layers: Vec<Vec<usize>> = layers
@@ -35,6 +35,7 @@ pub fn run(graph: &mut LayoutGraph, config: &LayoutConfig) {
     // Post-processing: separate overlapping sibling subgraph content
     // in the cross-rank direction. Only applies when sibling subgraph
     // content nodes share the exact same cross-rank position.
+    // TODO(plan-0038): Evaluate whether this workaround should be gated/removed.
     if !graph.compound_nodes.is_empty() {
         separate_sibling_subgraph_content(graph, config);
     }
@@ -56,7 +57,8 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
         edge_sep: config.edge_sep,
         direction: config.direction,
     };
-    let x_coords = position_x(graph, &bk_config);
+    let mut x_coords = position_x(graph, &bk_config);
+    center_source_nodes(graph, &mut x_coords);
 
     // Find minimum x to shift everything to start at margin
     let min_x = (0..graph.node_ids.len())
@@ -87,6 +89,72 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
             .map(|&n| graph.dimensions[n].1)
             .fold(0.0, f64::max);
         y += max_height + config.rank_sep;
+    }
+}
+
+fn center_source_nodes(graph: &LayoutGraph, x_coords: &mut std::collections::HashMap<usize, f64>) {
+    use std::collections::{HashMap, HashSet};
+
+    let n = graph.node_ids.len();
+    let mut has_pred = vec![false; n];
+    let mut succs: HashMap<usize, Vec<usize>> = HashMap::new();
+
+    for (idx, &(from, to, _)) in graph.edges.iter().enumerate() {
+        if graph.excluded_edges.contains(&idx) {
+            continue;
+        }
+        let (from, to) = if graph.reversed_edges.contains(&idx) {
+            (to, from)
+        } else {
+            (from, to)
+        };
+        if !graph.is_position_node(from) || !graph.is_position_node(to) {
+            continue;
+        }
+        has_pred[to] = true;
+        succs.entry(from).or_default().push(to);
+    }
+
+    let resolve_target = |start: usize| -> Option<usize> {
+        let mut current = start;
+        let mut visited = HashSet::new();
+        loop {
+            if !graph.is_dummy_index(current) {
+                return Some(current);
+            }
+            if !visited.insert(current) {
+                return None;
+            }
+            let nexts = succs.get(&current)?;
+            if nexts.is_empty() {
+                return None;
+            }
+            current = nexts[0];
+        }
+    };
+
+    for node in 0..n {
+        if !graph.is_position_node(node) || has_pred[node] {
+            continue;
+        }
+        let mut targets = HashSet::new();
+        if let Some(nexts) = succs.get(&node) {
+            for &succ in nexts {
+                if let Some(target) = resolve_target(succ) {
+                    targets.insert(target);
+                }
+            }
+        }
+        let xs: Vec<f64> = targets
+            .iter()
+            .filter_map(|&t| x_coords.get(&t).copied())
+            .collect();
+        if xs.is_empty() {
+            continue;
+        }
+        let min_x = xs.iter().copied().fold(f64::INFINITY, f64::min);
+        let max_x = xs.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        x_coords.insert(node, (min_x + max_x) / 2.0);
     }
 }
 
@@ -169,6 +237,10 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
 /// exact same cross-rank center position, indicating they've been collapsed.
 fn separate_sibling_subgraph_content(graph: &mut LayoutGraph, config: &LayoutConfig) {
     use std::collections::HashMap;
+
+    if graph.node_rank_factor.is_some() {
+        return;
+    }
 
     // For TD/BT: cross-rank axis is x. For LR/RL: cross-rank axis is y.
     let is_vertical = matches!(
@@ -512,6 +584,54 @@ mod tests {
         let a_center = a_x + 25.0; // half of width
         let d_center = d_x + 25.0;
         assert!((a_center - d_center).abs() < 1.0);
+    }
+
+    #[test]
+    fn test_position_skips_compound_parents() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("sg", ());
+        g.add_node("A", ());
+        g.set_parent("A", "sg");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+
+        lg.ranks[lg.node_index[&"sg".into()]] = 0;
+        lg.ranks[lg.node_index[&"A".into()]] = 0;
+
+        let config = LayoutConfig::default();
+        run(&mut lg, &config);
+
+        let sg_idx = lg.node_index[&"sg".into()];
+        let a_idx = lg.node_index[&"A".into()];
+
+        assert_eq!(lg.positions[sg_idx], Point::default());
+        assert_ne!(lg.positions[a_idx], Point::default());
+    }
+
+    #[test]
+    fn test_separate_sibling_content_is_disabled_when_rank_factor_set() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("sg1", ());
+        g.add_node("sg2", ());
+        g.add_node("A", ());
+        g.add_node("C", ());
+        g.set_parent("A", "sg1");
+        g.set_parent("C", "sg2");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        lg.node_rank_factor = Some(3);
+
+        let a_idx = lg.node_index[&"A".into()];
+        let c_idx = lg.node_index[&"C".into()];
+
+        lg.positions[a_idx].x = 10.0;
+        lg.positions[c_idx].x = 10.0;
+
+        let config = LayoutConfig::default();
+        separate_sibling_subgraph_content(&mut lg, &config);
+
+        assert_eq!(lg.positions[a_idx].x, 10.0);
+        assert_eq!(lg.positions[c_idx].x, 10.0);
     }
 
     #[test]

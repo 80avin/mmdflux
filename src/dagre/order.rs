@@ -31,6 +31,51 @@ fn debug_dump_order(graph: &LayoutGraph, label: &str) {
     }
 }
 
+fn effective_edges_filtered(graph: &LayoutGraph) -> Vec<(usize, usize)> {
+    graph
+        .edges
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, &(from, to, _))| {
+            if graph.excluded_edges.contains(&idx) {
+                return None;
+            }
+            let (from, to) = if graph.reversed_edges.contains(&idx) {
+                (to, from)
+            } else {
+                (from, to)
+            };
+            if !graph.is_position_node(from) || !graph.is_position_node(to) {
+                return None;
+            }
+            Some((from, to))
+        })
+        .collect()
+}
+
+fn effective_edges_weighted_filtered(graph: &LayoutGraph) -> Vec<(usize, usize, f64)> {
+    graph
+        .edges
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, &(from, to, _))| {
+            if graph.excluded_edges.contains(&idx) {
+                return None;
+            }
+            let weight = graph.edge_weights[idx];
+            let (from, to) = if graph.reversed_edges.contains(&idx) {
+                (to, from)
+            } else {
+                (from, to)
+            };
+            if !graph.is_position_node(from) || !graph.is_position_node(to) {
+                return None;
+            }
+            Some((from, to, weight))
+        })
+        .collect()
+}
+
 /// DFS-based initial ordering matching Dagre's initOrder().
 ///
 /// Visits nodes sorted by rank, adding each to its layer in DFS visit order.
@@ -38,8 +83,8 @@ fn debug_dump_order(graph: &LayoutGraph, label: &str) {
 /// for crossing minimization than arbitrary insertion order.
 ///
 /// Reference: Gansner et al., "A Technique for Drawing Directed Graphs"
-fn init_order(graph: &mut LayoutGraph) {
-    let edges = graph.effective_edges();
+fn init_order(graph: &mut LayoutGraph, layers: &[Vec<usize>]) {
+    let edges = effective_edges_filtered(graph);
     let n = graph.node_ids.len();
 
     // Build successor adjacency list
@@ -50,7 +95,7 @@ fn init_order(graph: &mut LayoutGraph) {
 
     // Get all nodes sorted by rank (ascending), matching Dagre's
     // `simpleNodes.sort((a, b) => g.node(a).rank - g.node(b).rank)`
-    let mut start_nodes: Vec<usize> = (0..n).collect();
+    let mut start_nodes: Vec<usize> = layers.iter().flatten().copied().collect();
     start_nodes.sort_by_key(|&node| graph.ranks[node]);
 
     // Track visit state and per-rank insertion index
@@ -87,12 +132,8 @@ fn init_order(graph: &mut LayoutGraph) {
 }
 
 /// Build layer vectors sorted by node order.
-///
-/// `rank::by_rank()` returns layers with nodes in insertion order.
-/// This function sorts each layer by `graph.order[node]` so the
-/// vectors reflect the current ordering.
-fn layers_sorted_by_order(graph: &LayoutGraph) -> Vec<Vec<usize>> {
-    let mut layers = rank::by_rank(graph);
+fn layers_sorted_by_order(layers: &[Vec<usize>], graph: &LayoutGraph) -> Vec<Vec<usize>> {
+    let mut layers: Vec<Vec<usize>> = layers.iter().cloned().collect();
     for layer in &mut layers {
         layer.sort_by_key(|&node| graph.order[node]);
     }
@@ -108,18 +149,18 @@ fn layers_sorted_by_order(graph: &LayoutGraph) -> Vec<Vec<usize>> {
 /// - Best-order tracking across iterations
 /// - Terminates after 4 consecutive non-improving iterations
 pub fn run(graph: &mut LayoutGraph) {
-    let layers = rank::by_rank(graph);
+    let layers = rank::by_rank_filtered(graph, |node| graph.is_position_node(node));
     if layers.len() < 2 {
         return;
     }
 
     // DFS-based initial ordering
-    init_order(graph);
+    init_order(graph, &layers);
     debug_dump_order(graph, "after init_order");
 
     // Rebuild layers sorted by the new DFS order
-    let layers = layers_sorted_by_order(graph);
-    let edges = graph.effective_edges_weighted();
+    let layers = layers_sorted_by_order(&layers, graph);
+    let edges = effective_edges_weighted_filtered(graph);
 
     let mut best_cc = usize::MAX;
     let mut best_order: Vec<usize> = Vec::new();
@@ -515,7 +556,7 @@ mod tests {
 
         // Simple chain should have no crossings
         let layers = rank::by_rank(&lg);
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         assert_eq!(count_all_crossings(&lg, &layers, &edges), 0);
     }
 
@@ -541,7 +582,7 @@ mod tests {
 
         // After ordering, crossings should be minimized
         let layers = rank::by_rank(&lg);
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         let crossings = count_all_crossings(&lg, &layers, &edges);
         assert_eq!(crossings, 0);
     }
@@ -570,7 +611,7 @@ mod tests {
             }
         }
 
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         let fixed = &layers[0]; // [A]
         let free = &layers[1]; // [B, C]
 
@@ -626,7 +667,8 @@ mod tests {
         rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
-        init_order(&mut lg);
+        let layers = rank::by_rank(&lg);
+        init_order(&mut lg, &layers);
 
         // All nodes should have valid consecutive order values per layer
         let layers = rank::by_rank(&lg);
@@ -656,7 +698,8 @@ mod tests {
         rank::run(&mut lg, &LayoutConfig::default());
         rank::normalize(&mut lg);
 
-        init_order(&mut lg);
+        let layers = rank::by_rank(&lg);
+        init_order(&mut lg, &layers);
 
         // All nodes should have valid order values, no panics
         let layers = rank::by_rank(&lg);
@@ -686,7 +729,7 @@ mod tests {
         run(&mut lg);
 
         let layers = rank::by_rank(&lg);
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         let crossings = count_all_crossings(&lg, &layers, &edges);
         assert_eq!(
             crossings, 0,
@@ -734,7 +777,7 @@ mod tests {
             );
         }
 
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         assert_eq!(count_all_crossings(&lg, &layers, &edges), 0);
     }
 
@@ -816,7 +859,7 @@ mod tests {
         run(&mut lg);
 
         let layers = rank::by_rank(&lg);
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         assert_eq!(count_all_crossings(&lg, &layers, &edges), 0);
     }
 
@@ -840,7 +883,7 @@ mod tests {
         run(&mut lg);
 
         let layers = rank::by_rank(&lg);
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         assert_eq!(count_all_crossings(&lg, &layers, &edges), 0);
     }
 
@@ -875,7 +918,7 @@ mod tests {
         lg.order[b] = 1;
         lg.order[c] = 2;
 
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         let fixed = vec![x, y];
         let free = vec![a, b, c];
         reorder_layer(&mut lg, &fixed, &free, &edges, true, false);
@@ -904,7 +947,7 @@ mod tests {
         run(&mut lg);
 
         let layers = rank::by_rank(&lg);
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         assert_eq!(count_all_crossings(&lg, &layers, &edges), 0);
     }
 
@@ -950,7 +993,7 @@ mod tests {
         lg.order[a] = 0;
         lg.order[b] = 1;
 
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         let fixed = vec![x, y];
         let free = vec![a, b];
 
@@ -1007,7 +1050,8 @@ mod tests {
         let min_r = lg.min_rank[&sg1_idx];
         let max_r = lg.max_rank[&sg1_idx];
 
-        let layers = layers_sorted_by_order(&lg);
+        let layers = rank::by_rank(&lg);
+        let layers = layers_sorted_by_order(&layers, &lg);
         for rank in min_r..=max_r {
             let rank_offset = (rank - min_r) as usize;
             let left_border = left_borders[rank_offset];
@@ -1075,7 +1119,8 @@ mod tests {
 
         // For each rank, children of sg1 should be contiguous and
         // children of sg2 should be contiguous (no interleaving)
-        let layers = layers_sorted_by_order(&lg);
+        let layers = rank::by_rank(&lg);
+        let layers = layers_sorted_by_order(&layers, &lg);
         let sg1_idx = lg.node_index[&"sg1".into()];
         let sg2_idx = lg.node_index[&"sg2".into()];
 
@@ -1134,7 +1179,7 @@ mod tests {
         run(&mut lg);
 
         let layers = rank::by_rank(&lg);
-        let edges = lg.effective_edges_weighted();
+        let edges = effective_edges_weighted_filtered(&lg);
         assert_eq!(
             count_all_crossings(&lg, &layers, &edges),
             0,

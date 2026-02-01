@@ -196,7 +196,7 @@ pub fn get_layers(graph: &LayoutGraph) -> Vec<Vec<NodeIndex>> {
     let mut layers: Vec<Vec<NodeIndex>> = vec![Vec::new(); max_rank + 1];
 
     for (node, &rank) in graph.ranks.iter().enumerate() {
-        if !is_position_node(graph, node) {
+        if !graph.is_position_node(node) {
             continue;
         }
         layers[rank as usize].push(node);
@@ -208,16 +208,6 @@ pub fn get_layers(graph: &LayoutGraph) -> Vec<Vec<NodeIndex>> {
     }
 
     layers
-}
-
-fn is_position_node(graph: &LayoutGraph, node: NodeIndex) -> bool {
-    if graph.compound_nodes.contains(&node) {
-        return false;
-    }
-    if graph.nesting_root == Some(node) {
-        return false;
-    }
-    true
 }
 
 /// Get the layer indices in sweep order.
@@ -243,7 +233,7 @@ pub fn get_predecessors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> 
         .filter(|&(idx, &(from, to))| {
             to == node
                 && !graph.excluded_edges.contains(&idx)
-                && is_position_node(graph, from)
+                && graph.is_position_node(from)
         })
         .map(|(_, &(from, _))| from)
         .collect();
@@ -263,7 +253,7 @@ pub fn get_successors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> {
         .filter(|&(idx, &(from, to))| {
             from == node
                 && !graph.excluded_edges.contains(&idx)
-                && is_position_node(graph, to)
+                && graph.is_position_node(to)
         })
         .map(|(_, &(_, to))| to)
         .collect();
@@ -349,7 +339,7 @@ fn find_inner_segments(
     upper_layer: usize,
     lower_layer: usize,
 ) -> Vec<(usize, usize)> {
-    let effective_edges = graph.effective_edges();
+    let effective_edges = effective_edges_for_position(graph);
     let mut segments = Vec::new();
 
     for &(from, to) in &effective_edges {
@@ -370,6 +360,28 @@ fn find_inner_segments(
     }
 
     segments
+}
+
+fn effective_edges_for_position(graph: &LayoutGraph) -> Vec<(usize, usize)> {
+    graph
+        .edges
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, &(from, to, _))| {
+            if graph.excluded_edges.contains(&idx) {
+                return None;
+            }
+            let (from, to) = if graph.reversed_edges.contains(&idx) {
+                (to, from)
+            } else {
+                (from, to)
+            };
+            if !graph.is_position_node(from) || !graph.is_position_node(to) {
+                return None;
+            }
+            Some((from, to))
+        })
+        .collect()
 }
 
 /// Find all Type-1 conflicts in the graph.
@@ -396,7 +408,7 @@ pub fn find_type1_conflicts(graph: &LayoutGraph) -> ConflictSet {
         }
 
         // Get all edges between these layers
-        let effective_edges = graph.effective_edges();
+        let effective_edges = effective_edges_for_position(graph);
 
         for &(from, to) in &effective_edges {
             let from_layer = get_layer(graph, from);
@@ -578,7 +590,7 @@ pub fn vertical_alignment(
                     let conflict_free =
                         !has_conflict(conflicts, prev_layer_idx, v_pos, m_pos as usize);
 
-                    if conflict_free && order_ok {
+                    if conflict_free && order_ok && can_align_border(graph, v, m) {
                         // Align v with m
                         // In the paper: align[m] = v, root[v] = root[m], align[v] = root[m]
                         // This creates a chain from m down to v
@@ -602,6 +614,19 @@ pub fn vertical_alignment(
     }
 
     alignment
+}
+
+fn can_align_border(graph: &LayoutGraph, v: NodeIndex, m: NodeIndex) -> bool {
+    let v_border = graph.border_type.contains_key(&v);
+    let m_border = graph.border_type.contains_key(&m);
+
+    if v_border || m_border {
+        let v_parent = graph.parents.get(v).copied().flatten();
+        let m_parent = graph.parents.get(m).copied().flatten();
+        return v_parent.is_some() && v_parent == m_parent;
+    }
+
+    true
 }
 
 /// Get median neighbor(s) from a sorted list of neighbors.
@@ -892,13 +917,6 @@ fn build_block_graph(
             let right_root = alignment.get_root(right);
 
             if left_root != right_root {
-                // Skip separation edges between border nodes and children
-                // of the same compound. This prevents border-child separation
-                // from pushing content apart, matching dagre.js behavior where
-                // asNonCompoundGraph removes compound nodes before positioning.
-                if is_border_child_pair(graph, left, right) {
-                    continue;
-                }
                 let weight = compute_sep(graph, left, right, config);
                 bg.add_edge(left_root, right_root, weight);
             }
@@ -906,26 +924,6 @@ fn build_block_graph(
     }
 
     bg
-}
-
-/// Check if two adjacent nodes are a border node and a child of the same compound.
-///
-/// Border-child pairs in the same compound don't need separation constraints
-/// in the BK block graph. The border node marks the compound's edge and should
-/// sit flush against the content without pushing it away.
-fn is_border_child_pair(graph: &LayoutGraph, left: NodeIndex, right: NodeIndex) -> bool {
-    let left_is_border = graph.border_type.contains_key(&left);
-    let right_is_border = graph.border_type.contains_key(&right);
-
-    // Need exactly one border node in the pair
-    if left_is_border == right_is_border {
-        return false;
-    }
-
-    // Both must share the same parent compound
-    let left_parent = graph.parents.get(left).copied().flatten();
-    let right_parent = graph.parents.get(right).copied().flatten();
-    left_parent.is_some() && left_parent == right_parent
 }
 
 /// Get the separation value for a node: `edge_sep` for dummy nodes, `node_sep` for real nodes.
@@ -1276,6 +1274,7 @@ mod tests {
 
         let root_idx = lg.add_nesting_node("_nesting_root".into());
         lg.nesting_root = Some(root_idx);
+        lg.position_excluded_nodes.insert(root_idx);
 
         let sg_idx = lg.node_index[&"sg".into()];
         let a_idx = lg.node_index[&"A".into()];
@@ -1289,6 +1288,26 @@ mod tests {
         assert!(layers[0].contains(&a_idx));
         assert!(!layers[0].contains(&sg_idx), "compound parent should be excluded");
         assert!(!layers[0].contains(&root_idx), "nesting root should be excluded");
+    }
+
+    #[test]
+    fn test_get_neighbors_skips_excluded_nodes() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("sg", ());
+        g.set_parent("B", "sg");
+        g.add_edge("A", "B");
+
+        let lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        let sg_idx = lg.node_index[&"sg".into()];
+        let a_idx = lg.node_index[&"A".into()];
+        let b_idx = lg.node_index[&"B".into()];
+
+        assert!(!lg.is_position_node(sg_idx));
+
+        let preds = get_predecessors(&lg, b_idx);
+        assert_eq!(preds, vec![a_idx]);
     }
 
     #[test]
@@ -2374,13 +2393,44 @@ mod tests {
         assert_eq!(bg.successors(d).len(), 0);
     }
 
+    #[test]
+    fn test_block_graph_includes_border_child_separation() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("sg", (0.0, 0.0));
+        graph.add_node("border", (0.0, 0.0));
+        graph.add_node("child", (10.0, 10.0));
+        graph.set_parent("border", "sg");
+        graph.set_parent("child", "sg");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+        let sg_idx = lg.node_index[&"sg".into()];
+        let border_idx = lg.node_index[&"border".into()];
+        let child_idx = lg.node_index[&"child".into()];
+
+        lg.border_type.insert(border_idx, BorderType::Left);
+        lg.parents[border_idx] = Some(sg_idx);
+        lg.parents[child_idx] = Some(sg_idx);
+
+        lg.ranks[border_idx] = 0;
+        lg.ranks[child_idx] = 0;
+        lg.order[border_idx] = 0;
+        lg.order[child_idx] = 1;
+
+        let layers = vec![vec![border_idx, child_idx]];
+        let alignment = BlockAlignment::new(&[border_idx, child_idx]);
+        let config = BKConfig::default();
+
+        let bg = build_block_graph(&lg, &alignment, &layers, &config);
+        let left_root = alignment.get_root(border_idx);
+        let right_root = alignment.get_root(child_idx);
+        assert!(bg.successors(left_root).iter().any(|(n, _)| *n == right_root));
+    }
+
     // =========================================================================
     // BK borderType guard tests (Task 3.2)
     // =========================================================================
 
     #[test]
-    #[ignore] // TODO(plan-0037): BK border positioning broken with new rank structure.
-    // See findings/bk-border-positioning-broken.md
     fn test_bk_border_guard_left_border_not_pulled_right() {
         // Test that a compound graph with external nodes produces valid layout
         // through the full pipeline. The BK algorithm positions nodes, and the

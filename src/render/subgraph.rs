@@ -59,6 +59,14 @@ pub fn render_subgraph_borders(
             for dx in (title_end + 1)..(x + w - 1) {
                 canvas.set_subgraph_border(dx, y, charset.horizontal);
             }
+
+            // Protect the entire top border row so edges cannot corrupt
+            // the embedded title segment.
+            for dx in 1..(w - 1) {
+                if let Some(cell) = canvas.get(x + dx, y) {
+                    let _ = canvas.set_subgraph_title_char(x + dx, y, cell.ch);
+                }
+            }
         } else {
             // No title or too narrow: plain horizontal
             for dx in 1..(w - 1) {

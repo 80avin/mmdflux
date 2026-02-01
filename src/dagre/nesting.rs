@@ -213,6 +213,9 @@ pub fn cleanup(lg: &mut LayoutGraph) {
         lg.excluded_edges.insert(edge_idx);
     }
     lg.nesting_edges.clear();
+    if let Some(root_idx) = lg.nesting_root {
+        lg.position_excluded_nodes.insert(root_idx);
+    }
     lg.nesting_root = None;
 }
 

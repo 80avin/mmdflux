@@ -110,6 +110,47 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
                 .fold(f64::NEG_INFINITY, f64::max)
         });
 
+        // Ensure bounds still contain direct children even if borders drift.
+        let mut child_min_x = f64::INFINITY;
+        let mut child_max_x = f64::NEG_INFINITY;
+        let mut child_min_y = f64::INFINITY;
+        let mut child_max_y = f64::NEG_INFINITY;
+        for (idx, parent) in lg.parents.iter().enumerate() {
+            if *parent != Some(compound_idx) {
+                continue;
+            }
+            if lg.border_type.contains_key(&idx) || lg.compound_nodes.contains(&idx) {
+                continue;
+            }
+            let pos = lg.positions[idx];
+            let (w, h) = lg.dimensions[idx];
+            child_min_x = child_min_x.min(pos.x);
+            child_max_x = child_max_x.max(pos.x + w);
+            child_min_y = child_min_y.min(pos.y);
+            child_max_y = child_max_y.max(pos.y + h);
+        }
+
+        let x_min = if child_min_x.is_finite() {
+            x_min.min(child_min_x)
+        } else {
+            x_min
+        };
+        let x_max = if child_max_x.is_finite() {
+            x_max.max(child_max_x)
+        } else {
+            x_max
+        };
+        let y_min = if child_min_y.is_finite() {
+            y_min.min(child_min_y)
+        } else {
+            y_min
+        };
+        let y_max = if child_max_y.is_finite() {
+            y_max.max(child_max_y)
+        } else {
+            y_max
+        };
+
         let width = (x_max - x_min).max(0.0);
         let height = (y_max - y_min).max(0.0);
 
@@ -117,8 +158,8 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
         bounds.insert(
             name,
             Rect {
-                x: (x_min + x_max) / 2.0,
-                y: (y_min + y_max) / 2.0,
+                x: x_min,
+                y: y_min,
                 width,
                 height,
             },

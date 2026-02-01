@@ -223,6 +223,9 @@ pub(crate) struct LayoutGraph {
     /// (normalization, ordering, BK alignment).
     pub excluded_edges: BTreeSet<usize>,
 
+    /// Nodes excluded from positioning (dagre `asNonCompoundGraph` semantics).
+    pub position_excluded_nodes: BTreeSet<usize>,
+
     /// Node indices that are compound (subgraph) nodes.
     pub compound_nodes: BTreeSet<usize>,
 
@@ -318,6 +321,7 @@ impl LayoutGraph {
             nesting_root: None,
             nesting_edges: BTreeSet::new(),
             excluded_edges: BTreeSet::new(),
+            position_excluded_nodes: BTreeSet::new(),
             compound_nodes,
             compound_titles,
             edge_minlens: vec![1; edge_count],
@@ -361,22 +365,6 @@ impl LayoutGraph {
             .collect()
     }
 
-    /// Get effective edges with weights (with reversals applied).
-    pub fn effective_edges_weighted(&self) -> Vec<(usize, usize, f64)> {
-        self.edges
-            .iter()
-            .enumerate()
-            .map(|(idx, &(from, to, _))| {
-                let weight = self.edge_weights[idx];
-                if self.reversed_edges.contains(&idx) {
-                    (to, from, weight)
-                } else {
-                    (from, to, weight)
-                }
-            })
-            .collect()
-    }
-
     /// Check if a node is a dummy node.
     pub fn is_dummy(&self, node_id: &NodeId) -> bool {
         self.dummy_nodes.contains_key(node_id)
@@ -408,7 +396,22 @@ impl LayoutGraph {
         self.positions.push(Point::default());
         self.dimensions.push((0.0, 0.0));
         self.parents.push(None);
+        self.position_excluded_nodes.remove(&idx);
         idx
+    }
+
+    /// Returns true if a node should participate in positioning.
+    ///
+    /// This excludes compound parents and any nodes explicitly excluded via
+    /// `position_excluded_nodes` (dagre `asNonCompoundGraph` semantics).
+    pub fn is_position_node(&self, node: usize) -> bool {
+        if self.compound_nodes.contains(&node) {
+            return false;
+        }
+        if self.position_excluded_nodes.contains(&node) {
+            return false;
+        }
+        true
     }
 
     /// Add an edge and return its index.
@@ -637,6 +640,31 @@ mod tests {
         assert_eq!(lg.parents[b_idx], Some(sg1_idx));
         assert_eq!(lg.parents[sg1_idx], None);
         assert!(lg.compound_nodes.contains(&sg1_idx));
+    }
+
+    #[test]
+    fn test_is_position_node_excludes_compound_parents_and_root() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("sg", ());
+        g.add_node("A", ());
+        g.set_parent("A", "sg");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        let sg_idx = lg.node_index[&"sg".into()];
+        let a_idx = lg.node_index[&"A".into()];
+
+        let root_idx = lg.add_nesting_node("_nesting_root".into());
+        lg.position_excluded_nodes.insert(root_idx);
+
+        assert!(
+            !lg.is_position_node(sg_idx),
+            "compound parent should be excluded"
+        );
+        assert!(lg.is_position_node(a_idx), "leaf node should be included");
+        assert!(
+            !lg.is_position_node(root_idx),
+            "nesting root should be excluded"
+        );
     }
 
     #[test]
