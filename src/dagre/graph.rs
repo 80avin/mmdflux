@@ -531,6 +531,23 @@ mod tests {
     }
 
     #[test]
+    fn test_add_nesting_node_does_not_shift_edge_weights() {
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_edge("A", "B");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        let edges_before = lg.edges.len();
+        let weights_before = lg.edge_weights.len();
+
+        lg.add_nesting_node("_nesting_root".into());
+
+        assert_eq!(lg.edges.len(), edges_before);
+        assert_eq!(lg.edge_weights.len(), weights_before);
+    }
+
+    #[test]
     fn test_layout_graph_dummy_tracking() {
         use crate::dagre::normalize::{DummyNode, LabelPos};
 
