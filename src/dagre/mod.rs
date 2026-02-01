@@ -117,6 +117,7 @@ fn insert_self_edge_dummies(lg: &mut LayoutGraph) {
         lg.ranks.push(node_rank);
         lg.positions.push(Point::default());
         lg.dimensions.push((1.0, 1.0));
+        lg.original_has_predecessor.push(false);
         lg.parents.push(lg.parents[se.node_index]);
 
         // Insert into ordering: place dummy right after the node

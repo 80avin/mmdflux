@@ -134,7 +134,7 @@ fn center_source_nodes(graph: &LayoutGraph, x_coords: &mut std::collections::Has
     };
 
     for node in 0..n {
-        if !graph.is_position_node(node) || has_pred[node] {
+        if !graph.is_position_node(node) || has_pred[node] || graph.original_has_predecessor[node] {
             continue;
         }
         let mut targets = HashSet::new();
@@ -144,6 +144,9 @@ fn center_source_nodes(graph: &LayoutGraph, x_coords: &mut std::collections::Has
                     targets.insert(target);
                 }
             }
+        }
+        if targets.len() < 2 {
+            continue;
         }
         let xs: Vec<f64> = targets
             .iter()

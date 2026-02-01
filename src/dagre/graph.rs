@@ -169,6 +169,9 @@ pub(crate) struct LayoutGraph {
     /// Node dimensions (width, height).
     pub dimensions: Vec<(f64, f64)>,
 
+    /// Whether the node had any incoming edge in the original graph.
+    pub original_has_predecessor: Vec<bool>,
+
     // --- Dummy node tracking (for normalization) ---
     /// Metadata for dummy nodes, keyed by node ID.
     pub dummy_nodes: HashMap<NodeId, DummyNode>,
@@ -276,6 +279,10 @@ impl LayoutGraph {
         let edge_count = edges.len();
 
         let edge_weights = vec![1.0; edge_count];
+        let mut original_has_predecessor = vec![false; n];
+        for &(_, to_idx, _) in &edges {
+            original_has_predecessor[to_idx] = true;
+        }
 
         // Build compound_titles set
         let compound_titles: BTreeSet<usize> = graph
@@ -305,6 +312,7 @@ impl LayoutGraph {
             order: (0..n).collect(),
             positions: vec![Point::default(); n],
             dimensions,
+            original_has_predecessor,
             dummy_nodes: HashMap::new(),
             dummy_chains: Vec::new(),
             original_edge_count: edge_count,
@@ -395,6 +403,7 @@ impl LayoutGraph {
         self.order.push(idx);
         self.positions.push(Point::default());
         self.dimensions.push((0.0, 0.0));
+        self.original_has_predecessor.push(false);
         self.parents.push(None);
         self.position_excluded_nodes.remove(&idx);
         idx
@@ -758,6 +767,7 @@ mod tests {
         // Add a dummy (simulating normalization adding a node)
         let dummy_id = NodeId::from("_d0");
         lg.node_ids.push(dummy_id.clone());
+        lg.original_has_predecessor.push(false);
         lg.dummy_nodes.insert(dummy_id, DummyNode::edge(0, 1));
 
         // Now index 2 is a dummy

@@ -268,6 +268,7 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
             graph.order.push(dummy_idx);
             graph.positions.push(Point::default());
             graph.dimensions.push((width, height));
+            graph.original_has_predecessor.push(false);
             graph.parents.push(None);
             graph.dummy_nodes.insert(dummy_id.clone(), dummy_node);
 
