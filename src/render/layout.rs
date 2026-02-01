@@ -292,11 +292,10 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .collect();
 
     // --- Phase D: Scale dagre coordinates to ASCII ---
-    // When global minlen doubling is active (any edge has a label), dagre
-    // positions real nodes 2× further apart (doubled minlens → doubled rank
-    // gaps). We halve the primary-axis scale factor to compensate, keeping
-    // total diagram height approximately unchanged.
-    let ranks_doubled = !edge_labels.is_empty();
+    // Dagre's makeSpaceForEdgeLabels always doubles minlen, which doubles rank gaps.
+    // We compensate by adjusting the primary-axis scale factor so overall spacing
+    // stays stable for ASCII rendering.
+    let ranks_doubled = true;
     let (scale_x, scale_y) = compute_ascii_scale_factors(
         &node_dims,
         dagre_config.rank_sep,

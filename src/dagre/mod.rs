@@ -52,18 +52,16 @@ pub use types::{
     SelfEdgeLayout,
 };
 
-/// Double all edge minlens when any edge has a label, creating a uniform rank grid.
+/// Double all edge minlens to create a uniform rank grid.
 ///
-/// This matches dagre.js's `makeSpaceForEdgeLabels()` which globally doubles minlens
-/// rather than selectively inflating labeled edges. The uniform grid ensures downstream
-/// Sugiyama phases (normalization, ordering, positioning) see consistent rank spacing.
+/// Matches dagre.js's `makeSpaceForEdgeLabels()` behavior, which always doubles
+/// minlens (and later compensates via ranksep scaling). The uniform grid ensures
+/// downstream Sugiyama phases (normalization, ordering, positioning) see consistent
+/// rank spacing, even when no labels are present.
 fn make_space_for_edge_labels(
     lg: &mut LayoutGraph,
-    edge_labels: &HashMap<usize, normalize::EdgeLabelInfo>,
+    _edge_labels: &HashMap<usize, normalize::EdgeLabelInfo>,
 ) {
-    if edge_labels.is_empty() {
-        return;
-    }
     for minlen in &mut lg.edge_minlens {
         *minlen *= 2;
     }
@@ -690,7 +688,7 @@ mod tests {
     }
 
     #[test]
-    fn test_make_space_noop_when_no_labels() {
+    fn test_make_space_doubles_without_labels() {
         let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
         graph.add_node("A", (5.0, 3.0));
         graph.add_node("B", (5.0, 3.0));
@@ -701,7 +699,7 @@ mod tests {
 
         make_space_for_edge_labels(&mut lg, &edge_labels);
 
-        assert_eq!(lg.edge_minlens[0], 1); // unchanged
+        assert_eq!(lg.edge_minlens[0], 2); // doubled even without labels
     }
 
     #[test]

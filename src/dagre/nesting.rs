@@ -100,28 +100,7 @@ pub fn run(lg: &mut LayoutGraph) {
         }
     }
 
-    // Add separation edges between sibling compounds to keep their rank ranges disjoint.
-    let mut compounds_by_parent: HashMap<Option<usize>, Vec<usize>> = HashMap::new();
-    for &compound_idx in &compound_indices {
-        compounds_by_parent
-            .entry(lg.parents[compound_idx])
-            .or_default()
-            .push(compound_idx);
-    }
-    for mut siblings in compounds_by_parent.values().cloned() {
-        if siblings.len() < 2 {
-            continue;
-        }
-        siblings.sort_unstable();
-        for window in siblings.windows(2) {
-            let prev = window[0];
-            let next = window[1];
-            let prev_bot = lg.border_bottom[&prev];
-            let next_top = lg.border_top[&next];
-            let edge_idx = lg.add_nesting_edge_with_minlen(prev_bot, next_top, nesting_weight, 1);
-            lg.nesting_edges.insert(edge_idx);
-        }
-    }
+    // Note: dagre.js does not add sibling-compound separation edges here.
 
     // Create root node connecting to all top-level nodes and compound border_tops
     let root_id = NodeId("_nesting_root".to_string());

@@ -214,6 +214,7 @@ pub fn run(graph: &mut LayoutGraph) {
     if !best_order.is_empty() {
         graph.order = best_order;
     }
+    debug_dump_order(graph, "final");
 }
 
 fn sweep_down(
