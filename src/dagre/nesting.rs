@@ -62,7 +62,7 @@ pub fn run(lg: &mut LayoutGraph) {
 
     // For each compound node, create border top/bottom and nesting edges
     let compound_indices: Vec<usize> = lg.compound_nodes.iter().copied().collect();
-    for compound_idx in compound_indices {
+    for &compound_idx in &compound_indices {
         let compound_id = lg.node_ids[compound_idx].0.clone();
 
         // Create border top node
@@ -97,6 +97,29 @@ pub fn run(lg: &mut LayoutGraph) {
             lg.nesting_edges.insert(e1);
             let e2 = lg.add_nesting_edge_with_minlen(child, bot_idx, nesting_weight, minlen);
             lg.nesting_edges.insert(e2);
+        }
+    }
+
+    // Add separation edges between sibling compounds to keep their rank ranges disjoint.
+    let mut compounds_by_parent: HashMap<Option<usize>, Vec<usize>> = HashMap::new();
+    for &compound_idx in &compound_indices {
+        compounds_by_parent
+            .entry(lg.parents[compound_idx])
+            .or_default()
+            .push(compound_idx);
+    }
+    for mut siblings in compounds_by_parent.values().cloned() {
+        if siblings.len() < 2 {
+            continue;
+        }
+        siblings.sort_unstable();
+        for window in siblings.windows(2) {
+            let prev = window[0];
+            let next = window[1];
+            let prev_bot = lg.border_bottom[&prev];
+            let next_top = lg.border_top[&next];
+            let edge_idx = lg.add_nesting_edge_with_minlen(prev_bot, next_top, nesting_weight, 1);
+            lg.nesting_edges.insert(edge_idx);
         }
     }
 
@@ -596,6 +619,53 @@ mod tests {
         assert!(lg.min_rank.contains_key(&sg1_idx));
         assert!(lg.max_rank.contains_key(&sg1_idx));
         assert!(lg.min_rank[&sg1_idx] <= lg.max_rank[&sg1_idx]);
+    }
+
+    #[test]
+    fn test_sibling_subgraphs_do_not_share_rank_ranges() {
+        use crate::dagre::rank;
+
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("sg1", ());
+        g.add_node("sg2", ());
+        g.add_node("A", ());
+        g.add_node("B", ());
+        g.add_node("C", ());
+        g.add_node("D", ());
+
+        g.set_parent("A", "sg1");
+        g.set_parent("B", "sg1");
+        g.set_parent("C", "sg2");
+        g.set_parent("D", "sg2");
+
+        g.add_edge("A", "B");
+        g.add_edge("C", "D");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
+        rank::remove_empty_ranks(&mut lg);
+        cleanup(&mut lg);
+        rank::normalize(&mut lg);
+        assign_rank_minmax(&mut lg);
+
+        let sg1 = lg.node_index[&"sg1".into()];
+        let sg2 = lg.node_index[&"sg2".into()];
+
+        let sg1_min = *lg.min_rank.get(&sg1).unwrap();
+        let sg1_max = *lg.max_rank.get(&sg1).unwrap();
+        let sg2_min = *lg.min_rank.get(&sg2).unwrap();
+        let sg2_max = *lg.max_rank.get(&sg2).unwrap();
+
+        let disjoint = sg1_max < sg2_min || sg2_max < sg1_min;
+        assert!(
+            disjoint,
+            "Sibling subgraph rank ranges overlap: sg1=[{}, {}], sg2=[{}, {}]",
+            sg1_min,
+            sg1_max,
+            sg2_min,
+            sg2_max
+        );
     }
 
     #[test]

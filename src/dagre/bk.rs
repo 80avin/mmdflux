@@ -196,6 +196,9 @@ pub fn get_layers(graph: &LayoutGraph) -> Vec<Vec<NodeIndex>> {
     let mut layers: Vec<Vec<NodeIndex>> = vec![Vec::new(); max_rank + 1];
 
     for (node, &rank) in graph.ranks.iter().enumerate() {
+        if !is_position_node(graph, node) {
+            continue;
+        }
         layers[rank as usize].push(node);
     }
 
@@ -205,6 +208,16 @@ pub fn get_layers(graph: &LayoutGraph) -> Vec<Vec<NodeIndex>> {
     }
 
     layers
+}
+
+fn is_position_node(graph: &LayoutGraph, node: NodeIndex) -> bool {
+    if graph.compound_nodes.contains(&node) {
+        return false;
+    }
+    if graph.nesting_root == Some(node) {
+        return false;
+    }
+    true
 }
 
 /// Get the layer indices in sweep order.
@@ -227,7 +240,11 @@ pub fn get_predecessors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> 
     let mut preds: Vec<NodeIndex> = effective_edges
         .iter()
         .enumerate()
-        .filter(|&(idx, &(_, to))| to == node && !graph.excluded_edges.contains(&idx))
+        .filter(|&(idx, &(from, to))| {
+            to == node
+                && !graph.excluded_edges.contains(&idx)
+                && is_position_node(graph, from)
+        })
         .map(|(_, &(from, _))| from)
         .collect();
 
@@ -243,7 +260,11 @@ pub fn get_successors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> {
     let mut succs: Vec<NodeIndex> = effective_edges
         .iter()
         .enumerate()
-        .filter(|&(idx, &(from, _))| from == node && !graph.excluded_edges.contains(&idx))
+        .filter(|&(idx, &(from, to))| {
+            from == node
+                && !graph.excluded_edges.contains(&idx)
+                && is_position_node(graph, to)
+        })
         .map(|(_, &(_, to))| to)
         .collect();
 
@@ -1242,6 +1263,32 @@ mod tests {
         let c = lg.node_index[&"C".into()];
         assert_eq!(layers[1][0], b);
         assert_eq!(layers[1][1], c);
+    }
+
+    #[test]
+    fn test_get_layers_excludes_compound_parents_and_root() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("sg", ());
+        g.add_node("A", ());
+        g.set_parent("A", "sg");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+
+        let root_idx = lg.add_nesting_node("_nesting_root".into());
+        lg.nesting_root = Some(root_idx);
+
+        let sg_idx = lg.node_index[&"sg".into()];
+        let a_idx = lg.node_index[&"A".into()];
+
+        lg.ranks[sg_idx] = 0;
+        lg.ranks[a_idx] = 0;
+        lg.ranks[root_idx] = 0;
+
+        let layers = get_layers(&lg);
+
+        assert!(layers[0].contains(&a_idx));
+        assert!(!layers[0].contains(&sg_idx), "compound parent should be excluded");
+        assert!(!layers[0].contains(&root_idx), "nesting root should be excluded");
     }
 
     #[test]

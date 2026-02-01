@@ -1788,3 +1788,28 @@ fn test_external_node_not_far_from_targets() {
         tolerance
     );
 }
+
+#[test]
+fn test_external_node_centered_between_targets() {
+    let (_, layout) = layout_fixture("external_node_subgraph.mmd");
+    let a_cx = layout.node_bounds["A"].center_x();
+    let c_cx = layout.node_bounds["C"].center_x();
+    let e_cx = layout.node_bounds["E"].center_x();
+
+    let min_x = a_cx.min(c_cx);
+    let max_x = a_cx.max(c_cx);
+    let range = max_x - min_x;
+    let midpoint = (min_x + max_x) / 2;
+    let distance = (e_cx as isize - midpoint as isize).unsigned_abs();
+    let tolerance = (range / 2).max(15);
+
+    assert!(
+        distance <= tolerance,
+        "External node E ({}) is not centered between A ({}) and C ({}) (distance {} > {})",
+        e_cx,
+        a_cx,
+        c_cx,
+        distance,
+        tolerance
+    );
+}
