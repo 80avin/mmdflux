@@ -598,6 +598,18 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         dagre_direction,
         &diagram.edges,
     );
+    debug_compare_subgraph_bounds(
+        &diagram.subgraphs,
+        &subgraph_bounds,
+        &result.subgraph_bounds,
+        scale_x,
+        scale_y,
+        dagre_min_x,
+        dagre_min_y,
+        max_overhang_x,
+        max_overhang_y,
+        config,
+    );
 
     // --- Phase L: Compute self-edge loop paths in draw coordinates ---
     // We use node bounds directly rather than transforming dagre-space loop points,
@@ -1143,6 +1155,90 @@ fn convert_subgraph_bounds(
     // adjustments can overcorrect otherwise correct layouts.
 
     bounds
+}
+
+fn debug_compare_subgraph_bounds(
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    computed: &HashMap<String, SubgraphBounds>,
+    dagre_bounds: &HashMap<String, Rect>,
+    scale_x: f64,
+    scale_y: f64,
+    dagre_min_x: f64,
+    dagre_min_y: f64,
+    max_overhang_x: usize,
+    max_overhang_y: usize,
+    config: &LayoutConfig,
+) {
+    if !std::env::var("MMDFLUX_DEBUG_SUBGRAPH_BOUNDS").is_ok_and(|v| v == "1") {
+        return;
+    }
+
+    let mut ids: HashSet<String> = HashSet::new();
+    ids.extend(subgraphs.keys().cloned());
+    ids.extend(computed.keys().cloned());
+    ids.extend(dagre_bounds.keys().cloned());
+
+    fn dagre_to_draw(
+        x: f64,
+        y: f64,
+        scale_x: f64,
+        scale_y: f64,
+        dagre_min_x: f64,
+        dagre_min_y: f64,
+        max_overhang_x: usize,
+        max_overhang_y: usize,
+        config: &LayoutConfig,
+    ) -> (usize, usize) {
+        let dx = ((x - dagre_min_x) * scale_x).round() as isize;
+        let dy = ((y - dagre_min_y) * scale_y).round() as isize;
+        let x = dx.max(0) as usize + max_overhang_x + config.padding + config.left_label_margin;
+        let y = dy.max(0) as usize + max_overhang_y + config.padding;
+        (x, y)
+    }
+
+    eprintln!("[subgraph_bounds] comparing computed vs dagre-derived");
+    let mut ids: Vec<String> = ids.into_iter().collect();
+    ids.sort();
+    for id in ids {
+        let computed_bounds = computed.get(&id);
+        let dagre_rect = dagre_bounds.get(&id);
+        if computed_bounds.is_none() && dagre_rect.is_none() {
+            continue;
+        }
+
+        let dagre_draw = dagre_rect.map(|rect| {
+            let (x0, y0) = dagre_to_draw(
+                rect.x,
+                rect.y,
+                scale_x,
+                scale_y,
+                dagre_min_x,
+                dagre_min_y,
+                max_overhang_x,
+                max_overhang_y,
+                config,
+            );
+            let (x1, y1) = dagre_to_draw(
+                rect.x + rect.width,
+                rect.y + rect.height,
+                scale_x,
+                scale_y,
+                dagre_min_x,
+                dagre_min_y,
+                max_overhang_x,
+                max_overhang_y,
+                config,
+            );
+            (x0, y0, x1.saturating_sub(x0), y1.saturating_sub(y0))
+        });
+
+        let computed_tuple = computed_bounds.map(|b| (b.x, b.y, b.width, b.height));
+
+        eprintln!(
+            "[subgraph_bounds] {} computed={:?} dagre={:?}",
+            id, computed_tuple, dagre_draw
+        );
+    }
 }
 
 /// Check if `ancestor_id` is an ancestor of `descendant_id` in the subgraph hierarchy.
