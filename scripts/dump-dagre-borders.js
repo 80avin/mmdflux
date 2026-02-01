@@ -24,6 +24,7 @@ const addBorderSegments = require(path.join(dagreRoot, "lib", "add-border-segmen
 const coordinateSystem = require(path.join(dagreRoot, "lib", "coordinate-system"));
 const order = require(path.join(dagreRoot, "lib", "order"));
 const position = require(path.join(dagreRoot, "lib", "position"));
+const bk = require(path.join(dagreRoot, "lib", "position", "bk"));
 
 const g = new Graph({ multigraph: true, compound: true });
 
@@ -241,6 +242,67 @@ parentDummyChains(g);
 addBorderSegments(g);
 order(g, {});
 insertSelfEdges(g);
+
+function dumpBorderBlocks(graph) {
+  const graphNon = util.asNonCompoundGraph(graph);
+  const layering = util.buildLayerMatrix(graphNon);
+  const conflicts = Object.assign(
+    bk.findType1Conflicts(graphNon, layering),
+    bk.findType2Conflicts(graphNon, layering)
+  );
+
+  const parents = graph.nodes().filter((v) => graph.children(v).length);
+  parents.sort();
+
+  console.log("[border_blocks] block roots");
+  const dirs = [
+    { key: "ul", vert: "u", horiz: "l", label: "UL" },
+    { key: "ur", vert: "u", horiz: "r", label: "UR" },
+    { key: "dl", vert: "d", horiz: "l", label: "DL" },
+    { key: "dr", vert: "d", horiz: "r", label: "DR" },
+  ];
+
+  dirs.forEach(({ vert, horiz, label }) => {
+    let adjustedLayering = vert === "u" ? layering : layering.slice().reverse();
+    let layerForAlign = adjustedLayering;
+    if (horiz === "r") {
+      layerForAlign = adjustedLayering.map((layer) => layer.slice().reverse());
+    }
+    const neighborFn = (vert === "u" ? graphNon.predecessors : graphNon.successors).bind(graphNon);
+    const align = bk.verticalAlignment(graphNon, layerForAlign, conflicts, neighborFn);
+
+    console.log(`[border_blocks] ${label}`);
+    parents.forEach((parent) => {
+      const borderChildren = graph
+        .children(parent)
+        .filter((child) => graph.node(child).dummy === "border");
+      if (!borderChildren.length) {
+        return;
+      }
+
+      borderChildren.sort((a, b) => {
+        const ra = graph.node(a).rank ?? 0;
+        const rb = graph.node(b).rank ?? 0;
+        if (ra !== rb) return ra - rb;
+        const oa = graph.node(a).order ?? 0;
+        const ob = graph.node(b).order ?? 0;
+        if (oa !== ob) return oa - ob;
+        return a.localeCompare(b);
+      });
+
+      console.log(`[border_blocks]   ${parent}`);
+      borderChildren.forEach((child) => {
+        const node = graph.node(child);
+        const root = align.root[child] ?? child;
+        console.log(
+          `[border_blocks]     ${child} rank=${node.rank} order=${node.order} root=${root}`
+        );
+      });
+    });
+  });
+}
+
+dumpBorderBlocks(g);
 coordinateSystem.adjust(g);
 position(g);
 g.edges().forEach((e) => {

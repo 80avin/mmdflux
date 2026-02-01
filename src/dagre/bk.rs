@@ -1105,6 +1105,7 @@ pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, 
 
     // Step 1: Find all conflicts
     let conflicts = find_all_conflicts(graph);
+    debug_dump_border_blocks(graph, &conflicts);
 
     // Step 2: Compute all 4 alignments
     let mut results = compute_all_alignments(graph, &conflicts, config);
@@ -1117,6 +1118,55 @@ pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, 
 
     // Step 5: Balance (median of all 4)
     balance(graph, &results)
+}
+
+fn debug_dump_border_blocks(graph: &LayoutGraph, conflicts: &ConflictSet) {
+    if !std::env::var("MMDFLUX_DEBUG_BORDER_BLOCKS").is_ok_and(|v| v == "1") {
+        return;
+    }
+
+    let mut compounds: Vec<usize> = graph.compound_nodes.iter().copied().collect();
+    compounds.sort_by_key(|&idx| graph.node_ids[idx].0.clone());
+
+    eprintln!("[border_blocks] block roots");
+    for dir in AlignmentDirection::all() {
+        let alignment = vertical_alignment(graph, conflicts, dir);
+        eprintln!("[border_blocks] {:?}", dir);
+
+        for compound_idx in &compounds {
+            let name = &graph.node_ids[*compound_idx].0;
+            eprintln!("[border_blocks]   {}", name);
+
+            let mut nodes: Vec<NodeIndex> = Vec::new();
+            if let Some(left) = graph.border_left.get(compound_idx) {
+                nodes.extend(left.iter().copied());
+            }
+            if let Some(right) = graph.border_right.get(compound_idx) {
+                nodes.extend(right.iter().copied());
+            }
+            if let Some(&top) = graph.border_top.get(compound_idx) {
+                nodes.push(top);
+            }
+            if let Some(&bot) = graph.border_bottom.get(compound_idx) {
+                nodes.push(bot);
+            }
+
+            nodes.sort_by_key(|&idx| (graph.ranks[idx], graph.order[idx], idx));
+            nodes.dedup();
+
+            for idx in nodes {
+                let root = alignment.get_root(idx);
+                let root_id = &graph.node_ids[root].0;
+                eprintln!(
+                    "[border_blocks]     {} rank={} order={} root={}",
+                    graph.node_ids[idx].0,
+                    graph.ranks[idx],
+                    graph.order[idx],
+                    root_id
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]
