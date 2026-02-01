@@ -316,22 +316,37 @@ where
         acyclic::run(&mut lg);
     }
 
-    // Compound: add nesting structure (border top/bottom, nesting edges)
+    // Phase 1.5: Set minlen=2 for labeled edges so ranking creates a gap
+    // Must be before nesting::run so nesting minlen multiplication applies to these too.
+    make_space_for_edge_labels(&mut lg, edge_labels);
+
+    // Compound: add nesting structure (border top/bottom, nesting edges).
+    // Multiplies all existing edge minlens by nodeSep = 2*height+1.
     if has_compound {
         nesting::run(&mut lg);
     }
 
-    // Phase 1.5: Set minlen=2 for labeled edges so ranking creates a gap
-    make_space_for_edge_labels(&mut lg, edge_labels);
-
     // Phase 2: Assign ranks (layers)
     rank::run(&mut lg, config);
-    rank::normalize(&mut lg);
 
-    // Compound: cleanup nesting edges, insert title nodes, compute rank spans
+    // Compound: remove empty ranks created by nesting minlen multiplication.
+    // Must run after ranking to compress the expanded rank space, and before
+    // nesting cleanup so border nodes are still present.
+    if has_compound {
+        rank::remove_empty_ranks(&mut lg);
+    }
+
+    // Compound: cleanup nesting edges, normalize, insert title nodes, compute rank spans
     if has_compound {
         nesting::cleanup(&mut lg);
+    }
+
+    rank::normalize(&mut lg);
+
+    if has_compound {
         nesting::insert_title_nodes(&mut lg);
+        // Re-normalize after title nodes may have introduced rank -1
+        rank::normalize(&mut lg);
         nesting::assign_rank_minmax(&mut lg);
     }
 
@@ -831,7 +846,12 @@ mod tests {
             "Should have subgraph bounds for sg1"
         );
         let bounds = &result.subgraph_bounds["sg1"];
-        assert!(bounds.width > 0.0, "Subgraph width should be positive");
+        assert!(
+            bounds.width > 0.0,
+            "Subgraph width should be positive, got bounds={:?}, all_nodes={:?}",
+            bounds,
+            result.nodes
+        );
         assert!(bounds.height > 0.0, "Subgraph height should be positive");
     }
 

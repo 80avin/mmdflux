@@ -234,6 +234,10 @@ pub(crate) struct LayoutGraph {
 
     /// Self-edges extracted before the acyclic phase and reinserted after ordering.
     pub self_edges: Vec<SelfEdge>,
+
+    /// Node rank factor from nesting graph (used by `remove_empty_ranks`).
+    /// Set when nesting multiplies edge minlens by this factor.
+    pub node_rank_factor: Option<i32>,
 }
 
 impl LayoutGraph {
@@ -318,6 +322,7 @@ impl LayoutGraph {
             compound_titles,
             edge_minlens: vec![1; edge_count],
             self_edges: Vec::new(),
+            node_rank_factor: None,
         }
     }
 
@@ -403,16 +408,26 @@ impl LayoutGraph {
         self.positions.push(Point::default());
         self.dimensions.push((0.0, 0.0));
         self.parents.push(None);
-        self.edge_weights.push(0.0); // placeholder; real weights set by edge addition
         idx
     }
 
     /// Add an edge and return its index.
     pub fn add_nesting_edge(&mut self, from: usize, to: usize, weight: f64) -> usize {
+        self.add_nesting_edge_with_minlen(from, to, weight, 1)
+    }
+
+    /// Add an edge with a specific minlen and return its index.
+    pub fn add_nesting_edge_with_minlen(
+        &mut self,
+        from: usize,
+        to: usize,
+        weight: f64,
+        minlen: i32,
+    ) -> usize {
         let idx = self.edges.len();
         self.edges.push((from, to, idx));
         self.edge_weights.push(weight);
-        self.edge_minlens.push(1);
+        self.edge_minlens.push(minlen);
         idx
     }
 

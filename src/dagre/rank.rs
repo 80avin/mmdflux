@@ -92,6 +92,46 @@ pub fn normalize(graph: &mut LayoutGraph) {
     }
 }
 
+/// Remove empty ranks that were introduced by nesting minlen multiplication.
+///
+/// Matches dagre.js `util.removeEmptyRanks()`. After nesting multiplies edge
+/// minlens by `nodeRankFactor`, ranking creates large gaps. This function
+/// compresses out empty ranks at positions that aren't multiples of
+/// `nodeRankFactor`, keeping border nodes on separate ranks from content.
+pub fn remove_empty_ranks(graph: &mut LayoutGraph) {
+    let node_rank_factor = match graph.node_rank_factor {
+        Some(f) if f > 1 => f,
+        _ => return,
+    };
+
+    // Find the offset (minimum rank)
+    let offset = graph.ranks.iter().copied().min().unwrap_or(0);
+
+    // Build layers array
+    let max_rank = graph.ranks.iter().copied().max().unwrap_or(0);
+    let layer_count = (max_rank - offset + 1) as usize;
+    let mut layers: Vec<Option<Vec<usize>>> = vec![None; layer_count];
+
+    for (node, &rank) in graph.ranks.iter().enumerate() {
+        let idx = (rank - offset) as usize;
+        layers[idx].get_or_insert_with(Vec::new).push(node);
+    }
+
+    // Compute delta: for each empty layer at a non-factor position, decrement delta
+    let mut delta: i32 = 0;
+    for (i, layer) in layers.iter().enumerate() {
+        if layer.is_none() && (i as i32) % node_rank_factor != 0 {
+            delta -= 1;
+        } else if let Some(nodes) = layer {
+            if delta != 0 {
+                for &node in nodes {
+                    graph.ranks[node] += delta;
+                }
+            }
+        }
+    }
+}
+
 /// Get nodes grouped by rank.
 pub fn by_rank(graph: &LayoutGraph) -> Vec<Vec<usize>> {
     let max_rank = graph.ranks.iter().max().copied().unwrap_or(0) as usize;

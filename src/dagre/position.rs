@@ -32,6 +32,13 @@ pub fn run(graph: &mut LayoutGraph, config: &LayoutConfig) {
         }
     }
 
+    // Post-processing: separate overlapping sibling subgraph content
+    // in the cross-rank direction. Only applies when sibling subgraph
+    // content nodes share the exact same cross-rank position.
+    if !graph.compound_nodes.is_empty() {
+        separate_sibling_subgraph_content(graph, config);
+    }
+
     // Reverse coordinates if needed
     if config.direction.is_reversed() {
         reverse_positions(graph, config);
@@ -52,10 +59,12 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
     let x_coords = position_x(graph, &bk_config);
 
     // Find minimum x to shift everything to start at margin
-    let min_x = x_coords
-        .values()
-        .zip(graph.dimensions.iter())
-        .map(|(&center_x, (w, _))| center_x - w / 2.0)
+    let min_x = (0..graph.node_ids.len())
+        .filter_map(|node| {
+            x_coords
+                .get(&node)
+                .map(|&cx| cx - graph.dimensions[node].0 / 2.0)
+        })
         .fold(f64::INFINITY, f64::min);
 
     let x_shift = config.margin - min_x;
@@ -119,10 +128,12 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
     }
 
     // Find minimum y to shift everything to start at margin
-    let min_y = y_coords
-        .values()
-        .zip(graph.dimensions.iter())
-        .map(|(&center_y, (_, h))| center_y - h / 2.0)
+    let min_y = (0..graph.node_ids.len())
+        .filter_map(|node| {
+            y_coords
+                .get(&node)
+                .map(|&cy| cy - graph.dimensions[node].1 / 2.0)
+        })
         .fold(f64::INFINITY, f64::min);
 
     let y_shift = config.margin - min_y;
@@ -145,6 +156,153 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
             .map(|&n| graph.dimensions[n].0)
             .fold(0.0, f64::max);
         x += max_width + config.rank_sep;
+    }
+}
+
+/// Separate overlapping sibling subgraph content in the cross-rank direction.
+///
+/// When sibling subgraphs share rank ranges, the BK algorithm may place their
+/// content at the same cross-rank position (e.g., same x for TD layouts).
+/// This function detects such overlaps and shifts content apart.
+///
+/// Only shifts when content nodes from different sibling subgraphs share the
+/// exact same cross-rank center position, indicating they've been collapsed.
+fn separate_sibling_subgraph_content(graph: &mut LayoutGraph, config: &LayoutConfig) {
+    use std::collections::HashMap;
+
+    // For TD/BT: cross-rank axis is x. For LR/RL: cross-rank axis is y.
+    let is_vertical = matches!(
+        config.direction,
+        Direction::TopBottom | Direction::BottomTop
+    );
+
+    // Group compounds by their parent (to find siblings)
+    let mut siblings: HashMap<Option<usize>, Vec<usize>> = HashMap::new();
+    for &compound in &graph.compound_nodes {
+        let parent = graph.parents.get(compound).copied().flatten();
+        siblings.entry(parent).or_default().push(compound);
+    }
+
+    for (_, group) in &siblings {
+        if group.len() < 2 {
+            continue;
+        }
+
+        // For each pair of sibling compounds, check content overlap
+        for i in 0..group.len() {
+            for j in (i + 1)..group.len() {
+                let c1 = group[i];
+                let c2 = group[j];
+
+                // Get content nodes (children that aren't compounds or border nodes)
+                let content1: Vec<usize> = get_content_nodes(graph, c1);
+                let content2: Vec<usize> = get_content_nodes(graph, c2);
+
+                if content1.is_empty() || content2.is_empty() {
+                    continue;
+                }
+
+                // Check if any content nodes at the same rank share the same
+                // cross-rank center position (collapsed on top of each other).
+                let mut has_collapsed = false;
+                for &n1 in &content1 {
+                    for &n2 in &content2 {
+                        if graph.ranks[n1] != graph.ranks[n2] {
+                            continue;
+                        }
+                        let pos1 = if is_vertical {
+                            graph.positions[n1].x
+                        } else {
+                            graph.positions[n1].y
+                        };
+                        let pos2 = if is_vertical {
+                            graph.positions[n2].x
+                        } else {
+                            graph.positions[n2].y
+                        };
+                        if (pos1 - pos2).abs() < 0.5 {
+                            has_collapsed = true;
+                            break;
+                        }
+                    }
+                    if has_collapsed {
+                        break;
+                    }
+                }
+
+                if !has_collapsed {
+                    continue;
+                }
+
+                // Compute shift needed: width of c1's content + separation
+                let (_, max1) = content_range(graph, &content1, is_vertical);
+                let (min2, _) = content_range(graph, &content2, is_vertical);
+                let overlap = max1 - min2 + config.node_sep;
+                if overlap > 0.0 {
+                    shift_compound_content(graph, c2, overlap, is_vertical);
+                }
+            }
+        }
+    }
+}
+
+/// Get content node indices for a compound (non-compound, non-border children).
+fn get_content_nodes(graph: &LayoutGraph, compound: usize) -> Vec<usize> {
+    graph
+        .parents
+        .iter()
+        .enumerate()
+        .filter(|(i, p)| {
+            **p == Some(compound)
+                && !graph.compound_nodes.contains(i)
+                && !graph.border_type.contains_key(i)
+        })
+        .map(|(i, _)| i)
+        .collect()
+}
+
+/// Get the cross-rank range (min, max) of positioned content nodes.
+fn content_range(graph: &LayoutGraph, nodes: &[usize], is_vertical: bool) -> (f64, f64) {
+    let mut min_val = f64::INFINITY;
+    let mut max_val = f64::NEG_INFINITY;
+    for &n in nodes {
+        let pos = if is_vertical {
+            graph.positions[n].x
+        } else {
+            graph.positions[n].y
+        };
+        let dim = if is_vertical {
+            graph.dimensions[n].0
+        } else {
+            graph.dimensions[n].1
+        };
+        min_val = min_val.min(pos);
+        max_val = max_val.max(pos + dim);
+    }
+    (min_val, max_val)
+}
+
+/// Shift all content of a compound (including border nodes) by `delta` in the cross-rank axis.
+fn shift_compound_content(graph: &mut LayoutGraph, compound: usize, delta: f64, is_vertical: bool) {
+    // Collect all nodes belonging to this compound (direct children + border nodes)
+    let nodes_to_shift: Vec<usize> = graph
+        .parents
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| **p == Some(compound))
+        .map(|(i, _)| i)
+        .collect();
+
+    for n in nodes_to_shift {
+        if is_vertical {
+            graph.positions[n].x += delta;
+        } else {
+            graph.positions[n].y += delta;
+        }
+        // Recursively shift nested compounds
+        if graph.compound_nodes.contains(&n) {
+            shift_compound_content(graph, n, delta, is_vertical);
+        }
     }
 }
 
