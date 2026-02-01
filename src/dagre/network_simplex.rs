@@ -389,7 +389,10 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
     let mut iters = 0;
 
     while let Some(leave_node) = leave_edge(&tree) {
-        let enter_idx = enter_edge(&tree, graph, leave_node);
+        let enter_idx = match enter_edge(&tree, graph, leave_node) {
+            Some(idx) => idx,
+            None => break, // No crossing edge found — tree may have disconnected components
+        };
         exchange_edges(&mut tree, graph, leave_node, enter_idx);
         iters += 1;
         if iters >= max_iters {
@@ -410,7 +413,7 @@ fn leave_edge(tree: &SpanningTree) -> Option<usize> {
 ///
 /// The entering edge must cross the same cut as the leaving edge.
 /// Follows Dagre.js enterEdge (lines 156-192).
-fn enter_edge(tree: &SpanningTree, graph: &LayoutGraph, leave_node: usize) -> usize {
+fn enter_edge(tree: &SpanningTree, graph: &LayoutGraph, leave_node: usize) -> Option<usize> {
     let edges = graph.effective_edges();
     let parent = tree.parent[leave_node].unwrap();
     let leave_edge_idx = tree.parent_edge[leave_node].unwrap();
@@ -454,7 +457,7 @@ fn enter_edge(tree: &SpanningTree, graph: &LayoutGraph, leave_node: usize) -> us
         }
     }
 
-    best_edge.expect("enter_edge: no crossing edge found")
+    best_edge
 }
 
 /// Exchange leave and enter edges in the tree, recompute everything.
