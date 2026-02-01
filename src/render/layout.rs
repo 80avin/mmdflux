@@ -1138,14 +1138,15 @@ fn convert_subgraph_bounds(
         );
     }
 
-    // Post-hoc overlap resolution: ensure no two sibling subgraph bounds overlap.
-    resolve_subgraph_overlap(&mut bounds, subgraphs);
-    ensure_sibling_gap(&mut bounds, subgraphs);
+    // Post-hoc overlap resolution is currently disabled for dagre parity
+    // experiments. Rank-band overlap is now resolved upstream, so these
+    // adjustments can overcorrect otherwise correct layouts.
 
     bounds
 }
 
 /// Check if `ancestor_id` is an ancestor of `descendant_id` in the subgraph hierarchy.
+#[cfg(test)]
 fn is_ancestor(
     ancestor_id: &str,
     descendant_id: &str,
@@ -1169,6 +1170,7 @@ fn is_ancestor(
 /// of the overlap region. For vertically stacked subgraphs, trims the upper's
 /// bottom and the lower's top. For horizontally adjacent, trims left/right.
 /// Skips nested pairs (ancestor/descendant) — only resolves sibling overlaps.
+#[cfg(test)]
 fn resolve_subgraph_overlap(
     bounds: &mut HashMap<String, SubgraphBounds>,
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
@@ -1272,6 +1274,7 @@ fn resolve_subgraph_overlap(
 
 /// Ensure sibling subgraphs (same parent) have at least 1 cell of space between them.
 /// After nudging, re-expand any parent whose children now exceed its bounds.
+#[cfg(test)]
 fn ensure_sibling_gap(
     bounds: &mut HashMap<String, SubgraphBounds>,
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
