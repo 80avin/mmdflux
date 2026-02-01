@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to AI code assistants when working with code in this repository.
 
 ## Project Overview
 
@@ -37,17 +37,20 @@ Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram → Dag
 ### Module Structure
 
 **`src/parser/`** - Mermaid parsing
+
 - `grammar.pest` - PEG grammar definition (header, nodes, edges, connectors)
 - `ast.rs` - AST types: `ShapeSpec`, `Vertex`, `ConnectorSpec`, `EdgeSpec`, `Statement`
 - `flowchart.rs` - `parse_flowchart()` entry point, converts pest tree to AST
 
 **`src/graph/`** - Graph data structures
+
 - `diagram.rs` - `Diagram` struct (nodes HashMap, edges Vec, direction)
 - `node.rs` - `Node` with `Shape` enum (Rectangle, Round, Diamond)
 - `edge.rs` - `Edge` with `Stroke` (Solid, Dotted, Thick) and `Arrow` (Normal, None)
 - `builder.rs` - `build_diagram()` converts AST to Diagram
 
 **`src/dagre/`** - Hierarchical graph layout (Sugiyama framework)
+
 - `mod.rs` - `layout()` entry point, orchestrates the layout phases
 - `graph.rs` - `DiGraph` input graph, `LayoutGraph` internal representation
 - `acyclic.rs` - Cycle removal via DFS, tracks reversed edges
@@ -59,6 +62,7 @@ Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram → Dag
 - `types.rs` - `LayoutConfig`, `LayoutResult`, `Rect`, `Point`, `Direction`
 
 **`src/render/`** - Text rendering
+
 - `layout.rs` - `compute_layout()` bridges Diagram to dagre, converts to draw coordinates
 - `router.rs` - `route_edge()` and `route_backward_edge()` compute paths using waypoints
 - `edge.rs` - `render_edge()` draws edges with arrows and labels
@@ -78,6 +82,7 @@ Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram → Dag
 ## Testing
 
 Test fixtures live in `tests/fixtures/` with `.mmd` files covering various patterns:
+
 - **Basic flows**: `simple.mmd`, `chain.mmd`, `ampersand.mmd`
 - **Node shapes**: `decision.mmd`, `shapes.mmd`, `diamond_fan.mmd`
 - **Backward edges/cycles**: `simple_cycle.mmd`, `multiple_cycles.mmd`
@@ -88,4 +93,3 @@ Test fixtures live in `tests/fixtures/` with `.mmd` files covering various patte
 - **Complex examples**: `complex.mmd`, `http_request.mmd`, `ci_pipeline.mmd`, `git_workflow.mmd`
 
 Integration tests in `tests/integration.rs` verify parsing, building, and rendering.
-
