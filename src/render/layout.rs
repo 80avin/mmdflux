@@ -591,12 +591,16 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .collect();
 
     // --- Phase K: Convert subgraph bounds to draw coordinates ---
-    let subgraph_bounds = convert_subgraph_bounds(
+    let subgraph_bounds = dagre_subgraph_bounds_to_draw(
         &diagram.subgraphs,
-        &draw_positions,
-        &node_dims,
-        dagre_direction,
-        &diagram.edges,
+        &result.subgraph_bounds,
+        scale_x,
+        scale_y,
+        dagre_min_x,
+        dagre_min_y,
+        max_overhang_x,
+        max_overhang_y,
+        config,
     );
     debug_compare_subgraph_bounds(
         &diagram.subgraphs,
@@ -913,6 +917,7 @@ struct RawCenter {
 }
 
 /// Build a map from parent subgraph ID to list of direct child subgraph IDs.
+#[cfg(test)]
 fn build_children_map(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
 ) -> HashMap<String, Vec<String>> {
@@ -932,178 +937,65 @@ fn build_children_map(
 ///
 /// Uses inside-out (bottom-up) computation: leaf subgraphs first, then parents
 /// expand to contain their children. This ensures proper nesting of bounds.
-fn convert_subgraph_bounds(
+fn dagre_subgraph_bounds_to_draw(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
-    draw_positions: &HashMap<String, (usize, usize)>,
-    node_dims: &HashMap<String, (usize, usize)>,
-    direction: crate::dagre::Direction,
-    edges: &[crate::graph::Edge],
+    dagre_bounds: &HashMap<String, Rect>,
+    scale_x: f64,
+    scale_y: f64,
+    dagre_min_x: f64,
+    dagre_min_y: f64,
+    max_overhang_x: usize,
+    max_overhang_y: usize,
+    config: &LayoutConfig,
 ) -> HashMap<String, SubgraphBounds> {
-    let children_map = build_children_map(subgraphs);
-
-    // Collect the set of node IDs that belong to child subgraphs for each parent,
-    // so parent bounds only use their own direct nodes (not inherited from children).
-    let mut child_node_ids: HashMap<String, HashSet<String>> = HashMap::new();
-    for sg in subgraphs.values() {
-        if let Some(ref parent_id) = sg.parent {
-            let set = child_node_ids.entry(parent_id.clone()).or_default();
-            for node_id in &sg.nodes {
-                set.insert(node_id.clone());
-            }
-        }
-    }
-
     let mut bounds: HashMap<String, SubgraphBounds> = HashMap::new();
-    let mut visited: HashSet<String> = HashSet::new();
 
-    // Recursively compute bounds for a subgraph, children first.
-    #[allow(clippy::too_many_arguments)]
-    fn compute_bounds_recursive(
-        sg_id: &str,
-        subgraphs: &HashMap<String, crate::graph::Subgraph>,
-        children_map: &HashMap<String, Vec<String>>,
-        child_node_ids: &HashMap<String, HashSet<String>>,
-        draw_positions: &HashMap<String, (usize, usize)>,
-        node_dims: &HashMap<String, (usize, usize)>,
-        direction: crate::dagre::Direction,
-        edges: &[crate::graph::Edge],
-        bounds: &mut HashMap<String, SubgraphBounds>,
-        visited: &mut HashSet<String>,
-    ) {
-        if visited.contains(sg_id) {
-            return;
-        }
-        visited.insert(sg_id.to_string());
-
-        // Recurse into children first
-        if let Some(children) = children_map.get(sg_id) {
-            for child_id in children {
-                compute_bounds_recursive(
-                    child_id,
-                    subgraphs,
-                    children_map,
-                    child_node_ids,
-                    draw_positions,
-                    node_dims,
-                    direction,
-                    edges,
-                    bounds,
-                    visited,
-                );
-            }
-        }
-
+    for (sg_id, rect) in dagre_bounds {
         let sg = match subgraphs.get(sg_id) {
             Some(sg) => sg,
-            None => return,
+            None => continue,
         };
 
-        let border_padding: usize = 2;
-        let mut min_x = usize::MAX;
-        let mut min_y = usize::MAX;
-        let mut max_x: usize = 0;
-        let mut max_y: usize = 0;
-
-        // Include only direct nodes (not nodes belonging to child subgraphs)
-        let excluded = child_node_ids.get(sg_id);
-        for node_id in &sg.nodes {
-            if excluded.is_some_and(|set| set.contains(node_id)) {
-                continue;
-            }
-            if let (Some(&(x, y)), Some(&(w, h))) =
-                (draw_positions.get(node_id), node_dims.get(node_id))
-            {
-                min_x = min_x.min(x);
-                min_y = min_y.min(y);
-                max_x = max_x.max(x + w);
-                max_y = max_y.max(y + h);
-            }
-        }
-
-        // Include child subgraph bounds
-        if let Some(children) = children_map.get(sg_id) {
-            for child_id in children {
-                if let Some(child_bounds) = bounds.get(child_id) {
-                    min_x = min_x.min(child_bounds.x);
-                    min_y = min_y.min(child_bounds.y);
-                    max_x = max_x.max(child_bounds.x + child_bounds.width);
-                    max_y = max_y.max(child_bounds.y + child_bounds.height);
-                }
-            }
-        }
-
-        if min_x == usize::MAX {
-            return;
-        }
-
-        let border_x = min_x.saturating_sub(border_padding);
-        let border_y = min_y.saturating_sub(border_padding);
-        let border_right = max_x + border_padding;
-        let border_bottom = max_y + border_padding;
-
-        let (draw_x, draw_y, draw_width, draw_height) = (
-            border_x,
-            border_y,
-            border_right - border_x,
-            border_bottom - border_y,
+        let (x0, y0) = dagre_to_draw_coords(
+            rect.x,
+            rect.y,
+            scale_x,
+            scale_y,
+            dagre_min_x,
+            dagre_min_y,
+            max_overhang_x,
+            max_overhang_y,
+            config,
         );
+        let (x1, y1) = dagre_to_draw_coords(
+            rect.x + rect.width,
+            rect.y + rect.height,
+            scale_x,
+            scale_y,
+            dagre_min_x,
+            dagre_min_y,
+            max_overhang_x,
+            max_overhang_y,
+            config,
+        );
+
+        let mut final_x = x0;
+        let mut final_width = x1.saturating_sub(x0);
+        let final_height = y1.saturating_sub(y0);
 
         // Enforce title-width minimum: ┌─ Title ─┐
         // Overhead: 2 corners + "─ " prefix (2) + " ─" suffix (2) = 6
         let has_visible_title = !sg.title.trim().is_empty();
-        let min_title_width = if has_visible_title {
-            sg.title.len() + 6
-        } else {
-            0
-        };
-        let mut final_x = draw_x;
-        let mut final_width = draw_width;
-        let mut final_height = draw_height;
+        let min_title_width = if has_visible_title { sg.title.len() + 6 } else { 0 };
         if min_title_width > 0 && final_width < min_title_width {
             let expand = min_title_width - final_width;
             final_x = final_x.saturating_sub(expand / 2);
             final_width = min_title_width;
         }
 
-        // Expand bounds if the subgraph contains backward edges.
-        let has_backward = edges.iter().any(|e| {
-            let from_in = sg.nodes.contains(&e.from);
-            let to_in = sg.nodes.contains(&e.to);
-            if !(from_in && to_in) {
-                return false;
-            }
-            if let (Some(&from_pos), Some(&to_pos)) =
-                (draw_positions.get(&e.from), draw_positions.get(&e.to))
-            {
-                use crate::dagre::Direction;
-                match direction {
-                    Direction::TopBottom => from_pos.1 > to_pos.1,
-                    Direction::BottomTop => from_pos.1 < to_pos.1,
-                    Direction::LeftRight => from_pos.0 > to_pos.0,
-                    Direction::RightLeft => from_pos.0 < to_pos.0,
-                }
-            } else {
-                false
-            }
-        });
-
-        if has_backward {
-            use crate::dagre::Direction;
-            use crate::render::router::BACKWARD_ROUTE_GAP;
-            let route_margin = BACKWARD_ROUTE_GAP + 2;
-            match direction {
-                Direction::TopBottom | Direction::BottomTop => {
-                    final_width += route_margin;
-                }
-                Direction::LeftRight | Direction::RightLeft => {
-                    final_height += route_margin;
-                }
-            }
-        }
-
         // Compute nesting depth by walking parent chain
         let mut depth = 0;
-        let mut cur = sg_id;
+        let mut cur = sg_id.as_str();
         while let Some(s) = subgraphs.get(cur) {
             if let Some(ref p) = s.parent {
                 depth += 1;
@@ -1113,18 +1005,11 @@ fn convert_subgraph_bounds(
             }
         }
 
-        // Ensure nested subgraphs leave room for parent borders.
-        // Each nesting level needs border_padding chars of clearance.
-        let min_x_for_depth = depth * border_padding;
-        if final_x < min_x_for_depth {
-            final_x = min_x_for_depth;
-        }
-
         bounds.insert(
-            sg_id.to_string(),
+            sg_id.clone(),
             SubgraphBounds {
                 x: final_x,
-                y: draw_y,
+                y: y0,
                 width: final_width,
                 height: final_height,
                 title: sg.title.clone(),
@@ -1132,27 +1017,6 @@ fn convert_subgraph_bounds(
             },
         );
     }
-
-    // Process all subgraphs (recursion handles ordering)
-    let sg_ids: Vec<String> = subgraphs.keys().cloned().collect();
-    for sg_id in &sg_ids {
-        compute_bounds_recursive(
-            sg_id,
-            subgraphs,
-            &children_map,
-            &child_node_ids,
-            draw_positions,
-            node_dims,
-            direction,
-            edges,
-            &mut bounds,
-            &mut visited,
-        );
-    }
-
-    // Post-hoc overlap resolution is currently disabled for dagre parity
-    // experiments. Rank-band overlap is now resolved upstream, so these
-    // adjustments can overcorrect otherwise correct layouts.
 
     bounds
 }
@@ -1178,24 +1042,6 @@ fn debug_compare_subgraph_bounds(
     ids.extend(computed.keys().cloned());
     ids.extend(dagre_bounds.keys().cloned());
 
-    fn dagre_to_draw(
-        x: f64,
-        y: f64,
-        scale_x: f64,
-        scale_y: f64,
-        dagre_min_x: f64,
-        dagre_min_y: f64,
-        max_overhang_x: usize,
-        max_overhang_y: usize,
-        config: &LayoutConfig,
-    ) -> (usize, usize) {
-        let dx = ((x - dagre_min_x) * scale_x).round() as isize;
-        let dy = ((y - dagre_min_y) * scale_y).round() as isize;
-        let x = dx.max(0) as usize + max_overhang_x + config.padding + config.left_label_margin;
-        let y = dy.max(0) as usize + max_overhang_y + config.padding;
-        (x, y)
-    }
-
     eprintln!("[subgraph_bounds] comparing computed vs dagre-derived");
     let mut ids: Vec<String> = ids.into_iter().collect();
     ids.sort();
@@ -1207,7 +1053,7 @@ fn debug_compare_subgraph_bounds(
         }
 
         let dagre_draw = dagre_rect.map(|rect| {
-            let (x0, y0) = dagre_to_draw(
+            let (x0, y0) = dagre_to_draw_coords(
                 rect.x,
                 rect.y,
                 scale_x,
@@ -1218,7 +1064,7 @@ fn debug_compare_subgraph_bounds(
                 max_overhang_y,
                 config,
             );
-            let (x1, y1) = dagre_to_draw(
+            let (x1, y1) = dagre_to_draw_coords(
                 rect.x + rect.width,
                 rect.y + rect.height,
                 scale_x,
@@ -1239,6 +1085,24 @@ fn debug_compare_subgraph_bounds(
             id, computed_tuple, dagre_draw
         );
     }
+}
+
+fn dagre_to_draw_coords(
+    x: f64,
+    y: f64,
+    scale_x: f64,
+    scale_y: f64,
+    dagre_min_x: f64,
+    dagre_min_y: f64,
+    max_overhang_x: usize,
+    max_overhang_y: usize,
+    config: &LayoutConfig,
+) -> (usize, usize) {
+    let dx = ((x - dagre_min_x) * scale_x).round() as isize;
+    let dy = ((y - dagre_min_y) * scale_y).round() as isize;
+    let x = dx.max(0) as usize + max_overhang_x + config.padding + config.left_label_margin;
+    let y = dy.max(0) as usize + max_overhang_y + config.padding;
+    (x, y)
 }
 
 /// Check if `ancestor_id` is an ancestor of `descendant_id` in the subgraph hierarchy.
@@ -2359,11 +2223,11 @@ mod tests {
     }
 
     // =========================================================================
-    // Subgraph Bounds Tests (Plan 0026, Task 1.1)
+    // Subgraph Bounds Tests (Dagre-derived bounds)
     // =========================================================================
 
     #[test]
-    fn test_subgraph_bounds_no_overlap_from_separated_nodes() {
+    fn test_subgraph_bounds_no_overlap_from_separated_dagre_rects() {
         use crate::graph::Subgraph;
 
         let mut subgraphs = HashMap::new();
@@ -2388,20 +2252,42 @@ mod tests {
             },
         );
 
-        // Nodes far apart: A at x=5, B at x=25 (gap of 15, each 5 wide + 2 padding = 9 total)
-        let mut draw_positions = HashMap::new();
-        draw_positions.insert("A".to_string(), (5usize, 5usize));
-        draw_positions.insert("B".to_string(), (25usize, 5usize));
-        let mut node_dims = HashMap::new();
-        node_dims.insert("A".to_string(), (5usize, 3usize));
-        node_dims.insert("B".to_string(), (5usize, 3usize));
+        let mut dagre_bounds = HashMap::new();
+        dagre_bounds.insert(
+            "sg1".to_string(),
+            Rect {
+                x: 10.0,
+                y: 10.0,
+                width: 10.0,
+                height: 5.0,
+            },
+        );
+        dagre_bounds.insert(
+            "sg2".to_string(),
+            Rect {
+                x: 40.0,
+                y: 10.0,
+                width: 10.0,
+                height: 5.0,
+            },
+        );
 
-        let result = convert_subgraph_bounds(
+        let config = LayoutConfig {
+            padding: 0,
+            left_label_margin: 0,
+            ..LayoutConfig::default()
+        };
+
+        let result = dagre_subgraph_bounds_to_draw(
             &subgraphs,
-            &draw_positions,
-            &node_dims,
-            crate::dagre::Direction::TopBottom,
-            &[],
+            &dagre_bounds,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0,
+            0,
+            &config,
         );
 
         let a = &result["sg1"];
@@ -2425,7 +2311,7 @@ mod tests {
     }
 
     #[test]
-    fn test_convert_subgraph_bounds_uses_member_node_positions() {
+    fn test_dagre_subgraph_bounds_maps_rects() {
         use crate::graph::Subgraph;
 
         let mut subgraphs = HashMap::new();
@@ -2440,28 +2326,40 @@ mod tests {
             },
         );
 
-        // Single node at (10,10) with size (5,3)
-        let mut draw_positions = HashMap::new();
-        draw_positions.insert("A".to_string(), (10usize, 10usize));
-        let mut node_dims = HashMap::new();
-        node_dims.insert("A".to_string(), (5usize, 3usize));
+        let mut dagre_bounds = HashMap::new();
+        dagre_bounds.insert(
+            "sg1".to_string(),
+            Rect {
+                x: 10.0,
+                y: 10.0,
+                width: 5.0,
+                height: 3.0,
+            },
+        );
 
-        let result = convert_subgraph_bounds(
+        let config = LayoutConfig {
+            padding: 0,
+            left_label_margin: 0,
+            ..LayoutConfig::default()
+        };
+
+        let result = dagre_subgraph_bounds_to_draw(
             &subgraphs,
-            &draw_positions,
-            &node_dims,
-            crate::dagre::Direction::TopBottom,
-            &[],
+            &dagre_bounds,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0,
+            0,
+            &config,
         );
 
         let b = &result["sg1"];
-        // Member-node at (10,10) size (5,3) with border_padding=2:
-        //   x = 10 - 2 = 8, width = (10+5+2) - 8 = 9
-        //   y = 10 - 2 = 8, height = (10+3+2) - 8 = 7
-        assert_eq!(b.x, 8, "x should be node_x - border_padding");
-        assert_eq!(b.y, 8, "y should be node_y - border_padding");
-        assert_eq!(b.width, 9, "width should span node + 2*border_padding");
-        assert_eq!(b.height, 7, "height should span node + 2*border_padding");
+        assert_eq!(b.x, 10, "x should match dagre rect x");
+        assert_eq!(b.y, 10, "y should match dagre rect y");
+        assert_eq!(b.width, 5, "width should match dagre rect width");
+        assert_eq!(b.height, 3, "height should match dagre rect height");
     }
 
     // =========================================================================
@@ -2512,71 +2410,6 @@ mod tests {
         assert!(layout.subgraph_bounds.contains_key("sg1"));
         let bounds = &layout.subgraph_bounds["sg1"];
         assert!(bounds.height > 0);
-    }
-
-    // =========================================================================
-    // Backward Edge Containment Tests (Plan 0026, Task 5.1)
-    // =========================================================================
-
-    #[test]
-    fn test_subgraph_bounds_expanded_for_backward_edge() {
-        use crate::graph::{Arrow, Stroke, Subgraph};
-
-        // Setup: A subgraph with a backward edge (B→A in TD layout)
-        let mut subgraphs = HashMap::new();
-        subgraphs.insert(
-            "sg1".to_string(),
-            Subgraph {
-                id: "sg1".to_string(),
-                title: "G".to_string(),
-
-                nodes: vec!["A".to_string(), "B".to_string()],
-                parent: None,
-            },
-        );
-
-        // A at (5,5) size 8x3, B at (5,12) size 8x3 (TD layout: B below A)
-        let mut draw_positions = HashMap::new();
-        draw_positions.insert("A".to_string(), (5usize, 5usize));
-        draw_positions.insert("B".to_string(), (5usize, 12usize));
-        let mut node_dims = HashMap::new();
-        node_dims.insert("A".to_string(), (8usize, 3usize));
-        node_dims.insert("B".to_string(), (8usize, 3usize));
-
-        let edges = vec![
-            crate::graph::Edge {
-                from: "A".to_string(),
-                to: "B".to_string(),
-                label: None,
-                stroke: Stroke::Solid,
-                arrow: Arrow::Normal,
-            },
-            crate::graph::Edge {
-                from: "B".to_string(),
-                to: "A".to_string(),
-                label: None,
-                stroke: Stroke::Solid,
-                arrow: Arrow::Normal,
-            },
-        ];
-
-        let result = convert_subgraph_bounds(
-            &subgraphs,
-            &draw_positions,
-            &node_dims,
-            crate::dagre::Direction::TopBottom,
-            &edges,
-        );
-
-        let b = &result["sg1"];
-        // Without backward edge expansion: rightmost = 5+8+2 = 15
-        // With backward edge: should be wider to contain the backward route
-        // BACKWARD_ROUTE_GAP = 2, plus some buffer
-        assert!(
-            b.width > 15,
-            "Bounds should expand for backward edge. Got width={}",
-            b.width
-        );
     }
 
     // =========================================================================
