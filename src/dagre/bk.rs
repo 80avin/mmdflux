@@ -210,6 +210,29 @@ pub fn get_layers(graph: &LayoutGraph) -> Vec<Vec<NodeIndex>> {
     layers
 }
 
+/// Get layers indexed by order (sparse, with None for gaps).
+///
+/// This mirrors dagre's buildLayerMatrix, preserving order positions so
+/// conflict detection can reason about border boundaries.
+fn get_layers_with_order(graph: &LayoutGraph) -> Vec<Vec<Option<NodeIndex>>> {
+    let max_rank = graph.ranks.iter().max().copied().unwrap_or(0) as usize;
+    let mut layers: Vec<Vec<Option<NodeIndex>>> = vec![Vec::new(); max_rank + 1];
+
+    for (node, &rank) in graph.ranks.iter().enumerate() {
+        if !graph.is_position_node(node) {
+            continue;
+        }
+        let order = graph.order[node];
+        let layer = &mut layers[rank as usize];
+        if layer.len() <= order {
+            layer.resize(order + 1, None);
+        }
+        layer[order] = Some(node);
+    }
+
+    layers
+}
+
 /// Get the layer indices in sweep order.
 ///
 /// For downward sweep (UL, UR): layers 0, 1, 2, ... (top to bottom)
@@ -284,6 +307,7 @@ pub fn get_position(graph: &LayoutGraph, node: NodeIndex) -> usize {
 
 /// Get the layer (rank) of a node.
 #[inline]
+#[allow(dead_code)]
 pub fn get_layer(graph: &LayoutGraph, node: NodeIndex) -> usize {
     graph.ranks[node] as usize
 }
@@ -319,21 +343,24 @@ pub fn get_width(graph: &LayoutGraph, node: NodeIndex, direction: Direction) -> 
 ///
 /// Two segments cross if one starts left and ends right of the other, or vice versa.
 #[inline]
+#[allow(dead_code)]
 fn segments_cross(u1: usize, l1: usize, u2: usize, l2: usize) -> bool {
     (u1 < u2 && l1 > l2) || (u1 > u2 && l1 < l2)
 }
 
-/// Check if an edge is an inner segment (both endpoints are dummy nodes).
+/// Check if an edge is an inner segment (both endpoints are dummy/border nodes).
 ///
 /// Inner segments are part of long edges that span multiple layers.
 #[inline]
+#[allow(dead_code)]
 fn is_inner_segment(graph: &LayoutGraph, from: NodeIndex, to: NodeIndex) -> bool {
-    is_dummy(graph, from) && is_dummy(graph, to)
+    is_dummy_like(graph, from) && is_dummy_like(graph, to)
 }
 
-/// Find all inner segments (edges between dummy nodes) between two adjacent layers.
+/// Find all inner segments (edges between dummy/border nodes) between two adjacent layers.
 ///
 /// Returns a vector of (upper_position, lower_position) tuples.
+#[allow(dead_code)]
 fn find_inner_segments(
     graph: &LayoutGraph,
     upper_layer: usize,
@@ -351,7 +378,7 @@ fn find_inner_segments(
             continue;
         }
 
-        // Check if both endpoints are dummy nodes (inner segment)
+        // Check if both endpoints are dummy/border nodes (inner segment)
         if is_inner_segment(graph, from, to) {
             let from_pos = get_position(graph, from);
             let to_pos = get_position(graph, to);
@@ -362,6 +389,7 @@ fn find_inner_segments(
     segments
 }
 
+#[allow(dead_code)]
 fn effective_edges_for_position(graph: &LayoutGraph) -> Vec<(usize, usize)> {
     graph
         .edges
@@ -387,59 +415,75 @@ fn effective_edges_for_position(graph: &LayoutGraph) -> Vec<(usize, usize)> {
 /// Find all Type-1 conflicts in the graph.
 ///
 /// A Type-1 conflict occurs when a non-inner segment crosses an inner segment.
-/// Inner segments are edges between dummy nodes (part of long edge normalization).
+/// Inner segments are edges between dummy/border nodes (part of long edge normalization).
 ///
 /// These conflicts are used during vertical alignment to prevent alignments
 /// that would cause edge crossings.
 pub fn find_type1_conflicts(graph: &LayoutGraph) -> ConflictSet {
     let mut conflicts = ConflictSet::new();
-    let max_layer = graph.ranks.iter().copied().max().unwrap_or(0) as usize;
+    let layers = get_layers_with_order(graph);
+    if layers.len() < 2 {
+        return conflicts;
+    }
 
-    // For each pair of adjacent layers
-    for layer in 0..max_layer {
-        let upper_layer = layer;
-        let lower_layer = layer + 1;
+    for layer_idx in 1..layers.len() {
+        let prev_layer = &layers[layer_idx - 1];
+        let layer = &layers[layer_idx];
 
-        // Find inner segments in this layer pair
-        let inner_segments = find_inner_segments(graph, upper_layer, lower_layer);
+        let mut k0: isize = 0;
+        let mut scan_pos: usize = 0;
+        let prev_layer_len = prev_layer.len();
+        let last_node = layer.last().copied().flatten();
 
-        if inner_segments.is_empty() {
-            continue;
-        }
-
-        // Get all edges between these layers
-        let effective_edges = effective_edges_for_position(graph);
-
-        for &(from, to) in &effective_edges {
-            let from_layer = get_layer(graph, from);
-            let to_layer = get_layer(graph, to);
-
-            // Skip if not in this layer pair
-            if from_layer != upper_layer || to_layer != lower_layer {
+        for (i, v) in layer.iter().enumerate() {
+            let Some(v) = *v else {
                 continue;
-            }
+            };
+            let w = find_other_inner_segment_node(graph, v);
+            let k1 = w
+                .map(|node| graph.order[node] as isize)
+                .unwrap_or(prev_layer_len as isize);
 
-            // Skip if this is an inner segment
-            if is_inner_segment(graph, from, to) {
-                continue;
-            }
-
-            // Check for crossings with inner segments
-            let from_pos = get_position(graph, from);
-            let to_pos = get_position(graph, to);
-
-            for &(inner_upper, inner_lower) in &inner_segments {
-                if segments_cross(from_pos, to_pos, inner_upper, inner_lower) {
-                    // Record conflict using positions in the upper layer
-                    let pos1 = from_pos.min(inner_upper);
-                    let pos2 = from_pos.max(inner_upper);
-                    conflicts.insert((layer, pos1, pos2), Conflict { layer, pos1, pos2 });
+            if w.is_some() || Some(v) == last_node {
+                for idx in scan_pos..=i {
+                    let Some(scan_node) = layer[idx] else {
+                        continue;
+                    };
+                    for u in get_predecessors(graph, scan_node) {
+                        let u_pos = graph.order[u] as isize;
+                        if (u_pos < k0 || k1 < u_pos)
+                            && !(is_dummy_like(graph, u) && is_dummy_like(graph, scan_node))
+                        {
+                            let pos1 = graph.order[u].min(graph.order[scan_node]);
+                            let pos2 = graph.order[u].max(graph.order[scan_node]);
+                            let layer_key = layer_idx - 1;
+                            conflicts.insert(
+                                (layer_key, pos1, pos2),
+                                Conflict {
+                                    layer: layer_key,
+                                    pos1,
+                                    pos2,
+                                },
+                            );
+                        }
+                    }
                 }
+                scan_pos = i + 1;
+                k0 = k1;
             }
         }
     }
 
     conflicts
+}
+
+fn find_other_inner_segment_node(graph: &LayoutGraph, node: NodeIndex) -> Option<NodeIndex> {
+    if !is_dummy_like(graph, node) {
+        return None;
+    }
+    get_predecessors(graph, node)
+        .into_iter()
+        .find(|&u| is_dummy_like(graph, u))
 }
 
 /// Find all Type-2 conflicts in the graph.
@@ -448,32 +492,104 @@ pub fn find_type1_conflicts(graph: &LayoutGraph) -> ConflictSet {
 /// when they cross each other.
 pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
     let mut conflicts = ConflictSet::new();
-    let max_layer = graph.ranks.iter().copied().max().unwrap_or(0) as usize;
+    let layers = get_layers_with_order(graph);
+    if layers.len() < 2 {
+        return conflicts;
+    }
 
-    // For each pair of adjacent layers
-    for layer in 0..max_layer {
-        let upper_layer = layer;
-        let lower_layer = layer + 1;
+    for layer in 1..layers.len() {
+        let north = &layers[layer - 1];
+        let south = &layers[layer];
 
-        // Find all inner segments
-        let inner_segments = find_inner_segments(graph, upper_layer, lower_layer);
+        let mut prev_north_pos: isize = -1;
+        let mut next_north_pos: Option<isize> = None;
+        let mut south_pos: usize = 0;
 
-        // Check each pair of inner segments for crossing
-        for i in 0..inner_segments.len() {
-            for j in (i + 1)..inner_segments.len() {
-                let (u1, l1) = inner_segments[i];
-                let (u2, l2) = inner_segments[j];
-
-                if segments_cross(u1, l1, u2, l2) {
-                    let pos1 = u1.min(u2);
-                    let pos2 = u1.max(u2);
-                    conflicts.insert((layer, pos1, pos2), Conflict { layer, pos1, pos2 });
+        for (south_lookahead, v) in south.iter().enumerate() {
+            let Some(v) = *v else {
+                continue;
+            };
+            if is_border_node(graph, v) {
+                let predecessors = get_predecessors(graph, v);
+                if let Some(&first) = predecessors.first() {
+                    next_north_pos = Some(graph.order[first] as isize);
+                    scan_type2_conflicts(
+                        graph,
+                        &mut conflicts,
+                        layer - 1,
+                        south,
+                        south_pos,
+                        south_lookahead,
+                        prev_north_pos,
+                        next_north_pos.unwrap_or(north.len() as isize),
+                    );
+                    south_pos = south_lookahead;
+                    prev_north_pos = next_north_pos.unwrap_or(prev_north_pos);
                 }
             }
+
+            scan_type2_conflicts(
+                graph,
+                &mut conflicts,
+                layer - 1,
+                south,
+                south_pos,
+                south.len(),
+                prev_north_pos,
+                next_north_pos.unwrap_or(north.len() as isize),
+            );
         }
     }
 
     conflicts
+}
+
+fn scan_type2_conflicts(
+    graph: &LayoutGraph,
+    conflicts: &mut ConflictSet,
+    layer: usize,
+    south: &[Option<NodeIndex>],
+    south_pos: usize,
+    south_end: usize,
+    prev_north_border: isize,
+    next_north_border: isize,
+) {
+    for i in south_pos..south_end {
+        let Some(v) = south[i] else {
+            continue;
+        };
+        if !is_dummy_like(graph, v) {
+            continue;
+        }
+        for u in get_predecessors(graph, v) {
+            if !is_dummy_like(graph, u) {
+                continue;
+            }
+            let u_pos = graph.order[u] as isize;
+            if u_pos < prev_north_border || u_pos > next_north_border {
+                let pos1 = graph.order[u].min(graph.order[v]);
+                let pos2 = graph.order[u].max(graph.order[v]);
+                conflicts.insert((layer, pos1, pos2), Conflict { layer, pos1, pos2 });
+            }
+        }
+    }
+}
+
+fn is_border_node(graph: &LayoutGraph, node: NodeIndex) -> bool {
+    if graph.border_type.contains_key(&node) {
+        return true;
+    }
+    if graph.border_top.values().any(|&idx| idx == node) {
+        return true;
+    }
+    if graph.border_bottom.values().any(|&idx| idx == node) {
+        return true;
+    }
+    false
+}
+
+fn is_dummy_like(graph: &LayoutGraph, node: NodeIndex) -> bool {
+    graph.is_dummy_index(node) || is_border_node(graph, node)
 }
 
 /// Find all conflicts (Type-1 and Type-2) in the graph.
