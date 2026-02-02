@@ -73,6 +73,10 @@ fn debug_pipeline_target() -> Option<String> {
     std::env::var("MMDFLUX_DEBUG_PIPELINE").ok()
 }
 
+fn debug_layout_target() -> Option<String> {
+    std::env::var("MMDFLUX_DEBUG_LAYOUT").ok()
+}
+
 fn json_escape(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for ch in input.chars() {
@@ -86,6 +90,14 @@ fn json_escape(input: &str) -> String {
         }
     }
     out
+}
+
+fn fmt_f64_json(value: f64) -> String {
+    if value.is_finite() {
+        format!("{}", value)
+    } else {
+        "null".to_string()
+    }
 }
 
 fn debug_dump_pipeline(lg: &LayoutGraph, stage: &str) {
@@ -160,6 +172,96 @@ fn debug_dump_pipeline(lg: &LayoutGraph, stage: &str) {
     } else if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
+        .open(&target)
+    {
+        let _ = file.write_all(buf.as_bytes());
+    }
+}
+
+fn debug_dump_layout_result(result: &LayoutResult, original_edge_count: usize) {
+    let Some(target) = debug_layout_target() else {
+        return;
+    };
+
+    let mut nodes: Vec<(&NodeId, &Rect)> = result.nodes.iter().collect();
+    nodes.sort_by(|a, b| a.0 .0.cmp(&b.0 .0));
+
+    let mut edges: Vec<EdgeLayout> = result
+        .edges
+        .iter()
+        .filter(|e| e.index < original_edge_count)
+        .cloned()
+        .collect();
+    edges.sort_by_key(|e| e.index);
+
+    let mut subgraphs: Vec<(&String, &Rect)> = result.subgraph_bounds.iter().collect();
+    subgraphs.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut buf = String::new();
+    buf.push_str("{\"nodes\":[");
+    for (i, (id, rect)) in nodes.iter().enumerate() {
+        let center_x = rect.x + rect.width / 2.0;
+        let center_y = rect.y + rect.height / 2.0;
+        let suffix = if i + 1 == nodes.len() { "" } else { "," };
+        buf.push_str(&format!(
+            "{{\"id\":\"{}\",\"x\":{},\"y\":{},\"width\":{},\"height\":{},\"center_x\":{},\"center_y\":{}}}{}",
+            json_escape(&id.0),
+            fmt_f64_json(rect.x),
+            fmt_f64_json(rect.y),
+            fmt_f64_json(rect.width),
+            fmt_f64_json(rect.height),
+            fmt_f64_json(center_x),
+            fmt_f64_json(center_y),
+            suffix
+        ));
+    }
+    buf.push_str("],\"edges\":[");
+    for (i, edge) in edges.iter().enumerate() {
+        let suffix = if i + 1 == edges.len() { "" } else { "," };
+        buf.push_str(&format!(
+            "{{\"index\":{},\"from\":\"{}\",\"to\":\"{}\",\"points\":[",
+            edge.index,
+            json_escape(&edge.from.0),
+            json_escape(&edge.to.0)
+        ));
+        for (p_idx, point) in edge.points.iter().enumerate() {
+            let p_suffix = if p_idx + 1 == edge.points.len() { "" } else { "," };
+            buf.push_str(&format!(
+                "[{},{}]{}",
+                fmt_f64_json(point.x),
+                fmt_f64_json(point.y),
+                p_suffix
+            ));
+        }
+        buf.push_str(&format!("]}}{}", suffix));
+    }
+    buf.push_str("],\"subgraph_bounds\":[");
+    for (i, (id, rect)) in subgraphs.iter().enumerate() {
+        let suffix = if i + 1 == subgraphs.len() { "" } else { "," };
+        buf.push_str(&format!(
+            "{{\"id\":\"{}\",\"x\":{},\"y\":{},\"width\":{},\"height\":{}}}{}",
+            json_escape(id),
+            fmt_f64_json(rect.x),
+            fmt_f64_json(rect.y),
+            fmt_f64_json(rect.width),
+            fmt_f64_json(rect.height),
+            suffix
+        ));
+    }
+    buf.push_str("],\"graph\":{");
+    buf.push_str(&format!(
+        "\"width\":{},\"height\":{}",
+        fmt_f64_json(result.width),
+        fmt_f64_json(result.height)
+    ));
+    buf.push_str("}}\n");
+
+    if target == "1" {
+        eprint!("{buf}");
+    } else if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
         .open(&target)
     {
         let _ = file.write_all(buf.as_bytes());
@@ -630,7 +732,7 @@ where
     let mut edges: Vec<EdgeLayout> = edges_by_orig_idx.into_values().collect();
     edges.sort_by_key(|e| e.index);
 
-    LayoutResult {
+    let result = LayoutResult {
         nodes,
         edges,
         reversed_edges,
@@ -640,7 +742,11 @@ where
         label_positions,
         subgraph_bounds,
         self_edges: self_edge_layouts,
-    }
+    };
+
+    debug_dump_layout_result(&result, lg.original_edge_count);
+
+    result
 }
 
 #[cfg(test)]
