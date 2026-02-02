@@ -148,7 +148,9 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             }
         }
     }
-    for id in diagram.nodes.keys() {
+    let mut node_keys: Vec<&String> = diagram.nodes.keys().collect();
+    node_keys.sort();
+    for id in node_keys {
         if seen.insert(id.clone()) {
             ordered_node_ids.push(id.clone());
         }
@@ -162,7 +164,10 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     }
 
     // Add subgraph compound nodes (zero dimensions, sized by border removal later)
-    for (sg_id, sg) in &diagram.subgraphs {
+    let mut subgraph_keys: Vec<&String> = diagram.subgraphs.keys().collect();
+    subgraph_keys.sort();
+    for sg_id in &subgraph_keys {
+        let sg = &diagram.subgraphs[*sg_id];
         dgraph.add_node(sg_id.as_str(), (0, 0));
         if !sg.title.trim().is_empty() {
             dgraph.set_has_title(sg_id.as_str());
@@ -170,14 +175,18 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     }
 
     // Set parent relationships for compound nodes
-    for (node_id, node) in &diagram.nodes {
+    let mut node_parent_keys: Vec<&String> = diagram.nodes.keys().collect();
+    node_parent_keys.sort();
+    for node_id in node_parent_keys {
+        let node = &diagram.nodes[node_id];
         if let Some(ref parent) = node.parent {
             dgraph.set_parent(node_id.as_str(), parent.as_str());
         }
     }
 
     // Set parent relationships for nested subgraphs
-    for (sg_id, sg) in &diagram.subgraphs {
+    for sg_id in &subgraph_keys {
+        let sg = &diagram.subgraphs[*sg_id];
         if let Some(ref parent_id) = sg.parent {
             dgraph.set_parent(sg_id.as_str(), parent_id.as_str());
         }

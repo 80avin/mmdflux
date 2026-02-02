@@ -246,10 +246,39 @@ insertSelfEdges(g);
 function dumpBorderBlocks(graph) {
   const graphNon = util.asNonCompoundGraph(graph);
   const layering = util.buildLayerMatrix(graphNon);
-  const conflicts = Object.assign(
-    bk.findType1Conflicts(graphNon, layering),
-    bk.findType2Conflicts(graphNon, layering)
-  );
+  const t1 = bk.findType1Conflicts(graphNon, layering);
+  const t2 = bk.findType2Conflicts(graphNon, layering);
+  const conflicts = Object.assign({}, t1, t2);
+
+  console.log("[layer_matrix] start");
+  layering.forEach((layer, rank) => {
+    console.log(`[layer_matrix] rank ${rank}`);
+    layer.forEach((v, pos) => {
+      if (v === undefined) {
+        return;
+      }
+      const node = graphNon.node(v) || {};
+      const dummy = node.dummy ?? "-";
+      const borderType = node.borderType ?? "-";
+      const order = node.order ?? "?";
+      const preds = graphNon.predecessors(v) || [];
+      const predEntries = preds.map((p) => {
+        const pNode = graphNon.node(p) || {};
+        const pOrder = pNode.order ?? "?";
+        return `${p}(order=${pOrder})`;
+      });
+      console.log(
+        `[layer_matrix]   pos ${pos} node=${v} order=${order} dummy=${dummy} borderType=${borderType} preds=[${predEntries.join(", ")}]`
+      );
+    });
+  });
+  console.log("[layer_matrix] end");
+
+  Object.keys(t2).forEach((v) => {
+    Object.keys(t2[v]).forEach((w) => {
+      console.log(`[type2_conflict] ${v} vs ${w}`);
+    });
+  });
 
   const parents = graph.nodes().filter((v) => graph.children(v).length);
   parents.sort();

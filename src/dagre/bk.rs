@@ -481,6 +481,10 @@ pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
         return conflicts;
     }
 
+    if std::env::var("MMDFLUX_DEBUG_CONFLICTS").map_or(false, |v| v == "1") {
+        debug_dump_layer_matrix(graph, &layers);
+    }
+
     for layer in 1..layers.len() {
         let north = &layers[layer - 1];
         let south = &layers[layer];
@@ -489,25 +493,24 @@ pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
         let mut next_north_pos: Option<isize> = None;
         let mut south_pos: usize = 0;
 
-        for (south_lookahead, v) in south.iter().enumerate() {
-            let Some(v) = *v else {
-                continue;
-            };
-            if is_border_node(graph, v) {
-                let predecessors = get_predecessors(graph, v);
-                if let Some(&first) = predecessors.first() {
-                    next_north_pos = Some(graph.order[first] as isize);
-                    scan_type2_conflicts(
-                        graph,
-                        &mut conflicts,
-                        south,
-                        south_pos,
-                        south_lookahead,
-                        prev_north_pos,
-                        next_north_pos.unwrap_or(north.len() as isize),
-                    );
-                    south_pos = south_lookahead;
-                    prev_north_pos = next_north_pos.unwrap_or(prev_north_pos);
+        for (south_lookahead, slot) in south.iter().enumerate() {
+            if let Some(v) = *slot {
+                if is_border_node(graph, v) {
+                    let predecessors = get_predecessors(graph, v);
+                    if let Some(&first) = predecessors.first() {
+                        next_north_pos = Some(graph.order[first] as isize);
+                        scan_type2_conflicts(
+                            graph,
+                            &mut conflicts,
+                            south,
+                            south_pos,
+                            south_lookahead,
+                            prev_north_pos,
+                            next_north_pos.unwrap_or(north.len() as isize),
+                        );
+                        south_pos = south_lookahead;
+                        prev_north_pos = next_north_pos.unwrap_or(prev_north_pos);
+                    }
                 }
             }
 
@@ -573,12 +576,76 @@ fn is_dummy_like(graph: &LayoutGraph, node: NodeIndex) -> bool {
     graph.is_dummy_index(node) || is_border_node(graph, node)
 }
 
+fn debug_dump_layer_matrix(graph: &LayoutGraph, layers: &[Vec<Option<NodeIndex>>]) {
+    eprintln!("[layer_matrix] start");
+    for (rank, layer) in layers.iter().enumerate() {
+        eprintln!("[layer_matrix] rank {}", rank);
+        for (pos, slot) in layer.iter().enumerate() {
+            let Some(node) = *slot else {
+                continue;
+            };
+            let node_id = &graph.node_ids[node].0;
+            let order = graph.order[node];
+            let is_border = is_border_node(graph, node);
+            let is_dummy_like = is_dummy_like(graph, node);
+            let preds = get_predecessors(graph, node);
+            let pred_entries: Vec<String> = preds
+                .iter()
+                .map(|&p| format!("{}(order={})", graph.node_ids[p].0, graph.order[p]))
+                .collect();
+            eprintln!(
+                "[layer_matrix]   pos {} node={} order={} border={} dummy_like={} preds=[{}]",
+                pos,
+                node_id,
+                order,
+                is_border,
+                is_dummy_like,
+                pred_entries.join(", ")
+            );
+        }
+    }
+    eprintln!("[layer_matrix] end");
+}
+
 /// Find all conflicts (Type-1 and Type-2) in the graph.
 pub fn find_all_conflicts(graph: &LayoutGraph) -> ConflictSet {
-    let mut conflicts = find_type1_conflicts(graph);
+    let type1 = find_type1_conflicts(graph);
+    let type2 = find_type2_conflicts(graph);
 
-    conflicts.extend(find_type2_conflicts(graph));
+    let debug = std::env::var("MMDFLUX_DEBUG_CONFLICTS").map_or(false, |v| v == "1");
+    if debug {
+        let layers = get_layers_with_order(graph);
+        // Build node-index to (layer, pos) map
+        let mut node_layer: Vec<(usize, usize)> = vec![(0, 0); graph.node_ids.len()];
+        for (li, layer) in layers.iter().enumerate() {
+            for (pos, slot) in layer.iter().enumerate() {
+                if let Some(idx) = *slot {
+                    node_layer[idx] = (li, pos);
+                }
+            }
+        }
+        for &(a, b) in &type1 {
+            let (la, pa) = node_layer[a];
+            let (lb, pb) = node_layer[b];
+            let layer = la.max(lb);
+            eprintln!(
+                "[conflicts] type1 layer {} pos {}({}) vs pos {}({})",
+                layer, pa, &graph.node_ids[a], pb, &graph.node_ids[b]
+            );
+        }
+        for &(a, b) in &type2 {
+            let (la, pa) = node_layer[a];
+            let (lb, pb) = node_layer[b];
+            let layer = la.max(lb);
+            eprintln!(
+                "[conflicts] type2 layer {} pos {}({}) vs pos {}({})",
+                layer, pa, &graph.node_ids[a], pb, &graph.node_ids[b]
+            );
+        }
+    }
 
+    let mut conflicts = type1;
+    conflicts.extend(type2);
     conflicts
 }
 
@@ -670,9 +737,9 @@ pub fn vertical_alignment(
 
         // Track the boundary position we've aligned to.
         // This prevents crossing alignments within the same sweep.
-        // For left-to-right processing, r starts at -1 (leftmost boundary)
-        // For right-to-left processing, r starts at usize::MAX (rightmost boundary)
-        let mut r: isize = if prefer_left { -1 } else { isize::MAX };
+        // Dagre always uses a monotonically increasing boundary with r starting at -1,
+        // even for right-biased alignments (positions are already reversed).
+        let mut r: isize = -1;
 
         for &v in &node_order {
             // Get median neighbor in the previous layer (in sweep direction)
@@ -703,9 +770,8 @@ pub fn vertical_alignment(
                         .unwrap_or_else(|| graph.order[m]) as isize;
 
                     // Check ordering constraint:
-                    // For left preference: median must be to the right of last aligned position
-                    // For right preference: median must be to the left of last aligned position
-                    let order_ok = if prefer_left { r < m_pos } else { r > m_pos };
+                    // Always enforce r < m_pos; right-bias is already handled by reversed positions.
+                    let order_ok = r < m_pos;
 
                     // Check conflict constraint
                     let conflict_free = !has_conflict(conflicts, v, m);

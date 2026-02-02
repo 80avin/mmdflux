@@ -137,11 +137,11 @@ pub fn run(lg: &mut LayoutGraph) {
 pub fn assign_rank_minmax(lg: &mut LayoutGraph) {
     let compound_indices: Vec<usize> = lg.compound_nodes.iter().copied().collect();
     for compound_idx in compound_indices {
-        // Use title rank if available, otherwise border_top
-        if let Some(&title_idx) = lg.border_title.get(&compound_idx) {
-            lg.min_rank.insert(compound_idx, lg.ranks[title_idx]);
-        } else if let Some(&top_idx) = lg.border_top.get(&compound_idx) {
+        // Use border_top for min_rank; title ranks should not extend border chains.
+        if let Some(&top_idx) = lg.border_top.get(&compound_idx) {
             lg.min_rank.insert(compound_idx, lg.ranks[top_idx]);
+        } else if let Some(&title_idx) = lg.border_title.get(&compound_idx) {
+            lg.min_rank.insert(compound_idx, lg.ranks[title_idx]);
         }
         if let Some(&bot_idx) = lg.border_bottom.get(&compound_idx) {
             lg.max_rank.insert(compound_idx, lg.ranks[bot_idx]);
@@ -651,7 +651,7 @@ mod tests {
     }
 
     #[test]
-    fn test_assign_rank_minmax_uses_title_rank_for_min() {
+    fn test_assign_rank_minmax_uses_border_top_for_min() {
         use crate::dagre::rank;
 
         let mut lg = build_test_titled_compound_layout_graph();
@@ -664,11 +664,11 @@ mod tests {
         insert_title_nodes(&mut lg);
         assign_rank_minmax(&mut lg);
 
-        let title_idx = lg.border_title[&sg1_idx];
         let top_idx = lg.border_top[&sg1_idx];
+        let title_idx = lg.border_title[&sg1_idx];
 
-        // min_rank should be the title's rank, not border_top's rank
-        assert_eq!(lg.min_rank[&sg1_idx], lg.ranks[title_idx]);
+        // min_rank should be the border_top rank, not the title's rank
+        assert_eq!(lg.min_rank[&sg1_idx], lg.ranks[top_idx]);
         // title rank should be strictly less than border_top rank
         assert!(lg.ranks[title_idx] < lg.ranks[top_idx]);
     }
