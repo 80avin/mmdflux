@@ -45,6 +45,7 @@ mod rank;
 pub mod types;
 
 use std::collections::HashMap;
+use std::io::Write;
 
 pub use graph::DiGraph;
 use graph::LayoutGraph;
@@ -65,6 +66,100 @@ fn make_space_for_edge_labels(
 ) {
     for minlen in &mut lg.edge_minlens {
         *minlen *= 2;
+    }
+}
+
+fn debug_pipeline_target() -> Option<String> {
+    std::env::var("MMDFLUX_DEBUG_PIPELINE").ok()
+}
+
+fn json_escape(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for ch in input.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+fn debug_dump_pipeline(lg: &LayoutGraph, stage: &str) {
+    let Some(target) = debug_pipeline_target() else {
+        return;
+    };
+
+    let mut entries: Vec<(i32, usize, usize)> = lg
+        .ranks
+        .iter()
+        .enumerate()
+        .map(|(idx, &rank)| (rank, lg.order[idx], idx))
+        .collect();
+    entries.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| a.1.cmp(&b.1))
+            .then_with(|| lg.node_ids[a.2].0.cmp(&lg.node_ids[b.2].0))
+    });
+
+    let mut buf = String::new();
+    for (rank, order, idx) in entries {
+        let id = &lg.node_ids[idx].0;
+        let parent = lg.parents[idx].map(|p| lg.node_ids[p].0.clone());
+        let dummy = lg.dummy_nodes.get(&lg.node_ids[idx]).map(|d| match d.dummy_type {
+            normalize::DummyType::Edge => "edge",
+            normalize::DummyType::EdgeLabel => "edge_label",
+        });
+        let dummy_edge = lg.dummy_nodes.get(&lg.node_ids[idx]).map(|d| d.edge_index);
+        let border = lg.border_type.get(&idx).map(|b| match b {
+            graph::BorderType::Left => "left",
+            graph::BorderType::Right => "right",
+        });
+        let is_position = lg.is_position_node(idx);
+        let is_compound = lg.compound_nodes.contains(&idx);
+        let is_excluded = lg.position_excluded_nodes.contains(&idx);
+
+        let parent_json = parent
+            .as_ref()
+            .map(|p| format!("\"{}\"", json_escape(p)))
+            .unwrap_or_else(|| "null".to_string());
+        let dummy_json = dummy
+            .map(|d| format!("\"{}\"", d))
+            .unwrap_or_else(|| "null".to_string());
+        let dummy_edge_json = dummy_edge
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let border_json = border
+            .map(|b| format!("\"{}\"", b))
+            .unwrap_or_else(|| "null".to_string());
+
+        buf.push_str(&format!(
+            "{{\"stage\":\"{}\",\"id\":\"{}\",\"rank\":{},\"order\":{},\"parent\":{},\"dummy\":{},\"dummy_edge\":{},\"border\":{},\"is_position\":{},\"is_compound\":{},\"is_excluded\":{}}}\n",
+            json_escape(stage),
+            json_escape(id),
+            rank,
+            order,
+            parent_json,
+            dummy_json,
+            dummy_edge_json,
+            border_json,
+            is_position,
+            is_compound,
+            is_excluded
+        ));
+    }
+
+    if target == "1" {
+        eprint!("{buf}");
+    } else if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&target)
+    {
+        let _ = file.write_all(buf.as_bytes());
     }
 }
 
@@ -328,26 +423,36 @@ where
 
     // Phase 2: Assign ranks (layers)
     rank::run(&mut lg, config);
+    debug_dump_pipeline(&lg, "after_rank");
 
     // Compound: remove empty ranks created by nesting minlen multiplication.
     // Must run after ranking to compress the expanded rank space, and before
     // nesting cleanup so border nodes are still present.
     if has_compound {
         rank::remove_empty_ranks(&mut lg);
+        debug_dump_pipeline(&lg, "after_remove_empty_ranks");
     }
 
     // Compound: cleanup nesting edges, normalize, insert title nodes, compute rank spans
     if has_compound {
         nesting::cleanup(&mut lg);
+        debug_dump_pipeline(&lg, "after_nesting_cleanup");
     }
 
     rank::normalize(&mut lg);
+    debug_dump_pipeline(&lg, "after_rank_normalize");
 
     if has_compound {
-        nesting::insert_title_nodes(&mut lg);
-        // Re-normalize after title nodes may have introduced rank -1
-        rank::normalize(&mut lg);
+        let skip_titles = std::env::var("MMDFLUX_SKIP_TITLE_NODES").is_ok_and(|v| v == "1");
+        if !skip_titles {
+            nesting::insert_title_nodes(&mut lg);
+            debug_dump_pipeline(&lg, "after_insert_title_nodes");
+            // Re-normalize after title nodes may have introduced rank -1
+            rank::normalize(&mut lg);
+            debug_dump_pipeline(&lg, "after_rank_normalize_titles");
+        }
         nesting::assign_rank_minmax(&mut lg);
+        debug_dump_pipeline(&lg, "after_rank_minmax");
     }
 
     // Capture original edge indices of reversed edges BEFORE normalization,
@@ -361,19 +466,23 @@ where
 
     // Phase 2.5: Normalize long edges (insert dummy nodes)
     normalize::run(&mut lg, edge_labels);
+    debug_dump_pipeline(&lg, "after_normalize");
 
     // Compound: assign dummy chain parents to match compound hierarchy.
     if has_compound {
         parent_dummy_chains::run(&mut lg);
+        debug_dump_pipeline(&lg, "after_parent_dummy_chains");
     }
 
     // Compound: add border segments (left/right border nodes per rank)
     if has_compound {
         border::add_segments(&mut lg);
+        debug_dump_pipeline(&lg, "after_border_segments");
     }
 
     // Phase 3: Reduce crossings (now includes dummy nodes and border segments)
     order::run(&mut lg);
+    debug_dump_pipeline(&lg, "after_order");
 
     // Phase 3.5: Insert self-edge dummies (after ordering, before positioning)
     insert_self_edge_dummies(&mut lg);
