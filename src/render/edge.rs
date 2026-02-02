@@ -843,7 +843,7 @@ mod tests {
         let charset = CharSet::unicode();
 
         let routed =
-            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
+            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None, false).unwrap();
         render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
 
         let output = canvas.to_string();
@@ -861,7 +861,7 @@ mod tests {
         let charset = CharSet::unicode();
 
         let routed =
-            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
+            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None, false).unwrap();
         render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
 
         let output = canvas.to_string();
@@ -883,7 +883,7 @@ mod tests {
         let charset = CharSet::unicode();
 
         let routed =
-            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
+            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None, false).unwrap();
         render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
 
         // Dotted edge should be drawn (may or may not be visible depending on layout)
@@ -905,7 +905,7 @@ mod tests {
         let charset = CharSet::unicode();
 
         let routed =
-            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None).unwrap();
+            route_edge(&diagram.edges[0], &layout, Direction::TopDown, None, None, false).unwrap();
         render_edge(&mut canvas, &routed, &charset, Direction::TopDown);
 
         let output = canvas.to_string();
@@ -962,7 +962,7 @@ mod tests {
         let routed_edges: Vec<_> = diagram
             .edges
             .iter()
-            .filter_map(|e| route_edge(e, &layout, Direction::TopDown, None, None))
+            .filter_map(|e| route_edge(e, &layout, Direction::TopDown, None, None, false))
             .collect();
 
         render_all_edges(&mut canvas, &routed_edges, &charset, Direction::TopDown);
@@ -1229,7 +1229,7 @@ mod tests {
         let charset = CharSet::unicode();
 
         let routed =
-            route_edge(&diagram.edges[0], &layout, Direction::LeftRight, None, None).unwrap();
+            route_edge(&diagram.edges[0], &layout, Direction::LeftRight, None, None, false).unwrap();
 
         // Check that the routed edge has segments
         assert!(

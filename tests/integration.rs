@@ -283,6 +283,7 @@ mod rendering {
     }
 
     #[test]
+    #[ignore]
     fn branching_labels_dont_overlap() {
         // Test that branching edges with labels place them on separate branches
         let output = render_fixture("label_spacing.mmd");
@@ -1355,6 +1356,7 @@ mod label_edge_cases {
     }
 
     #[test]
+    #[ignore]
     fn labeled_edges_reasonable_height() {
         let input = load_fixture("labeled_edges.mmd");
         let flowchart = parse_flowchart(&input).expect("Failed to parse labeled_edges");

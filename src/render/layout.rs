@@ -586,6 +586,12 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         height,
     );
 
+    if std::env::var("MMDFLUX_DEBUG_WAYPOINTS").is_ok_and(|v| v == "1") {
+        for (key, waypoints) in &edge_waypoints_converted {
+            eprintln!("[waypoints] {} -> {}: {:?}", key.0, key.1, waypoints);
+        }
+    }
+
     let edge_label_positions_converted = transform_label_positions_direct(
         &result.label_positions,
         &diagram.edges,
@@ -602,14 +608,20 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Strip them so the router falls through to synthetic compact routing via
     // generate_backward_waypoints().
     let mut edge_waypoints_final = edge_waypoints_converted;
-    if ranks_doubled {
+    const BACKWARD_WAYPOINT_STRIP_THRESHOLD: usize = 6;
+    if ranks_doubled && is_vertical {
         for edge in &diagram.edges {
             let key = (edge.from.clone(), edge.to.clone());
             if let (Some(from_b), Some(to_b)) =
                 (node_bounds.get(&edge.from), node_bounds.get(&edge.to))
                 && crate::render::router::is_backward_edge(from_b, to_b, diagram.direction)
             {
-                edge_waypoints_final.remove(&key);
+                if edge_waypoints_final
+                    .get(&key)
+                    .is_some_and(|wps| wps.len() >= BACKWARD_WAYPOINT_STRIP_THRESHOLD)
+                {
+                    edge_waypoints_final.remove(&key);
+                }
             }
         }
     }
