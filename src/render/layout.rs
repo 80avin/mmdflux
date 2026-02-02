@@ -1038,7 +1038,11 @@ fn dagre_subgraph_bounds_to_draw(
         // Enforce title-width minimum: ┌─ Title ─┐
         // Overhead: 2 corners + "─ " prefix (2) + " ─" suffix (2) = 6
         let has_visible_title = !sg.title.trim().is_empty();
-        let min_title_width = if has_visible_title { sg.title.len() + 6 } else { 0 };
+        let min_title_width = if has_visible_title {
+            sg.title.len() + 6
+        } else {
+            0
+        };
         if min_title_width > 0 && final_width < min_title_width {
             let expand = min_title_width - final_width;
             final_x = final_x.saturating_sub(expand / 2);
@@ -2450,9 +2454,11 @@ mod tests {
         );
 
         let b = &result["sg1"];
-        assert_eq!(b.x, 10, "x should match dagre rect x");
+        // Title "G" requires min width = len("G") + 6 = 7, which exceeds rect width 5.
+        // Title-width enforcement expands by (7-5)=2 and shifts x left by 2/2=1.
+        assert_eq!(b.x, 9, "x shifted left by 1 due to title-width expansion");
         assert_eq!(b.y, 10, "y should match dagre rect y");
-        assert_eq!(b.width, 5, "width should match dagre rect width");
+        assert_eq!(b.width, 7, "width expanded to fit title");
         assert_eq!(b.height, 3, "height should match dagre rect height");
     }
 
