@@ -201,8 +201,7 @@ pub fn generate_backward_waypoints(
             let route_y = bottom_edge + BACKWARD_ROUTE_GAP;
 
             let left_edge = src_bounds.x.min(tgt_bounds.x);
-            let right_edge =
-                (src_bounds.x + src_bounds.width).max(tgt_bounds.x + tgt_bounds.width);
+            let right_edge = (src_bounds.x + src_bounds.width).max(tgt_bounds.x + tgt_bounds.width);
 
             match direction {
                 Direction::LeftRight => {
@@ -298,7 +297,10 @@ pub fn route_edge(
     if is_backward_edge(from_bounds, to_bounds, diagram_direction) {
         let synthetic_wps = generate_backward_waypoints(from_bounds, to_bounds, diagram_direction);
         if !synthetic_wps.is_empty() {
-            if matches!(diagram_direction, Direction::LeftRight | Direction::RightLeft) {
+            if matches!(
+                diagram_direction,
+                Direction::LeftRight | Direction::RightLeft
+            ) {
                 return route_edge_with_waypoints(
                     edge,
                     &endpoints,
@@ -933,7 +935,11 @@ fn build_orthogonal_path_with_waypoints(
 
     // Start → first waypoint
     let first_wp = Point::new(waypoints[0].0, waypoints[0].1);
-    let first_vertical = if start_vertical { true } else { !vertical_first };
+    let first_vertical = if start_vertical {
+        true
+    } else {
+        !vertical_first
+    };
     segments.extend(orthogonalize_segment(start, first_wp, first_vertical));
 
     // Through all intermediate waypoints

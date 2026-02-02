@@ -3,7 +3,7 @@
 //! Implements coordinate assignment using the Brandes-Köpf algorithm for
 //! optimal horizontal positioning, with y-coordinates based on layer rank.
 
-use super::bk::{position_x, BKConfig};
+use super::bk::{BKConfig, position_x};
 use super::graph::LayoutGraph;
 use super::rank;
 use super::types::{Direction, LayoutConfig, Point};
@@ -49,36 +49,7 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
         edge_sep: config.edge_sep,
         direction: config.direction,
     };
-    let mut x_coords = position_x(graph, &bk_config);
-
-    // Post-BK centering: center source nodes (no real predecessors) among their
-    // real successors. Use original edge endpoints (skip dummy chains) so long
-    // edges don't bias the centroid toward intermediate dummies.
-    let mut has_predecessor = vec![false; graph.node_ids.len()];
-    let mut successors: Vec<Vec<usize>> = vec![Vec::new(); graph.node_ids.len()];
-
-    for &(src, tgt) in &graph.original_edge_endpoints {
-        if !graph.is_position_node(src) || !graph.is_position_node(tgt) {
-            continue;
-        }
-        has_predecessor[tgt] = true;
-        successors[src].push(tgt);
-    }
-
-    for node in 0..graph.node_ids.len() {
-        if !graph.is_position_node(node) || has_predecessor[node] {
-            continue;
-        }
-        let succ_xs: Vec<f64> = successors[node]
-            .iter()
-            .filter_map(|&succ| x_coords.get(&succ).copied())
-            .collect();
-        if succ_xs.len() >= 2 {
-            let min_x = succ_xs.iter().copied().fold(f64::INFINITY, f64::min);
-            let max_x = succ_xs.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-            x_coords.insert(node, (min_x + max_x) / 2.0);
-        }
-    }
+    let x_coords = position_x(graph, &bk_config);
 
     // Find minimum x to shift everything to start at margin
     let min_x = (0..graph.node_ids.len())
@@ -124,30 +95,7 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
         edge_sep: config.edge_sep,
         direction: config.direction,
     };
-    let mut y_coords = position_x(graph, &bk_config);
-
-    // Post-BK centering: center layer-0 source nodes among their successors.
-    // BK aligns via predecessors; layer-0 nodes have none, so they may default to
-    // their first child's position instead of being centered.
-    for &node in &layers[0] {
-        let has_predecessors = graph.edges.iter().any(|&(_, to, _)| to == node);
-        if has_predecessors {
-            continue;
-        }
-
-        let succ_ys: Vec<f64> = graph
-            .edges
-            .iter()
-            .filter(|&&(from, _, _)| from == node)
-            .filter_map(|&(_, to, _)| y_coords.get(&to).copied())
-            .collect();
-
-        if succ_ys.len() >= 2 {
-            let min_y = succ_ys.iter().copied().fold(f64::INFINITY, f64::min);
-            let max_y = succ_ys.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-            y_coords.insert(node, (min_y + max_y) / 2.0);
-        }
-    }
+    let y_coords = position_x(graph, &bk_config);
 
     // Find minimum y to shift everything to start at margin
     let min_y = (0..graph.node_ids.len())

@@ -40,11 +40,7 @@ fn debug_border_nodes(lg: &LayoutGraph) {
             let pos = lg.positions[top_idx];
             eprintln!(
                 "[border_nodes]   top {} rank={} order={} x={:.2} y={:.2}",
-                lg.node_ids[top_idx].0,
-                lg.ranks[top_idx],
-                lg.order[top_idx],
-                pos.x,
-                pos.y
+                lg.node_ids[top_idx].0, lg.ranks[top_idx], lg.order[top_idx], pos.x, pos.y
             );
         }
 
@@ -52,11 +48,7 @@ fn debug_border_nodes(lg: &LayoutGraph) {
             let pos = lg.positions[bot_idx];
             eprintln!(
                 "[border_nodes]   bottom {} rank={} order={} x={:.2} y={:.2}",
-                lg.node_ids[bot_idx].0,
-                lg.ranks[bot_idx],
-                lg.order[bot_idx],
-                pos.x,
-                pos.y
+                lg.node_ids[bot_idx].0, lg.ranks[bot_idx], lg.order[bot_idx], pos.x, pos.y
             );
         }
 
@@ -145,8 +137,7 @@ pub fn add_segments(lg: &mut LayoutGraph) {
 pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
     debug_border_nodes(lg);
 
-    let debug_bounds = std::env::var("MMDFLUX_DEBUG_SUBGRAPH_BOUNDS")
-        .is_ok_and(|v| v == "1");
+    let debug_bounds = std::env::var("MMDFLUX_DEBUG_SUBGRAPH_BOUNDS").is_ok_and(|v| v == "1");
 
     let mut bounds = HashMap::new();
 

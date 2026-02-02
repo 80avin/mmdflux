@@ -267,9 +267,7 @@ pub fn get_predecessors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> 
         .iter()
         .enumerate()
         .filter(|&(idx, &(from, to))| {
-            to == node
-                && !graph.excluded_edges.contains(&idx)
-                && graph.is_position_node(from)
+            to == node && !graph.excluded_edges.contains(&idx) && graph.is_position_node(from)
         })
         .map(|(_, &(from, _))| from)
         .collect();
@@ -287,9 +285,7 @@ pub fn get_successors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> {
         .iter()
         .enumerate()
         .filter(|&(idx, &(from, to))| {
-            from == node
-                && !graph.excluded_edges.contains(&idx)
-                && graph.is_position_node(to)
+            from == node && !graph.excluded_edges.contains(&idx) && graph.is_position_node(to)
         })
         .map(|(_, &(_, to))| to)
         .collect();
@@ -715,8 +711,7 @@ fn vertical_alignment_with_layering(
     layers: &[Vec<Option<NodeIndex>>],
     conflicts: &ConflictSet,
     downward: bool,
-) -> BlockAlignment
-{
+) -> BlockAlignment {
     let all_nodes: Vec<NodeIndex> = (0..graph.node_ids.len()).collect();
     let mut alignment = BlockAlignment::new(&all_nodes);
 
@@ -724,7 +719,9 @@ fn vertical_alignment_with_layering(
         return alignment;
     }
 
-    let bk_trace = std::env::var("MMDFLUX_DEBUG_BK_TRACE").ok().map_or(false, |v| v == "1");
+    let bk_trace = std::env::var("MMDFLUX_DEBUG_BK_TRACE")
+        .ok()
+        .map_or(false, |v| v == "1");
 
     let mut pos: HashMap<NodeIndex, isize> = HashMap::new();
     for layer in layers {
@@ -768,8 +765,10 @@ fn vertical_alignment_with_layering(
 
                 if bk_trace && graph.border_type.contains_key(&v) {
                     let v_name = &graph.node_ids[v].0;
-                    let neighbor_names: Vec<&str> =
-                        neighbors.iter().map(|n| graph.node_ids[*n].0.as_str()).collect();
+                    let neighbor_names: Vec<&str> = neighbors
+                        .iter()
+                        .map(|n| graph.node_ids[*n].0.as_str())
+                        .collect();
                     let m_name = &graph.node_ids[m].0;
                     eprintln!(
                         "[BK] border node={} neighbors={:?} prev_idx={} conflict_free={} order_ok={} median_candidate={}",
@@ -1360,10 +1359,7 @@ fn debug_dump_border_blocks(graph: &LayoutGraph, conflicts: &ConflictSet) {
                 let root_id = &graph.node_ids[root].0;
                 eprintln!(
                     "[border_blocks]     {} rank={} order={} root={}",
-                    graph.node_ids[idx].0,
-                    graph.ranks[idx],
-                    graph.order[idx],
-                    root_id
+                    graph.node_ids[idx].0, graph.ranks[idx], graph.order[idx], root_id
                 );
             }
         }
@@ -1515,8 +1511,14 @@ mod tests {
         let layers = get_layers(&lg);
 
         assert!(layers[0].contains(&a_idx));
-        assert!(!layers[0].contains(&sg_idx), "compound parent should be excluded");
-        assert!(!layers[0].contains(&root_idx), "nesting root should be excluded");
+        assert!(
+            !layers[0].contains(&sg_idx),
+            "compound parent should be excluded"
+        );
+        assert!(
+            !layers[0].contains(&root_idx),
+            "nesting root should be excluded"
+        );
     }
 
     #[test]
@@ -2640,7 +2642,11 @@ mod tests {
         let bg = build_block_graph(&lg, &alignment, &layers, &config);
         let left_root = alignment.get_root(border_idx);
         let right_root = alignment.get_root(child_idx);
-        assert!(bg.successors(left_root).iter().any(|(n, _)| *n == right_root));
+        assert!(
+            bg.successors(left_root)
+                .iter()
+                .any(|(n, _)| *n == right_root)
+        );
     }
 
     // =========================================================================

@@ -17,8 +17,7 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
         return;
     }
 
-    let debug = std::env::var("MMDFLUX_DEBUG_DUMMY_PARENTS")
-        .is_ok_and(|v| v == "1");
+    let debug = std::env::var("MMDFLUX_DEBUG_DUMMY_PARENTS").is_ok_and(|v| v == "1");
     let postorder = compute_postorder(graph);
 
     for chain in &graph.dummy_chains {
@@ -37,10 +36,7 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
             let src_id = &graph.node_ids[src].0;
             let tgt_id = &graph.node_ids[tgt].0;
             let lca_id = &graph.node_ids[lca].0;
-            let path_ids: Vec<String> = path
-                .iter()
-                .map(|&p| graph.node_ids[p].0.clone())
-                .collect();
+            let path_ids: Vec<String> = path.iter().map(|&p| graph.node_ids[p].0.clone()).collect();
             eprintln!(
                 "[dummy_parents] edge {} src={} tgt={} lca={} path={:?}",
                 chain.edge_index, src_id, tgt_id, lca_id, path_ids
@@ -71,8 +67,7 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
             }
 
             if !ascending {
-                while path_idx + 1 < path.len()
-                    && min_rank(graph, path[path_idx + 1]) <= dummy_rank
+                while path_idx + 1 < path.len() && min_rank(graph, path[path_idx + 1]) <= dummy_rank
                 {
                     path_idx += 1;
                 }
@@ -104,21 +99,10 @@ fn compute_postorder(graph: &LayoutGraph) -> Vec<PostorderRange> {
         kids.sort();
     }
 
-    let mut result = vec![
-        PostorderRange {
-            low: 0,
-            lim: 0,
-        };
-        n
-    ];
+    let mut result = vec![PostorderRange { low: 0, lim: 0 }; n];
     let mut lim: i32 = 0;
 
-    fn dfs(
-        v: usize,
-        children: &[Vec<usize>],
-        result: &mut [PostorderRange],
-        lim: &mut i32,
-    ) {
+    fn dfs(v: usize, children: &[Vec<usize>], result: &mut [PostorderRange], lim: &mut i32) {
         let low = *lim;
         for &child in &children[v] {
             dfs(child, children, result, lim);

@@ -1,8 +1,7 @@
-use std::env;
-use std::fs;
+use std::{env, fs};
 
 use mmdflux::render::node_dimensions;
-use mmdflux::{build_diagram, parse_flowchart, Direction};
+use mmdflux::{Direction, build_diagram, parse_flowchart};
 
 fn json_escape(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
@@ -97,7 +96,7 @@ fn main() {
 
     println!("{{");
     println!("  \"graph\": {{");
-    println!("    \"rankdir\": \"{}\"," , rankdir);
+    println!("    \"rankdir\": \"{}\",", rankdir);
     println!("    \"nodesep\": {},", node_sep);
     println!("    \"edgesep\": {},", edge_sep);
     println!("    \"ranksep\": {},", ranksep);
