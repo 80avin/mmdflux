@@ -429,8 +429,8 @@ mod stagger {
     #[test]
     fn stagger_present_for_multiple_cycles() {
         // multiple_cycles.mmd: A[Top] --> B[Middle], B --> C[Bottom], C --> A, C --> B
-        // Dagre computes A leftward (aligned with dummy chain for reversed C→A/C→B edges)
-        // After stagger: A's center_x should be < B's and C's center_x
+        // Mermaid/dagre-d3-es computes A rightward (aligned with the reversed edge chain).
+        // After stagger: A's center_x should be > B's and C's center_x
         let (_, layout) = layout_fixture("multiple_cycles.mmd");
 
         let a_cx = layout.node_bounds["A"].center_x();
@@ -438,14 +438,14 @@ mod stagger {
         let c_cx = layout.node_bounds["C"].center_x();
 
         assert!(
-            a_cx < b_cx,
-            "A (center_x={}) should be left of B (center_x={})",
+            a_cx > b_cx,
+            "A (center_x={}) should be right of B (center_x={})",
             a_cx,
             b_cx
         );
         assert!(
-            a_cx < c_cx,
-            "A (center_x={}) should be left of C (center_x={})",
+            a_cx > c_cx,
+            "A (center_x={}) should be right of C (center_x={})",
             a_cx,
             c_cx
         );

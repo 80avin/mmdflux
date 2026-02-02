@@ -204,9 +204,8 @@ pub fn run(graph: &mut LayoutGraph) {
             if debug_order() {
                 eprintln!("[order] iter {i}: NEW BEST cc={cc}");
             }
-        } else if cc == best_cc {
-            best_order = graph.order.clone();
         }
+        // Dagre-d3-es keeps the first best ordering; do not replace on ties.
 
         i += 1;
         last_best += 1;
