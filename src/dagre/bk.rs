@@ -6,7 +6,7 @@
 //! The algorithm produces x-coordinates that minimize total edge length while
 //! respecting node separation constraints.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use super::graph::LayoutGraph;
 use super::types::Direction;
@@ -14,23 +14,11 @@ use super::types::Direction;
 /// Index type for nodes in the layout graph
 pub type NodeIndex = usize;
 
-/// A conflict between edges that prevents alignment.
+/// Set of conflicts indexed by node pairs for O(1) lookup.
 ///
-/// Conflicts occur when aligning a node with its median neighbor would cause
-/// edge crossings with inner segments (long edges through dummy nodes).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Conflict {
-    /// The layer where the conflict occurs
-    pub layer: usize,
-    /// Position of first conflicting node in layer
-    pub pos1: usize,
-    /// Position of second conflicting node in layer
-    pub pos2: usize,
-}
-
-/// Set of conflicts indexed by (layer, pos1, pos2) for O(1) lookup.
-/// We use a nested HashMap: layer -> (pos1, pos2) -> Conflict
-pub type ConflictSet = HashMap<(usize, usize, usize), Conflict>;
+/// Conflicts are stored by node indices (unordered), matching dagre's
+/// node-based conflict checks.
+pub type ConflictSet = HashSet<(NodeIndex, NodeIndex)>;
 
 /// Represents a vertical alignment of nodes into blocks.
 ///
@@ -455,17 +443,12 @@ pub fn find_type1_conflicts(graph: &LayoutGraph) -> ConflictSet {
                         if (u_pos < k0 || k1 < u_pos)
                             && !(is_dummy_like(graph, u) && is_dummy_like(graph, scan_node))
                         {
-                            let pos1 = graph.order[u].min(graph.order[scan_node]);
-                            let pos2 = graph.order[u].max(graph.order[scan_node]);
-                            let layer_key = layer_idx - 1;
-                            conflicts.insert(
-                                (layer_key, pos1, pos2),
-                                Conflict {
-                                    layer: layer_key,
-                                    pos1,
-                                    pos2,
-                                },
-                            );
+                            let (a, b) = if u < scan_node {
+                                (u, scan_node)
+                            } else {
+                                (scan_node, u)
+                            };
+                            conflicts.insert((a, b));
                         }
                     }
                 }
@@ -517,7 +500,6 @@ pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
                     scan_type2_conflicts(
                         graph,
                         &mut conflicts,
-                        layer - 1,
                         south,
                         south_pos,
                         south_lookahead,
@@ -529,15 +511,15 @@ pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
                 }
             }
 
+            let scan_prev = next_north_pos.unwrap_or(prev_north_pos);
             scan_type2_conflicts(
                 graph,
                 &mut conflicts,
-                layer - 1,
                 south,
                 south_pos,
                 south.len(),
-                prev_north_pos,
-                next_north_pos.unwrap_or(north.len() as isize),
+                scan_prev,
+                north.len() as isize,
             );
         }
     }
@@ -548,7 +530,6 @@ pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
 fn scan_type2_conflicts(
     graph: &LayoutGraph,
     conflicts: &mut ConflictSet,
-    layer: usize,
     south: &[Option<NodeIndex>],
     south_pos: usize,
     south_end: usize,
@@ -568,9 +549,8 @@ fn scan_type2_conflicts(
             }
             let u_pos = graph.order[u] as isize;
             if u_pos < prev_north_border || u_pos > next_north_border {
-                let pos1 = graph.order[u].min(graph.order[v]);
-                let pos2 = graph.order[u].max(graph.order[v]);
-                conflicts.insert((layer, pos1, pos2), Conflict { layer, pos1, pos2 });
+                let (a, b) = if u < v { (u, v) } else { (v, u) };
+                conflicts.insert((a, b));
             }
         }
     }
@@ -597,9 +577,7 @@ fn is_dummy_like(graph: &LayoutGraph, node: NodeIndex) -> bool {
 pub fn find_all_conflicts(graph: &LayoutGraph) -> ConflictSet {
     let mut conflicts = find_type1_conflicts(graph);
 
-    for ((layer, pos1, pos2), conflict) in find_type2_conflicts(graph) {
-        conflicts.entry((layer, pos1, pos2)).or_insert(conflict);
-    }
+    conflicts.extend(find_type2_conflicts(graph));
 
     conflicts
 }
@@ -607,19 +585,9 @@ pub fn find_all_conflicts(graph: &LayoutGraph) -> ConflictSet {
 /// Check if aligning two positions would violate a conflict.
 ///
 /// Used during vertical alignment to skip alignments that would cause crossings.
-pub fn has_conflict(conflicts: &ConflictSet, layer: usize, pos1: usize, pos2: usize) -> bool {
-    let min_pos = pos1.min(pos2);
-    let max_pos = pos1.max(pos2);
-
-    // Check if there's a conflict that falls within this range
-    // A conflict at (layer, p1, p2) blocks alignments where min_pos <= p1 and p2 <= max_pos
-    for &(conf_layer, conf_pos1, conf_pos2) in conflicts.keys() {
-        if conf_layer == layer && min_pos <= conf_pos1 && conf_pos2 <= max_pos {
-            return true;
-        }
-    }
-
-    false
+pub fn has_conflict(conflicts: &ConflictSet, v: NodeIndex, w: NodeIndex) -> bool {
+    let (a, b) = if v < w { (v, w) } else { (w, v) };
+    conflicts.contains(&(a, b))
 }
 
 // =============================================================================
@@ -647,6 +615,8 @@ pub fn vertical_alignment(
     // Get all node indices
     let all_nodes: Vec<NodeIndex> = (0..graph.node_ids.len()).collect();
     let mut alignment = BlockAlignment::new(&all_nodes);
+
+    let bk_trace = std::env::var("MMDFLUX_DEBUG_BK_TRACE").ok().map_or(false, |v| v == "1");
 
     // Get layer structure (order-aware, to mirror dagre's buildLayerMatrix)
     let layers_with_order = get_layers_with_order(graph);
@@ -687,7 +657,6 @@ pub fn vertical_alignment(
     // Skip first layer in sweep order (no neighbors in sweep direction)
     for i in 1..layer_order.len() {
         let layer_idx = layer_order[i];
-        let prev_layer_idx = layer_order[i - 1];
 
         // Get nodes in current layer
         let layer_nodes = &layers[layer_idx];
@@ -739,9 +708,18 @@ pub fn vertical_alignment(
                     let order_ok = if prefer_left { r < m_pos } else { r > m_pos };
 
                     // Check conflict constraint
-                    let v_pos = graph.order[v];
-                    let conflict_free =
-                        !has_conflict(conflicts, prev_layer_idx, v_pos, graph.order[m]);
+                    let conflict_free = !has_conflict(conflicts, v, m);
+
+                    if bk_trace && graph.border_type.contains_key(&v) {
+                        let v_name = &graph.node_ids[v].0;
+                        let neighbor_names: Vec<&str> = neighbors.iter().map(|n| graph.node_ids[*n].0.as_str()).collect();
+                        let median_names: Vec<&str> = get_medians(&neighbors, prefer_left).iter().map(|n| graph.node_ids[*n].0.as_str()).collect();
+                        let m_name = &graph.node_ids[m].0;
+                        eprintln!(
+                            "[BK {:?}] border node={} neighbors={:?} medians={:?} r={} conflict_free={} order_ok={} median_candidate={}",
+                            direction, v_name, neighbor_names, median_names, r, conflict_free, order_ok, m_name
+                        );
+                    }
 
                     if conflict_free && order_ok {
                         // Align v with m
@@ -760,6 +738,16 @@ pub fn vertical_alignment(
 
                         // Update boundary
                         r = m_pos;
+
+                        if bk_trace && graph.border_type.contains_key(&v) {
+                            let v_name = &graph.node_ids[v].0;
+                            let m_name = &graph.node_ids[m].0;
+                            let m_root_name = &graph.node_ids[alignment.get_root(m)].0;
+                            eprintln!(
+                                "[BK {:?}]   -> ALIGNED {}  to {} (root={})",
+                                direction, v_name, m_name, m_root_name
+                            );
+                        }
                     }
                 }
             }
@@ -1410,28 +1398,6 @@ mod tests {
         assert_eq!(config.direction, Direction::TopBottom);
     }
 
-    #[test]
-    fn test_conflict_equality() {
-        let c1 = Conflict {
-            layer: 1,
-            pos1: 0,
-            pos2: 2,
-        };
-        let c2 = Conflict {
-            layer: 1,
-            pos1: 0,
-            pos2: 2,
-        };
-        let c3 = Conflict {
-            layer: 1,
-            pos1: 0,
-            pos2: 3,
-        };
-
-        assert_eq!(c1, c2);
-        assert_ne!(c1, c3);
-    }
-
     // =========================================================================
     // Helper Function Tests
     // =========================================================================
@@ -1665,23 +1631,11 @@ mod tests {
     #[test]
     fn test_has_conflict_basic() {
         let mut conflicts = ConflictSet::new();
-        conflicts.insert(
-            (1, 0, 2),
-            Conflict {
-                layer: 1,
-                pos1: 0,
-                pos2: 2,
-            },
-        );
+        conflicts.insert((1, 3));
 
-        // Alignment that spans the conflict range should be blocked
-        assert!(has_conflict(&conflicts, 1, 0, 3));
-
-        // Alignment in different layer should not be blocked
-        assert!(!has_conflict(&conflicts, 0, 0, 3));
-
-        // Alignment that doesn't span the conflict should not be blocked
-        assert!(!has_conflict(&conflicts, 1, 3, 4));
+        assert!(has_conflict(&conflicts, 1, 3));
+        assert!(has_conflict(&conflicts, 3, 1));
+        assert!(!has_conflict(&conflicts, 1, 2));
     }
 
     #[test]
