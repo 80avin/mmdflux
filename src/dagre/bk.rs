@@ -706,7 +706,7 @@ pub fn vertical_alignment(
                     let conflict_free =
                         !has_conflict(conflicts, prev_layer_idx, v_pos, m_pos as usize);
 
-                    if conflict_free && order_ok && can_align_border(graph, v, m) {
+                    if conflict_free && order_ok {
                         // Align v with m
                         // In the paper: align[m] = v, root[v] = root[m], align[v] = root[m]
                         // This creates a chain from m down to v
@@ -730,19 +730,6 @@ pub fn vertical_alignment(
     }
 
     alignment
-}
-
-fn can_align_border(graph: &LayoutGraph, v: NodeIndex, m: NodeIndex) -> bool {
-    let v_border = graph.border_type.contains_key(&v);
-    let m_border = graph.border_type.contains_key(&m);
-
-    if v_border || m_border {
-        let v_parent = graph.parents.get(v).copied().flatten();
-        let m_parent = graph.parents.get(m).copied().flatten();
-        return v_parent.is_some() && v_parent == m_parent;
-    }
-
-    true
 }
 
 /// Get median neighbor(s) from a sorted list of neighbors.
