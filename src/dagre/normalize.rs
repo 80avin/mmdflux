@@ -319,6 +319,13 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
             .filter_map(|&old_pos| old_to_new.get(&old_pos).copied())
             .collect();
 
+        // Remap excluded_edges so nesting edges remain excluded after rebuild.
+        graph.excluded_edges = graph
+            .excluded_edges
+            .iter()
+            .filter_map(|&old_pos| old_to_new.get(&old_pos).copied())
+            .collect();
+
         graph.edges = rebuilt_edges;
         graph.edge_weights = rebuilt_weights;
         graph.edge_minlens = rebuilt_minlens;
