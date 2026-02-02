@@ -291,6 +291,7 @@ pub fn get_successors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> {
 /// - Upward sweep (DL, DR): use successors (lower neighbors)
 ///
 /// Returns neighbors sorted by position in their layer.
+#[allow(dead_code)]
 pub fn get_neighbors(graph: &LayoutGraph, node: NodeIndex, downward: bool) -> Vec<NodeIndex> {
     if downward {
         get_predecessors(graph, node)
@@ -647,8 +648,12 @@ pub fn vertical_alignment(
     let all_nodes: Vec<NodeIndex> = (0..graph.node_ids.len()).collect();
     let mut alignment = BlockAlignment::new(&all_nodes);
 
-    // Get layer structure
-    let layers = get_layers(graph);
+    // Get layer structure (order-aware, to mirror dagre's buildLayerMatrix)
+    let layers_with_order = get_layers_with_order(graph);
+    let layers: Vec<Vec<NodeIndex>> = layers_with_order
+        .iter()
+        .map(|layer| layer.iter().filter_map(|n| *n).collect())
+        .collect();
     let num_layers = layers.len();
 
     if num_layers < 2 {
@@ -659,6 +664,25 @@ pub fn vertical_alignment(
     let downward = direction.is_downward();
     let prefer_left = direction.prefers_left();
     let layer_order = get_layers_in_order(num_layers, downward);
+
+    // Build a per-alignment position map. For right-biased alignments, positions
+    // are reversed within each layer to match dagre's verticalAlignment logic.
+    let mut alignment_pos: HashMap<NodeIndex, usize> = HashMap::new();
+    for layer in &layers_with_order {
+        if prefer_left {
+            for (pos, node) in layer.iter().enumerate() {
+                if let Some(node) = node {
+                    alignment_pos.insert(*node, pos);
+                }
+            }
+        } else {
+            for (pos, node) in layer.iter().rev().enumerate() {
+                if let Some(node) = node {
+                    alignment_pos.insert(*node, pos);
+                }
+            }
+        }
+    }
 
     // Skip first layer in sweep order (no neighbors in sweep direction)
     for i in 1..layer_order.len() {
@@ -683,7 +707,17 @@ pub fn vertical_alignment(
 
         for &v in &node_order {
             // Get median neighbor in the previous layer (in sweep direction)
-            let neighbors = get_neighbors(graph, v, downward);
+            let mut neighbors = if downward {
+                get_predecessors(graph, v)
+            } else {
+                get_successors(graph, v)
+            };
+            neighbors.sort_by_key(|n| {
+                alignment_pos
+                    .get(n)
+                    .copied()
+                    .unwrap_or_else(|| graph.order[*n])
+            });
             if neighbors.is_empty() {
                 continue;
             }
@@ -694,7 +728,10 @@ pub fn vertical_alignment(
             for m in medians {
                 // Only align if v isn't already aligned to something else
                 if alignment.align.get(&v) == Some(&v) {
-                    let m_pos = get_position(graph, m) as isize;
+                    let m_pos = alignment_pos
+                        .get(&m)
+                        .copied()
+                        .unwrap_or_else(|| graph.order[m]) as isize;
 
                     // Check ordering constraint:
                     // For left preference: median must be to the right of last aligned position
@@ -702,9 +739,9 @@ pub fn vertical_alignment(
                     let order_ok = if prefer_left { r < m_pos } else { r > m_pos };
 
                     // Check conflict constraint
-                    let v_pos = get_position(graph, v);
+                    let v_pos = graph.order[v];
                     let conflict_free =
-                        !has_conflict(conflicts, prev_layer_idx, v_pos, m_pos as usize);
+                        !has_conflict(conflicts, prev_layer_idx, v_pos, graph.order[m]);
 
                     if conflict_free && order_ok {
                         // Align v with m
