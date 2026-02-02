@@ -18,7 +18,7 @@ pub fn render_subgraph_borders(
 ) {
     // Sort by depth: outer borders first (background), inner last (foreground)
     let mut sorted_bounds: Vec<_> = subgraph_bounds.values().collect();
-    sorted_bounds.sort_by_key(|b| b.depth);
+    sorted_bounds.sort_by(|a, b| a.depth.cmp(&b.depth).then_with(|| a.title.cmp(&b.title)));
 
     for bounds in sorted_bounds {
         let x = bounds.x;

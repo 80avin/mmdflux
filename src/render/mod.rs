@@ -63,7 +63,10 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
     }
 
     // Step 3: Render nodes
-    for (node_id, node) in &diagram.nodes {
+    let mut node_keys: Vec<&String> = diagram.nodes.keys().collect();
+    node_keys.sort();
+    for node_id in node_keys {
+        let node = &diagram.nodes[node_id];
         if let Some(&(x, y)) = layout.draw_positions.get(node_id) {
             render_node(&mut canvas, node, x, y, &charset);
         }
