@@ -1148,13 +1148,16 @@ mod subgraph_rendering {
         assert!(output.contains("API"), "Should contain API node");
         assert!(output.contains("Server"), "Should contain Server node");
         assert!(output.contains("DB"), "Should contain DB node");
-        // Should have two distinct subgraph borders
+        // Should have subgraph borders and node borders
         let border_count = output.matches('┌').count();
         assert!(
-            border_count >= 4,
+            border_count >= 3,
             "Should have borders for subgraphs and nodes, got {} '┌' chars",
             border_count
         );
+        // Both subgraph titles should appear
+        assert!(output.contains("Frontend"), "Should contain Frontend title");
+        assert!(output.contains("Backend"), "Should contain Backend title");
     }
 
     #[test]

@@ -60,7 +60,7 @@ pub use types::{
 /// minlens (and later compensates via ranksep scaling). The uniform grid ensures
 /// downstream Sugiyama phases (normalization, ordering, positioning) see consistent
 /// rank spacing, even when no labels are present.
-fn make_space_for_edge_labels(
+pub(crate) fn make_space_for_edge_labels(
     lg: &mut LayoutGraph,
     _edge_labels: &HashMap<usize, normalize::EdgeLabelInfo>,
 ) {
@@ -109,10 +109,13 @@ fn debug_dump_pipeline(lg: &LayoutGraph, stage: &str) {
     for (rank, order, idx) in entries {
         let id = &lg.node_ids[idx].0;
         let parent = lg.parents[idx].map(|p| lg.node_ids[p].0.clone());
-        let dummy = lg.dummy_nodes.get(&lg.node_ids[idx]).map(|d| match d.dummy_type {
-            normalize::DummyType::Edge => "edge",
-            normalize::DummyType::EdgeLabel => "edge_label",
-        });
+        let dummy = lg
+            .dummy_nodes
+            .get(&lg.node_ids[idx])
+            .map(|d| match d.dummy_type {
+                normalize::DummyType::Edge => "edge",
+                normalize::DummyType::EdgeLabel => "edge_label",
+            });
         let dummy_edge = lg.dummy_nodes.get(&lg.node_ids[idx]).map(|d| d.edge_index);
         let border = lg.border_type.get(&idx).map(|b| match b {
             graph::BorderType::Left => "left",
@@ -167,7 +170,7 @@ fn debug_dump_pipeline(lg: &LayoutGraph, stage: &str) {
 ///
 /// Self-edges confuse cycle detection and ranking. They are stashed on
 /// `lg.self_edges` and removed from `lg.edges` (and parallel arrays).
-fn extract_self_edges(lg: &mut LayoutGraph) {
+pub(crate) fn extract_self_edges(lg: &mut LayoutGraph) {
     debug_assert!(
         lg.reversed_edges.is_empty(),
         "extract_self_edges must run before acyclic::run()"
