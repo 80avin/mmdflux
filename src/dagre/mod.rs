@@ -34,6 +34,7 @@
 mod acyclic;
 mod bk;
 pub(crate) mod border;
+mod parent_dummy_chains;
 mod graph;
 pub(crate) mod nesting;
 pub(crate) mod network_simplex;
@@ -360,6 +361,11 @@ where
 
     // Phase 2.5: Normalize long edges (insert dummy nodes)
     normalize::run(&mut lg, edge_labels);
+
+    // Compound: assign dummy chain parents to match compound hierarchy.
+    if has_compound {
+        parent_dummy_chains::run(&mut lg);
+    }
 
     // Compound: add border segments (left/right border nodes per rank)
     if has_compound {

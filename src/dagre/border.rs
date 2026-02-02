@@ -145,6 +145,9 @@ pub fn add_segments(lg: &mut LayoutGraph) {
 pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
     debug_border_nodes(lg);
 
+    let debug_bounds = std::env::var("MMDFLUX_DEBUG_SUBGRAPH_BOUNDS")
+        .is_ok_and(|v| v == "1");
+
     let mut bounds = HashMap::new();
 
     let compound_indices: Vec<usize> = lg.compound_nodes.iter().copied().collect();
@@ -195,11 +198,22 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
             if *parent != Some(compound_idx) {
                 continue;
             }
-            if lg.border_type.contains_key(&idx) || lg.compound_nodes.contains(&idx) {
+            if lg.border_type.contains_key(&idx)
+                || lg.compound_nodes.contains(&idx)
+                || lg.is_dummy_index(idx)
+                || lg.position_excluded_nodes.contains(&idx)
+            {
                 continue;
             }
             let pos = lg.positions[idx];
             let (w, h) = lg.dimensions[idx];
+            if debug_bounds {
+                let name = &lg.node_ids[idx].0;
+                eprintln!(
+                    "[subgraph_bounds]   child {} pos=({:.2},{:.2}) size=({:.2},{:.2})",
+                    name, pos.x, pos.y, w, h
+                );
+            }
             child_min_x = child_min_x.min(pos.x);
             child_max_x = child_max_x.max(pos.x + w);
             child_min_y = child_min_y.min(pos.y);
@@ -226,6 +240,22 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
         } else {
             y_max
         };
+
+        if debug_bounds {
+            let name = &lg.node_ids[compound_idx].0;
+            eprintln!(
+                "[subgraph_bounds] {} border=({:.2},{:.2})-({:.2},{:.2}) child=({:.2},{:.2})-({:.2},{:.2})",
+                name,
+                x_min,
+                y_min,
+                x_max,
+                y_max,
+                child_min_x,
+                child_min_y,
+                child_max_x,
+                child_max_y
+            );
+        }
 
         let width = (x_max - x_min).max(0.0);
         let height = (y_max - y_min).max(0.0);

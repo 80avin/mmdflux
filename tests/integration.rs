@@ -429,8 +429,8 @@ mod stagger {
     #[test]
     fn stagger_present_for_multiple_cycles() {
         // multiple_cycles.mmd: A[Top] --> B[Middle], B --> C[Bottom], C --> A, C --> B
-        // Dagre computes A rightward (aligned with dummy chain for reversed A→C edge)
-        // After stagger: A's center_x should be > B's and C's center_x
+        // Dagre computes A leftward (aligned with dummy chain for reversed C→A/C→B edges)
+        // After stagger: A's center_x should be < B's and C's center_x
         let (_, layout) = layout_fixture("multiple_cycles.mmd");
 
         let a_cx = layout.node_bounds["A"].center_x();
@@ -438,14 +438,14 @@ mod stagger {
         let c_cx = layout.node_bounds["C"].center_x();
 
         assert!(
-            a_cx > b_cx,
-            "A (center_x={}) should be right of B (center_x={})",
+            a_cx < b_cx,
+            "A (center_x={}) should be left of B (center_x={})",
             a_cx,
             b_cx
         );
         assert!(
-            a_cx > c_cx,
-            "A (center_x={}) should be right of C (center_x={})",
+            a_cx < c_cx,
+            "A (center_x={}) should be left of C (center_x={})",
             a_cx,
             c_cx
         );
@@ -627,13 +627,11 @@ mod skip_edge_separation {
 
     /// Assert that the A→D skip-edge waypoints do not overlap with node B's bounding box.
     /// Both fixtures have an A→B→...→D chain plus an A→D skip edge whose waypoints
-    /// must clear intermediate node B.
+    /// must clear intermediate node B (either to the left or right).
     fn assert_skip_edge_clears_node_b(fixture_name: &str) {
         let (_, layout) = layout_fixture(fixture_name);
 
         let b_bounds = &layout.node_bounds["B"];
-        let b_right = b_bounds.x + b_bounds.width;
-
         let key = ("A".to_string(), "D".to_string());
         let waypoints = layout
             .edge_waypoints
@@ -646,14 +644,14 @@ mod skip_edge_separation {
             fixture_name
         );
 
-        // Waypoints are ordered by rank; the first is at B's rank
+        // Waypoints are ordered by rank; the first is at B's rank.
         let wp_at_b_rank = waypoints[0];
         assert!(
-            wp_at_b_rank.0 > b_right,
-            "{}: A→D waypoint x={} should be > B's right edge {} (need separation)",
+            !b_bounds.contains(wp_at_b_rank.0, wp_at_b_rank.1),
+            "{}: A→D waypoint {:?} should clear B's bounds {:?} (need separation)",
             fixture_name,
-            wp_at_b_rank.0,
-            b_right,
+            wp_at_b_rank,
+            b_bounds,
         );
     }
 

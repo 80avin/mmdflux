@@ -200,10 +200,27 @@ pub fn generate_backward_waypoints(
                 (src_bounds.y + src_bounds.height).max(tgt_bounds.y + tgt_bounds.height);
             let route_y = bottom_edge + BACKWARD_ROUTE_GAP;
 
-            let src_center_x = src_bounds.center_x();
-            let tgt_center_x = tgt_bounds.center_x();
+            let left_edge = src_bounds.x.min(tgt_bounds.x);
+            let right_edge =
+                (src_bounds.x + src_bounds.width).max(tgt_bounds.x + tgt_bounds.width);
 
-            vec![(src_center_x, route_y), (tgt_center_x, route_y)]
+            match direction {
+                Direction::LeftRight => {
+                    // Backward edge flows right-to-left: keep the route_x to the right
+                    // so the final segment enters the target from the right (left arrow).
+                    let start_x = src_bounds.x.saturating_sub(1);
+                    let route_x = right_edge + BACKWARD_ROUTE_GAP;
+                    vec![(start_x, route_y), (route_x, route_y)]
+                }
+                Direction::RightLeft => {
+                    // Backward edge flows left-to-right: keep the route_x to the left
+                    // so the final segment enters the target from the left (right arrow).
+                    let start_x = src_bounds.x + src_bounds.width;
+                    let route_x = left_edge.saturating_sub(BACKWARD_ROUTE_GAP);
+                    vec![(start_x, route_y), (route_x, route_y)]
+                }
+                _ => vec![],
+            }
         }
     }
 }
@@ -279,6 +296,16 @@ pub fn route_edge(
     if is_backward_edge(from_bounds, to_bounds, diagram_direction) {
         let synthetic_wps = generate_backward_waypoints(from_bounds, to_bounds, diagram_direction);
         if !synthetic_wps.is_empty() {
+            if matches!(diagram_direction, Direction::LeftRight | Direction::RightLeft) {
+                return route_edge_with_waypoints(
+                    edge,
+                    &endpoints,
+                    &synthetic_wps,
+                    diagram_direction,
+                    src_attach_override,
+                    tgt_attach_override,
+                );
+            }
             return route_backward_with_synthetic_waypoints(
                 edge,
                 &endpoints,
@@ -1075,6 +1102,10 @@ pub fn compute_attachment_plan(
         let has_dagre_waypoints = waypoints.is_some_and(|wps| !wps.is_empty());
         let (src_face, tgt_face) = if is_backward && !has_dagre_waypoints {
             backward_routing_faces(direction)
+        } else if matches!(direction, Direction::TopDown | Direction::BottomTop) && !is_backward {
+            // For forward edges in vertical layouts, stick to canonical faces to
+            // keep fan-in/out attachment spreading stable.
+            edge_faces(direction, false)
         } else {
             match direction {
                 Direction::LeftRight | Direction::RightLeft => edge_faces(direction, is_backward),

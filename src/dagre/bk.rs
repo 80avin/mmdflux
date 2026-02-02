@@ -179,6 +179,7 @@ impl Default for BKConfig {
 ///
 /// Returns a vector where index is the layer number and value is a vector of
 /// node indices in that layer, sorted by their order within the layer.
+#[cfg(test)]
 pub fn get_layers(graph: &LayoutGraph) -> Vec<Vec<NodeIndex>> {
     let max_rank = graph.ranks.iter().max().copied().unwrap_or(0) as usize;
     let mut layers: Vec<Vec<NodeIndex>> = vec![Vec::new(); max_rank + 1];
@@ -221,10 +222,34 @@ fn get_layers_with_order(graph: &LayoutGraph) -> Vec<Vec<Option<NodeIndex>>> {
     layers
 }
 
+fn adjusted_layers_with_order(
+    layers: &[Vec<Option<NodeIndex>>],
+    direction: AlignmentDirection,
+) -> Vec<Vec<Option<NodeIndex>>> {
+    let mut adjusted = layers.to_vec();
+    if !direction.is_downward() {
+        adjusted.reverse();
+    }
+    if !direction.prefers_left() {
+        for layer in &mut adjusted {
+            layer.reverse();
+        }
+    }
+    adjusted
+}
+
+fn compact_layers(layers: &[Vec<Option<NodeIndex>>]) -> Vec<Vec<NodeIndex>> {
+    layers
+        .iter()
+        .map(|layer| layer.iter().filter_map(|n| *n).collect())
+        .collect()
+}
+
 /// Get the layer indices in sweep order.
 ///
 /// For downward sweep (UL, UR): layers 0, 1, 2, ... (top to bottom)
 /// For upward sweep (DL, DR): layers n, n-1, ... 0 (bottom to top)
+#[cfg(test)]
 pub fn get_layers_in_order(num_layers: usize, downward: bool) -> Vec<usize> {
     if downward {
         (0..num_layers).collect()
@@ -679,141 +704,95 @@ pub fn vertical_alignment(
     conflicts: &ConflictSet,
     direction: AlignmentDirection,
 ) -> BlockAlignment {
-    // Get all node indices
+    let base_layers = get_layers_with_order(graph);
+    let adjusted_layers = adjusted_layers_with_order(&base_layers, direction);
+    let downward = direction.is_downward();
+    vertical_alignment_with_layering(graph, &adjusted_layers, conflicts, downward)
+}
+
+fn vertical_alignment_with_layering(
+    graph: &LayoutGraph,
+    layers: &[Vec<Option<NodeIndex>>],
+    conflicts: &ConflictSet,
+    downward: bool,
+) -> BlockAlignment
+{
     let all_nodes: Vec<NodeIndex> = (0..graph.node_ids.len()).collect();
     let mut alignment = BlockAlignment::new(&all_nodes);
 
-    let bk_trace = std::env::var("MMDFLUX_DEBUG_BK_TRACE").ok().map_or(false, |v| v == "1");
-
-    // Get layer structure (order-aware, to mirror dagre's buildLayerMatrix)
-    let layers_with_order = get_layers_with_order(graph);
-    let layers: Vec<Vec<NodeIndex>> = layers_with_order
-        .iter()
-        .map(|layer| layer.iter().filter_map(|n| *n).collect())
-        .collect();
-    let num_layers = layers.len();
-
-    if num_layers < 2 {
+    if layers.len() < 2 {
         return alignment;
     }
 
-    // Get sweep order based on direction
-    let downward = direction.is_downward();
-    let prefer_left = direction.prefers_left();
-    let layer_order = get_layers_in_order(num_layers, downward);
+    let bk_trace = std::env::var("MMDFLUX_DEBUG_BK_TRACE").ok().map_or(false, |v| v == "1");
 
-    // Build a per-alignment position map. For right-biased alignments, positions
-    // are reversed within each layer to match dagre's verticalAlignment logic.
-    let mut alignment_pos: HashMap<NodeIndex, usize> = HashMap::new();
-    for layer in &layers_with_order {
-        if prefer_left {
-            for (pos, node) in layer.iter().enumerate() {
-                if let Some(node) = node {
-                    alignment_pos.insert(*node, pos);
-                }
-            }
-        } else {
-            for (pos, node) in layer.iter().rev().enumerate() {
-                if let Some(node) = node {
-                    alignment_pos.insert(*node, pos);
-                }
+    let mut pos: HashMap<NodeIndex, isize> = HashMap::new();
+    for layer in layers {
+        for (order, slot) in layer.iter().enumerate() {
+            if let Some(node) = *slot {
+                pos.insert(node, order as isize);
             }
         }
     }
 
-    // Skip first layer in sweep order (no neighbors in sweep direction)
-    for i in 1..layer_order.len() {
-        let layer_idx = layer_order[i];
+    for layer in layers {
+        let mut prev_idx: isize = -1;
+        for slot in layer {
+            let Some(v) = *slot else {
+                continue;
+            };
 
-        // Get nodes in current layer
-        let layer_nodes = &layers[layer_idx];
-
-        // Process nodes in appropriate order based on bias
-        let node_order: Vec<NodeIndex> = if prefer_left {
-            layer_nodes.clone()
-        } else {
-            layer_nodes.iter().rev().copied().collect()
-        };
-
-        // Track the boundary position we've aligned to.
-        // This prevents crossing alignments within the same sweep.
-        // Dagre always uses a monotonically increasing boundary with r starting at -1,
-        // even for right-biased alignments (positions are already reversed).
-        let mut r: isize = -1;
-
-        for &v in &node_order {
-            // Get median neighbor in the previous layer (in sweep direction)
             let mut neighbors = if downward {
                 get_predecessors(graph, v)
             } else {
                 get_successors(graph, v)
             };
-            neighbors.sort_by_key(|n| {
-                alignment_pos
-                    .get(n)
-                    .copied()
-                    .unwrap_or_else(|| graph.order[*n])
-            });
             if neighbors.is_empty() {
                 continue;
             }
+            neighbors.sort_by_key(|n| pos.get(n).copied().unwrap_or(graph.order[*n] as isize));
 
-            // Get median(s) - for even count, we try both
-            let medians = get_medians(&neighbors, prefer_left);
+            let mp = (neighbors.len() - 1) as f64 / 2.0;
+            let start = mp.floor() as usize;
+            let end = mp.ceil() as usize;
 
-            for m in medians {
-                // Only align if v isn't already aligned to something else
-                if alignment.align.get(&v) == Some(&v) {
-                    let m_pos = alignment_pos
-                        .get(&m)
-                        .copied()
-                        .unwrap_or_else(|| graph.order[m]) as isize;
+            for i in start..=end {
+                let m = neighbors[i];
+                if alignment.align.get(&v) != Some(&v) {
+                    continue;
+                }
 
-                    // Check ordering constraint:
-                    // Always enforce r < m_pos; right-bias is already handled by reversed positions.
-                    let order_ok = r < m_pos;
+                let m_pos = pos.get(&m).copied().unwrap_or(graph.order[m] as isize);
+                let order_ok = prev_idx < m_pos;
+                let conflict_free = !has_conflict(conflicts, v, m);
 
-                    // Check conflict constraint
-                    let conflict_free = !has_conflict(conflicts, v, m);
+                if bk_trace && graph.border_type.contains_key(&v) {
+                    let v_name = &graph.node_ids[v].0;
+                    let neighbor_names: Vec<&str> =
+                        neighbors.iter().map(|n| graph.node_ids[*n].0.as_str()).collect();
+                    let m_name = &graph.node_ids[m].0;
+                    eprintln!(
+                        "[BK] border node={} neighbors={:?} prev_idx={} conflict_free={} order_ok={} median_candidate={}",
+                        v_name, neighbor_names, prev_idx, conflict_free, order_ok, m_name
+                    );
+                }
+
+                if conflict_free && order_ok {
+                    alignment.align.insert(m, v);
+
+                    let m_root = alignment.get_root(m);
+                    alignment.root.insert(v, m_root);
+                    alignment.align.insert(v, m_root);
+                    prev_idx = m_pos;
 
                     if bk_trace && graph.border_type.contains_key(&v) {
                         let v_name = &graph.node_ids[v].0;
-                        let neighbor_names: Vec<&str> = neighbors.iter().map(|n| graph.node_ids[*n].0.as_str()).collect();
-                        let median_names: Vec<&str> = get_medians(&neighbors, prefer_left).iter().map(|n| graph.node_ids[*n].0.as_str()).collect();
                         let m_name = &graph.node_ids[m].0;
+                        let m_root_name = &graph.node_ids[alignment.get_root(m)].0;
                         eprintln!(
-                            "[BK {:?}] border node={} neighbors={:?} medians={:?} r={} conflict_free={} order_ok={} median_candidate={}",
-                            direction, v_name, neighbor_names, median_names, r, conflict_free, order_ok, m_name
+                            "[BK]   -> ALIGNED {}  to {} (root={})",
+                            v_name, m_name, m_root_name
                         );
-                    }
-
-                    if conflict_free && order_ok {
-                        // Align v with m
-                        // In the paper: align[m] = v, root[v] = root[m], align[v] = root[m]
-                        // This creates a chain from m down to v
-
-                        // m now points to v (m aligns with v)
-                        alignment.align.insert(m, v);
-
-                        // v gets m's root
-                        let m_root = alignment.get_root(m);
-                        alignment.root.insert(v, m_root);
-
-                        // v points back to the root (completing the block chain)
-                        alignment.align.insert(v, m_root);
-
-                        // Update boundary
-                        r = m_pos;
-
-                        if bk_trace && graph.border_type.contains_key(&v) {
-                            let v_name = &graph.node_ids[v].0;
-                            let m_name = &graph.node_ids[m].0;
-                            let m_root_name = &graph.node_ids[alignment.get_root(m)].0;
-                            eprintln!(
-                                "[BK {:?}]   -> ALIGNED {}  to {} (root={})",
-                                direction, v_name, m_name, m_root_name
-                            );
-                        }
                     }
                 }
             }
@@ -827,6 +806,7 @@ pub fn vertical_alignment(
 ///
 /// For odd count: returns single true median.
 /// For even count: returns both middle elements, ordered by preference.
+#[cfg(test)]
 fn get_medians(neighbors: &[NodeIndex], prefer_left: bool) -> Vec<NodeIndex> {
     let len = neighbors.len();
     if len == 0 {
@@ -874,7 +854,8 @@ pub fn horizontal_compaction(
     alignment: &BlockAlignment,
     config: &BKConfig,
 ) -> CompactionResult {
-    horizontal_compaction_with_direction(graph, alignment, config, None)
+    let layers = get_layers(graph);
+    horizontal_compaction_with_direction(graph, alignment, config, &layers, None)
 }
 
 /// Horizontal compaction with optional alignment direction for border guard.
@@ -887,14 +868,14 @@ fn horizontal_compaction_with_direction(
     graph: &LayoutGraph,
     alignment: &BlockAlignment,
     config: &BKConfig,
+    layers: &[Vec<NodeIndex>],
     direction: Option<AlignmentDirection>,
 ) -> CompactionResult {
     let mut result = CompactionResult::new();
-    let layers = get_layers(graph);
     let num_nodes = graph.node_ids.len();
 
     // Build block graph with separation constraints
-    let block_graph = build_block_graph(graph, alignment, &layers, config);
+    let block_graph = build_block_graph(graph, alignment, layers, config);
 
     // Two-pass compaction on the block graph
     let mut xs: HashMap<NodeIndex, f64> = HashMap::new();
@@ -933,9 +914,11 @@ fn horizontal_compaction_with_direction(
             if let Some(dir) = direction
                 && let Some(&bt) = graph.border_type.get(&root)
             {
+                // Dagre: reverseSep (right align) protects left borders,
+                // left align protects right borders.
                 let skip = match bt {
-                    super::graph::BorderType::Left => dir.prefers_left(),
-                    super::graph::BorderType::Right => !dir.prefers_left(),
+                    super::graph::BorderType::Left => !dir.prefers_left(),
+                    super::graph::BorderType::Right => dir.prefers_left(),
                 };
                 if skip {
                     continue;
@@ -1151,11 +1134,26 @@ fn compute_all_alignments(
     config: &BKConfig,
 ) -> HashMap<AlignmentDirection, CompactionResult> {
     let mut results = HashMap::new();
+    let base_layers = get_layers_with_order(graph);
 
     for direction in AlignmentDirection::all() {
-        let alignment = vertical_alignment(graph, conflicts, direction);
-        let compaction =
-            horizontal_compaction_with_direction(graph, &alignment, config, Some(direction));
+        let adjusted_layers = adjusted_layers_with_order(&base_layers, direction);
+        let compact_layers = compact_layers(&adjusted_layers);
+        let downward = direction.is_downward();
+        let alignment =
+            vertical_alignment_with_layering(graph, &adjusted_layers, conflicts, downward);
+        let mut compaction = horizontal_compaction_with_direction(
+            graph,
+            &alignment,
+            config,
+            &compact_layers,
+            Some(direction),
+        );
+        if !direction.prefers_left() {
+            for x in compaction.x.values_mut() {
+                *x = -*x;
+            }
+        }
         results.insert(direction, compaction);
     }
 
@@ -1205,26 +1203,22 @@ fn find_bounds(graph: &LayoutGraph, result: &CompactionResult, direction: Direct
 /// This shifts each alignment so they share common boundaries,
 /// making the median more meaningful.
 fn align_to_smallest(
-    graph: &LayoutGraph,
     results: &mut HashMap<AlignmentDirection, CompactionResult>,
     smallest: AlignmentDirection,
-    direction: Direction,
 ) {
     let smallest_result = results.get(&smallest).unwrap();
-    let (target_min, target_max) = find_bounds(graph, smallest_result, direction);
+    let (target_min, target_max) = find_center_bounds(smallest_result);
 
     for (dir, result) in results.iter_mut() {
         if *dir == smallest {
             continue;
         }
 
-        let (result_min, result_max) = find_bounds(graph, result, direction);
-
-        // Determine shift based on alignment direction's horizontal bias
+        let (result_min, result_max) = find_center_bounds(result);
         let shift = if dir.prefers_left() {
-            target_min - result_min // Align left edges
+            target_min - result_min
         } else {
-            target_max - result_max // Align right edges
+            target_max - result_max
         };
 
         // Apply shift to all coordinates
@@ -1232,6 +1226,19 @@ fn align_to_smallest(
             *x += shift;
         }
     }
+}
+
+/// Find the min/max of center coordinates for a compaction result.
+///
+/// This matches dagre's alignCoordinates behavior (center-based alignment).
+fn find_center_bounds(result: &CompactionResult) -> (f64, f64) {
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    for &x in result.x.values() {
+        min_x = min_x.min(x);
+        max_x = max_x.max(x);
+    }
+    (min_x, max_x)
 }
 
 /// Compute final x-coordinates as median of all 4 alignments.
@@ -1308,7 +1315,7 @@ pub fn position_x(graph: &LayoutGraph, config: &BKConfig) -> HashMap<NodeIndex, 
     let smallest = find_smallest_width(graph, &results, config.direction);
 
     // Step 4: Align others to smallest's bounds
-    align_to_smallest(graph, &mut results, smallest, config.direction);
+    align_to_smallest(&mut results, smallest);
 
     // Step 5: Balance (median of all 4)
     balance(graph, &results)

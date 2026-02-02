@@ -244,6 +244,15 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         &edge_labels,
     );
 
+    if std::env::var("MMDFLUX_DEBUG_NODE_POS").is_ok_and(|v| v == "1") {
+        for (id, rect) in &result.nodes {
+            eprintln!(
+                "[dagre_nodes] {} x={:.2} y={:.2} w={:.2} h={:.2}",
+                id.0, rect.x, rect.y, rect.width, rect.height
+            );
+        }
+    }
+
     // --- Phase B: Group nodes into layers ---
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
 
@@ -316,16 +325,38 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     );
 
     // Find dagre bounding box min
-    let dagre_min_x = result
+    let mut dagre_min_x = result
         .nodes
         .values()
         .map(|r| r.x)
         .fold(f64::INFINITY, f64::min);
-    let dagre_min_y = result
+    let mut dagre_min_y = result
         .nodes
         .values()
         .map(|r| r.y)
         .fold(f64::INFINITY, f64::min);
+
+    if !result.subgraph_bounds.is_empty() {
+        let sg_min_x = result
+            .subgraph_bounds
+            .values()
+            .map(|r| r.x)
+            .fold(f64::INFINITY, f64::min);
+        let sg_min_y = result
+            .subgraph_bounds
+            .values()
+            .map(|r| r.y)
+            .fold(f64::INFINITY, f64::min);
+        dagre_min_x = dagre_min_x.min(sg_min_x);
+        dagre_min_y = dagre_min_y.min(sg_min_y);
+    }
+
+    if std::env::var("MMDFLUX_DEBUG_MIN_X").is_ok_and(|v| v == "1") {
+        eprintln!(
+            "[min_x] dagre_min_x={:.2} dagre_min_y={:.2}",
+            dagre_min_x, dagre_min_y
+        );
+    }
 
     // Scale each node's center, then compute top-left.
     // First pass: compute raw centers and find the maximum overhang
@@ -1027,6 +1058,41 @@ fn dagre_subgraph_bounds_to_draw(
         );
     }
 
+    // Expand parent bounds to contain child bounds (inside-out).
+    let mut ids: Vec<String> = bounds.keys().cloned().collect();
+    ids.sort_by_key(|id| bounds.get(id).map(|b| b.depth).unwrap_or(0));
+    ids.reverse();
+    for id in ids {
+        let parent_id = subgraphs
+            .get(&id)
+            .and_then(|sg| sg.parent.as_ref())
+            .cloned();
+        let (Some(parent_id), Some(child_bounds)) = (parent_id, bounds.get(&id).cloned()) else {
+            continue;
+        };
+        let Some(parent_bounds) = bounds.get_mut(&parent_id) else {
+            continue;
+        };
+
+        let pad = 1usize;
+        let child_left = child_bounds.x.saturating_sub(pad);
+        let child_top = child_bounds.y.saturating_sub(pad);
+        let child_right = child_bounds.x + child_bounds.width + pad;
+        let child_bottom = child_bounds.y + child_bounds.height + pad;
+        let parent_right = parent_bounds.x + parent_bounds.width;
+        let parent_bottom = parent_bounds.y + parent_bounds.height;
+
+        let new_left = parent_bounds.x.min(child_left);
+        let new_top = parent_bounds.y.min(child_top);
+        let new_right = parent_right.max(child_right);
+        let new_bottom = parent_bottom.max(child_bottom);
+
+        parent_bounds.x = new_left;
+        parent_bounds.y = new_top;
+        parent_bounds.width = new_right.saturating_sub(new_left);
+        parent_bounds.height = new_bottom.saturating_sub(new_top);
+    }
+
     bounds
 }
 
@@ -1059,6 +1125,13 @@ fn debug_compare_subgraph_bounds(
         let dagre_rect = dagre_bounds.get(&id);
         if computed_bounds.is_none() && dagre_rect.is_none() {
             continue;
+        }
+
+        if let Some(rect) = dagre_rect {
+            eprintln!(
+                "[subgraph_bounds] raw {} = ({:.2}, {:.2}, {:.2}, {:.2})",
+                id, rect.x, rect.y, rect.width, rect.height
+            );
         }
 
         let dagre_draw = dagre_rect.map(|rect| {

@@ -60,22 +60,26 @@ pub fn run(lg: &mut LayoutGraph) {
     let n = lg.node_count();
     let nesting_weight = (n * 2) as f64;
 
-    // For each compound node, create border top/bottom and nesting edges
+    // Create border top/bottom nodes for each compound node (ref: nesting-graph.js:52-55)
     let compound_indices: Vec<usize> = lg.compound_nodes.iter().copied().collect();
     for &compound_idx in &compound_indices {
         let compound_id = lg.node_ids[compound_idx].0.clone();
 
-        // Create border top node
         let top_id = NodeId(format!("_bt_{}", compound_id));
         let top_idx = lg.add_nesting_node(top_id);
         lg.border_top.insert(compound_idx, top_idx);
 
-        // Create border bottom node
         let bot_id = NodeId(format!("_bb_{}", compound_id));
         let bot_idx = lg.add_nesting_node(bot_id);
         lg.border_bottom.insert(compound_idx, bot_idx);
+    }
 
-        // Find children of this compound node
+    // For each compound node, add nesting edges using child border nodes when available
+    // (ref: nesting-graph.js:56-70)
+    for &compound_idx in &compound_indices {
+        let top_idx = lg.border_top[&compound_idx];
+        let bot_idx = lg.border_bottom[&compound_idx];
+
         let children: Vec<usize> = lg
             .parents
             .iter()
@@ -84,18 +88,24 @@ pub fn run(lg: &mut LayoutGraph) {
             .map(|(i, _)| i)
             .collect();
 
-        // Add nesting edges: top -> child, child -> bottom
-        // Depth-dependent minlens (ref: nesting-graph.js:56-67)
         for child in children {
-            let child_is_compound = lg.compound_nodes.contains(&child);
-            let minlen = if child_is_compound {
-                1 // Compound children always minlen=1
+            let (child_top, child_bottom, weight) = if let (Some(&ct), Some(&cb)) =
+                (lg.border_top.get(&child), lg.border_bottom.get(&child))
+            {
+                (ct, cb, nesting_weight)
             } else {
-                height - depths[&compound_idx] + 1 // Leaf: depth-dependent
+                (child, child, nesting_weight * 2.0)
             };
-            let e1 = lg.add_nesting_edge_with_minlen(top_idx, child, nesting_weight, minlen);
+
+            let minlen = if child_top != child_bottom {
+                1
+            } else {
+                height - depths[&compound_idx] + 1
+            };
+
+            let e1 = lg.add_nesting_edge_with_minlen(top_idx, child_top, weight, minlen);
             lg.nesting_edges.insert(e1);
-            let e2 = lg.add_nesting_edge_with_minlen(child, bot_idx, nesting_weight, minlen);
+            let e2 = lg.add_nesting_edge_with_minlen(child_bottom, bot_idx, weight, minlen);
             lg.nesting_edges.insert(e2);
         }
     }
@@ -166,6 +176,7 @@ pub fn insert_title_nodes(lg: &mut LayoutGraph) {
         lg.ranks[title_idx] = title_rank;
         lg.parents[title_idx] = Some(compound_idx);
         lg.border_title.insert(compound_idx, title_idx);
+        lg.position_excluded_nodes.insert(title_idx);
 
         // Add edge title → border_top so the title participates in
         // ordering and positioning (without an edge it would float freely)

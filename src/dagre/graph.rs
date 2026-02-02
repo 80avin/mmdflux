@@ -157,6 +157,9 @@ pub(crate) struct LayoutGraph {
     /// Reversed edges (for cycle removal).
     pub reversed_edges: BTreeSet<usize>,
 
+    /// Original edge endpoints, indexed by original edge index.
+    pub original_edge_endpoints: Vec<(usize, usize)>,
+
     /// Rank (layer) assigned to each node.
     pub ranks: Vec<i32>,
 
@@ -278,6 +281,13 @@ impl LayoutGraph {
         let n = node_ids.len();
         let edge_count = edges.len();
 
+        let mut original_edge_endpoints = vec![(0usize, 0usize); edge_count];
+        for &(from_idx, to_idx, orig_idx) in &edges {
+            if let Some(slot) = original_edge_endpoints.get_mut(orig_idx) {
+                *slot = (from_idx, to_idx);
+            }
+        }
+
         let edge_weights = vec![1.0; edge_count];
         let mut original_has_predecessor = vec![false; n];
         for &(_, to_idx, _) in &edges {
@@ -308,6 +318,7 @@ impl LayoutGraph {
             edges,
             node_index,
             reversed_edges: BTreeSet::new(),
+            original_edge_endpoints,
             ranks: vec![0; n],
             order: (0..n).collect(),
             positions: vec![Point::default(); n],

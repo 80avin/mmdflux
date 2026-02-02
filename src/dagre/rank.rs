@@ -85,7 +85,16 @@ pub fn longest_path(graph: &mut LayoutGraph) {
 
 /// Normalize ranks so minimum is 0.
 pub fn normalize(graph: &mut LayoutGraph) {
-    if let Some(&min) = graph.ranks.iter().min() {
+    let min = graph
+        .ranks
+        .iter()
+        .enumerate()
+        .filter(|(idx, _)| graph.is_position_node(*idx))
+        .map(|(_, &rank)| rank)
+        .min()
+        .or_else(|| graph.ranks.iter().min().copied());
+
+    if let Some(min) = min {
         for rank in &mut graph.ranks {
             *rank -= min;
         }

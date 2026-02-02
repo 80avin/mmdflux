@@ -204,6 +204,8 @@ pub fn run(graph: &mut LayoutGraph) {
             if debug_order() {
                 eprintln!("[order] iter {i}: NEW BEST cc={cc}");
             }
+        } else if cc == best_cc {
+            best_order = graph.order.clone();
         }
 
         i += 1;
