@@ -36,7 +36,13 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
             let lca_label = lca
                 .map(|l| graph.node_ids[l].0.clone())
                 .unwrap_or_else(|| "None".to_string());
-            let path_ids: Vec<String> = path.iter().map(|&p| graph.node_ids[p].0.clone()).collect();
+            let path_ids: Vec<String> = path
+                .iter()
+                .map(|p| {
+                    p.map(|idx| graph.node_ids[idx].0.clone())
+                        .unwrap_or_else(|| "None".to_string())
+                })
+                .collect();
             eprintln!(
                 "[dummy_parents] edge {} src={} tgt={} lca={} path={:?}",
                 chain.edge_index, src_id, tgt_id, lca_label, path_ids
@@ -45,8 +51,7 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
 
         let mut path_idx = 0usize;
         let mut path_v = path[path_idx];
-        // When lca is None (root-level), skip ascending entirely
-        let mut ascending = lca.is_some();
+        let mut ascending = true;
 
         for dummy_id in &chain.dummy_ids {
             let Some(&dummy_idx) = graph.node_index.get(dummy_id) else {
@@ -55,33 +60,40 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
             let dummy_rank = graph.ranks[dummy_idx];
 
             if ascending {
-                while Some(path_v) != lca && max_rank(graph, path_v) < dummy_rank {
+                // Advance through ascending (source-side) path entries.
+                // path_v is Option<usize>: Some(node) for compound ancestors,
+                // None for the root sentinel. Mirrors dagre's while loop where
+                // pathV !== lca is checked first (short-circuits when both are undefined).
+                while path_v != lca && path_v.map_or(false, |pv| max_rank(graph, pv) < dummy_rank) {
                     path_idx += 1;
                     if path_idx >= path.len() {
                         break;
                     }
                     path_v = path[path_idx];
                 }
-                if Some(path_v) == lca {
+                if path_v == lca {
                     ascending = false;
                 }
             }
 
             if !ascending {
-                while path_idx + 1 < path.len() && min_rank(graph, path[path_idx + 1]) <= dummy_rank
+                while path_idx + 1 < path.len()
+                    && path[path_idx + 1].map_or(false, |pv| min_rank(graph, pv) <= dummy_rank)
                 {
                     path_idx += 1;
                 }
                 path_v = path[path_idx];
             }
 
-            graph.parents[dummy_idx] = Some(path_v);
+            graph.parents[dummy_idx] = path_v;
             if debug {
                 let dummy_name = &graph.node_ids[dummy_idx].0;
-                let parent_name = &graph.node_ids[path_v].0;
+                let parent_label = path_v
+                    .map(|pv| graph.node_ids[pv].0.clone())
+                    .unwrap_or_else(|| "None".to_string());
                 eprintln!(
                     "[dummy_parents]   dummy {} rank {} -> {}",
-                    dummy_name, dummy_rank, parent_name
+                    dummy_name, dummy_rank, parent_label
                 );
             }
         }
@@ -121,24 +133,35 @@ fn compute_postorder(graph: &LayoutGraph) -> Vec<PostorderRange> {
     result
 }
 
+/// Find the path from v to w through their lowest common ancestor (LCA).
+///
+/// Returns `(path, lca)` where:
+/// - `path` is a `Vec<Option<usize>>`: `Some(node)` for compound ancestors,
+///   `None` for the root sentinel (matching dagre's `undefined` in the path array).
+/// - `lca` is `Some(node)` if v and w share a compound ancestor, or `None` if
+///   the LCA is the implicit root (no shared compound parent).
+///
+/// Mirrors dagre's `findPath()` exactly: the do-while traverses up from v,
+/// pushing each parent (including `undefined`/`None`) until the LCA is found.
+/// The w-side path is then appended in reverse.
 fn find_path(
     graph: &LayoutGraph,
     postorder: &[PostorderRange],
     v: usize,
     w: usize,
-) -> (Vec<usize>, Option<usize>) {
+) -> (Vec<Option<usize>>, Option<usize>) {
     let low = postorder[v].low.min(postorder[w].low);
     let lim = postorder[v].lim.max(postorder[w].lim);
 
     // Traverse up from v to find the LCA.
-    // Mirrors dagre's do-while: g.parent(v) can be undefined (None),
-    // which is a valid LCA representing the root level.
-    let mut v_path: Vec<usize> = Vec::new();
+    // Mirrors dagre's do-while: push parent first, then check.
+    // g.parent(v) can be undefined (None), which is a valid LCA.
+    let mut v_path: Vec<Option<usize>> = Vec::new();
     let mut parent_opt = graph.parents[v];
     let lca: Option<usize> = loop {
+        v_path.push(parent_opt);
         match parent_opt {
             Some(parent) => {
-                v_path.push(parent);
                 let range = &postorder[parent];
                 if !(range.low > low || lim > range.lim) {
                     break Some(parent);
@@ -146,41 +169,33 @@ fn find_path(
                 parent_opt = graph.parents[parent];
             }
             None => {
-                // Reached root without finding an ancestor that spans both —
-                // LCA is the implicit root (None).
+                // Reached root — LCA is the implicit root (None).
                 break None;
             }
         }
     };
 
     // Traverse from w up to the LCA.
-    let mut w_path: Vec<usize> = Vec::new();
+    let mut w_path: Vec<Option<usize>> = Vec::new();
     let mut cur = w;
     loop {
-        match graph.parents[cur] {
-            Some(p) => {
-                if Some(p) == lca {
-                    break;
-                }
-                w_path.push(p);
-                cur = p;
+        let p = graph.parents[cur];
+        if p == lca {
+            break;
+        }
+        match p {
+            Some(parent) => {
+                w_path.push(Some(parent));
+                cur = parent;
             }
             None => {
-                // Reached root; if lca is also None, we're done
+                // Reached root; lca must also be None, so we're done.
                 break;
             }
         }
     }
 
     w_path.reverse();
-
-    // For root-level LCA, v_path may contain ancestors that aren't the LCA itself,
-    // so we only keep the w_path (descending from root into the target's hierarchy).
-    if lca.is_none() {
-        // v_path entries aren't useful (they were traversed but no LCA compound was found)
-        return (w_path, None);
-    }
-
     v_path.extend(w_path);
     (v_path, lca)
 }
@@ -353,6 +368,119 @@ mod tests {
             has_us_west_parent,
             "E→C chain should have a dummy parented to us-west, got: {:?}",
             e_to_c_parents
+        );
+    }
+
+    /// Build a LayoutGraph matching the multi_subgraph fixture and run
+    /// the pipeline up through parent_dummy_chains.
+    fn build_multi_subgraph_after_parent_dummy_chains() -> LayoutGraph {
+        // multi_subgraph.mmd:
+        //   graph LR
+        //   subgraph sg1[Frontend]
+        //   A[UI] --> B[API]
+        //   end
+        //   subgraph sg2[Backend]
+        //   C[Server] --> D[DB]
+        //   end
+        //   B --> C
+        let mut g: DiGraph<(usize, usize)> = DiGraph::new();
+
+        // Nodes in edge-first order
+        g.add_node("A", (6, 3)); // UI
+        g.add_node("B", (7, 3)); // API
+        g.add_node("C", (10, 3)); // Server
+        g.add_node("D", (6, 3)); // DB
+
+        // Subgraph compound nodes
+        g.add_node("sg1", (0, 0));
+        g.add_node("sg2", (0, 0));
+
+        // Titles
+        g.set_has_title("sg1");
+        g.set_has_title("sg2");
+
+        // Parent relationships
+        g.set_parent("A", "sg1");
+        g.set_parent("B", "sg1");
+        g.set_parent("C", "sg2");
+        g.set_parent("D", "sg2");
+
+        // Edges: A→B (0), C→D (1), B→C (2)
+        g.add_edge("A", "B");
+        g.add_edge("C", "D");
+        g.add_edge("B", "C");
+
+        let config = LayoutConfig {
+            direction: crate::dagre::Direction::LeftRight,
+            ..Default::default()
+        };
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, dims| (dims.0 as f64, dims.1 as f64));
+
+        dagre::extract_self_edges(&mut lg);
+        crate::dagre::acyclic::run(&mut lg);
+        dagre::make_space_for_edge_labels(&mut lg, &HashMap::new());
+        crate::dagre::nesting::run(&mut lg);
+        rank::run(&mut lg, &config);
+        rank::remove_empty_ranks(&mut lg);
+        crate::dagre::nesting::cleanup(&mut lg);
+        rank::normalize(&mut lg);
+        crate::dagre::nesting::insert_title_nodes(&mut lg);
+        rank::normalize(&mut lg);
+        crate::dagre::nesting::assign_rank_minmax(&mut lg);
+        normalize::run(&mut lg, &HashMap::new());
+        run(&mut lg);
+
+        lg
+    }
+
+    #[test]
+    fn assigns_parents_for_cross_subgraph_chains() {
+        let lg = build_multi_subgraph_after_parent_dummy_chains();
+
+        // Edge 2: B→C crosses from sg1 to sg2 (top-level sibling subgraphs).
+        // Dagre's path for this case is [sg1, undefined, sg2].
+        // Source-side dummies within sg1's rank span should be parented to sg1.
+        // Target-side dummies within sg2's rank span should be parented to sg2.
+        let mut b_to_c_parents: Vec<(i32, Option<String>)> = Vec::new();
+        for chain in &lg.dummy_chains {
+            if chain.edge_index != 2 {
+                continue;
+            }
+            for dummy_id in &chain.dummy_ids {
+                let &dummy_idx = lg.node_index.get(dummy_id).unwrap();
+                let rank = lg.ranks[dummy_idx];
+                let parent_name = lg.parents[dummy_idx].map(|p| lg.node_ids[p].0.clone());
+                b_to_c_parents.push((rank, parent_name));
+            }
+        }
+        b_to_c_parents.sort_by_key(|(r, _)| *r);
+
+        // There should be dummies for this edge (B→C spans multiple ranks after make_space)
+        assert!(
+            !b_to_c_parents.is_empty(),
+            "B→C edge should have dummy nodes"
+        );
+
+        // At least one dummy should be parented to sg1 (source side) or sg2 (target side).
+        // With the v_path bug, ALL dummies only get sg2 or None — sg1 never appears.
+        let has_sg1 = b_to_c_parents
+            .iter()
+            .any(|(_, p)| p.as_deref() == Some("sg1"));
+        let has_sg2 = b_to_c_parents
+            .iter()
+            .any(|(_, p)| p.as_deref() == Some("sg2"));
+        assert!(
+            has_sg1 || has_sg2,
+            "B→C dummies should be parented to sg1 or sg2, got: {:?}",
+            b_to_c_parents
+        );
+
+        // The specific dagre parity check: source-side dummies should see sg1
+        assert!(
+            has_sg1,
+            "B→C chain should have a dummy parented to sg1 (source subgraph), got: {:?}",
+            b_to_c_parents
         );
     }
 }

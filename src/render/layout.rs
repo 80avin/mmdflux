@@ -166,7 +166,14 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Add subgraph compound nodes in reverse parse order (Mermaid parity).
     // subgraph_order is post-order (inner-first); reversing gives outer-first,
     // matching Mermaid's getData() insertion order.
-    let subgraph_keys: Vec<&String> = diagram.subgraph_order.iter().rev().collect();
+    // Falls back to sorted keys for manually constructed Diagrams without subgraph_order.
+    let subgraph_keys: Vec<&String> = if !diagram.subgraph_order.is_empty() {
+        diagram.subgraph_order.iter().rev().collect()
+    } else {
+        let mut keys: Vec<&String> = diagram.subgraphs.keys().collect();
+        keys.sort();
+        keys
+    };
     for sg_id in &subgraph_keys {
         let sg = &diagram.subgraphs[*sg_id];
         dgraph.add_node(sg_id.as_str(), (0, 0));
