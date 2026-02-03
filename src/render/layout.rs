@@ -1257,8 +1257,9 @@ fn debug_subgraph_gaps(
                 continue;
             }
             if let Some(child_bounds) = subgraph_bounds.get(member) {
-                let child_bottom =
-                    child_bounds.y.saturating_add(child_bounds.height.saturating_sub(1));
+                let child_bottom = child_bounds
+                    .y
+                    .saturating_add(child_bounds.height.saturating_sub(1));
                 min_y = Some(min_y.map_or(child_bounds.y, |cur| cur.min(child_bounds.y)));
                 max_y = Some(max_y.map_or(child_bottom, |cur| cur.max(child_bottom)));
             }
@@ -1269,9 +1270,7 @@ fn debug_subgraph_gaps(
         };
 
         let content_top = bounds.y.saturating_add(1); // inside top border row
-        let content_bottom = bounds
-            .y
-            .saturating_add(bounds.height.saturating_sub(2)); // inside bottom border row
+        let content_bottom = bounds.y.saturating_add(bounds.height.saturating_sub(2)); // inside bottom border row
         let top_gap = min_y.saturating_sub(content_top);
         let bottom_gap = content_bottom.saturating_sub(max_y);
 
