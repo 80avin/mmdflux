@@ -156,25 +156,20 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
             continue;
         }
 
-        // Compute bounding box from ALL border node positions.
-        // Using all border nodes (left + right + top + bottom) for both axes
-        // works correctly for all layout directions without direction-specific
-        // logic. In TB, left/right span x and top/bottom span y; in LR,
-        // left/right span y and top/bottom span x.
-        let top_idx = lg.border_top.get(&compound_idx).copied();
-        let bot_idx = lg.border_bottom.get(&compound_idx).copied();
-
-        let all_border_indices = left
-            .iter()
-            .chain(right.iter())
-            .chain(top_idx.iter())
-            .chain(bot_idx.iter());
-
+        // Compute bounding box from left/right border nodes only.
+        //
+        // Left/right borders span all ranks and together define the full rectangle
+        // in both x and y dimensions for any layout direction (TD, LR, etc.).
+        // We intentionally exclude border_top and border_bottom because they can
+        // be mispositioned due to BK alignment issues (they form their own blocks
+        // and may end up outside the left/right border range).
+        //
+        // This matches dagre.js behavior where width comes from left/right borders.
         let mut x_min = f64::INFINITY;
         let mut x_max = f64::NEG_INFINITY;
         let mut y_min = f64::INFINITY;
         let mut y_max = f64::NEG_INFINITY;
-        for &idx in all_border_indices {
+        for &idx in left.iter().chain(right.iter()) {
             let pos = lg.positions[idx];
             x_min = x_min.min(pos.x);
             x_max = x_max.max(pos.x);
@@ -363,6 +358,62 @@ mod tests {
             (b.height - 90.0).abs() < 0.001,
             "height should be 90.0, got {}",
             b.height
+        );
+    }
+
+    #[test]
+    fn test_x_bounds_from_left_right_only() {
+        // dagre.js computes x bounds from left/right borders only.
+        // border_top and border_bottom x positions should NOT affect x bounds.
+        // This matches dagre.js removeBorderNodes which uses:
+        //   node.width = Math.abs(r.x - l.x)
+        //   node.x = l.x + node.width / 2
+        let mut lg = build_ranked_compound_graph();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+        add_segments(&mut lg);
+
+        // Set left borders at x=10, right borders at x=100
+        for &idx in lg.border_left.get(&sg1_idx).unwrap() {
+            lg.positions[idx] = super::super::types::Point {
+                x: 10.0,
+                y: lg.ranks[idx] as f64 * 50.0,
+            };
+        }
+        for &idx in lg.border_right.get(&sg1_idx).unwrap() {
+            lg.positions[idx] = super::super::types::Point {
+                x: 100.0,
+                y: lg.ranks[idx] as f64 * 50.0,
+            };
+        }
+
+        // Place border_top and border_bottom at x positions OUTSIDE the left/right range
+        // This simulates the bug where these nodes end up mispositioned
+        if let Some(&top) = lg.border_top.get(&sg1_idx) {
+            lg.positions[top] = super::super::types::Point {
+                x: 200.0, // Far right of the right border
+                y: 0.0,
+            };
+        }
+        if let Some(&bot) = lg.border_bottom.get(&sg1_idx) {
+            lg.positions[bot] = super::super::types::Point {
+                x: 150.0, // Also outside the left/right range
+                y: 100.0,
+            };
+        }
+
+        let bounds = remove_nodes(&mut lg);
+        let b = &bounds["sg1"];
+
+        // X bounds should come from left/right only (10..100), not top/bottom
+        assert!(
+            (b.x - 10.0).abs() < 0.001,
+            "x should be 10.0 (from left border), got {}",
+            b.x
+        );
+        assert!(
+            (b.width - 90.0).abs() < 0.001,
+            "width should be 90.0 (100-10 from left/right), got {}",
+            b.width
         );
     }
 }
