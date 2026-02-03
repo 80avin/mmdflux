@@ -483,6 +483,126 @@ fn position_self_edges(lg: &LayoutGraph, config: &LayoutConfig) -> Vec<SelfEdgeL
         .collect()
 }
 
+/// Translate all layout coordinates so the minimum corner aligns with margins.
+///
+/// Matches dagre.js `translateGraph`: computes min/max across nodes, edge points,
+/// subgraph bounds, waypoints, and label positions, then shifts everything so the
+/// minimum is at (margin_x, margin_y).
+fn translate_layout_result(result: &mut LayoutResult, margin_x: f64, margin_y: f64) {
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+
+    macro_rules! update_rect {
+        ($x:expr, $y:expr, $w:expr, $h:expr) => {
+            min_x = min_x.min($x);
+            max_x = max_x.max($x + $w);
+            min_y = min_y.min($y);
+            max_y = max_y.max($y + $h);
+        };
+    }
+
+    macro_rules! update_point {
+        ($x:expr, $y:expr) => {
+            min_x = min_x.min($x);
+            max_x = max_x.max($x);
+            min_y = min_y.min($y);
+            max_y = max_y.max($y);
+        };
+    }
+
+    // Nodes
+    for rect in result.nodes.values() {
+        update_rect!(rect.x, rect.y, rect.width, rect.height);
+    }
+
+    // Edge points
+    for edge in &result.edges {
+        for p in &edge.points {
+            update_point!(p.x, p.y);
+        }
+    }
+
+    // Subgraph bounds
+    for rect in result.subgraph_bounds.values() {
+        update_rect!(rect.x, rect.y, rect.width, rect.height);
+    }
+
+    // Edge waypoints
+    for wps in result.edge_waypoints.values() {
+        for wp in wps {
+            update_point!(wp.point.x, wp.point.y);
+        }
+    }
+
+    // Label positions
+    for lp in result.label_positions.values() {
+        update_point!(lp.point.x, lp.point.y);
+    }
+
+    // Self-edge points
+    for se in &result.self_edges {
+        for p in &se.points {
+            update_point!(p.x, p.y);
+        }
+    }
+
+    if min_x == f64::INFINITY {
+        return; // empty result
+    }
+
+    // Shift = margin - min (dagre.js: minX -= marginX, then subtract minX)
+    let dx = margin_x - min_x;
+    let dy = margin_y - min_y;
+
+    // Shift nodes
+    for rect in result.nodes.values_mut() {
+        rect.x += dx;
+        rect.y += dy;
+    }
+
+    // Shift edge points
+    for edge in &mut result.edges {
+        for p in &mut edge.points {
+            p.x += dx;
+            p.y += dy;
+        }
+    }
+
+    // Shift subgraph bounds
+    for rect in result.subgraph_bounds.values_mut() {
+        rect.x += dx;
+        rect.y += dy;
+    }
+
+    // Shift edge waypoints
+    for wps in result.edge_waypoints.values_mut() {
+        for wp in wps {
+            wp.point.x += dx;
+            wp.point.y += dy;
+        }
+    }
+
+    // Shift label positions
+    for lp in result.label_positions.values_mut() {
+        lp.point.x += dx;
+        lp.point.y += dy;
+    }
+
+    // Shift self-edge points
+    for se in &mut result.self_edges {
+        for p in &mut se.points {
+            p.x += dx;
+            p.y += dy;
+        }
+    }
+
+    // Update dimensions: dagre.js uses maxX - minX + marginX
+    result.width = max_x - min_x + margin_x;
+    result.height = max_y - min_y + margin_y;
+}
+
 /// Main entry point for layout computation.
 ///
 /// Takes a directed graph, configuration options, and a function to get node dimensions.
@@ -625,8 +745,7 @@ where
         }
     }
 
-    // Build result
-    let (width, height) = position::calculate_dimensions(&lg, &config);
+    // Build result (width/height set by translate_layout_result below)
     let reversed_edges = reversed_orig_edges;
 
     // Only include real nodes (not dummies) in the output
@@ -741,17 +860,21 @@ where
     let mut edges: Vec<EdgeLayout> = edges_by_orig_idx.into_values().collect();
     edges.sort_by_key(|e| e.index);
 
-    let result = LayoutResult {
+    let mut result = LayoutResult {
         nodes,
         edges,
         reversed_edges,
-        width,
-        height,
+        width: 0.0,
+        height: 0.0,
         edge_waypoints,
         label_positions,
         subgraph_bounds,
         self_edges: self_edge_layouts,
     };
+
+    // Post-layout translation: shift all coordinates so min corner = (margin, margin).
+    // Matches dagre.js translateGraph (layout.js:215-264).
+    translate_layout_result(&mut result, config.margin, config.margin);
 
     debug_dump_layout_result(&result, lg.original_edge_count);
 
@@ -1384,6 +1507,150 @@ mod tests {
         assert!(
             !result.reversed_edges.contains(&1),
             "self-edge should not be in reversed_edges"
+        );
+    }
+
+    #[test]
+    fn test_translate_layout_result_uses_edge_points() {
+        // Edge point at x=-5 extends left of node at x=10.
+        // Translation should use the edge point as the min, not the node.
+        let mut result = LayoutResult {
+            nodes: HashMap::from([(
+                "A".into(),
+                Rect {
+                    x: 10.0,
+                    y: 10.0,
+                    width: 10.0,
+                    height: 10.0,
+                },
+            )]),
+            edges: vec![EdgeLayout {
+                from: "A".into(),
+                to: "A".into(),
+                points: vec![Point { x: -5.0, y: 12.0 }],
+                index: 0,
+            }],
+            reversed_edges: vec![],
+            width: 0.0,
+            height: 0.0,
+            edge_waypoints: HashMap::new(),
+            label_positions: HashMap::new(),
+            subgraph_bounds: HashMap::new(),
+            self_edges: vec![],
+        };
+
+        translate_layout_result(&mut result, 10.0, 10.0);
+
+        // Min X is -5 (from edge point). Shift = -5 - 10 = -15. All coords += 15.
+        // Edge point: -5 + 15 = 10
+        assert!(
+            (result.edges[0].points[0].x - 10.0).abs() < 0.001,
+            "edge point x should be 10.0 (margin), got {}",
+            result.edges[0].points[0].x
+        );
+        // Node: 10 + 15 = 25
+        let rect = result.nodes.get(&"A".into()).unwrap();
+        assert!(
+            (rect.x - 25.0).abs() < 0.001,
+            "node x should be 25.0, got {}",
+            rect.x
+        );
+    }
+
+    #[test]
+    fn test_translate_layout_result_shifts_all_fields() {
+        use super::normalize::WaypointWithRank;
+
+        let mut result = LayoutResult {
+            nodes: HashMap::from([(
+                "A".into(),
+                Rect {
+                    x: 5.0,
+                    y: 5.0,
+                    width: 10.0,
+                    height: 10.0,
+                },
+            )]),
+            edges: vec![EdgeLayout {
+                from: "A".into(),
+                to: "A".into(),
+                points: vec![Point { x: 5.0, y: 5.0 }, Point { x: 20.0, y: 20.0 }],
+                index: 0,
+            }],
+            reversed_edges: vec![],
+            width: 0.0,
+            height: 0.0,
+            edge_waypoints: HashMap::from([(
+                0,
+                vec![WaypointWithRank {
+                    point: Point { x: 12.0, y: 12.0 },
+                    rank: 1,
+                }],
+            )]),
+            label_positions: HashMap::from([(
+                0,
+                WaypointWithRank {
+                    point: Point { x: 12.0, y: 12.0 },
+                    rank: 1,
+                },
+            )]),
+            subgraph_bounds: HashMap::from([(
+                "sg1".to_string(),
+                Rect {
+                    x: 3.0,
+                    y: 3.0,
+                    width: 20.0,
+                    height: 20.0,
+                },
+            )]),
+            self_edges: vec![],
+        };
+
+        translate_layout_result(&mut result, 10.0, 10.0);
+
+        // Min X = 3 (subgraph), Min Y = 3 (subgraph). Shift = 3 - 10 = -7.
+        // All coords += 7.
+        let sg = result.subgraph_bounds.get("sg1").unwrap();
+        assert!(
+            (sg.x - 10.0).abs() < 0.001,
+            "subgraph x should be 10.0, got {}",
+            sg.x
+        );
+        assert!(
+            (sg.y - 10.0).abs() < 0.001,
+            "subgraph y should be 10.0, got {}",
+            sg.y
+        );
+
+        // Edge waypoints should be shifted
+        let wp = &result.edge_waypoints[&0][0];
+        assert!(
+            (wp.point.x - 19.0).abs() < 0.001,
+            "waypoint x should be 19.0, got {}",
+            wp.point.x
+        );
+
+        // Label position should be shifted
+        let lp = &result.label_positions[&0];
+        assert!(
+            (lp.point.x - 19.0).abs() < 0.001,
+            "label x should be 19.0, got {}",
+            lp.point.x
+        );
+
+        // Width/height should be set
+        // maxX = 20+10 = 30 (node right edge) shifted: 37. maxY = 20+10 = 30 shifted: 37.
+        // Actually: maxX from node = 5+10=15, edge point=20, subgraph=3+20=23. Max=23, shifted=30.
+        // width = maxX - minX + marginX = 23 - 3 + 10 = 30
+        assert!(
+            result.width > 0.0,
+            "width should be positive, got {}",
+            result.width
+        );
+        assert!(
+            result.height > 0.0,
+            "height should be positive, got {}",
+            result.height
         );
     }
 }

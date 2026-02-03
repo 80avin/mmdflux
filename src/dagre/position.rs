@@ -160,28 +160,6 @@ fn reverse_positions(graph: &mut LayoutGraph, config: &LayoutConfig) {
     }
 }
 
-/// Calculate the total layout dimensions.
-pub fn calculate_dimensions(graph: &LayoutGraph, config: &LayoutConfig) -> (f64, f64) {
-    if graph.node_ids.is_empty() {
-        return (config.margin * 2.0, config.margin * 2.0);
-    }
-
-    let max_x = graph
-        .positions
-        .iter()
-        .zip(graph.dimensions.iter())
-        .map(|(p, (w, _))| p.x + w)
-        .fold(0.0, f64::max);
-    let max_y = graph
-        .positions
-        .iter()
-        .zip(graph.dimensions.iter())
-        .map(|(p, (_, h))| p.y + h)
-        .fold(0.0, f64::max);
-
-    (max_x + config.margin, max_y + config.margin)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -357,24 +335,5 @@ mod tests {
 
         assert_eq!(lg.positions[sg_idx], Point::default());
         assert_ne!(lg.positions[a_idx], Point::default());
-    }
-
-    #[test]
-    fn test_calculate_dimensions() {
-        let config = LayoutConfig {
-            direction: Direction::TopBottom,
-            node_sep: 10.0,
-            rank_sep: 20.0,
-            margin: 5.0,
-            ..Default::default()
-        };
-
-        let lg = run_full_layout(&[("A", 100.0, 50.0)], &[], &config);
-
-        let (width, height) = calculate_dimensions(&lg, &config);
-
-        // Should be margin + node + margin
-        assert!((width - 110.0).abs() < 0.01); // 5 + 100 + 5
-        assert!((height - 60.0).abs() < 0.01); // 5 + 50 + 5
     }
 }
