@@ -340,7 +340,7 @@ fn consume_unsortable_entries(
         if entry.i <= *vs_index {
             let entry = unsortable.pop().unwrap();
             vs.extend(&entry.vs);
-            *vs_index += entry.vs.len();
+            *vs_index += 1; // dagre increments by 1, not vs.len()
         } else {
             break;
         }
