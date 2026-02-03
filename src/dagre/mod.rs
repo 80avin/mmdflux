@@ -943,9 +943,11 @@ where
         }
     }
 
-    // Build rank-to-position mapping for waypoint transformation.
-    // Includes all position nodes (user nodes + border nodes) so that waypoints
-    // at any rank can be transformed to draw coordinates correctly.
+    // Build rank-to-position mapping.
+    // Contains user nodes and border nodes (position nodes), excluding dummies.
+    // Note: The render layer now computes layer_starts from node_bounds + node_ranks,
+    // so this mapping is retained for potential future use but not currently needed
+    // for waypoint transformation.
     let is_vertical = config.direction.is_vertical();
     let rank_to_position: HashMap<i32, (f64, f64)> = lg
         .node_ids
@@ -970,14 +972,16 @@ where
             acc
         });
 
-    // Build node_ranks mapping for user nodes (excluding dummies and subgraphs).
+    // Build node_ranks mapping for user nodes only (excluding dummies and compounds).
     // This allows the render layer to compute layer_starts from actual node bounds.
+    // Compounds are excluded because they don't have rendered bounds in node_bounds;
+    // including them would cause waypoint drift when compound bounds are surfaced.
     let node_ranks: HashMap<NodeId, i32> = lg
         .node_ids
         .iter()
         .enumerate()
         .take(original_node_count)
-        .filter(|&(i, _)| !lg.is_dummy_index(i))
+        .filter(|&(i, _)| !lg.is_dummy_index(i) && !lg.compound_nodes.contains(&i))
         .map(|(i, id)| (id.clone(), lg.ranks[i]))
         .collect();
 
