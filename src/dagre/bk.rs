@@ -1105,7 +1105,7 @@ fn build_block_graph(
 /// Get the separation value for a node: `edge_sep` for dummy nodes, `node_sep` for real nodes.
 #[inline]
 fn separation_for(graph: &LayoutGraph, node: NodeIndex, config: &BKConfig) -> f64 {
-    if is_dummy(graph, node) || graph.border_type.contains_key(&node) {
+    if is_dummy_like(graph, node) {
         config.edge_sep
     } else {
         config.node_sep
