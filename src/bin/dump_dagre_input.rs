@@ -47,9 +47,15 @@ fn main() {
 
     // Match dagre defaults (Mermaid flowchart defaults).
     let config = LayoutConfig::default();
+    let render_config = mmdflux::render::LayoutConfig::default();
     let node_sep = config.node_sep;
     let edge_sep = config.edge_sep;
-    let ranksep = config.rank_sep;
+    let mut ranksep = config.rank_sep;
+    // Apply cluster rank_sep offset when subgraphs are present, matching
+    // compute_layout_direct which adds dagre_cluster_rank_sep for compound graphs.
+    if diagram.has_subgraphs() && render_config.dagre_cluster_rank_sep > 0.0 {
+        ranksep += render_config.dagre_cluster_rank_sep;
+    }
     let margin = config.margin;
 
     // Collect nodes (diagram nodes + subgraphs), sorted by id for determinism
