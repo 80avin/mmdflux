@@ -157,6 +157,9 @@ pub(crate) struct LayoutGraph {
     /// Reversed edges (for cycle removal).
     pub reversed_edges: BTreeSet<usize>,
 
+    /// Original edge endpoints, indexed by original edge index.
+    pub original_edge_endpoints: Vec<(usize, usize)>,
+
     /// Rank (layer) assigned to each node.
     pub ranks: Vec<i32>,
 
@@ -168,6 +171,9 @@ pub(crate) struct LayoutGraph {
 
     /// Node dimensions (width, height).
     pub dimensions: Vec<(f64, f64)>,
+
+    /// Whether the node had any incoming edge in the original graph.
+    pub original_has_predecessor: Vec<bool>,
 
     // --- Dummy node tracking (for normalization) ---
     /// Metadata for dummy nodes, keyed by node ID.
@@ -223,6 +229,9 @@ pub(crate) struct LayoutGraph {
     /// (normalization, ordering, BK alignment).
     pub excluded_edges: BTreeSet<usize>,
 
+    /// Nodes excluded from positioning (dagre `asNonCompoundGraph` semantics).
+    pub position_excluded_nodes: BTreeSet<usize>,
+
     /// Node indices that are compound (subgraph) nodes.
     pub compound_nodes: BTreeSet<usize>,
 
@@ -234,6 +243,10 @@ pub(crate) struct LayoutGraph {
 
     /// Self-edges extracted before the acyclic phase and reinserted after ordering.
     pub self_edges: Vec<SelfEdge>,
+
+    /// Node rank factor from nesting graph (used by `remove_empty_ranks`).
+    /// Set when nesting multiplies edge minlens by this factor.
+    pub node_rank_factor: Option<i32>,
 }
 
 impl LayoutGraph {
@@ -268,7 +281,18 @@ impl LayoutGraph {
         let n = node_ids.len();
         let edge_count = edges.len();
 
+        let mut original_edge_endpoints = vec![(0usize, 0usize); edge_count];
+        for &(from_idx, to_idx, orig_idx) in &edges {
+            if let Some(slot) = original_edge_endpoints.get_mut(orig_idx) {
+                *slot = (from_idx, to_idx);
+            }
+        }
+
         let edge_weights = vec![1.0; edge_count];
+        let mut original_has_predecessor = vec![false; n];
+        for &(_, to_idx, _) in &edges {
+            original_has_predecessor[to_idx] = true;
+        }
 
         // Build compound_titles set
         let compound_titles: BTreeSet<usize> = graph
@@ -294,10 +318,12 @@ impl LayoutGraph {
             edges,
             node_index,
             reversed_edges: BTreeSet::new(),
+            original_edge_endpoints,
             ranks: vec![0; n],
             order: (0..n).collect(),
             positions: vec![Point::default(); n],
             dimensions,
+            original_has_predecessor,
             dummy_nodes: HashMap::new(),
             dummy_chains: Vec::new(),
             original_edge_count: edge_count,
@@ -314,10 +340,12 @@ impl LayoutGraph {
             nesting_root: None,
             nesting_edges: BTreeSet::new(),
             excluded_edges: BTreeSet::new(),
+            position_excluded_nodes: BTreeSet::new(),
             compound_nodes,
             compound_titles,
             edge_minlens: vec![1; edge_count],
             self_edges: Vec::new(),
+            node_rank_factor: None,
         }
     }
 
@@ -356,22 +384,6 @@ impl LayoutGraph {
             .collect()
     }
 
-    /// Get effective edges with weights (with reversals applied).
-    pub fn effective_edges_weighted(&self) -> Vec<(usize, usize, f64)> {
-        self.edges
-            .iter()
-            .enumerate()
-            .map(|(idx, &(from, to, _))| {
-                let weight = self.edge_weights[idx];
-                if self.reversed_edges.contains(&idx) {
-                    (to, from, weight)
-                } else {
-                    (from, to, weight)
-                }
-            })
-            .collect()
-    }
-
     /// Check if a node is a dummy node.
     pub fn is_dummy(&self, node_id: &NodeId) -> bool {
         self.dummy_nodes.contains_key(node_id)
@@ -402,17 +414,43 @@ impl LayoutGraph {
         self.order.push(idx);
         self.positions.push(Point::default());
         self.dimensions.push((0.0, 0.0));
+        self.original_has_predecessor.push(false);
         self.parents.push(None);
-        self.edge_weights.push(0.0); // placeholder; real weights set by edge addition
+        self.position_excluded_nodes.remove(&idx);
         idx
+    }
+
+    /// Returns true if a node should participate in positioning.
+    ///
+    /// This excludes compound parents and any nodes explicitly excluded via
+    /// `position_excluded_nodes` (dagre `asNonCompoundGraph` semantics).
+    pub fn is_position_node(&self, node: usize) -> bool {
+        if self.compound_nodes.contains(&node) {
+            return false;
+        }
+        if self.position_excluded_nodes.contains(&node) {
+            return false;
+        }
+        true
     }
 
     /// Add an edge and return its index.
     pub fn add_nesting_edge(&mut self, from: usize, to: usize, weight: f64) -> usize {
+        self.add_nesting_edge_with_minlen(from, to, weight, 1)
+    }
+
+    /// Add an edge with a specific minlen and return its index.
+    pub fn add_nesting_edge_with_minlen(
+        &mut self,
+        from: usize,
+        to: usize,
+        weight: f64,
+        minlen: i32,
+    ) -> usize {
         let idx = self.edges.len();
         self.edges.push((from, to, idx));
         self.edge_weights.push(weight);
-        self.edge_minlens.push(1);
+        self.edge_minlens.push(minlen);
         idx
     }
 
@@ -516,6 +554,23 @@ mod tests {
     }
 
     #[test]
+    fn test_add_nesting_node_does_not_shift_edge_weights() {
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_edge("A", "B");
+
+        let mut lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
+        let edges_before = lg.edges.len();
+        let weights_before = lg.edge_weights.len();
+
+        lg.add_nesting_node("_nesting_root".into());
+
+        assert_eq!(lg.edges.len(), edges_before);
+        assert_eq!(lg.edge_weights.len(), weights_before);
+    }
+
+    #[test]
     fn test_layout_graph_dummy_tracking() {
         use crate::dagre::normalize::{DummyNode, LabelPos};
 
@@ -605,6 +660,31 @@ mod tests {
         assert_eq!(lg.parents[b_idx], Some(sg1_idx));
         assert_eq!(lg.parents[sg1_idx], None);
         assert!(lg.compound_nodes.contains(&sg1_idx));
+    }
+
+    #[test]
+    fn test_is_position_node_excludes_compound_parents_and_root() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("sg", ());
+        g.add_node("A", ());
+        g.set_parent("A", "sg");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        let sg_idx = lg.node_index[&"sg".into()];
+        let a_idx = lg.node_index[&"A".into()];
+
+        let root_idx = lg.add_nesting_node("_nesting_root".into());
+        lg.position_excluded_nodes.insert(root_idx);
+
+        assert!(
+            !lg.is_position_node(sg_idx),
+            "compound parent should be excluded"
+        );
+        assert!(lg.is_position_node(a_idx), "leaf node should be included");
+        assert!(
+            !lg.is_position_node(root_idx),
+            "nesting root should be excluded"
+        );
     }
 
     #[test]
@@ -698,6 +778,7 @@ mod tests {
         // Add a dummy (simulating normalization adding a node)
         let dummy_id = NodeId::from("_d0");
         lg.node_ids.push(dummy_id.clone());
+        lg.original_has_predecessor.push(false);
         lg.dummy_nodes.insert(dummy_id, DummyNode::edge(0, 1));
 
         // Now index 2 is a dummy

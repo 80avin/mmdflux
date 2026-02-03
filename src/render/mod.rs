@@ -27,6 +27,18 @@ pub struct RenderOptions {
     pub ascii_only: bool,
     /// Ranking algorithm override. None uses the default (NetworkSimplex).
     pub ranker: Option<crate::dagre::types::Ranker>,
+    /// Dagre nodesep override (node spacing).
+    pub node_spacing: Option<f64>,
+    /// Dagre ranksep override (rank spacing).
+    pub rank_spacing: Option<f64>,
+    /// Dagre edgesep override (edge segment spacing).
+    pub edge_spacing: Option<f64>,
+    /// Dagre margin override (translateGraph margin).
+    pub margin: Option<f64>,
+    /// Extra ranksep applied when subgraphs are present (Mermaid clusters).
+    pub cluster_ranksep: Option<f64>,
+    /// ASCII padding around the diagram (diagramPadding analog).
+    pub padding: Option<usize>,
 }
 
 /// Render a diagram to ASCII art.
@@ -50,7 +62,7 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
     };
 
     // Step 1: Compute layout with direction-aware spacing
-    let mut config = layout_config_for_diagram(diagram);
+    let mut config = layout_config_for_diagram(diagram, options);
     config.ranker = options.ranker;
     let layout = compute_layout_direct(diagram, &config);
 
@@ -63,7 +75,10 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
     }
 
     // Step 3: Render nodes
-    for (node_id, node) in &diagram.nodes {
+    let mut node_keys: Vec<&String> = diagram.nodes.keys().collect();
+    node_keys.sort();
+    for node_id in node_keys {
+        let node = &diagram.nodes[node_id];
         if let Some(&(x, y)) = layout.draw_positions.get(node_id) {
             render_node(&mut canvas, node, x, y, &charset);
         }
@@ -86,7 +101,7 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
 /// Compute layout configuration appropriate for the diagram.
 ///
 /// For LR/RL layouts, we need more horizontal spacing to accommodate edge labels.
-fn layout_config_for_diagram(diagram: &Diagram) -> LayoutConfig {
+fn layout_config_for_diagram(diagram: &Diagram, options: &RenderOptions) -> LayoutConfig {
     let mut config = LayoutConfig::default();
 
     // Check if any edges have labels
@@ -145,6 +160,26 @@ fn layout_config_for_diagram(diagram: &Diagram) -> LayoutConfig {
             // Each nesting level needs border_padding (2) extra chars
             config.padding += max_depth * 2;
         }
+    }
+
+    // Apply dagre config overrides (Mermaid/dagre parity knobs)
+    if let Some(node_spacing) = options.node_spacing {
+        config.dagre_node_sep = node_spacing;
+    }
+    if let Some(rank_spacing) = options.rank_spacing {
+        config.dagre_rank_sep = rank_spacing;
+    }
+    if let Some(edge_spacing) = options.edge_spacing {
+        config.dagre_edge_sep = edge_spacing;
+    }
+    if let Some(margin) = options.margin {
+        config.dagre_margin = margin;
+    }
+    if let Some(cluster_ranksep) = options.cluster_ranksep {
+        config.dagre_cluster_rank_sep = cluster_ranksep;
+    }
+    if let Some(padding) = options.padding {
+        config.padding = padding;
     }
 
     config

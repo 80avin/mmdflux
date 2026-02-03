@@ -118,7 +118,7 @@ impl Default for LayoutConfig {
             node_sep: 50.0,
             edge_sep: 20.0,
             rank_sep: 50.0,
-            margin: 10.0,
+            margin: 8.0,
             acyclic: true,
             ranker: Ranker::default(),
         }
@@ -162,6 +162,18 @@ pub struct LayoutResult {
 
     /// Self-edge layout data (loops where source == target).
     pub self_edges: Vec<SelfEdgeLayout>,
+
+    /// Dagre rank to position mapping for waypoint transformation.
+    /// Key: dagre rank, Value: (primary_start, primary_end) coordinates in dagre space.
+    /// The primary axis is Y for TD/BT layouts and X for LR/RL layouts.
+    /// Includes all position nodes (user nodes + border nodes), used to convert
+    /// waypoint ranks to draw coordinates.
+    pub rank_to_position: HashMap<i32, (f64, f64)>,
+
+    /// Dagre rank for each user node.
+    /// Key: node ID, Value: dagre rank.
+    /// Used to compute layer_starts from actual node bounds in render layer.
+    pub node_ranks: HashMap<NodeId, i32>,
 }
 
 /// A self-edge (A → A) stashed before layout, reinserted after ordering.
@@ -244,6 +256,8 @@ mod tests {
             label_positions: HashMap::new(),
             subgraph_bounds: HashMap::new(),
             self_edges: vec![],
+            rank_to_position: HashMap::new(),
+            node_ranks: HashMap::new(),
         };
         assert!(result.self_edges.is_empty());
     }

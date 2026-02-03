@@ -9,6 +9,72 @@ use std::collections::HashMap;
 use super::graph::{BorderType, LayoutGraph};
 use super::types::{NodeId, Rect};
 
+fn debug_border_nodes(lg: &LayoutGraph) {
+    if !std::env::var("MMDFLUX_DEBUG_BORDER_NODES").is_ok_and(|v| v == "1") {
+        return;
+    }
+
+    let mut compounds: Vec<usize> = lg.compound_nodes.iter().copied().collect();
+    compounds.sort_by_key(|&idx| lg.node_ids[idx].0.clone());
+
+    eprintln!("[border_nodes] layout positions");
+    for compound_idx in compounds {
+        let left = match lg.border_left.get(&compound_idx) {
+            Some(nodes) => nodes,
+            None => continue,
+        };
+        let right = match lg.border_right.get(&compound_idx) {
+            Some(nodes) => nodes,
+            None => continue,
+        };
+
+        let name = &lg.node_ids[compound_idx].0;
+        let min_rank = lg.min_rank.get(&compound_idx).copied();
+        let max_rank = lg.max_rank.get(&compound_idx).copied();
+        eprintln!(
+            "[border_nodes] {} min_rank={:?} max_rank={:?}",
+            name, min_rank, max_rank
+        );
+
+        if let Some(&top_idx) = lg.border_top.get(&compound_idx) {
+            let pos = lg.positions[top_idx];
+            eprintln!(
+                "[border_nodes]   top {} rank={} order={} x={:.2} y={:.2}",
+                lg.node_ids[top_idx].0, lg.ranks[top_idx], lg.order[top_idx], pos.x, pos.y
+            );
+        }
+
+        if let Some(&bot_idx) = lg.border_bottom.get(&compound_idx) {
+            let pos = lg.positions[bot_idx];
+            eprintln!(
+                "[border_nodes]   bottom {} rank={} order={} x={:.2} y={:.2}",
+                lg.node_ids[bot_idx].0, lg.ranks[bot_idx], lg.order[bot_idx], pos.x, pos.y
+            );
+        }
+
+        let count = left.len().min(right.len());
+        for i in 0..count {
+            let left_idx = left[i];
+            let right_idx = right[i];
+            let rank = lg.ranks[left_idx];
+            let left_pos = lg.positions[left_idx];
+            let right_pos = lg.positions[right_idx];
+            eprintln!(
+                "[border_nodes]   rank {}: left {} order={} x={:.2} y={:.2} right {} order={} x={:.2} y={:.2}",
+                rank,
+                lg.node_ids[left_idx].0,
+                lg.order[left_idx],
+                left_pos.x,
+                left_pos.y,
+                lg.node_ids[right_idx].0,
+                lg.order[right_idx],
+                right_pos.x,
+                right_pos.y
+            );
+        }
+    }
+}
+
 /// Create left and right border nodes for each rank in each compound node's span.
 ///
 /// Border nodes are linked vertically (consecutive ranks) and assigned the
@@ -69,6 +135,10 @@ pub fn add_segments(lg: &mut LayoutGraph) {
 /// Returns a map from compound node ID to its bounding rectangle. The bounding box
 /// is computed from the positioned border nodes.
 pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
+    debug_border_nodes(lg);
+
+    let debug_bounds = std::env::var("MMDFLUX_DEBUG_SUBGRAPH_BOUNDS").is_ok_and(|v| v == "1");
+
     let mut bounds = HashMap::new();
 
     let compound_indices: Vec<usize> = lg.compound_nodes.iter().copied().collect();
@@ -86,29 +156,45 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
             continue;
         }
 
-        // Compute bounding box from border node positions
-        let x_min = left
-            .iter()
-            .map(|&i| lg.positions[i].x)
-            .fold(f64::INFINITY, f64::min);
-        let x_max = right
-            .iter()
-            .map(|&i| lg.positions[i].x)
-            .fold(f64::NEG_INFINITY, f64::max);
+        // Compute bounding box from left/right border nodes only.
+        //
+        // Left/right borders span all ranks and together define the full rectangle
+        // in both x and y dimensions for any layout direction (TD, LR, etc.).
+        //
+        // We intentionally exclude border_top and border_bottom because:
+        // 1. They can be mispositioned in x due to BK alignment (they form their
+        //    own blocks with no neighbors and may end up outside the left/right range)
+        // 2. Their y positions don't reliably span the content height (they're
+        //    centered in their rank, not at the content edges)
+        //
+        // Note: dagre.js uses top/bottom y for height, but this requires those nodes
+        // to be correctly positioned at content edges. Our BK alignment doesn't
+        // guarantee this, so we use left/right which span the full y range.
+        //
+        // NOTE: Extra vertical padding in LR layouts matches current dagre output.
+        // If we ever want to tighten this, it will be a deliberate parity deviation
+        // and should be validated against Mermaid rendering expectations.
+        let mut x_min = f64::INFINITY;
+        let mut x_max = f64::NEG_INFINITY;
+        let mut y_min = f64::INFINITY;
+        let mut y_max = f64::NEG_INFINITY;
+        for &idx in left.iter().chain(right.iter()) {
+            let pos = lg.positions[idx];
+            x_min = x_min.min(pos.x);
+            x_max = x_max.max(pos.x);
+            y_min = y_min.min(pos.y);
+            y_max = y_max.max(pos.y);
+        }
 
-        let top_idx = lg.border_top.get(&compound_idx).copied();
-        let bot_idx = lg.border_bottom.get(&compound_idx).copied();
-
-        let y_min = top_idx.map(|i| lg.positions[i].y).unwrap_or_else(|| {
-            left.iter()
-                .map(|&i| lg.positions[i].y)
-                .fold(f64::INFINITY, f64::min)
-        });
-        let y_max = bot_idx.map(|i| lg.positions[i].y).unwrap_or_else(|| {
-            left.iter()
-                .map(|&i| lg.positions[i].y)
-                .fold(f64::NEG_INFINITY, f64::max)
-        });
+        // Bounds come from border nodes only, matching dagre.js removeBorderNodes
+        // (layout.js:309-330) which uses borderLeft/Right/Top/Bottom exclusively.
+        if debug_bounds {
+            let name = &lg.node_ids[compound_idx].0;
+            eprintln!(
+                "[subgraph_bounds] {} border=({:.2},{:.2})-({:.2},{:.2})",
+                name, x_min, y_min, x_max, y_max
+            );
+        }
 
         let width = (x_max - x_min).max(0.0);
         let height = (y_max - y_min).max(0.0);
@@ -117,8 +203,8 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
         bounds.insert(
             name,
             Rect {
-                x: (x_min + x_max) / 2.0,
-                y: (y_min + y_max) / 2.0,
+                x: x_min,
+                y: y_min,
                 width,
                 height,
             },
@@ -236,5 +322,107 @@ mod tests {
         let b = &bounds["sg1"];
         assert!(b.width > 0.0);
         assert!(b.height > 0.0);
+    }
+
+    #[test]
+    fn test_remove_nodes_uses_border_only_bounds() {
+        // dagre.js computes bounds from border nodes only, never expanding
+        // to include children. Place a child outside border range and verify
+        // bounds are not affected.
+        let mut lg = build_ranked_compound_graph();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+        add_segments(&mut lg);
+
+        // Set all border nodes to a known box: x=10..100, y=5..95
+        for &idx in lg.border_left.get(&sg1_idx).unwrap() {
+            lg.positions[idx] = super::super::types::Point { x: 10.0, y: 5.0 };
+        }
+        for &idx in lg.border_right.get(&sg1_idx).unwrap() {
+            lg.positions[idx] = super::super::types::Point { x: 100.0, y: 95.0 };
+        }
+        if let Some(&top) = lg.border_top.get(&sg1_idx) {
+            lg.positions[top] = super::super::types::Point { x: 10.0, y: 5.0 };
+        }
+        if let Some(&bot) = lg.border_bottom.get(&sg1_idx) {
+            lg.positions[bot] = super::super::types::Point { x: 100.0, y: 95.0 };
+        }
+
+        // Place child A far outside border bounds
+        let child_idx = lg.node_index[&"A".into()];
+        lg.positions[child_idx] = super::super::types::Point { x: -50.0, y: -20.0 };
+        lg.dimensions[child_idx] = (10.0, 10.0);
+
+        let bounds = remove_nodes(&mut lg);
+        let b = &bounds["sg1"];
+
+        // Bounds should come from borders only, not expand to child at (-50, -20)
+        assert!((b.x - 10.0).abs() < 0.001, "x should be 10.0, got {}", b.x);
+        assert!(
+            (b.width - 90.0).abs() < 0.001,
+            "width should be 90.0, got {}",
+            b.width
+        );
+        assert!((b.y - 5.0).abs() < 0.001, "y should be 5.0, got {}", b.y);
+        assert!(
+            (b.height - 90.0).abs() < 0.001,
+            "height should be 90.0, got {}",
+            b.height
+        );
+    }
+
+    #[test]
+    fn test_x_bounds_from_left_right_only() {
+        // dagre.js computes x bounds from left/right borders only.
+        // border_top and border_bottom x positions should NOT affect x bounds.
+        // This matches dagre.js removeBorderNodes which uses:
+        //   node.width = Math.abs(r.x - l.x)
+        //   node.x = l.x + node.width / 2
+        let mut lg = build_ranked_compound_graph();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+        add_segments(&mut lg);
+
+        // Set left borders at x=10, right borders at x=100
+        for &idx in lg.border_left.get(&sg1_idx).unwrap() {
+            lg.positions[idx] = super::super::types::Point {
+                x: 10.0,
+                y: lg.ranks[idx] as f64 * 50.0,
+            };
+        }
+        for &idx in lg.border_right.get(&sg1_idx).unwrap() {
+            lg.positions[idx] = super::super::types::Point {
+                x: 100.0,
+                y: lg.ranks[idx] as f64 * 50.0,
+            };
+        }
+
+        // Place border_top and border_bottom at x positions OUTSIDE the left/right range
+        // This simulates the bug where these nodes end up mispositioned
+        if let Some(&top) = lg.border_top.get(&sg1_idx) {
+            lg.positions[top] = super::super::types::Point {
+                x: 200.0, // Far right of the right border
+                y: 0.0,
+            };
+        }
+        if let Some(&bot) = lg.border_bottom.get(&sg1_idx) {
+            lg.positions[bot] = super::super::types::Point {
+                x: 150.0, // Also outside the left/right range
+                y: 100.0,
+            };
+        }
+
+        let bounds = remove_nodes(&mut lg);
+        let b = &bounds["sg1"];
+
+        // X bounds should come from left/right only (10..100), not top/bottom
+        assert!(
+            (b.x - 10.0).abs() < 0.001,
+            "x should be 10.0 (from left border), got {}",
+            b.x
+        );
+        assert!(
+            (b.width - 90.0).abs() < 0.001,
+            "width should be 90.0 (100-10 from left/right), got {}",
+            b.width
+        );
     }
 }

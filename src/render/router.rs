@@ -13,7 +13,7 @@ use crate::graph::{Direction, Edge, Shape};
 
 /// Map from (node_id, face) to the edges attached at that face.
 /// Each entry is `(edge_index, is_source_side, approach_cross_axis)`.
-type FaceGroupMap = HashMap<(String, NodeFace), Vec<(usize, bool, usize)>>;
+type FaceGroupMap = HashMap<(String, NodeFace), Vec<(usize, bool, usize, bool)>>;
 
 /// Grouped endpoint parameters for edge routing functions.
 struct EdgeEndpoints<'a> {
@@ -200,10 +200,26 @@ pub fn generate_backward_waypoints(
                 (src_bounds.y + src_bounds.height).max(tgt_bounds.y + tgt_bounds.height);
             let route_y = bottom_edge + BACKWARD_ROUTE_GAP;
 
-            let src_center_x = src_bounds.center_x();
-            let tgt_center_x = tgt_bounds.center_x();
+            let left_edge = src_bounds.x.min(tgt_bounds.x);
+            let right_edge = (src_bounds.x + src_bounds.width).max(tgt_bounds.x + tgt_bounds.width);
 
-            vec![(src_center_x, route_y), (tgt_center_x, route_y)]
+            match direction {
+                Direction::LeftRight => {
+                    // Backward edge flows right-to-left: keep the route_x to the right
+                    // so the final segment enters the target from the right (left arrow).
+                    let start_x = src_bounds.x.saturating_sub(1);
+                    let route_x = right_edge + BACKWARD_ROUTE_GAP;
+                    vec![(start_x, route_y), (route_x, route_y)]
+                }
+                Direction::RightLeft => {
+                    // Backward edge flows left-to-right: keep the route_x to the left
+                    // so the final segment enters the target from the left (right arrow).
+                    let start_x = src_bounds.x + src_bounds.width;
+                    let route_x = left_edge.saturating_sub(BACKWARD_ROUTE_GAP);
+                    vec![(start_x, route_y), (route_x, route_y)]
+                }
+                _ => vec![],
+            }
         }
     }
 }
@@ -226,6 +242,7 @@ pub fn route_edge(
     diagram_direction: Direction,
     src_attach_override: Option<(usize, usize)>,
     tgt_attach_override: Option<(usize, usize)>,
+    src_first_vertical: bool,
 ) -> Option<RoutedEdge> {
     let from_bounds = layout.get_bounds(&edge.from)?;
     let to_bounds = layout.get_bounds(&edge.to)?;
@@ -272,6 +289,7 @@ pub fn route_edge(
             diagram_direction,
             src_attach_override,
             tgt_attach_override,
+            src_first_vertical,
         );
     }
 
@@ -279,6 +297,20 @@ pub fn route_edge(
     if is_backward_edge(from_bounds, to_bounds, diagram_direction) {
         let synthetic_wps = generate_backward_waypoints(from_bounds, to_bounds, diagram_direction);
         if !synthetic_wps.is_empty() {
+            if matches!(
+                diagram_direction,
+                Direction::LeftRight | Direction::RightLeft
+            ) {
+                return route_edge_with_waypoints(
+                    edge,
+                    &endpoints,
+                    &synthetic_wps,
+                    diagram_direction,
+                    src_attach_override,
+                    tgt_attach_override,
+                    src_first_vertical,
+                );
+            }
             return route_backward_with_synthetic_waypoints(
                 edge,
                 &endpoints,
@@ -286,6 +318,7 @@ pub fn route_edge(
                 diagram_direction,
                 src_attach_override,
                 tgt_attach_override,
+                src_first_vertical,
             );
         }
     }
@@ -297,6 +330,7 @@ pub fn route_edge(
         diagram_direction,
         src_attach_override,
         tgt_attach_override,
+        src_first_vertical,
     )
 }
 
@@ -311,6 +345,7 @@ fn route_edge_with_waypoints(
     direction: Direction,
     src_attach_override: Option<(usize, usize)>,
     tgt_attach_override: Option<(usize, usize)>,
+    src_first_vertical: bool,
 ) -> Option<RoutedEdge> {
     // Calculate attachment points, using overrides where provided
     let (src_attach_raw, tgt_attach_raw) = resolve_attachment_points(
@@ -326,6 +361,13 @@ fn route_edge_with_waypoints(
     let tgt_attach_point = clamp_to_boundary(tgt_attach_raw, ep.to_bounds);
     let src_attach = (src_attach_point.x, src_attach_point.y);
     let tgt_attach = (tgt_attach_point.x, tgt_attach_point.y);
+
+    if std::env::var("MMDFLUX_DEBUG_ROUTE_SEGMENTS").is_ok_and(|v| v == "1") {
+        eprintln!(
+            "[route] {} -> {}: waypoints={:?}",
+            edge.from, edge.to, waypoints
+        );
+    }
 
     // Use face-aware offset to avoid corner ambiguity (e.g., a point at
     // the top-right corner should offset RIGHT for LR layouts, not UP)
@@ -343,11 +385,22 @@ fn route_edge_with_waypoints(
 
     // Build orthogonal path through waypoints, ending with appropriate segment
     segments.extend(build_orthogonal_path_with_waypoints(
-        start, waypoints, end, direction,
+        start,
+        waypoints,
+        end,
+        direction,
+        src_first_vertical,
     ));
 
     // Determine entry direction based on final segment orientation
     let entry_direction = entry_direction_from_segments(&segments);
+
+    if std::env::var("MMDFLUX_DEBUG_ROUTE_SEGMENTS").is_ok_and(|v| v == "1") {
+        eprintln!(
+            "[route] {} -> {}: start={:?} end={:?} segments={:?}",
+            edge.from, edge.to, start, end, segments
+        );
+    }
 
     Some(RoutedEdge {
         edge: edge.clone(),
@@ -372,6 +425,7 @@ fn route_backward_with_synthetic_waypoints(
     direction: Direction,
     src_attach_override: Option<(usize, usize)>,
     tgt_attach_override: Option<(usize, usize)>,
+    src_first_vertical: bool,
 ) -> Option<RoutedEdge> {
     // Use intersection calculation from waypoint approach angles
     let (src_attach_raw, tgt_attach_raw) = calculate_attachment_points(
@@ -405,7 +459,11 @@ fn route_backward_with_synthetic_waypoints(
     }
 
     segments.extend(build_orthogonal_path_with_waypoints(
-        start, waypoints, end, direction,
+        start,
+        waypoints,
+        end,
+        direction,
+        src_first_vertical,
     ));
 
     let entry_direction = entry_direction_from_segments(&segments);
@@ -431,6 +489,7 @@ fn route_edge_direct(
     direction: Direction,
     src_attach_override: Option<(usize, usize)>,
     tgt_attach_override: Option<(usize, usize)>,
+    _src_first_vertical: bool,
 ) -> Option<RoutedEdge> {
     // For direct routing, use the other node's center as the "approach point"
     let empty_waypoints: &[(usize, usize)] = &[];
@@ -538,6 +597,15 @@ fn resolve_attachment_points(
         _ => {}
     }
 
+    if matches!(direction, Direction::TopDown | Direction::BottomTop)
+        && let (Some(&first_wp), Some(&last_wp)) = (waypoints.first(), waypoints.last())
+    {
+        let (src_face, tgt_face) = edge_faces(direction, is_backward);
+        let src = src_override.unwrap_or_else(|| clamp_to_face(from_bounds, src_face, first_wp));
+        let tgt = tgt_override.unwrap_or_else(|| clamp_to_face(to_bounds, tgt_face, last_wp));
+        return (src, tgt);
+    }
+
     // TD/BT layouts: use geometric intersection to find attachment points.
     let fallback = || {
         calculate_attachment_points(
@@ -551,6 +619,16 @@ fn resolve_attachment_points(
     let src = src_override.unwrap_or_else(|| fallback().0);
     let tgt = tgt_override.unwrap_or_else(|| fallback().1);
     (src, tgt)
+}
+
+/// Clamp a waypoint to a node face, returning a point on that face.
+fn clamp_to_face(bounds: &NodeBounds, face: NodeFace, waypoint: (usize, usize)) -> (usize, usize) {
+    let (min, max) = bounds.face_extent(&face);
+    let fixed = bounds.face_fixed_coord(&face);
+    match face {
+        NodeFace::Top | NodeFace::Bottom => (waypoint.0.clamp(min, max), fixed),
+        NodeFace::Left | NodeFace::Right => (fixed, waypoint.1.clamp(min, max)),
+    }
 }
 
 /// Compute a shared y-coordinate for LR/RL attachment, clamped to both nodes' y-ranges.
@@ -781,7 +859,7 @@ fn compute_mid_y_for_vertical_layout(start: Point, end: Point, direction: Direct
     let horizontal_offset = start.x.abs_diff(end.x);
 
     // Check if this edge has a large horizontal offset
-    if horizontal_offset > LARGE_HORIZONTAL_OFFSET_THRESHOLD {
+    let mut mid_y = if horizontal_offset > LARGE_HORIZONTAL_OFFSET_THRESHOLD {
         // Determine if source is to the right of target (right-to-left routing)
         let is_right_to_left = start.x > end.x;
 
@@ -819,7 +897,20 @@ fn compute_mid_y_for_vertical_layout(start: Point, end: Point, direction: Direct
     } else {
         // Normal edges: use standard midpoint
         (start.y + end.y) / 2
+    };
+
+    // Avoid placing the horizontal segment on the target row, which creates a
+    // zero-length final vertical segment and makes arrowheads look like they
+    // attach to horizontal lines.
+    if mid_y == end.y {
+        if start.y > end.y {
+            mid_y = end.y + 1;
+        } else {
+            mid_y = end.y.saturating_sub(1);
+        }
     }
+
+    mid_y
 }
 
 /// Build an orthogonal path through waypoints, ending with appropriate segment for layout.
@@ -831,6 +922,7 @@ fn build_orthogonal_path_with_waypoints(
     waypoints: &[(usize, usize)],
     end: Point,
     direction: Direction,
+    start_vertical: bool,
 ) -> Vec<Segment> {
     let vertical_first = matches!(direction, Direction::TopDown | Direction::BottomTop);
 
@@ -843,7 +935,12 @@ fn build_orthogonal_path_with_waypoints(
 
     // Start → first waypoint
     let first_wp = Point::new(waypoints[0].0, waypoints[0].1);
-    segments.extend(orthogonalize_segment(start, first_wp, !vertical_first));
+    let first_vertical = if start_vertical {
+        true
+    } else {
+        !vertical_first
+    };
+    segments.extend(orthogonalize_segment(start, first_wp, first_vertical));
 
     // Through all intermediate waypoints
     for window in waypoints.windows(2) {
@@ -1012,6 +1109,7 @@ pub fn build_orthogonal_path(
 pub struct AttachmentOverride {
     pub source: Option<(usize, usize)>,
     pub target: Option<(usize, usize)>,
+    pub source_first_vertical: bool,
 }
 
 /// Compute pre-assigned attachment points for edges that share a node face.
@@ -1075,6 +1173,10 @@ pub fn compute_attachment_plan(
         let has_dagre_waypoints = waypoints.is_some_and(|wps| !wps.is_empty());
         let (src_face, tgt_face) = if is_backward && !has_dagre_waypoints {
             backward_routing_faces(direction)
+        } else if matches!(direction, Direction::TopDown | Direction::BottomTop) && !is_backward {
+            // For forward edges in vertical layouts, stick to canonical faces to
+            // keep fan-in/out attachment spreading stable.
+            edge_faces(direction, false)
         } else {
             match direction {
                 Direction::LeftRight | Direction::RightLeft => edge_faces(direction, is_backward),
@@ -1098,11 +1200,11 @@ pub fn compute_attachment_plan(
         face_groups
             .entry((edge.from.clone(), src_face))
             .or_default()
-            .push((i, true, src_cross));
+            .push((i, true, src_cross, has_dagre_waypoints));
         face_groups
             .entry((edge.to.clone(), tgt_face))
             .or_default()
-            .push((i, false, tgt_cross));
+            .push((i, false, tgt_cross, has_dagre_waypoints));
     }
 
     // Step 2: For faces with >1 edge, compute spread positions
@@ -1120,20 +1222,62 @@ pub fn compute_attachment_plan(
 
         // Sort edges by approach point's cross-axis coordinate
         let mut sorted = group.clone();
-        sorted.sort_by_key(|&(_, _, approach_cross)| approach_cross);
+        sorted.sort_by_key(|&(_, _, approach_cross, _)| approach_cross);
 
         let extent = bounds.face_extent(face);
         let fixed = bounds.face_fixed_coord(face);
         let points = spread_points_on_face(*face, fixed, extent, sorted.len());
 
-        for (idx, &(edge_i, is_source, _)) in sorted.iter().enumerate() {
+        let flow_face = match direction {
+            Direction::TopDown => Some(NodeFace::Bottom),
+            Direction::BottomTop => Some(NodeFace::Top),
+            _ => None,
+        };
+        let center_cross = match face {
+            NodeFace::Top | NodeFace::Bottom => bounds.center_x(),
+            NodeFace::Left | NodeFace::Right => bounds.center_y(),
+        } as isize;
+        let mut left_count = 0usize;
+        let mut right_count = 0usize;
+        for (_, is_source, cross, has_wps) in &sorted {
+            if *is_source && *has_wps {
+                if *cross as isize >= center_cross {
+                    right_count += 1;
+                } else {
+                    left_count += 1;
+                }
+            }
+        }
+        let should_consider = flow_face.is_some_and(|face_match| *face == face_match);
+        let mut left_lane = 0usize;
+        let mut right_lane = 0usize;
+
+        for (idx, &(edge_i, is_source, cross, has_wps)) in sorted.iter().enumerate() {
             let point = points[idx];
             let entry = overrides.entry(edge_i).or_insert(AttachmentOverride {
                 source: None,
                 target: None,
+                source_first_vertical: false,
             });
             if is_source {
                 entry.source = Some(point);
+                if should_consider && has_wps {
+                    let side = if cross as isize >= center_cross {
+                        1
+                    } else {
+                        -1
+                    };
+                    let side_count = if side > 0 { right_count } else { left_count };
+                    if side_count > 1 {
+                        if side > 0 {
+                            entry.source_first_vertical = right_lane % 2 == 1;
+                            right_lane += 1;
+                        } else {
+                            entry.source_first_vertical = left_lane % 2 == 1;
+                            left_lane += 1;
+                        }
+                    }
+                }
             } else {
                 entry.target = Some(point);
             }
@@ -1224,11 +1368,18 @@ pub fn route_all_edges(
             if edge.from == edge.to {
                 return None;
             }
-            let (src_override, tgt_override) = plan
+            let (src_override, tgt_override, src_first_vertical) = plan
                 .get(&i)
-                .map(|ov| (ov.source, ov.target))
-                .unwrap_or((None, None));
-            route_edge(edge, layout, diagram_direction, src_override, tgt_override)
+                .map(|ov| (ov.source, ov.target, ov.source_first_vertical))
+                .unwrap_or((None, None, false));
+            route_edge(
+                edge,
+                layout,
+                diagram_direction,
+                src_override,
+                tgt_override,
+                src_first_vertical,
+            )
         })
         .collect();
 

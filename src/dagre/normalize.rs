@@ -268,6 +268,7 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
             graph.order.push(dummy_idx);
             graph.positions.push(Point::default());
             graph.dimensions.push((width, height));
+            graph.original_has_predecessor.push(false);
             graph.parents.push(None);
             graph.dummy_nodes.insert(dummy_id.clone(), dummy_node);
 
@@ -314,6 +315,13 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
         // Remap reversed_edges: removed edges drop out, surviving edges get new indices
         graph.reversed_edges = graph
             .reversed_edges
+            .iter()
+            .filter_map(|&old_pos| old_to_new.get(&old_pos).copied())
+            .collect();
+
+        // Remap excluded_edges so nesting edges remain excluded after rebuild.
+        graph.excluded_edges = graph
+            .excluded_edges
             .iter()
             .filter_map(|&old_pos| old_to_new.get(&old_pos).copied())
             .collect();

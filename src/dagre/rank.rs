@@ -85,9 +85,58 @@ pub fn longest_path(graph: &mut LayoutGraph) {
 
 /// Normalize ranks so minimum is 0.
 pub fn normalize(graph: &mut LayoutGraph) {
-    if let Some(&min) = graph.ranks.iter().min() {
+    let min = graph
+        .ranks
+        .iter()
+        .enumerate()
+        .filter(|(idx, _)| graph.is_position_node(*idx))
+        .map(|(_, &rank)| rank)
+        .min()
+        .or_else(|| graph.ranks.iter().min().copied());
+
+    if let Some(min) = min {
         for rank in &mut graph.ranks {
             *rank -= min;
+        }
+    }
+}
+
+/// Remove empty ranks that were introduced by nesting minlen multiplication.
+///
+/// Matches dagre.js `util.removeEmptyRanks()`. After nesting multiplies edge
+/// minlens by `nodeRankFactor`, ranking creates large gaps. This function
+/// compresses out empty ranks at positions that aren't multiples of
+/// `nodeRankFactor`, keeping border nodes on separate ranks from content.
+pub fn remove_empty_ranks(graph: &mut LayoutGraph) {
+    let node_rank_factor = match graph.node_rank_factor {
+        Some(f) if f > 1 => f,
+        _ => return,
+    };
+
+    // Find the offset (minimum rank)
+    let offset = graph.ranks.iter().copied().min().unwrap_or(0);
+
+    // Build layers array
+    let max_rank = graph.ranks.iter().copied().max().unwrap_or(0);
+    let layer_count = (max_rank - offset + 1) as usize;
+    let mut layers: Vec<Option<Vec<usize>>> = vec![None; layer_count];
+
+    for (node, &rank) in graph.ranks.iter().enumerate() {
+        let idx = (rank - offset) as usize;
+        layers[idx].get_or_insert_with(Vec::new).push(node);
+    }
+
+    // Compute delta: for each empty layer at a non-factor position, decrement delta
+    let mut delta: i32 = 0;
+    for (i, layer) in layers.iter().enumerate() {
+        if layer.is_none() && (i as i32) % node_rank_factor != 0 {
+            delta -= 1;
+        } else if let Some(nodes) = layer
+            && delta != 0
+        {
+            for &node in nodes {
+                graph.ranks[node] += delta;
+            }
         }
     }
 }
@@ -99,6 +148,33 @@ pub fn by_rank(graph: &LayoutGraph) -> Vec<Vec<usize>> {
 
     for (node, &rank) in graph.ranks.iter().enumerate() {
         layers[rank as usize].push(node);
+    }
+
+    layers
+}
+
+/// Get nodes grouped by rank, filtered by a predicate.
+pub fn by_rank_filtered<F>(graph: &LayoutGraph, mut predicate: F) -> Vec<Vec<usize>>
+where
+    F: FnMut(usize) -> bool,
+{
+    let mut max_rank: Option<i32> = None;
+    for (node, &rank) in graph.ranks.iter().enumerate() {
+        if predicate(node) {
+            max_rank = Some(max_rank.map_or(rank, |m| m.max(rank)));
+        }
+    }
+
+    let Some(max_rank) = max_rank else {
+        return Vec::new();
+    };
+
+    let mut layers: Vec<Vec<usize>> = vec![Vec::new(); max_rank as usize + 1];
+
+    for (node, &rank) in graph.ranks.iter().enumerate() {
+        if predicate(node) {
+            layers[rank as usize].push(node);
+        }
     }
 
     layers

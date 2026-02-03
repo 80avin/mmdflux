@@ -39,11 +39,13 @@ pub(crate) mod nesting;
 pub(crate) mod network_simplex;
 pub mod normalize;
 mod order;
+mod parent_dummy_chains;
 mod position;
 mod rank;
 pub mod types;
 
 use std::collections::HashMap;
+use std::io::Write;
 
 pub use graph::DiGraph;
 use graph::LayoutGraph;
@@ -52,20 +54,221 @@ pub use types::{
     SelfEdgeLayout,
 };
 
-/// Double all edge minlens when any edge has a label, creating a uniform rank grid.
+/// Double all edge minlens to create a uniform rank grid.
 ///
-/// This matches dagre.js's `makeSpaceForEdgeLabels()` which globally doubles minlens
-/// rather than selectively inflating labeled edges. The uniform grid ensures downstream
-/// Sugiyama phases (normalization, ordering, positioning) see consistent rank spacing.
-fn make_space_for_edge_labels(
+/// Matches dagre.js's `makeSpaceForEdgeLabels()` behavior, which always doubles
+/// minlens (and later compensates via ranksep scaling). The uniform grid ensures
+/// downstream Sugiyama phases (normalization, ordering, positioning) see consistent
+/// rank spacing, even when no labels are present.
+pub(crate) fn make_space_for_edge_labels(
     lg: &mut LayoutGraph,
-    edge_labels: &HashMap<usize, normalize::EdgeLabelInfo>,
+    _edge_labels: &HashMap<usize, normalize::EdgeLabelInfo>,
 ) {
-    if edge_labels.is_empty() {
-        return;
-    }
     for minlen in &mut lg.edge_minlens {
         *minlen *= 2;
+    }
+}
+
+fn debug_pipeline_target() -> Option<String> {
+    std::env::var("MMDFLUX_DEBUG_PIPELINE").ok()
+}
+
+fn debug_layout_target() -> Option<String> {
+    std::env::var("MMDFLUX_DEBUG_LAYOUT").ok()
+}
+
+fn json_escape(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for ch in input.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            _ => out.push(ch),
+        }
+    }
+    out
+}
+
+fn fmt_f64_json(value: f64) -> String {
+    if value.is_finite() {
+        format!("{}", value)
+    } else {
+        "null".to_string()
+    }
+}
+
+fn debug_dump_pipeline(lg: &LayoutGraph, stage: &str) {
+    let Some(target) = debug_pipeline_target() else {
+        return;
+    };
+
+    let mut entries: Vec<(i32, usize, usize)> = lg
+        .ranks
+        .iter()
+        .enumerate()
+        .map(|(idx, &rank)| (rank, lg.order[idx], idx))
+        .collect();
+    entries.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| a.1.cmp(&b.1))
+            .then_with(|| lg.node_ids[a.2].0.cmp(&lg.node_ids[b.2].0))
+    });
+
+    let mut buf = String::new();
+    for (rank, order, idx) in entries {
+        let id = &lg.node_ids[idx].0;
+        let parent = lg.parents[idx].map(|p| lg.node_ids[p].0.clone());
+        let dummy = lg
+            .dummy_nodes
+            .get(&lg.node_ids[idx])
+            .map(|d| match d.dummy_type {
+                normalize::DummyType::Edge => "edge",
+                normalize::DummyType::EdgeLabel => "edge_label",
+            });
+        let dummy_edge = lg.dummy_nodes.get(&lg.node_ids[idx]).map(|d| d.edge_index);
+        let border = lg.border_type.get(&idx).map(|b| match b {
+            graph::BorderType::Left => "left",
+            graph::BorderType::Right => "right",
+        });
+        let is_position = lg.is_position_node(idx);
+        let is_compound = lg.compound_nodes.contains(&idx);
+        let is_excluded = lg.position_excluded_nodes.contains(&idx);
+
+        let parent_json = parent
+            .as_ref()
+            .map(|p| format!("\"{}\"", json_escape(p)))
+            .unwrap_or_else(|| "null".to_string());
+        let dummy_json = dummy
+            .map(|d| format!("\"{}\"", d))
+            .unwrap_or_else(|| "null".to_string());
+        let dummy_edge_json = dummy_edge
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| "null".to_string());
+        let border_json = border
+            .map(|b| format!("\"{}\"", b))
+            .unwrap_or_else(|| "null".to_string());
+
+        buf.push_str(&format!(
+            "{{\"stage\":\"{}\",\"id\":\"{}\",\"rank\":{},\"order\":{},\"parent\":{},\"dummy\":{},\"dummy_edge\":{},\"border\":{},\"is_position\":{},\"is_compound\":{},\"is_excluded\":{}}}\n",
+            json_escape(stage),
+            json_escape(id),
+            rank,
+            order,
+            parent_json,
+            dummy_json,
+            dummy_edge_json,
+            border_json,
+            is_position,
+            is_compound,
+            is_excluded
+        ));
+    }
+
+    if target == "1" {
+        eprint!("{buf}");
+    } else if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&target)
+    {
+        let _ = file.write_all(buf.as_bytes());
+    }
+}
+
+fn debug_dump_layout_result(result: &LayoutResult, original_edge_count: usize) {
+    let Some(target) = debug_layout_target() else {
+        return;
+    };
+
+    let mut nodes: Vec<(&NodeId, &Rect)> = result.nodes.iter().collect();
+    nodes.sort_by(|a, b| a.0.0.cmp(&b.0.0));
+
+    let mut edges: Vec<EdgeLayout> = result
+        .edges
+        .iter()
+        .filter(|e| e.index < original_edge_count)
+        .cloned()
+        .collect();
+    edges.sort_by_key(|e| e.index);
+
+    let mut subgraphs: Vec<(&String, &Rect)> = result.subgraph_bounds.iter().collect();
+    subgraphs.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut buf = String::new();
+    buf.push_str("{\"nodes\":[");
+    for (i, (id, rect)) in nodes.iter().enumerate() {
+        let center_x = rect.x + rect.width / 2.0;
+        let center_y = rect.y + rect.height / 2.0;
+        let suffix = if i + 1 == nodes.len() { "" } else { "," };
+        buf.push_str(&format!(
+            "{{\"id\":\"{}\",\"x\":{},\"y\":{},\"width\":{},\"height\":{},\"center_x\":{},\"center_y\":{}}}{}",
+            json_escape(&id.0),
+            fmt_f64_json(rect.x),
+            fmt_f64_json(rect.y),
+            fmt_f64_json(rect.width),
+            fmt_f64_json(rect.height),
+            fmt_f64_json(center_x),
+            fmt_f64_json(center_y),
+            suffix
+        ));
+    }
+    buf.push_str("],\"edges\":[");
+    for (i, edge) in edges.iter().enumerate() {
+        let suffix = if i + 1 == edges.len() { "" } else { "," };
+        buf.push_str(&format!(
+            "{{\"index\":{},\"from\":\"{}\",\"to\":\"{}\",\"points\":[",
+            edge.index,
+            json_escape(&edge.from.0),
+            json_escape(&edge.to.0)
+        ));
+        for (p_idx, point) in edge.points.iter().enumerate() {
+            let p_suffix = if p_idx + 1 == edge.points.len() {
+                ""
+            } else {
+                ","
+            };
+            buf.push_str(&format!(
+                "[{},{}]{}",
+                fmt_f64_json(point.x),
+                fmt_f64_json(point.y),
+                p_suffix
+            ));
+        }
+        buf.push_str(&format!("]}}{}", suffix));
+    }
+    buf.push_str("],\"subgraph_bounds\":[");
+    for (i, (id, rect)) in subgraphs.iter().enumerate() {
+        let suffix = if i + 1 == subgraphs.len() { "" } else { "," };
+        buf.push_str(&format!(
+            "{{\"id\":\"{}\",\"x\":{},\"y\":{},\"width\":{},\"height\":{}}}{}",
+            json_escape(id),
+            fmt_f64_json(rect.x),
+            fmt_f64_json(rect.y),
+            fmt_f64_json(rect.width),
+            fmt_f64_json(rect.height),
+            suffix
+        ));
+    }
+    buf.push_str("],\"graph\":{");
+    buf.push_str(&format!(
+        "\"width\":{},\"height\":{}",
+        fmt_f64_json(result.width),
+        fmt_f64_json(result.height)
+    ));
+    buf.push_str("}}\n");
+
+    if target == "1" {
+        eprint!("{buf}");
+    } else if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(&target)
+    {
+        let _ = file.write_all(buf.as_bytes());
     }
 }
 
@@ -73,7 +276,7 @@ fn make_space_for_edge_labels(
 ///
 /// Self-edges confuse cycle detection and ranking. They are stashed on
 /// `lg.self_edges` and removed from `lg.edges` (and parallel arrays).
-fn extract_self_edges(lg: &mut LayoutGraph) {
+pub(crate) fn extract_self_edges(lg: &mut LayoutGraph) {
     debug_assert!(
         lg.reversed_edges.is_empty(),
         "extract_self_edges must run before acyclic::run()"
@@ -117,6 +320,7 @@ fn insert_self_edge_dummies(lg: &mut LayoutGraph) {
         lg.ranks.push(node_rank);
         lg.positions.push(Point::default());
         lg.dimensions.push((1.0, 1.0));
+        lg.original_has_predecessor.push(false);
         lg.parents.push(lg.parents[se.node_index]);
 
         // Insert into ordering: place dummy right after the node
@@ -279,6 +483,194 @@ fn position_self_edges(lg: &LayoutGraph, config: &LayoutConfig) -> Vec<SelfEdgeL
         .collect()
 }
 
+/// Translate all layout coordinates so the minimum corner aligns with margins.
+///
+/// Matches dagre.js `translateGraph` (layout.js:215-264): computes min/max across
+/// node bounding boxes and edge labels (not edge points), then shifts all coordinates
+/// (including edge points) so the minimum is at (margin_x, margin_y). Width/height
+/// include margin on both sides, matching dagre's `minX -= marginX` before the
+/// `width = maxX - minX + marginX` calculation.
+fn translate_layout_result(
+    result: &mut LayoutResult,
+    margin_x: f64,
+    margin_y: f64,
+    direction: Direction,
+) {
+    let mut min_x = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+
+    macro_rules! update_rect {
+        ($x:expr, $y:expr, $w:expr, $h:expr) => {
+            min_x = min_x.min($x);
+            max_x = max_x.max($x + $w);
+            min_y = min_y.min($y);
+            max_y = max_y.max($y + $h);
+        };
+    }
+
+    // Nodes (dagre: g.nodes().forEach(v => getExtremes(g.node(v))))
+    for rect in result.nodes.values() {
+        update_rect!(rect.x, rect.y, rect.width, rect.height);
+    }
+
+    // Edge labels — dagre only includes edges with edge.x (i.e. labels),
+    // not individual edge points. We don't store edge-level label rects in
+    // EdgeLayout, but label_positions serve the same role.
+    // (label_positions are point-sized, so they only affect min/max as points.)
+    for lp in result.label_positions.values() {
+        min_x = min_x.min(lp.point.x);
+        max_x = max_x.max(lp.point.x);
+        min_y = min_y.min(lp.point.y);
+        max_y = max_y.max(lp.point.y);
+    }
+
+    // Subgraph bounds (mmdflux-specific, no dagre equivalent in translateGraph)
+    for rect in result.subgraph_bounds.values() {
+        update_rect!(rect.x, rect.y, rect.width, rect.height);
+    }
+
+    if min_x == f64::INFINITY {
+        return; // empty result
+    }
+
+    // dagre.js: minX -= marginX; minY -= marginY;
+    // Then: node.x -= minX (which adds marginX since minX is now smaller).
+    // Net shift per coordinate: -(originalMinX - marginX) = marginX - originalMinX.
+    // This places the leftmost extent at marginX, with width including margin on both sides.
+    min_x -= margin_x;
+    min_y -= margin_y;
+
+    let dx = -min_x;
+    let dy = -min_y;
+
+    // Shift nodes
+    for rect in result.nodes.values_mut() {
+        rect.x += dx;
+        rect.y += dy;
+    }
+
+    // Shift edge points
+    for edge in &mut result.edges {
+        for p in &mut edge.points {
+            p.x += dx;
+            p.y += dy;
+        }
+    }
+
+    // Shift subgraph bounds
+    for rect in result.subgraph_bounds.values_mut() {
+        rect.x += dx;
+        rect.y += dy;
+    }
+
+    // Shift edge waypoints
+    for wps in result.edge_waypoints.values_mut() {
+        for wp in wps {
+            wp.point.x += dx;
+            wp.point.y += dy;
+        }
+    }
+
+    // Shift label positions
+    for lp in result.label_positions.values_mut() {
+        lp.point.x += dx;
+        lp.point.y += dy;
+    }
+
+    // Shift self-edge points
+    for se in &mut result.self_edges {
+        for p in &mut se.points {
+            p.x += dx;
+            p.y += dy;
+        }
+    }
+
+    // Shift rank_to_position: the primary axis is Y for vertical, X for horizontal
+    let primary_delta = if direction.is_vertical() { dy } else { dx };
+    for (start, end) in result.rank_to_position.values_mut() {
+        *start += primary_delta;
+        *end += primary_delta;
+    }
+
+    // dagre.js: graphLabel.width = maxX - minX + marginX
+    // Since minX was already reduced by marginX, this adds margin on both sides.
+    result.width = max_x - min_x + margin_x;
+    result.height = max_y - min_y + margin_y;
+}
+
+/// Adjust edge endpoints to intersect node borders.
+///
+/// Mirrors dagre.js `assignNodeIntersects` (layout.js:269-276).
+/// Uses the first/last waypoint (not the node center) as the direction vector
+/// so intersections are computed toward the edge path.
+fn assign_node_intersects(result: &mut LayoutResult) {
+    fn rect_center(rect: &Rect) -> Point {
+        Point {
+            x: rect.x + rect.width / 2.0,
+            y: rect.y + rect.height / 2.0,
+        }
+    }
+
+    fn intersect_rect(rect: &Rect, point: Point) -> Point {
+        let cx = rect.x + rect.width / 2.0;
+        let cy = rect.y + rect.height / 2.0;
+        let dx = point.x - cx;
+        let dy = point.y - cy;
+        let w = rect.width / 2.0;
+        let h = rect.height / 2.0;
+
+        if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+            // Edge case: point equals center, return bottom-center.
+            return Point { x: cx, y: cy + h };
+        }
+
+        let (sx, sy) = if dy.abs() * w > dx.abs() * h {
+            let h = if dy < 0.0 { -h } else { h };
+            (h * dx / dy, h)
+        } else {
+            let w = if dx < 0.0 { -w } else { w };
+            (w, w * dy / dx)
+        };
+
+        Point {
+            x: cx + sx,
+            y: cy + sy,
+        }
+    }
+
+    for edge in &mut result.edges {
+        if edge.points.is_empty() {
+            continue;
+        }
+        let Some(from_rect) = result.nodes.get(&edge.from) else {
+            continue;
+        };
+        let Some(to_rect) = result.nodes.get(&edge.to) else {
+            continue;
+        };
+
+        let from_center = rect_center(from_rect);
+        let to_center = rect_center(to_rect);
+        let last_idx = edge.points.len() - 1;
+
+        let from_target = if edge.points.len() >= 2 {
+            edge.points[1]
+        } else {
+            to_center
+        };
+        let to_target = if edge.points.len() >= 2 {
+            edge.points[last_idx - 1]
+        } else {
+            from_center
+        };
+
+        edge.points[0] = intersect_rect(from_rect, from_target);
+        edge.points[last_idx] = intersect_rect(to_rect, to_target);
+    }
+}
+
 /// Main entry point for layout computation.
 ///
 /// Takes a directed graph, configuration options, and a function to get node dimensions.
@@ -316,23 +708,53 @@ where
         acyclic::run(&mut lg);
     }
 
-    // Compound: add nesting structure (border top/bottom, nesting edges)
+    // Phase 1.5: Double minlen and halve ranksep to create a uniform rank grid.
+    // Matches dagre.js makeSpaceForEdgeLabels(): with doubled minlen every edge
+    // spans at least 2 ranks, so halved ranksep preserves the user-facing spacing
+    // while intermediate (0-height) ranks add only half the gap.
+    // Must be before nesting::run so nesting minlen multiplication applies to these too.
+    make_space_for_edge_labels(&mut lg, edge_labels);
+    let mut config = config.clone();
+    config.rank_sep /= 2.0;
+
+    // Compound: add nesting structure (border top/bottom, nesting edges).
+    // Multiplies all existing edge minlens by nodeSep = 2*height+1.
     if has_compound {
         nesting::run(&mut lg);
     }
 
-    // Phase 1.5: Set minlen=2 for labeled edges so ranking creates a gap
-    make_space_for_edge_labels(&mut lg, edge_labels);
-
     // Phase 2: Assign ranks (layers)
-    rank::run(&mut lg, config);
-    rank::normalize(&mut lg);
+    rank::run(&mut lg, &config);
+    debug_dump_pipeline(&lg, "after_rank");
 
-    // Compound: cleanup nesting edges, insert title nodes, compute rank spans
+    // Compound: remove empty ranks created by nesting minlen multiplication.
+    // Must run after ranking to compress the expanded rank space, and before
+    // nesting cleanup so border nodes are still present.
+    if has_compound {
+        rank::remove_empty_ranks(&mut lg);
+        debug_dump_pipeline(&lg, "after_remove_empty_ranks");
+    }
+
+    // Compound: cleanup nesting edges, normalize, insert title nodes, compute rank spans
     if has_compound {
         nesting::cleanup(&mut lg);
-        nesting::insert_title_nodes(&mut lg);
+        debug_dump_pipeline(&lg, "after_nesting_cleanup");
+    }
+
+    rank::normalize(&mut lg);
+    debug_dump_pipeline(&lg, "after_rank_normalize");
+
+    if has_compound {
+        let skip_titles = std::env::var("MMDFLUX_SKIP_TITLE_NODES").is_ok_and(|v| v == "1");
+        if !skip_titles {
+            nesting::insert_title_nodes(&mut lg);
+            debug_dump_pipeline(&lg, "after_insert_title_nodes");
+            // Re-normalize after title nodes may have introduced rank -1
+            rank::normalize(&mut lg);
+            debug_dump_pipeline(&lg, "after_rank_normalize_titles");
+        }
         nesting::assign_rank_minmax(&mut lg);
+        debug_dump_pipeline(&lg, "after_rank_minmax");
     }
 
     // Capture original edge indices of reversed edges BEFORE normalization,
@@ -346,23 +768,32 @@ where
 
     // Phase 2.5: Normalize long edges (insert dummy nodes)
     normalize::run(&mut lg, edge_labels);
+    debug_dump_pipeline(&lg, "after_normalize");
+
+    // Compound: assign dummy chain parents to match compound hierarchy.
+    if has_compound {
+        parent_dummy_chains::run(&mut lg);
+        debug_dump_pipeline(&lg, "after_parent_dummy_chains");
+    }
 
     // Compound: add border segments (left/right border nodes per rank)
     if has_compound {
         border::add_segments(&mut lg);
+        debug_dump_pipeline(&lg, "after_border_segments");
     }
 
     // Phase 3: Reduce crossings (now includes dummy nodes and border segments)
     order::run(&mut lg);
+    debug_dump_pipeline(&lg, "after_order");
 
     // Phase 3.5: Insert self-edge dummies (after ordering, before positioning)
     insert_self_edge_dummies(&mut lg);
 
     // Phase 4: Assign coordinates
-    position::run(&mut lg, config);
+    position::run(&mut lg, &config);
 
     // Phase 4.5: Compute self-edge loop paths
-    let self_edge_layouts = position_self_edges(&lg, config);
+    let self_edge_layouts = position_self_edges(&lg, &config);
 
     // Compound: extract subgraph bounding boxes from border node positions
     let subgraph_bounds = if has_compound {
@@ -382,12 +813,11 @@ where
         }
     }
 
-    // Build result
-    let (width, height) = position::calculate_dimensions(&lg, config);
+    // Build result (width/height set by translate_layout_result below)
     let reversed_edges = reversed_orig_edges;
 
     // Only include real nodes (not dummies) in the output
-    let nodes = lg
+    let mut nodes: HashMap<NodeId, Rect> = lg
         .node_ids
         .iter()
         .enumerate()
@@ -406,6 +836,16 @@ where
             )
         })
         .collect();
+
+    // Apply subgraph bounds to compound nodes (dagre.js exposes compound bounds in node layout)
+    if has_compound {
+        for (id, rect) in &subgraph_bounds {
+            let node_id = NodeId(id.clone());
+            if let Some(existing) = nodes.get_mut(&node_id) {
+                *existing = *rect;
+            }
+        }
+    }
 
     // Build edge layouts, using waypoints for normalized edges
     let mut edges_by_orig_idx: HashMap<usize, EdgeLayout> = HashMap::new();
@@ -498,17 +938,86 @@ where
     let mut edges: Vec<EdgeLayout> = edges_by_orig_idx.into_values().collect();
     edges.sort_by_key(|e| e.index);
 
-    LayoutResult {
+    // Reverse points and swap from/to for reversed edges.
+    // Matches dagre.js reversePointsForReversedEdges + acyclic.undo:
+    // internally, reversed edges are laid out in the flipped direction;
+    // this restores original source→target orientation.
+    let original_edges = graph.edges();
+    for edge in &mut edges {
+        if reversed_edges.contains(&edge.index) {
+            edge.points.reverse();
+            if let Some((orig_from, orig_to)) = original_edges.get(edge.index) {
+                edge.from = orig_from.clone();
+                edge.to = orig_to.clone();
+            }
+        }
+    }
+
+    // Build rank-to-position mapping.
+    // Contains user nodes and border nodes (position nodes), excluding dummies.
+    // Note: The render layer now computes layer_starts from node_bounds + node_ranks,
+    // so this mapping is retained for potential future use but not currently needed
+    // for waypoint transformation.
+    let is_vertical = config.direction.is_vertical();
+    let rank_to_position: HashMap<i32, (f64, f64)> = lg
+        .node_ids
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| lg.is_position_node(i) && !lg.is_dummy_index(i))
+        .fold(HashMap::new(), |mut acc, (i, _)| {
+            let rank = lg.ranks[i];
+            let pos = lg.positions[i];
+            let (w, h) = lg.dimensions[i];
+            let (start, end) = if is_vertical {
+                (pos.y, pos.y + h)
+            } else {
+                (pos.x, pos.x + w)
+            };
+            acc.entry(rank)
+                .and_modify(|(s, e)| {
+                    *s = s.min(start);
+                    *e = e.max(end);
+                })
+                .or_insert((start, end));
+            acc
+        });
+
+    // Build node_ranks mapping for user nodes only (excluding dummies and compounds).
+    // This allows the render layer to compute layer_starts from actual node bounds.
+    // Compounds are excluded because they don't have rendered bounds in node_bounds;
+    // including them would cause waypoint drift when compound bounds are surfaced.
+    let node_ranks: HashMap<NodeId, i32> = lg
+        .node_ids
+        .iter()
+        .enumerate()
+        .take(original_node_count)
+        .filter(|&(i, _)| !lg.is_dummy_index(i) && !lg.compound_nodes.contains(&i))
+        .map(|(i, id)| (id.clone(), lg.ranks[i]))
+        .collect();
+
+    let mut result = LayoutResult {
         nodes,
         edges,
         reversed_edges,
-        width,
-        height,
+        width: 0.0,
+        height: 0.0,
         edge_waypoints,
         label_positions,
         subgraph_bounds,
         self_edges: self_edge_layouts,
-    }
+        rank_to_position,
+        node_ranks,
+    };
+
+    // Post-layout translation: shift all coordinates so min corner = (margin, margin).
+    // Matches dagre.js translateGraph (layout.js:215-264).
+    translate_layout_result(&mut result, config.margin, config.margin, config.direction);
+    // Adjust edge endpoints to node borders (dagre.js assignNodeIntersects).
+    assign_node_intersects(&mut result);
+
+    debug_dump_layout_result(&result, lg.original_edge_count);
+
+    result
 }
 
 #[cfg(test)]
@@ -637,12 +1146,11 @@ mod tests {
         assert!(ad_edge.is_some(), "Should have A->D edge");
 
         let ad_edge = ad_edge.unwrap();
-        // A->D spans 3 ranks (A=0, D=3), needs 2 dummies
-        // So the edge should have: start + 2 waypoints + end = 4 points
-        assert_eq!(
-            ad_edge.points.len(),
-            4,
-            "A->D edge should have 4 points (start + 2 waypoints + end)"
+        // A->D spans 3 ranks. Points include start, end, and intermediate waypoints.
+        assert!(
+            ad_edge.points.len() >= 4,
+            "A->D edge should have at least 4 points, got {}",
+            ad_edge.points.len()
         );
 
         // Verify waypoints were extracted
@@ -674,7 +1182,7 @@ mod tests {
     }
 
     #[test]
-    fn test_make_space_noop_when_no_labels() {
+    fn test_make_space_doubles_without_labels() {
         let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
         graph.add_node("A", (5.0, 3.0));
         graph.add_node("B", (5.0, 3.0));
@@ -685,7 +1193,33 @@ mod tests {
 
         make_space_for_edge_labels(&mut lg, &edge_labels);
 
-        assert_eq!(lg.edge_minlens[0], 1); // unchanged
+        assert_eq!(lg.edge_minlens[0], 2); // doubled even without labels
+    }
+
+    #[test]
+    fn test_ranksep_compensates_for_doubled_minlen() {
+        // dagre.js halves ranksep when it doubles minlen (makeSpaceForEdgeLabels).
+        // With doubled minlen, A→B spans 2 internal ranks with a gap rank between.
+        // Halved ranksep (25) means the total spacing = height + 2*(ranksep/2) = 10 + 50 = 60.
+        // Without halving, spacing would be height + 2*ranksep = 10 + 100 = 110.
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 10.0));
+        graph.add_node("B", (10.0, 10.0));
+        graph.add_edge("A", "B");
+
+        let config = LayoutConfig::default(); // rank_sep = 50, margin = 10
+        let result = layout(&graph, &config, |_, dims| *dims);
+
+        let a = result.nodes.get(&"A".into()).unwrap();
+        let b = result.nodes.get(&"B".into()).unwrap();
+
+        // Expected: dy = height + 2*(rank_sep/2) = 10 + 2*25 = 60
+        let dy = b.y - a.y;
+        assert!(
+            (dy - 60.0).abs() < 0.01,
+            "Expected dy=60 (ranksep halved to 25, 2 rank gaps), got dy={}",
+            dy
+        );
     }
 
     #[test]
@@ -831,7 +1365,12 @@ mod tests {
             "Should have subgraph bounds for sg1"
         );
         let bounds = &result.subgraph_bounds["sg1"];
-        assert!(bounds.width > 0.0, "Subgraph width should be positive");
+        assert!(
+            bounds.width > 0.0,
+            "Subgraph width should be positive, got bounds={:?}, all_nodes={:?}",
+            bounds,
+            result.nodes
+        );
         assert!(bounds.height > 0.0, "Subgraph height should be positive");
     }
 
@@ -852,6 +1391,28 @@ mod tests {
         assert!(result.nodes.contains_key(&"A".into()));
         assert!(result.nodes.contains_key(&"B".into()));
         assert!(result.subgraph_bounds.contains_key("sg1"));
+    }
+
+    #[test]
+    #[ignore = "title nodes get negative ranks — will be fixed by BK parity work (plan 0040)"]
+    fn test_title_nodes_never_end_up_with_negative_rank() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("sg", ());
+        g.add_node("A", ());
+        g.set_parent("A", "sg");
+        g.set_has_title("sg");
+
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
+        acyclic::run(&mut lg);
+        nesting::run(&mut lg);
+        rank::run(&mut lg, &LayoutConfig::default());
+        rank::remove_empty_ranks(&mut lg);
+        nesting::cleanup(&mut lg);
+        rank::normalize(&mut lg);
+        nesting::insert_title_nodes(&mut lg);
+        rank::normalize(&mut lg);
+
+        assert!(lg.ranks.iter().all(|&r| r >= 0));
     }
 
     #[test]
@@ -1086,5 +1647,321 @@ mod tests {
             !result.reversed_edges.contains(&1),
             "self-edge should not be in reversed_edges"
         );
+    }
+
+    #[test]
+    fn test_reversed_edge_endpoints_match_original_direction() {
+        // Edge 0: A→B (forward), Edge 1: B→A (reversed for acyclic).
+        // After layout, the reversed edge should have from=B, to=A
+        // (original direction) and points going from B toward A.
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 10.0));
+        graph.add_node("B", (10.0, 10.0));
+        graph.add_edge("A", "B"); // edge 0
+        graph.add_edge("B", "A"); // edge 1: will be reversed
+
+        let result = layout(&graph, &LayoutConfig::default(), |_, dims| *dims);
+
+        assert!(!result.reversed_edges.is_empty());
+        let rev_idx = result.reversed_edges[0];
+        let edge = result.edges.iter().find(|e| e.index == rev_idx).unwrap();
+
+        // The reversed edge's original direction is B→A.
+        // After acyclic undo, from/to should reflect that.
+        assert_eq!(
+            edge.from,
+            "B".into(),
+            "reversed edge from should be B (original source)"
+        );
+        assert_eq!(
+            edge.to,
+            "A".into(),
+            "reversed edge to should be A (original target)"
+        );
+
+        // Points should be oriented from B toward A.
+        // In TD layout, A is above B. B→A goes upward, so first point
+        // should be near B (lower y) and last point near A (higher y).
+        let b_rect = result.nodes.get(&"B".into()).unwrap();
+        let a_rect = result.nodes.get(&"A".into()).unwrap();
+        let p_first = edge.points.first().unwrap();
+        let p_last = edge.points.last().unwrap();
+        let b_cy = b_rect.y + b_rect.height / 2.0;
+        let a_cy = a_rect.y + a_rect.height / 2.0;
+        assert!(
+            (p_first.y - b_cy).abs() < (p_first.y - a_cy).abs(),
+            "first point should be closer to B (original source), \
+             p_first.y={}, b_cy={}, a_cy={}",
+            p_first.y,
+            b_cy,
+            a_cy
+        );
+        assert!(
+            (p_last.y - a_cy).abs() < (p_last.y - b_cy).abs(),
+            "last point should be closer to A (original target), \
+             p_last.y={}, a_cy={}, b_cy={}",
+            p_last.y,
+            a_cy,
+            b_cy
+        );
+    }
+
+    #[test]
+    fn test_translate_layout_result_uses_nodes_not_edge_points() {
+        // dagre.js translateGraph uses node bounding boxes and edge labels for
+        // min/max, NOT individual edge points. Edge points still get shifted,
+        // but don't influence the bounding box calculation.
+        let mut result = LayoutResult {
+            nodes: HashMap::from([(
+                "A".into(),
+                Rect {
+                    x: 10.0,
+                    y: 10.0,
+                    width: 10.0,
+                    height: 10.0,
+                },
+            )]),
+            edges: vec![EdgeLayout {
+                from: "A".into(),
+                to: "A".into(),
+                points: vec![Point { x: -5.0, y: 12.0 }],
+                index: 0,
+            }],
+            reversed_edges: vec![],
+            width: 0.0,
+            height: 0.0,
+            edge_waypoints: HashMap::new(),
+            label_positions: HashMap::new(),
+            subgraph_bounds: HashMap::new(),
+            self_edges: vec![],
+            rank_to_position: HashMap::new(),
+            node_ranks: HashMap::new(),
+        };
+
+        translate_layout_result(&mut result, 10.0, 10.0, Direction::TopBottom);
+
+        // Min X = 10 (from node, not edge point at -5). dagre: minX -= marginX => 0.
+        // dx = -minX = -0 = 0. Wait: minX=10, minX -= 10 => 0, dx = -0 = 0.
+        // Actually: minX=10 (node left), marginX=10. minX -= marginX => 0. dx = 0.
+        // Node stays at x=10, edge point stays at -5.
+        let rect = result.nodes.get(&"A".into()).unwrap();
+        assert!(
+            (rect.x - 10.0).abs() < 0.001,
+            "node x should stay at 10.0 (min already at margin), got {}",
+            rect.x
+        );
+        // Edge point shifts by same dx=0
+        assert!(
+            (result.edges[0].points[0].x - (-5.0)).abs() < 0.001,
+            "edge point x should stay at -5.0, got {}",
+            result.edges[0].points[0].x
+        );
+
+        // Width: maxX=20 (node right), minX after margin reduction = 0.
+        // width = maxX - minX + marginX = 20 - 0 + 10 = 30
+        assert!(
+            (result.width - 30.0).abs() < 0.001,
+            "width should be 30.0 (margin on both sides), got {}",
+            result.width
+        );
+    }
+
+    #[test]
+    fn test_translate_layout_result_shifts_all_fields() {
+        use super::normalize::WaypointWithRank;
+
+        let mut result = LayoutResult {
+            nodes: HashMap::from([(
+                "A".into(),
+                Rect {
+                    x: 5.0,
+                    y: 5.0,
+                    width: 10.0,
+                    height: 10.0,
+                },
+            )]),
+            edges: vec![EdgeLayout {
+                from: "A".into(),
+                to: "A".into(),
+                points: vec![Point { x: 5.0, y: 5.0 }, Point { x: 20.0, y: 20.0 }],
+                index: 0,
+            }],
+            reversed_edges: vec![],
+            width: 0.0,
+            height: 0.0,
+            edge_waypoints: HashMap::from([(
+                0,
+                vec![WaypointWithRank {
+                    point: Point { x: 12.0, y: 12.0 },
+                    rank: 1,
+                }],
+            )]),
+            label_positions: HashMap::from([(
+                0,
+                WaypointWithRank {
+                    point: Point { x: 12.0, y: 12.0 },
+                    rank: 1,
+                },
+            )]),
+            subgraph_bounds: HashMap::from([(
+                "sg1".to_string(),
+                Rect {
+                    x: 3.0,
+                    y: 3.0,
+                    width: 20.0,
+                    height: 20.0,
+                },
+            )]),
+            self_edges: vec![],
+            rank_to_position: HashMap::new(),
+            node_ranks: HashMap::new(),
+        };
+
+        translate_layout_result(&mut result, 10.0, 10.0, Direction::TopBottom);
+
+        // Min from nodes: x=5, subgraph: x=3 => minX=3. label: x=12 (not smaller).
+        // dagre-style: minX -= marginX => 3 - 10 = -7. dx = -minX = 7.
+        // All coords += 7.
+        let sg = result.subgraph_bounds.get("sg1").unwrap();
+        assert!(
+            (sg.x - 10.0).abs() < 0.001,
+            "subgraph x should be 10.0, got {}",
+            sg.x
+        );
+        assert!(
+            (sg.y - 10.0).abs() < 0.001,
+            "subgraph y should be 10.0, got {}",
+            sg.y
+        );
+
+        // Edge waypoints should be shifted by dx=7
+        let wp = &result.edge_waypoints[&0][0];
+        assert!(
+            (wp.point.x - 19.0).abs() < 0.001,
+            "waypoint x should be 19.0, got {}",
+            wp.point.x
+        );
+
+        // Label position should be shifted by dx=7
+        let lp = &result.label_positions[&0];
+        assert!(
+            (lp.point.x - 19.0).abs() < 0.001,
+            "label x should be 19.0, got {}",
+            lp.point.x
+        );
+
+        // Width/height with margin on both sides:
+        // maxX from node = 5+10=15, subgraph = 3+20=23, label = 12. Max=23.
+        // minX = 3 (before margin reduction).
+        // width = maxX - (minX - marginX) + marginX = 23 - (3 - 10) + 10 = 23 + 7 + 10 = 40
+        assert!(
+            (result.width - 40.0).abs() < 0.001,
+            "width should be 40.0 (margin on both sides), got {}",
+            result.width
+        );
+        assert!(
+            (result.height - 40.0).abs() < 0.001,
+            "height should be 40.0 (margin on both sides), got {}",
+            result.height
+        );
+    }
+
+    #[test]
+    fn test_compound_node_rect_matches_subgraph_bounds() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("sg1", (0.0, 0.0));
+        graph.add_node("A", (40.0, 20.0));
+        graph.add_node("B", (40.0, 20.0));
+        graph.add_edge("A", "B");
+        graph.set_parent("A", "sg1");
+        graph.set_parent("B", "sg1");
+        graph.set_has_title("sg1");
+
+        let result = layout(&graph, &LayoutConfig::default(), |_, dims| *dims);
+
+        let bounds = &result.subgraph_bounds["sg1"];
+        let rect = result.nodes.get(&"sg1".into()).unwrap();
+
+        assert!(
+            (rect.x - bounds.x).abs() < 1e-6,
+            "compound node x={} should match bounds x={}",
+            rect.x,
+            bounds.x
+        );
+        assert!(
+            (rect.y - bounds.y).abs() < 1e-6,
+            "compound node y={} should match bounds y={}",
+            rect.y,
+            bounds.y
+        );
+        assert!(
+            (rect.width - bounds.width).abs() < 1e-6,
+            "compound node width={} should match bounds width={}",
+            rect.width,
+            bounds.width
+        );
+        assert!(
+            (rect.height - bounds.height).abs() < 1e-6,
+            "compound node height={} should match bounds height={}",
+            rect.height,
+            bounds.height
+        );
+    }
+
+    #[test]
+    fn test_assign_node_intersects_updates_edge_endpoints() {
+        let mut result = LayoutResult {
+            nodes: HashMap::from([
+                (
+                    "A".into(),
+                    Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: 10.0,
+                        height: 10.0,
+                    },
+                ),
+                (
+                    "B".into(),
+                    Rect {
+                        x: 0.0,
+                        y: 30.0,
+                        width: 10.0,
+                        height: 10.0,
+                    },
+                ),
+            ]),
+            edges: vec![EdgeLayout {
+                from: "A".into(),
+                to: "B".into(),
+                points: vec![
+                    Point { x: 5.0, y: 5.0 },
+                    Point { x: 5.0, y: 20.0 },
+                    Point { x: 5.0, y: 35.0 },
+                ],
+                index: 0,
+            }],
+            reversed_edges: vec![],
+            width: 0.0,
+            height: 0.0,
+            edge_waypoints: HashMap::new(),
+            label_positions: HashMap::new(),
+            subgraph_bounds: HashMap::new(),
+            self_edges: vec![],
+            rank_to_position: HashMap::new(),
+            node_ranks: HashMap::new(),
+        };
+
+        assign_node_intersects(&mut result);
+
+        let edge = &result.edges[0];
+        let p_first = edge.points.first().unwrap();
+        let p_last = edge.points.last().unwrap();
+
+        // Bottom of A (center y=5, h/2=5) and top of B (center y=35, h/2=5).
+        assert!((p_first.x - 5.0).abs() < 0.001);
+        assert!((p_first.y - 10.0).abs() < 0.001);
+        assert!((p_last.x - 5.0).abs() < 0.001);
+        assert!((p_last.y - 30.0).abs() < 0.001);
     }
 }

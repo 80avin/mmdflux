@@ -93,3 +93,42 @@ Test fixtures live in `tests/fixtures/` with `.mmd` files covering various patte
 - **Complex examples**: `complex.mmd`, `http_request.mmd`, `ci_pipeline.mmd`, `git_workflow.mmd`
 
 Integration tests in `tests/integration.rs` verify parsing, building, and rendering.
+
+## Debug Infrastructure
+
+The project includes tooling to compare mmdflux layout against dagre.js v0.8.5.
+
+### Setup
+
+```bash
+./scripts/setup-debug-deps.sh    # Clone dagre and mermaid to deps/
+```
+
+### Parity Tests
+
+```bash
+cargo test --test dagre_parity          # Compare layout against dagre.js fixtures
+```
+
+### Refreshing Fixtures
+
+```bash
+./scripts/refresh-parity-fixtures.sh   # Regenerate from dagre.js
+```
+
+### Debug Environment Variables
+
+- `MMDFLUX_DEBUG_LAYOUT=<file>` - Write layout JSON
+- `MMDFLUX_DEBUG_PIPELINE=<file>` - Write pipeline stages (JSONL)
+- `MMDFLUX_DEBUG_BORDER_NODES=1` - Print border node trace
+- `MMDFLUX_DEBUG_ORDER=1` - Order debug tracing
+- `MMDFLUX_DEBUG_BK_TRACE=1` - Brandes-Köpf coordinate assignment trace
+
+### Debug Scripts
+
+- `scripts/dump-dagre-layout.js` - Run dagre.js layout
+- `scripts/dump-dagre-pipeline.js` - Trace dagre pipeline stages
+- `scripts/dump-dagre-borders.js` - Extract dagre border nodes
+- `scripts/dump-dagre-order.js` - Dump node order per rank
+
+See `docs/DEBUG.md` for comprehensive documentation.

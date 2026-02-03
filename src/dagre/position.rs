@@ -10,7 +10,7 @@ use super::types::{Direction, LayoutConfig, Point};
 
 /// Assign positions to all nodes.
 pub fn run(graph: &mut LayoutGraph, config: &LayoutConfig) {
-    let layers = rank::by_rank(graph);
+    let layers = rank::by_rank_filtered(graph, |node| graph.is_position_node(node));
 
     // Sort each layer by the computed order
     let sorted_layers: Vec<Vec<usize>> = layers
@@ -51,17 +51,20 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
     };
     let x_coords = position_x(graph, &bk_config);
 
-    // Find minimum x to shift everything to start at margin
-    let min_x = x_coords
-        .values()
-        .zip(graph.dimensions.iter())
-        .map(|(&center_x, (w, _))| center_x - w / 2.0)
+    // Find minimum x to shift everything to start at 0.
+    // Dagre applies margin later in translateGraph; we do the same.
+    let min_x = (0..graph.node_ids.len())
+        .filter_map(|node| {
+            x_coords
+                .get(&node)
+                .map(|&cx| cx - graph.dimensions[node].0 / 2.0)
+        })
         .fold(f64::INFINITY, f64::min);
 
-    let x_shift = config.margin - min_x;
+    let x_shift = -min_x;
 
     // Assign Y based on rank, X from BK algorithm
-    let mut y = config.margin;
+    let mut y = 0.0;
 
     for layer in layers.iter() {
         for &node in layer {
@@ -93,42 +96,22 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
         edge_sep: config.edge_sep,
         direction: config.direction,
     };
-    let mut y_coords = position_x(graph, &bk_config);
+    let y_coords = position_x(graph, &bk_config);
 
-    // Post-BK centering: center layer-0 source nodes among their successors.
-    // BK aligns via predecessors; layer-0 nodes have none, so they may default to
-    // their first child's position instead of being centered.
-    for &node in &layers[0] {
-        let has_predecessors = graph.edges.iter().any(|&(_, to, _)| to == node);
-        if has_predecessors {
-            continue;
-        }
-
-        let succ_ys: Vec<f64> = graph
-            .edges
-            .iter()
-            .filter(|&&(from, _, _)| from == node)
-            .filter_map(|&(_, to, _)| y_coords.get(&to).copied())
-            .collect();
-
-        if succ_ys.len() >= 2 {
-            let min_y = succ_ys.iter().copied().fold(f64::INFINITY, f64::min);
-            let max_y = succ_ys.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-            y_coords.insert(node, (min_y + max_y) / 2.0);
-        }
-    }
-
-    // Find minimum y to shift everything to start at margin
-    let min_y = y_coords
-        .values()
-        .zip(graph.dimensions.iter())
-        .map(|(&center_y, (_, h))| center_y - h / 2.0)
+    // Find minimum y to shift everything to start at 0.
+    // Dagre applies margin later in translateGraph; we do the same.
+    let min_y = (0..graph.node_ids.len())
+        .filter_map(|node| {
+            y_coords
+                .get(&node)
+                .map(|&cy| cy - graph.dimensions[node].1 / 2.0)
+        })
         .fold(f64::INFINITY, f64::min);
 
-    let y_shift = config.margin - min_y;
+    let y_shift = -min_y;
 
     // Assign X based on rank, Y from BK algorithm
-    let mut x = config.margin;
+    let mut x = 0.0;
 
     for layer in layers.iter() {
         for &node in layer {
@@ -177,28 +160,6 @@ fn reverse_positions(graph: &mut LayoutGraph, config: &LayoutConfig) {
         }
         _ => {}
     }
-}
-
-/// Calculate the total layout dimensions.
-pub fn calculate_dimensions(graph: &LayoutGraph, config: &LayoutConfig) -> (f64, f64) {
-    if graph.node_ids.is_empty() {
-        return (config.margin * 2.0, config.margin * 2.0);
-    }
-
-    let max_x = graph
-        .positions
-        .iter()
-        .zip(graph.dimensions.iter())
-        .map(|(p, (w, _))| p.x + w)
-        .fold(0.0, f64::max);
-    let max_y = graph
-        .positions
-        .iter()
-        .zip(graph.dimensions.iter())
-        .map(|(p, (_, h))| p.y + h)
-        .fold(0.0, f64::max);
-
-    (max_x + config.margin, max_y + config.margin)
 }
 
 #[cfg(test)]
@@ -357,21 +318,26 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_dimensions() {
-        let config = LayoutConfig {
-            direction: Direction::TopBottom,
-            node_sep: 10.0,
-            rank_sep: 20.0,
-            margin: 5.0,
-            ..Default::default()
-        };
+    fn test_position_skips_compound_parents() {
+        let mut g: DiGraph<()> = DiGraph::new();
+        g.add_node("sg", ());
+        g.add_node("A", ());
+        g.set_parent("A", "sg");
 
-        let lg = run_full_layout(&[("A", 100.0, 50.0)], &[], &config);
+        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
 
-        let (width, height) = calculate_dimensions(&lg, &config);
+        // Put A on a different rank so it gets a non-zero position,
+        // while the compound parent remains unpositioned.
+        lg.ranks[lg.node_index[&"sg".into()]] = 0;
+        lg.ranks[lg.node_index[&"A".into()]] = 1;
 
-        // Should be margin + node + margin
-        assert!((width - 110.0).abs() < 0.01); // 5 + 100 + 5
-        assert!((height - 60.0).abs() < 0.01); // 5 + 50 + 5
+        let config = LayoutConfig::default();
+        run(&mut lg, &config);
+
+        let sg_idx = lg.node_index[&"sg".into()];
+        let a_idx = lg.node_index[&"A".into()];
+
+        assert_eq!(lg.positions[sg_idx], Point::default());
+        assert_ne!(lg.positions[a_idx], Point::default());
     }
 }

@@ -46,6 +46,7 @@ fn process_statements(
                         parent: parent_subgraph.map(|s| s.to_string()),
                     },
                 );
+                diagram.subgraph_order.push(sg_spec.id.clone());
             }
         }
     }

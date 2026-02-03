@@ -43,6 +43,8 @@ pub struct Diagram {
     pub edges: Vec<Edge>,
     /// Subgraphs indexed by their ID.
     pub subgraphs: HashMap<String, Subgraph>,
+    /// Subgraph IDs in parse order (inner-first / post-order).
+    pub subgraph_order: Vec<String>,
 }
 
 impl Diagram {
@@ -53,6 +55,7 @@ impl Diagram {
             nodes: HashMap::new(),
             edges: Vec::new(),
             subgraphs: HashMap::new(),
+            subgraph_order: Vec::new(),
         }
     }
 
@@ -157,6 +160,24 @@ mod tests {
             parent: Some("outer".to_string()),
         };
         assert_eq!(sg.parent, Some("outer".to_string()));
+    }
+
+    #[test]
+    fn subgraph_parse_order_is_postorder() {
+        use crate::graph::builder::build_diagram;
+        use crate::parser::parse_flowchart;
+        let input = include_str!("../../tests/fixtures/external_node_subgraph.mmd");
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert_eq!(
+            diagram.subgraph_order,
+            vec![
+                "us-east".to_string(),
+                "us-west".to_string(),
+                "Cloud".to_string(),
+            ]
+        );
     }
 
     #[test]

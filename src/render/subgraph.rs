@@ -18,13 +18,18 @@ pub fn render_subgraph_borders(
 ) {
     // Sort by depth: outer borders first (background), inner last (foreground)
     let mut sorted_bounds: Vec<_> = subgraph_bounds.values().collect();
-    sorted_bounds.sort_by_key(|b| b.depth);
+    sorted_bounds.sort_by(|a, b| a.depth.cmp(&b.depth).then_with(|| a.title.cmp(&b.title)));
 
     for bounds in sorted_bounds {
         let x = bounds.x;
         let y = bounds.y;
         let w = bounds.width;
         let h = bounds.height;
+
+        // Need at least 2×2 to draw a border box (corners only)
+        if w < 2 || h < 2 {
+            continue;
+        }
 
         // Top edge with embedded title: ┌─ Title ─┐
         canvas.set_subgraph_border(x, y, charset.corner_tl);
@@ -58,6 +63,14 @@ pub fn render_subgraph_borders(
             // Right horizontal fill
             for dx in (title_end + 1)..(x + w - 1) {
                 canvas.set_subgraph_border(dx, y, charset.horizontal);
+            }
+
+            // Protect the entire top border row so edges cannot corrupt
+            // the embedded title segment.
+            for dx in 1..(w - 1) {
+                if let Some(cell) = canvas.get(x + dx, y) {
+                    let _ = canvas.set_subgraph_title_char(x + dx, y, cell.ch);
+                }
             }
         } else {
             // No title or too narrow: plain horizontal
