@@ -220,8 +220,9 @@ fn assert_points_close(actual: &[(f64, f64)], expected: &[[f64; 2]], tolerance: 
 mod subgraph_bounds {
     use super::*;
 
-    const INPUT_PATH: &str = ".gumbo/research/0032-bk-compaction-divergence/full-debug-2026-02-02/fixtures/external_node_subgraph/mmdflux-dagre-input.json";
-    const EXPECTED_PATH: &str = ".gumbo/research/0032-bk-compaction-divergence/full-debug-2026-02-02/fixtures/external_node_subgraph/dagre-layout.json";
+    const INPUT_PATH: &str =
+        "tests/parity-fixtures/external_node_subgraph/mmdflux-dagre-input.json";
+    const EXPECTED_PATH: &str = "tests/parity-fixtures/external_node_subgraph/dagre-layout.json";
 
     /// Task 2.1: Regression test for subgraph bounds parity.
     ///
@@ -411,10 +412,13 @@ mod subgraph_bounds {
 mod border_ordering {
     use super::*;
 
-    const INPUT_PATH: &str = ".gumbo/research/0032-bk-compaction-divergence/full-debug-2026-02-02/fixtures/external_node_subgraph/mmdflux-dagre-input.json";
-    const EXPECTED_PATH: &str = ".gumbo/research/0032-bk-compaction-divergence/full-debug-2026-02-02/fixtures/external_node_subgraph/dagre-layout.json";
-    const MMDFLUX_BORDER_NODES_PATH: &str = ".gumbo/research/0032-bk-compaction-divergence/full-debug-2026-02-02/fixtures/external_node_subgraph/mmdflux-border-nodes.txt";
-    const DAGRE_BORDER_NODES_PATH: &str = ".gumbo/research/0032-bk-compaction-divergence/full-debug-2026-02-02/fixtures/external_node_subgraph/dagre-border-nodes.txt";
+    const INPUT_PATH: &str =
+        "tests/parity-fixtures/external_node_subgraph/mmdflux-dagre-input.json";
+    const EXPECTED_PATH: &str = "tests/parity-fixtures/external_node_subgraph/dagre-layout.json";
+    const MMDFLUX_BORDER_NODES_PATH: &str =
+        "tests/parity-fixtures/external_node_subgraph/mmdflux-border-nodes.txt";
+    const DAGRE_BORDER_NODES_PATH: &str =
+        "tests/parity-fixtures/external_node_subgraph/dagre-border-nodes.txt";
 
     /// Task 2.2: Characterization test for border node x positions.
     ///
@@ -545,8 +549,8 @@ mod border_ordering {
 mod backward_edge_bends {
     use super::*;
 
-    const INPUT_PATH: &str = ".gumbo/research/0032-bk-compaction-divergence/full-debug-2026-02-02/fixtures/backward_in_subgraph/mmdflux-dagre-input.json";
-    const EXPECTED_PATH: &str = ".gumbo/research/0032-bk-compaction-divergence/full-debug-2026-02-02/fixtures/backward_in_subgraph/dagre-layout.json";
+    const INPUT_PATH: &str = "tests/parity-fixtures/backward_in_subgraph/mmdflux-dagre-input.json";
+    const EXPECTED_PATH: &str = "tests/parity-fixtures/backward_in_subgraph/dagre-layout.json";
 
     /// Task 3.1: Regression test for backward edge bend points parity.
     ///

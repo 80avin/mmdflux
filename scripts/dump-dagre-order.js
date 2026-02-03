@@ -4,6 +4,15 @@
 const fs = require("fs");
 const path = require("path");
 
+// Dagre root: use DAGRE_ROOT env var, or default to deps/dagre relative to repo root
+const dagreRoot = process.env.DAGRE_ROOT || path.join(__dirname, "..", "deps", "dagre");
+if (!fs.existsSync(dagreRoot)) {
+  console.error(`Error: Dagre not found at ${dagreRoot}`);
+  console.error("Run ./scripts/setup-debug-deps.sh to set up dependencies,");
+  console.error("or set DAGRE_ROOT environment variable to your dagre checkout.");
+  process.exit(1);
+}
+
 if (process.argv.length < 3) {
   console.error("Usage: dump-dagre-order.js <input.json>");
   process.exit(1);
@@ -11,9 +20,14 @@ if (process.argv.length < 3) {
 
 const inputPath = process.argv[2];
 const data = JSON.parse(fs.readFileSync(inputPath, "utf8"));
-
-const dagreRoot = "/Users/kevin/src/dagre";
-const Graph = require(path.join(dagreRoot, "node_modules", "@dagrejs", "graphlib")).Graph;
+let Graph;
+try {
+  // dagre >= 1.x (scoped graphlib)
+  Graph = require(path.join(dagreRoot, "node_modules", "@dagrejs", "graphlib")).Graph;
+} catch (err) {
+  // dagre 0.8.x
+  Graph = require(path.join(dagreRoot, "node_modules", "graphlib")).Graph;
+}
 const acyclic = require(path.join(dagreRoot, "lib", "acyclic"));
 const normalize = require(path.join(dagreRoot, "lib", "normalize"));
 const rank = require(path.join(dagreRoot, "lib", "rank"));

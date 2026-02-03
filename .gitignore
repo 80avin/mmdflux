@@ -1,4 +1,6 @@
 /target
+# Debug dependencies (cloned by setup-debug-deps.sh)
+/deps
 # Gumbo (plans, research, issues tracked separately)
 /.gumbo
 CLAUDE.local.md
