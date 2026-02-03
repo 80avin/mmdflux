@@ -845,6 +845,21 @@ where
     let mut edges: Vec<EdgeLayout> = edges_by_orig_idx.into_values().collect();
     edges.sort_by_key(|e| e.index);
 
+    // Reverse points and swap from/to for reversed edges.
+    // Matches dagre.js reversePointsForReversedEdges + acyclic.undo:
+    // internally, reversed edges are laid out in the flipped direction;
+    // this restores original source→target orientation.
+    let original_edges = graph.edges();
+    for edge in &mut edges {
+        if reversed_edges.contains(&edge.index) {
+            edge.points.reverse();
+            if let Some((orig_from, orig_to)) = original_edges.get(edge.index) {
+                edge.from = orig_from.clone();
+                edge.to = orig_to.clone();
+            }
+        }
+    }
+
     let mut result = LayoutResult {
         nodes,
         edges,
@@ -1492,6 +1507,63 @@ mod tests {
         assert!(
             !result.reversed_edges.contains(&1),
             "self-edge should not be in reversed_edges"
+        );
+    }
+
+    #[test]
+    fn test_reversed_edge_endpoints_match_original_direction() {
+        // Edge 0: A→B (forward), Edge 1: B→A (reversed for acyclic).
+        // After layout, the reversed edge should have from=B, to=A
+        // (original direction) and points going from B toward A.
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 10.0));
+        graph.add_node("B", (10.0, 10.0));
+        graph.add_edge("A", "B"); // edge 0
+        graph.add_edge("B", "A"); // edge 1: will be reversed
+
+        let result = layout(&graph, &LayoutConfig::default(), |_, dims| *dims);
+
+        assert!(!result.reversed_edges.is_empty());
+        let rev_idx = result.reversed_edges[0];
+        let edge = result.edges.iter().find(|e| e.index == rev_idx).unwrap();
+
+        // The reversed edge's original direction is B→A.
+        // After acyclic undo, from/to should reflect that.
+        assert_eq!(
+            edge.from,
+            "B".into(),
+            "reversed edge from should be B (original source)"
+        );
+        assert_eq!(
+            edge.to,
+            "A".into(),
+            "reversed edge to should be A (original target)"
+        );
+
+        // Points should be oriented from B toward A.
+        // In TD layout, A is above B. B→A goes upward, so first point
+        // should be near B (lower y) and last point near A (higher y).
+        let b_rect = result.nodes.get(&"B".into()).unwrap();
+        let a_rect = result.nodes.get(&"A".into()).unwrap();
+        let p_first = edge.points.first().unwrap();
+        let p_last = edge.points.last().unwrap();
+        let b_cy = b_rect.y + b_rect.height / 2.0;
+        let a_cy = a_rect.y + a_rect.height / 2.0;
+        assert!(
+            (p_first.y - b_cy).abs() < (p_first.y - a_cy).abs(),
+            "first point should be closer to B (original source), \
+             p_first.y={}, b_cy={}, a_cy={}",
+            p_first.y,
+            b_cy,
+            a_cy
+        );
+        assert!(
+            (p_last.y - a_cy).abs() < (p_last.y - b_cy).abs(),
+            "last point should be closer to A (original target), \
+             p_last.y={}, a_cy={}, b_cy={}",
+            p_last.y,
+            a_cy,
+            b_cy
         );
     }
 
