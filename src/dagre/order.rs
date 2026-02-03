@@ -1589,6 +1589,15 @@ mod tests {
 
         run(&mut lg);
 
+        let border_tops: HashSet<usize> = lg.border_top.values().copied().collect();
+        let border_bottoms: HashSet<usize> = lg.border_bottom.values().copied().collect();
+        let border_titles: HashSet<usize> = lg.border_title.values().copied().collect();
+        let is_excluded = |node: usize| {
+            border_tops.contains(&node)
+                || border_bottoms.contains(&node)
+                || border_titles.contains(&node)
+        };
+
         // For each rank in sg1's span, left border should be leftmost
         // and right border should be rightmost among sg1's children
         let left_borders = &lg.border_left[&sg1_idx];
@@ -1613,7 +1622,7 @@ mod tests {
             let sg1_children: Vec<usize> = layer
                 .iter()
                 .copied()
-                .filter(|&n| lg.parents[n] == Some(sg1_idx))
+                .filter(|&n| lg.parents[n] == Some(sg1_idx) && !is_excluded(n))
                 .collect();
 
             if sg1_children.len() >= 2 {
@@ -1669,17 +1678,27 @@ mod tests {
         let layers = layers_sorted_by_order(&layers, &lg);
         let sg1_idx = lg.node_index[&"sg1".into()];
         let sg2_idx = lg.node_index[&"sg2".into()];
+        let mut border_nodes: HashSet<usize> = HashSet::new();
+        for nodes in lg.border_left.values() {
+            border_nodes.extend(nodes.iter().copied());
+        }
+        for nodes in lg.border_right.values() {
+            border_nodes.extend(nodes.iter().copied());
+        }
+        border_nodes.extend(lg.border_top.values().copied());
+        border_nodes.extend(lg.border_bottom.values().copied());
+        border_nodes.extend(lg.border_title.values().copied());
 
         for layer in &layers {
             let sg1_children: Vec<usize> = layer
                 .iter()
                 .copied()
-                .filter(|&n| lg.parents[n] == Some(sg1_idx))
+                .filter(|&n| lg.parents[n] == Some(sg1_idx) && !border_nodes.contains(&n))
                 .collect();
             let sg2_children: Vec<usize> = layer
                 .iter()
                 .copied()
-                .filter(|&n| lg.parents[n] == Some(sg2_idx))
+                .filter(|&n| lg.parents[n] == Some(sg2_idx) && !border_nodes.contains(&n))
                 .collect();
 
             // Check contiguity: max_order - min_order + 1 == count

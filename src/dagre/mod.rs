@@ -588,6 +588,77 @@ fn translate_layout_result(result: &mut LayoutResult, margin_x: f64, margin_y: f
     result.height = max_y - min_y + margin_y;
 }
 
+/// Adjust edge endpoints to intersect node borders.
+///
+/// Mirrors dagre.js `assignNodeIntersects` (layout.js:269-276).
+/// Uses the first/last waypoint (not the node center) as the direction vector
+/// so intersections are computed toward the edge path.
+fn assign_node_intersects(result: &mut LayoutResult) {
+    fn rect_center(rect: &Rect) -> Point {
+        Point {
+            x: rect.x + rect.width / 2.0,
+            y: rect.y + rect.height / 2.0,
+        }
+    }
+
+    fn intersect_rect(rect: &Rect, point: Point) -> Point {
+        let cx = rect.x + rect.width / 2.0;
+        let cy = rect.y + rect.height / 2.0;
+        let dx = point.x - cx;
+        let dy = point.y - cy;
+        let w = rect.width / 2.0;
+        let h = rect.height / 2.0;
+
+        if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+            // Edge case: point equals center, return bottom-center.
+            return Point { x: cx, y: cy + h };
+        }
+
+        let (sx, sy) = if dy.abs() * w > dx.abs() * h {
+            let h = if dy < 0.0 { -h } else { h };
+            (h * dx / dy, h)
+        } else {
+            let w = if dx < 0.0 { -w } else { w };
+            (w, w * dy / dx)
+        };
+
+        Point {
+            x: cx + sx,
+            y: cy + sy,
+        }
+    }
+
+    for edge in &mut result.edges {
+        if edge.points.is_empty() {
+            continue;
+        }
+        let Some(from_rect) = result.nodes.get(&edge.from) else {
+            continue;
+        };
+        let Some(to_rect) = result.nodes.get(&edge.to) else {
+            continue;
+        };
+
+        let from_center = rect_center(from_rect);
+        let to_center = rect_center(to_rect);
+        let last_idx = edge.points.len() - 1;
+
+        let from_target = if edge.points.len() >= 2 {
+            edge.points[1]
+        } else {
+            to_center
+        };
+        let to_target = if edge.points.len() >= 2 {
+            edge.points[last_idx - 1]
+        } else {
+            from_center
+        };
+
+        edge.points[0] = intersect_rect(from_rect, from_target);
+        edge.points[last_idx] = intersect_rect(to_rect, to_target);
+    }
+}
+
 /// Main entry point for layout computation.
 ///
 /// Takes a directed graph, configuration options, and a function to get node dimensions.
@@ -875,6 +946,8 @@ where
     // Post-layout translation: shift all coordinates so min corner = (margin, margin).
     // Matches dagre.js translateGraph (layout.js:215-264).
     translate_layout_result(&mut result, config.margin, config.margin);
+    // Adjust edge endpoints to node borders (dagre.js assignNodeIntersects).
+    assign_node_intersects(&mut result);
 
     debug_dump_layout_result(&result, lg.original_edge_count);
 
@@ -1721,5 +1794,60 @@ mod tests {
             "height should be 40.0 (margin on both sides), got {}",
             result.height
         );
+    }
+
+    #[test]
+    fn test_assign_node_intersects_updates_edge_endpoints() {
+        let mut result = LayoutResult {
+            nodes: HashMap::from([
+                (
+                    "A".into(),
+                    Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: 10.0,
+                        height: 10.0,
+                    },
+                ),
+                (
+                    "B".into(),
+                    Rect {
+                        x: 0.0,
+                        y: 30.0,
+                        width: 10.0,
+                        height: 10.0,
+                    },
+                ),
+            ]),
+            edges: vec![EdgeLayout {
+                from: "A".into(),
+                to: "B".into(),
+                points: vec![
+                    Point { x: 5.0, y: 5.0 },
+                    Point { x: 5.0, y: 20.0 },
+                    Point { x: 5.0, y: 35.0 },
+                ],
+                index: 0,
+            }],
+            reversed_edges: vec![],
+            width: 0.0,
+            height: 0.0,
+            edge_waypoints: HashMap::new(),
+            label_positions: HashMap::new(),
+            subgraph_bounds: HashMap::new(),
+            self_edges: vec![],
+        };
+
+        assign_node_intersects(&mut result);
+
+        let edge = &result.edges[0];
+        let p_first = edge.points.first().unwrap();
+        let p_last = edge.points.last().unwrap();
+
+        // Bottom of A (center y=5, h/2=5) and top of B (center y=35, h/2=5).
+        assert!((p_first.x - 5.0).abs() < 0.001);
+        assert!((p_first.y - 10.0).abs() < 0.001);
+        assert!((p_last.x - 5.0).abs() < 0.001);
+        assert!((p_last.y - 30.0).abs() < 0.001);
     }
 }
