@@ -35,8 +35,8 @@ const graphAttrs = {
   ranksep: data.graph.ranksep ?? 50,
   ranker: data.graph.ranker || "network-simplex",
   rankalign: "center",
-  marginx: data.graph.marginx ?? 10,
-  marginy: data.graph.marginy ?? 10,
+  marginx: data.graph.marginx ?? 0,
+  marginy: data.graph.marginy ?? 0,
 };
 
 g.setGraph(graphAttrs);
@@ -341,7 +341,10 @@ g.edges().forEach((e) => {
   }
 });
 coordinateSystem.undo(g);
-translateGraph(g);
+const skipTranslate = process.env.MMDFLUX_DAGRE_SKIP_TRANSLATE === "1";
+if (!skipTranslate) {
+  translateGraph(g);
+}
 
 function fmtNum(value) {
   if (value === undefined || Number.isNaN(value)) {
