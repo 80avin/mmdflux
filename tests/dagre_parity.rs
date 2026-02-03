@@ -342,16 +342,13 @@ mod subgraph_bounds {
         }
     }
 
-    /// Note: Sibling subgraph ordering differs from dagre by design.
+    /// Note: Sibling subgraph ordering should match dagre 0.8.5 layout output.
     ///
-    /// In dagre.js, us-west is on the left and us-east is on the right. Mermaid's
-    /// renderer then flips them. mmdflux handles this flip in the dagre layer
-    /// instead, so us-east is on the left and us-west is on the right. This is
-    /// intentional and NOT a bug.
-    ///
-    /// This test documents the expected difference in sibling ordering.
+    /// The captured dagre layout places us-east on the left and us-west on the right.
+    /// If Mermaid performs any additional flip in rendering, that is outside the
+    /// dagre layout parity scope of this test.
     #[test]
-    fn external_node_subgraph_sibling_ordering_is_intentionally_different() {
+    fn external_node_subgraph_sibling_ordering_matches_dagre() {
         let input: InputGraph = load_json(INPUT_PATH);
         let expected: DagreLayout = load_json(EXPECTED_PATH);
 
@@ -388,22 +385,22 @@ mod subgraph_bounds {
             .find(|n| n.id == "us-west")
             .expect("us-west expected");
 
-        // dagre.js: us-west.x (28) < us-east.x (132) - us-west is on the left
-        // mmdflux: us-east is on the left, us-west is on the right (INTENTIONALLY SWAPPED)
-        // mmdflux handles the flip in dagre rather than in the renderer like mermaid does.
-        let dagre_order_is_west_then_east = us_west_expected.x < us_east_expected.x;
-        let mmdflux_order_is_west_then_east = us_west_actual.x < us_east_actual.x;
+        let dagre_order_is_east_then_west = us_east_expected.x < us_west_expected.x;
+        let mmdflux_order_is_east_then_west = us_east_actual.x < us_west_actual.x;
 
-        // These SHOULD be different - mmdflux intentionally flips the sibling order
-        assert_ne!(
-            dagre_order_is_west_then_east, mmdflux_order_is_west_then_east,
-            "Sibling ordering should be intentionally different (mmdflux handles flip in dagre)"
+        assert_eq!(
+            dagre_order_is_east_then_west, mmdflux_order_is_east_then_west,
+            "Sibling ordering should match dagre layout ordering"
         );
 
-        // Verify mmdflux has us-east on the left
+        // Verify dagre/mmdflux have us-east on the left
         assert!(
             us_east_actual.x < us_west_actual.x,
             "mmdflux should have us-east on the left"
+        );
+        assert!(
+            us_east_expected.x < us_west_expected.x,
+            "dagre should have us-east on the left"
         );
     }
 }
