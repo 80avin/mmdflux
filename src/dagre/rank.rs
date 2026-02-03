@@ -131,13 +131,12 @@ pub fn remove_empty_ranks(graph: &mut LayoutGraph) {
     for (i, layer) in layers.iter().enumerate() {
         if layer.is_none() && (i as i32) % node_rank_factor != 0 {
             delta -= 1;
-        } else if let Some(nodes) = layer {
-            if delta != 0 {
+        } else if let Some(nodes) = layer
+            && delta != 0 {
                 for &node in nodes {
                     graph.ranks[node] += delta;
                 }
             }
-        }
     }
 }
 

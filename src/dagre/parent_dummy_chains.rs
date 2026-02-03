@@ -64,7 +64,7 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
                 // path_v is Option<usize>: Some(node) for compound ancestors,
                 // None for the root sentinel. Mirrors dagre's while loop where
                 // pathV !== lca is checked first (short-circuits when both are undefined).
-                while path_v != lca && path_v.map_or(false, |pv| max_rank(graph, pv) < dummy_rank) {
+                while path_v != lca && path_v.is_some_and(|pv| max_rank(graph, pv) < dummy_rank) {
                     path_idx += 1;
                     if path_idx >= path.len() {
                         break;
@@ -78,7 +78,7 @@ pub(crate) fn run(graph: &mut LayoutGraph) {
 
             if !ascending {
                 while path_idx + 1 < path.len()
-                    && path[path_idx + 1].map_or(false, |pv| min_rank(graph, pv) <= dummy_rank)
+                    && path[path_idx + 1].is_some_and(|pv| min_rank(graph, pv) <= dummy_rank)
                 {
                     path_idx += 1;
                 }

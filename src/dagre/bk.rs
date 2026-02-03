@@ -502,7 +502,7 @@ pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
         return conflicts;
     }
 
-    if std::env::var("MMDFLUX_DEBUG_CONFLICTS").map_or(false, |v| v == "1") {
+    if std::env::var("MMDFLUX_DEBUG_CONFLICTS").is_ok_and(|v| v == "1") {
         debug_dump_layer_matrix(graph, &layers);
     }
 
@@ -515,8 +515,8 @@ pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
         let mut south_pos: usize = 0;
 
         for (south_lookahead, slot) in south.iter().enumerate() {
-            if let Some(v) = *slot {
-                if is_border_node(graph, v) {
+            if let Some(v) = *slot
+                && is_border_node(graph, v) {
                     let predecessors = get_predecessors(graph, v);
                     if let Some(&first) = predecessors.first() {
                         next_north_pos = Some(graph.order[first] as isize);
@@ -533,7 +533,6 @@ pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
                         prev_north_pos = next_north_pos.unwrap_or(prev_north_pos);
                     }
                 }
-            }
 
             let scan_prev = next_north_pos.unwrap_or(prev_north_pos);
             scan_type2_conflicts(
@@ -633,7 +632,7 @@ pub fn find_all_conflicts(graph: &LayoutGraph) -> ConflictSet {
     let type1 = find_type1_conflicts(graph);
     let type2 = find_type2_conflicts(graph);
 
-    let debug = std::env::var("MMDFLUX_DEBUG_CONFLICTS").map_or(false, |v| v == "1");
+    let debug = std::env::var("MMDFLUX_DEBUG_CONFLICTS").is_ok_and(|v| v == "1");
     if debug {
         let layers = get_layers_with_order(graph);
         // Build node-index to (layer, pos) map
@@ -721,7 +720,7 @@ fn vertical_alignment_with_layering(
 
     let bk_trace = std::env::var("MMDFLUX_DEBUG_BK_TRACE")
         .ok()
-        .map_or(false, |v| v == "1");
+        .is_some_and(|v| v == "1");
 
     let mut pos: HashMap<NodeIndex, isize> = HashMap::new();
     for layer in layers {

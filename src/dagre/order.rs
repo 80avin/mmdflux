@@ -727,7 +727,7 @@ fn init_order(graph: &mut LayoutGraph, layers: &[Vec<usize>]) {
 
 /// Build layer vectors sorted by node order.
 fn layers_sorted_by_order(layers: &[Vec<usize>], graph: &LayoutGraph) -> Vec<Vec<usize>> {
-    let mut layers: Vec<Vec<usize>> = layers.iter().cloned().collect();
+    let mut layers: Vec<Vec<usize>> = layers.to_vec();
     for layer in &mut layers {
         layer.sort_by_key(|&node| graph.order[node]);
     }
