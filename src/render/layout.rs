@@ -517,72 +517,83 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         (base_width, base_height + backward_margin)
     };
 
-    // --- Phase G: Compute layer_starts from draw positions ---
-    // layer_starts maps layer index → primary-axis draw coordinate for that layer.
-    let layer_starts_raw: Vec<usize> = layers
-        .iter()
-        .map(|layer| {
-            layer
-                .iter()
-                .filter_map(|id| {
-                    draw_positions
-                        .get(id)
-                        .map(|&(x, y)| if is_vertical { y } else { x })
-                })
-                .min()
-                .unwrap_or(0)
-        })
-        .collect();
-
-    // Compute max right/bottom edge per layer (primary-axis position + dimension).
-    // Used for odd-rank interpolation to place labels in the gap between layers.
-    let layer_ends_raw: Vec<usize> = layers
-        .iter()
-        .map(|layer| {
-            layer
-                .iter()
-                .filter_map(|id| {
-                    let &(x, y) = draw_positions.get(id)?;
-                    let &(w, h) = node_dims.get(id)?;
-                    if is_vertical {
-                        Some(y + h)
-                    } else {
-                        Some(x + w)
-                    }
-                })
-                .max()
-                .unwrap_or(0)
-        })
-        .collect();
-
-    // When ranks are doubled (labels present), real nodes sit at even dagre ranks
-    // (0, 2, 4, ...) and dummies/labels at odd ranks (1, 3, 5, ...).
-    // Build rank_positions: dagre_rank → draw coordinate.
-    // Even ranks map to layer_starts_raw[rank/2].
-    // Odd ranks interpolate between the right edge of the source layer and
-    // the left edge of the target layer, placing labels in the gap between nodes.
-    let layer_starts: Vec<usize> = if ranks_doubled_for_layers && layer_starts_raw.len() >= 2 {
-        let max_rank = layer_starts_raw.len() * 2 - 1;
-        (0..=max_rank)
-            .map(|rank| {
-                let layer_idx = rank / 2;
-                if rank % 2 == 0 {
-                    // Even rank → real node layer
-                    layer_starts_raw.get(layer_idx).copied().unwrap_or(0)
+    // --- Phase G: Build dagre-rank → draw-coordinate mapping ---
+    // Use actual node_bounds to compute layer positions, ensuring waypoints are positioned
+    // relative to where nodes are actually rendered (not scaled dagre positions).
+    //
+    // For each rank with user nodes, compute the extent (start, end) on the primary axis
+    // from the actual node_bounds. For dummy ranks (no user nodes), interpolate between
+    // neighboring real node ranks.
+    let rank_to_actual_bounds: HashMap<i32, (usize, usize)> = {
+        let mut rank_bounds: HashMap<i32, (usize, usize)> = HashMap::new();
+        for (node_id, &rank) in &result.node_ranks {
+            if let Some(bounds) = node_bounds.get(&node_id.0) {
+                let (start, end) = if is_vertical {
+                    (bounds.y, bounds.y + bounds.height)
                 } else {
-                    // Odd rank → midpoint between right edge of source and left edge of target
-                    let curr_end = layer_ends_raw.get(layer_idx).copied().unwrap_or(0);
-                    let next_start = layer_starts_raw
-                        .get(layer_idx + 1)
-                        .copied()
-                        .unwrap_or(curr_end);
-                    (curr_end + next_start) / 2
-                }
-            })
-            .collect()
-    } else {
-        layer_starts_raw
+                    (bounds.x, bounds.x + bounds.width)
+                };
+                rank_bounds
+                    .entry(rank)
+                    .and_modify(|(s, e)| {
+                        *s = (*s).min(start);
+                        *e = (*e).max(end);
+                    })
+                    .or_insert((start, end));
+            }
+        }
+        rank_bounds
     };
+
+    // Build layer_starts as a Vec indexed by dagre rank.
+    // Real node ranks use the actual node bounds extent.
+    // Missing ranks (e.g., dummy/label ranks) interpolate between the nearest neighbors.
+    let max_rank = result
+        .node_ranks
+        .values()
+        .copied()
+        .max()
+        .unwrap_or(0)
+        .max(0) as usize;
+
+    // Helper: find nearest lower rank that has actual bounds
+    let find_lower_bound = |rank: i32| -> Option<(i32, usize)> {
+        (0..rank)
+            .rev()
+            .find_map(|r| rank_to_actual_bounds.get(&r).map(|&(_, end)| (r, end)))
+    };
+
+    // Helper: find nearest upper rank that has actual bounds
+    let find_upper_bound = |rank: i32, max: i32| -> Option<(i32, usize)> {
+        ((rank + 1)..=max).find_map(|r| rank_to_actual_bounds.get(&r).map(|&(start, _)| (r, start)))
+    };
+
+    let layer_starts: Vec<usize> = (0..=max_rank)
+        .map(|rank| {
+            let rank_i32 = rank as i32;
+            if let Some(&(start, _end)) = rank_to_actual_bounds.get(&rank_i32) {
+                // Real node rank — use its actual draw position
+                start
+            } else {
+                // Dummy/label rank — interpolate between nearest actual bounds
+                let lower = find_lower_bound(rank_i32);
+                let upper = find_upper_bound(rank_i32, max_rank as i32);
+
+                match (lower, upper) {
+                    (Some((lower_rank, lower_end)), Some((upper_rank, upper_start))) => {
+                        // Linearly interpolate between lower_end and upper_start
+                        let rank_span = upper_rank - lower_rank;
+                        let rank_offset = rank_i32 - lower_rank;
+                        let pos_span = upper_start as i32 - lower_end as i32;
+                        (lower_end as i32 + (pos_span * rank_offset) / rank_span) as usize
+                    }
+                    (Some((_, lower_end)), None) => lower_end,
+                    (None, Some((_, upper_start))) => upper_start,
+                    (None, None) => 0,
+                }
+            }
+        })
+        .collect();
 
     // --- Phase H: Transform waypoints and labels ---
     let ctx = TransformContext {
@@ -595,6 +606,20 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         overhang_x: max_overhang_x,
         overhang_y: max_overhang_y,
     };
+
+    if std::env::var("MMDFLUX_DEBUG_WAYPOINTS").is_ok_and(|v| v == "1") {
+        eprintln!("[node_ranks] {:?}", result.node_ranks);
+        eprintln!("[rank_to_actual_bounds] {:?}", rank_to_actual_bounds);
+        eprintln!("[layer_starts] {:?}", layer_starts);
+        for (edge_idx, wps) in &result.edge_waypoints {
+            if let Some(edge) = diagram.edges.get(*edge_idx) {
+                eprintln!(
+                    "[raw dagre waypoints] {} -> {}: {:?}",
+                    edge.from, edge.to, wps
+                );
+            }
+        }
+    }
 
     let edge_waypoints_converted = transform_waypoints_direct(
         &result.edge_waypoints,

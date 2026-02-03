@@ -490,7 +490,12 @@ fn position_self_edges(lg: &LayoutGraph, config: &LayoutConfig) -> Vec<SelfEdgeL
 /// (including edge points) so the minimum is at (margin_x, margin_y). Width/height
 /// include margin on both sides, matching dagre's `minX -= marginX` before the
 /// `width = maxX - minX + marginX` calculation.
-fn translate_layout_result(result: &mut LayoutResult, margin_x: f64, margin_y: f64) {
+fn translate_layout_result(
+    result: &mut LayoutResult,
+    margin_x: f64,
+    margin_y: f64,
+    direction: Direction,
+) {
     let mut min_x = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
     let mut min_y = f64::INFINITY;
@@ -580,6 +585,13 @@ fn translate_layout_result(result: &mut LayoutResult, margin_x: f64, margin_y: f
             p.x += dx;
             p.y += dy;
         }
+    }
+
+    // Shift rank_to_position: the primary axis is Y for vertical, X for horizontal
+    let primary_delta = if direction.is_vertical() { dy } else { dx };
+    for (start, end) in result.rank_to_position.values_mut() {
+        *start += primary_delta;
+        *end += primary_delta;
     }
 
     // dagre.js: graphLabel.width = maxX - minX + marginX
@@ -931,6 +943,44 @@ where
         }
     }
 
+    // Build rank-to-position mapping for waypoint transformation.
+    // Includes all position nodes (user nodes + border nodes) so that waypoints
+    // at any rank can be transformed to draw coordinates correctly.
+    let is_vertical = config.direction.is_vertical();
+    let rank_to_position: HashMap<i32, (f64, f64)> = lg
+        .node_ids
+        .iter()
+        .enumerate()
+        .filter(|&(i, _)| lg.is_position_node(i) && !lg.is_dummy_index(i))
+        .fold(HashMap::new(), |mut acc, (i, _)| {
+            let rank = lg.ranks[i];
+            let pos = lg.positions[i];
+            let (w, h) = lg.dimensions[i];
+            let (start, end) = if is_vertical {
+                (pos.y, pos.y + h)
+            } else {
+                (pos.x, pos.x + w)
+            };
+            acc.entry(rank)
+                .and_modify(|(s, e)| {
+                    *s = s.min(start);
+                    *e = e.max(end);
+                })
+                .or_insert((start, end));
+            acc
+        });
+
+    // Build node_ranks mapping for user nodes (excluding dummies and subgraphs).
+    // This allows the render layer to compute layer_starts from actual node bounds.
+    let node_ranks: HashMap<NodeId, i32> = lg
+        .node_ids
+        .iter()
+        .enumerate()
+        .take(original_node_count)
+        .filter(|&(i, _)| !lg.is_dummy_index(i))
+        .map(|(i, id)| (id.clone(), lg.ranks[i]))
+        .collect();
+
     let mut result = LayoutResult {
         nodes,
         edges,
@@ -941,11 +991,13 @@ where
         label_positions,
         subgraph_bounds,
         self_edges: self_edge_layouts,
+        rank_to_position,
+        node_ranks,
     };
 
     // Post-layout translation: shift all coordinates so min corner = (margin, margin).
     // Matches dagre.js translateGraph (layout.js:215-264).
-    translate_layout_result(&mut result, config.margin, config.margin);
+    translate_layout_result(&mut result, config.margin, config.margin, config.direction);
     // Adjust edge endpoints to node borders (dagre.js assignNodeIntersects).
     assign_node_intersects(&mut result);
 
@@ -1668,9 +1720,11 @@ mod tests {
             label_positions: HashMap::new(),
             subgraph_bounds: HashMap::new(),
             self_edges: vec![],
+            rank_to_position: HashMap::new(),
+            node_ranks: HashMap::new(),
         };
 
-        translate_layout_result(&mut result, 10.0, 10.0);
+        translate_layout_result(&mut result, 10.0, 10.0, Direction::TopBottom);
 
         // Min X = 10 (from node, not edge point at -5). dagre: minX -= marginX => 0.
         // dx = -minX = -0 = 0. Wait: minX=10, minX -= 10 => 0, dx = -0 = 0.
@@ -1745,9 +1799,11 @@ mod tests {
                 },
             )]),
             self_edges: vec![],
+            rank_to_position: HashMap::new(),
+            node_ranks: HashMap::new(),
         };
 
-        translate_layout_result(&mut result, 10.0, 10.0);
+        translate_layout_result(&mut result, 10.0, 10.0, Direction::TopBottom);
 
         // Min from nodes: x=5, subgraph: x=3 => minX=3. label: x=12 (not smaller).
         // dagre-style: minX -= marginX => 3 - 10 = -7. dx = -minX = 7.
@@ -1836,6 +1892,8 @@ mod tests {
             label_positions: HashMap::new(),
             subgraph_bounds: HashMap::new(),
             self_edges: vec![],
+            rank_to_position: HashMap::new(),
+            node_ranks: HashMap::new(),
         };
 
         assign_node_intersects(&mut result);
