@@ -26,6 +26,11 @@ pub fn render_subgraph_borders(
         let w = bounds.width;
         let h = bounds.height;
 
+        // Need at least 2×2 to draw a border box (corners only)
+        if w < 2 || h < 2 {
+            continue;
+        }
+
         // Top edge with embedded title: ┌─ Title ─┐
         canvas.set_subgraph_border(x, y, charset.corner_tl);
         canvas.set_subgraph_border(x + w - 1, y, charset.corner_tr);

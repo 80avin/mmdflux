@@ -156,95 +156,39 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
             continue;
         }
 
-        // Compute bounding box from border node positions
-        let x_min = left
-            .iter()
-            .map(|&i| lg.positions[i].x)
-            .fold(f64::INFINITY, f64::min);
-        let x_max = right
-            .iter()
-            .map(|&i| lg.positions[i].x)
-            .fold(f64::NEG_INFINITY, f64::max);
-
+        // Compute bounding box from ALL border node positions.
+        // Using all border nodes (left + right + top + bottom) for both axes
+        // works correctly for all layout directions without direction-specific
+        // logic. In TB, left/right span x and top/bottom span y; in LR,
+        // left/right span y and top/bottom span x.
         let top_idx = lg.border_top.get(&compound_idx).copied();
         let bot_idx = lg.border_bottom.get(&compound_idx).copied();
 
-        let y_min = top_idx.map(|i| lg.positions[i].y).unwrap_or_else(|| {
-            left.iter()
-                .map(|&i| lg.positions[i].y)
-                .fold(f64::INFINITY, f64::min)
-        });
-        let y_max = bot_idx.map(|i| lg.positions[i].y).unwrap_or_else(|| {
-            left.iter()
-                .map(|&i| lg.positions[i].y)
-                .fold(f64::NEG_INFINITY, f64::max)
-        });
+        let all_border_indices = left
+            .iter()
+            .chain(right.iter())
+            .chain(top_idx.iter())
+            .chain(bot_idx.iter());
 
-        // Ensure bounds still contain direct children even if borders drift.
-        let mut child_min_x = f64::INFINITY;
-        let mut child_max_x = f64::NEG_INFINITY;
-        let mut child_min_y = f64::INFINITY;
-        let mut child_max_y = f64::NEG_INFINITY;
-        for (idx, parent) in lg.parents.iter().enumerate() {
-            if *parent != Some(compound_idx) {
-                continue;
-            }
-            if lg.border_type.contains_key(&idx)
-                || lg.compound_nodes.contains(&idx)
-                || lg.is_dummy_index(idx)
-                || lg.position_excluded_nodes.contains(&idx)
-            {
-                continue;
-            }
+        let mut x_min = f64::INFINITY;
+        let mut x_max = f64::NEG_INFINITY;
+        let mut y_min = f64::INFINITY;
+        let mut y_max = f64::NEG_INFINITY;
+        for &idx in all_border_indices {
             let pos = lg.positions[idx];
-            let (w, h) = lg.dimensions[idx];
-            if debug_bounds {
-                let name = &lg.node_ids[idx].0;
-                eprintln!(
-                    "[subgraph_bounds]   child {} pos=({:.2},{:.2}) size=({:.2},{:.2})",
-                    name, pos.x, pos.y, w, h
-                );
-            }
-            child_min_x = child_min_x.min(pos.x);
-            child_max_x = child_max_x.max(pos.x + w);
-            child_min_y = child_min_y.min(pos.y);
-            child_max_y = child_max_y.max(pos.y + h);
+            x_min = x_min.min(pos.x);
+            x_max = x_max.max(pos.x);
+            y_min = y_min.min(pos.y);
+            y_max = y_max.max(pos.y);
         }
 
-        let x_min = if child_min_x.is_finite() {
-            x_min.min(child_min_x)
-        } else {
-            x_min
-        };
-        let x_max = if child_max_x.is_finite() {
-            x_max.max(child_max_x)
-        } else {
-            x_max
-        };
-        let y_min = if child_min_y.is_finite() {
-            y_min.min(child_min_y)
-        } else {
-            y_min
-        };
-        let y_max = if child_max_y.is_finite() {
-            y_max.max(child_max_y)
-        } else {
-            y_max
-        };
-
+        // Bounds come from border nodes only, matching dagre.js removeBorderNodes
+        // (layout.js:309-330) which uses borderLeft/Right/Top/Bottom exclusively.
         if debug_bounds {
             let name = &lg.node_ids[compound_idx].0;
             eprintln!(
-                "[subgraph_bounds] {} border=({:.2},{:.2})-({:.2},{:.2}) child=({:.2},{:.2})-({:.2},{:.2})",
-                name,
-                x_min,
-                y_min,
-                x_max,
-                y_max,
-                child_min_x,
-                child_min_y,
-                child_max_x,
-                child_max_y
+                "[subgraph_bounds] {} border=({:.2},{:.2})-({:.2},{:.2})",
+                name, x_min, y_min, x_max, y_max
             );
         }
 
@@ -374,5 +318,51 @@ mod tests {
         let b = &bounds["sg1"];
         assert!(b.width > 0.0);
         assert!(b.height > 0.0);
+    }
+
+    #[test]
+    fn test_remove_nodes_uses_border_only_bounds() {
+        // dagre.js computes bounds from border nodes only, never expanding
+        // to include children. Place a child outside border range and verify
+        // bounds are not affected.
+        let mut lg = build_ranked_compound_graph();
+        let sg1_idx = lg.node_index[&"sg1".into()];
+        add_segments(&mut lg);
+
+        // Set all border nodes to a known box: x=10..100, y=5..95
+        for &idx in lg.border_left.get(&sg1_idx).unwrap() {
+            lg.positions[idx] = super::super::types::Point { x: 10.0, y: 5.0 };
+        }
+        for &idx in lg.border_right.get(&sg1_idx).unwrap() {
+            lg.positions[idx] = super::super::types::Point { x: 100.0, y: 95.0 };
+        }
+        if let Some(&top) = lg.border_top.get(&sg1_idx) {
+            lg.positions[top] = super::super::types::Point { x: 10.0, y: 5.0 };
+        }
+        if let Some(&bot) = lg.border_bottom.get(&sg1_idx) {
+            lg.positions[bot] = super::super::types::Point { x: 100.0, y: 95.0 };
+        }
+
+        // Place child A far outside border bounds
+        let child_idx = lg.node_index[&"A".into()];
+        lg.positions[child_idx] = super::super::types::Point { x: -50.0, y: -20.0 };
+        lg.dimensions[child_idx] = (10.0, 10.0);
+
+        let bounds = remove_nodes(&mut lg);
+        let b = &bounds["sg1"];
+
+        // Bounds should come from borders only, not expand to child at (-50, -20)
+        assert!((b.x - 10.0).abs() < 0.001, "x should be 10.0, got {}", b.x);
+        assert!(
+            (b.width - 90.0).abs() < 0.001,
+            "width should be 90.0, got {}",
+            b.width
+        );
+        assert!((b.y - 5.0).abs() < 0.001, "y should be 5.0, got {}", b.y);
+        assert!(
+            (b.height - 90.0).abs() < 0.001,
+            "height should be 90.0, got {}",
+            b.height
+        );
     }
 }
