@@ -68,10 +68,16 @@ pub fn run(lg: &mut LayoutGraph) {
         let top_id = NodeId(format!("_bt_{}", compound_id));
         let top_idx = lg.add_nesting_node(top_id);
         lg.border_top.insert(compound_idx, top_idx);
+        if top_idx < lg.parents.len() {
+            lg.parents[top_idx] = Some(compound_idx);
+        }
 
         let bot_id = NodeId(format!("_bb_{}", compound_id));
         let bot_idx = lg.add_nesting_node(bot_id);
         lg.border_bottom.insert(compound_idx, bot_idx);
+        if bot_idx < lg.parents.len() {
+            lg.parents[bot_idx] = Some(compound_idx);
+        }
     }
 
     // For each compound node, add nesting edges using child border nodes when available
@@ -80,11 +86,14 @@ pub fn run(lg: &mut LayoutGraph) {
         let top_idx = lg.border_top[&compound_idx];
         let bot_idx = lg.border_bottom[&compound_idx];
 
+        // Capture current children excluding the border top/bottom nodes.
+        // This mirrors dagre's behavior where children are fetched before
+        // adding border nodes, so the borders don't participate in nesting edges.
         let children: Vec<usize> = lg
             .parents
             .iter()
             .enumerate()
-            .filter(|(_, p)| **p == Some(compound_idx))
+            .filter(|(i, p)| **p == Some(compound_idx) && *i != top_idx && *i != bot_idx)
             .map(|(i, _)| i)
             .collect();
 
