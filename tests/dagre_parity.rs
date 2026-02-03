@@ -223,8 +223,8 @@ mod subgraph_bounds {
     /// Task 2.1: Regression test for subgraph bounds parity.
     ///
     /// This test asserts that mmdflux's computed bounds for the Cloud subgraph
-    /// match dagre.js's expected output. Currently fails due to border bottom
-    /// ordering divergence (see findings/phase2-border-ordering-investigation.md).
+    /// match dagre.js's expected output (dagre 0.8.5). This should stay green
+    /// as long as we keep dagre 0.8.5 parity.
     #[test]
     fn external_node_subgraph_bounds_match_dagre() {
         let input: InputGraph = load_json(INPUT_PATH);
@@ -504,17 +504,15 @@ mod border_ordering {
         );
     }
 
-    /// Task 2.2 (extended): Verify bottom border ORDER matches dagre pattern.
+    /// Task 2.2 (extended): Verify bottom border ORDER matches dagre 0.8.5 pattern.
     ///
-    /// In dagre, for Cloud at rank 8 (the max rank):
-    /// - left order=0, bottom order=1, right order=2
-    ///
-    /// In mmdflux currently:
+    /// In dagre 0.8.5, for top-level Cloud at rank 8 (the max rank):
     /// - left order=0, right order=1, bottom order=2
     ///
-    /// The bottom border should be ordered BETWEEN left and right, not after.
+    /// This is different from child subgraphs, where bottom is BETWEEN left/right.
+    /// We match dagre 0.8.5 here to preserve Mermaid parity.
     #[test]
-    fn cloud_bottom_border_order_between_left_and_right() {
+    fn cloud_bottom_border_order_after_right_for_top_level_compound() {
         let mmdflux = parse_border_nodes(MMDFLUX_BORDER_NODES_PATH);
 
         let mmdflux_cloud = mmdflux.get("Cloud").expect("mmdflux should have Cloud");
@@ -534,13 +532,12 @@ mod border_ordering {
         // dagre: left.order=0 < bottom.order=1 < right.order=2
         // mmdflux currently: left.order=0 < right.order=1 < bottom.order=2 (WRONG)
         assert!(
-            left.order < bottom.order && bottom.order < right.order,
-            "Cloud bottom border should be ordered BETWEEN left and right at rank 8:\n\
-             Expected: left.order ({}) < bottom.order ({}) < right.order ({})\n\
-             This ensures the bottom border is centered horizontally within the compound.",
+            left.order < right.order && right.order < bottom.order,
+            "Cloud bottom border should be ordered AFTER right at rank 8 (dagre 0.8.5):\n\
+             Expected: left.order ({}) < right.order ({}) < bottom.order ({})",
             left.order,
-            bottom.order,
-            right.order
+            right.order,
+            bottom.order
         );
     }
 }

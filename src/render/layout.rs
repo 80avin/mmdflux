@@ -711,6 +711,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         max_overhang_y,
         config,
     );
+    debug_subgraph_gaps(&diagram.subgraphs, &node_bounds, &subgraph_bounds);
 
     // --- Phase L: Compute self-edge loop paths in draw coordinates ---
     // We use node bounds directly rather than transforming dagre-space loop points,
@@ -1226,6 +1227,57 @@ fn debug_compare_subgraph_bounds(
         eprintln!(
             "[subgraph_bounds] {} computed={:?} dagre={:?}",
             id, computed_tuple, dagre_draw
+        );
+    }
+}
+
+fn debug_subgraph_gaps(
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    node_bounds: &HashMap<String, NodeBounds>,
+    subgraph_bounds: &HashMap<String, SubgraphBounds>,
+) {
+    if !std::env::var("MMDFLUX_DEBUG_SUBGRAPH_GAPS").is_ok_and(|v| v == "1") {
+        return;
+    }
+
+    eprintln!("[subgraph_gaps] top-border to content gaps");
+
+    for (sg_id, sg) in subgraphs {
+        let Some(bounds) = subgraph_bounds.get(sg_id) else {
+            continue;
+        };
+
+        let mut min_y: Option<usize> = None;
+        let mut max_y: Option<usize> = None;
+        for member in &sg.nodes {
+            if let Some(node) = node_bounds.get(member) {
+                let node_bottom = node.y.saturating_add(node.height.saturating_sub(1));
+                min_y = Some(min_y.map_or(node.y, |cur| cur.min(node.y)));
+                max_y = Some(max_y.map_or(node_bottom, |cur| cur.max(node_bottom)));
+                continue;
+            }
+            if let Some(child_bounds) = subgraph_bounds.get(member) {
+                let child_bottom =
+                    child_bounds.y.saturating_add(child_bounds.height.saturating_sub(1));
+                min_y = Some(min_y.map_or(child_bounds.y, |cur| cur.min(child_bounds.y)));
+                max_y = Some(max_y.map_or(child_bottom, |cur| cur.max(child_bottom)));
+            }
+        }
+
+        let (Some(min_y), Some(max_y)) = (min_y, max_y) else {
+            continue;
+        };
+
+        let content_top = bounds.y.saturating_add(1); // inside top border row
+        let content_bottom = bounds
+            .y
+            .saturating_add(bounds.height.saturating_sub(2)); // inside bottom border row
+        let top_gap = min_y.saturating_sub(content_top);
+        let bottom_gap = content_bottom.saturating_sub(max_y);
+
+        eprintln!(
+            "[subgraph_gaps] {} top={} min_y={} max_y={} top_gap={} bottom_gap={}",
+            sg_id, bounds.y, min_y, max_y, top_gap, bottom_gap
         );
     }
 }
