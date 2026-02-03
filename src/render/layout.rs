@@ -318,10 +318,14 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .collect();
 
     // --- Phase D: Scale dagre coordinates to ASCII ---
-    // Dagre's makeSpaceForEdgeLabels always doubles minlen, which doubles rank gaps.
-    // We compensate by adjusting the primary-axis scale factor so overall spacing
-    // stays stable for ASCII rendering.
-    let ranks_doubled = true;
+    // The dagre layer halves rank_sep when it doubles minlen (matching dagre.js
+    // makeSpaceForEdgeLabels), so dagre positions are already compact. No
+    // render-side scale compensation is needed: pass ranks_doubled=false so the
+    // scale formula uses the original rank_sep directly.
+    // However, minlen IS still doubled, so waypoints at odd dagre ranks still
+    // need interpolation in the layer_starts map (ranks_doubled_for_layers=true).
+    let ranks_doubled_for_scale = false;
+    let ranks_doubled_for_layers = true;
     let (scale_x, scale_y) = compute_ascii_scale_factors(
         &node_dims,
         dagre_config.rank_sep,
@@ -329,7 +333,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         config.v_spacing,
         config.h_spacing,
         is_vertical,
-        ranks_doubled,
+        ranks_doubled_for_scale,
     );
 
     // Find dagre bounding box min
@@ -549,7 +553,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Even ranks map to layer_starts_raw[rank/2].
     // Odd ranks interpolate between the right edge of the source layer and
     // the left edge of the target layer, placing labels in the gap between nodes.
-    let layer_starts: Vec<usize> = if ranks_doubled && layer_starts_raw.len() >= 2 {
+    let layer_starts: Vec<usize> = if ranks_doubled_for_layers && layer_starts_raw.len() >= 2 {
         let max_rank = layer_starts_raw.len() * 2 - 1;
         (0..=max_rank)
             .map(|rank| {
@@ -617,7 +621,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // generate_backward_waypoints().
     let mut edge_waypoints_final = edge_waypoints_converted;
     const BACKWARD_WAYPOINT_STRIP_THRESHOLD: usize = 6;
-    if ranks_doubled && is_vertical {
+    if ranks_doubled_for_layers && is_vertical {
         for edge in &diagram.edges {
             let key = (edge.from.clone(), edge.to.clone());
             if let (Some(from_b), Some(to_b)) =

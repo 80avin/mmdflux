@@ -184,7 +184,7 @@ fn debug_dump_layout_result(result: &LayoutResult, original_edge_count: usize) {
     };
 
     let mut nodes: Vec<(&NodeId, &Rect)> = result.nodes.iter().collect();
-    nodes.sort_by(|a, b| a.0 .0.cmp(&b.0 .0));
+    nodes.sort_by(|a, b| a.0.0.cmp(&b.0.0));
 
     let mut edges: Vec<EdgeLayout> = result
         .edges
@@ -225,7 +225,11 @@ fn debug_dump_layout_result(result: &LayoutResult, original_edge_count: usize) {
             json_escape(&edge.to.0)
         ));
         for (p_idx, point) in edge.points.iter().enumerate() {
-            let p_suffix = if p_idx + 1 == edge.points.len() { "" } else { "," };
+            let p_suffix = if p_idx + 1 == edge.points.len() {
+                ""
+            } else {
+                ","
+            };
             buf.push_str(&format!(
                 "[{},{}]{}",
                 fmt_f64_json(point.x),
@@ -516,9 +520,14 @@ where
         acyclic::run(&mut lg);
     }
 
-    // Phase 1.5: Set minlen=2 for labeled edges so ranking creates a gap
+    // Phase 1.5: Double minlen and halve ranksep to create a uniform rank grid.
+    // Matches dagre.js makeSpaceForEdgeLabels(): with doubled minlen every edge
+    // spans at least 2 ranks, so halved ranksep preserves the user-facing spacing
+    // while intermediate (0-height) ranks add only half the gap.
     // Must be before nesting::run so nesting minlen multiplication applies to these too.
     make_space_for_edge_labels(&mut lg, edge_labels);
+    let mut config = config.clone();
+    config.rank_sep /= 2.0;
 
     // Compound: add nesting structure (border top/bottom, nesting edges).
     // Multiplies all existing edge minlens by nodeSep = 2*height+1.
@@ -527,7 +536,7 @@ where
     }
 
     // Phase 2: Assign ranks (layers)
-    rank::run(&mut lg, config);
+    rank::run(&mut lg, &config);
     debug_dump_pipeline(&lg, "after_rank");
 
     // Compound: remove empty ranks created by nesting minlen multiplication.
@@ -593,10 +602,10 @@ where
     insert_self_edge_dummies(&mut lg);
 
     // Phase 4: Assign coordinates
-    position::run(&mut lg, config);
+    position::run(&mut lg, &config);
 
     // Phase 4.5: Compute self-edge loop paths
-    let self_edge_layouts = position_self_edges(&lg, config);
+    let self_edge_layouts = position_self_edges(&lg, &config);
 
     // Compound: extract subgraph bounding boxes from border node positions
     let subgraph_bounds = if has_compound {
@@ -617,7 +626,7 @@ where
     }
 
     // Build result
-    let (width, height) = position::calculate_dimensions(&lg, config);
+    let (width, height) = position::calculate_dimensions(&lg, &config);
     let reversed_edges = reversed_orig_edges;
 
     // Only include real nodes (not dummies) in the output
@@ -923,6 +932,32 @@ mod tests {
         make_space_for_edge_labels(&mut lg, &edge_labels);
 
         assert_eq!(lg.edge_minlens[0], 2); // doubled even without labels
+    }
+
+    #[test]
+    fn test_ranksep_compensates_for_doubled_minlen() {
+        // dagre.js halves ranksep when it doubles minlen (makeSpaceForEdgeLabels).
+        // With doubled minlen, A→B spans 2 internal ranks with a gap rank between.
+        // Halved ranksep (25) means the total spacing = height + 2*(ranksep/2) = 10 + 50 = 60.
+        // Without halving, spacing would be height + 2*ranksep = 10 + 100 = 110.
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (10.0, 10.0));
+        graph.add_node("B", (10.0, 10.0));
+        graph.add_edge("A", "B");
+
+        let config = LayoutConfig::default(); // rank_sep = 50, margin = 10
+        let result = layout(&graph, &config, |_, dims| *dims);
+
+        let a = result.nodes.get(&"A".into()).unwrap();
+        let b = result.nodes.get(&"B".into()).unwrap();
+
+        // Expected: dy = height + 2*(rank_sep/2) = 10 + 2*25 = 60
+        let dy = b.y - a.y;
+        assert!(
+            (dy - 60.0).abs() < 0.01,
+            "Expected dy=60 (ranksep halved to 25, 2 rank gaps), got dy={}",
+            dy
+        );
     }
 
     #[test]
