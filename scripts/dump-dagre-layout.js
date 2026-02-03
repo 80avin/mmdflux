@@ -13,7 +13,14 @@ const inputPath = process.argv[2];
 const data = JSON.parse(fs.readFileSync(inputPath, "utf8"));
 
 const dagreRoot = "/Users/kevin/src/dagre";
-const Graph = require(path.join(dagreRoot, "node_modules", "@dagrejs", "graphlib")).Graph;
+let Graph;
+try {
+  // dagre >= 1.x (scoped graphlib)
+  Graph = require(path.join(dagreRoot, "node_modules", "@dagrejs", "graphlib")).Graph;
+} catch (err) {
+  // dagre 0.8.x
+  Graph = require(path.join(dagreRoot, "node_modules", "graphlib")).Graph;
+}
 const layout = require(path.join(dagreRoot, "lib", "layout"));
 
 const g = new Graph({ multigraph: true, compound: true });

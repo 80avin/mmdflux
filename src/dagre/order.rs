@@ -803,7 +803,12 @@ pub fn run(graph: &mut LayoutGraph) {
                 eprintln!("[order] iter {i}: NEW BEST cc={cc}");
             }
         }
-        // Dagre-d3-es keeps the first best ordering; do not replace on ties.
+        // NOTE: dagre 0.8.5 (used by Mermaid) does NOT replace the best order
+        // when cc ties the best. It keeps the first best ordering, which
+        // preserves DFS insertion/declaration order in many cases.
+        //
+        // Newer dagre versions may update on ties; if we move off 0.8.5 we
+        // should re-evaluate this logic against the target version.
 
         i += 1;
         last_best += 1;
