@@ -817,7 +817,7 @@ where
     let reversed_edges = reversed_orig_edges;
 
     // Only include real nodes (not dummies) in the output
-    let nodes = lg
+    let mut nodes: HashMap<NodeId, Rect> = lg
         .node_ids
         .iter()
         .enumerate()
@@ -836,6 +836,16 @@ where
             )
         })
         .collect();
+
+    // Apply subgraph bounds to compound nodes (dagre.js exposes compound bounds in node layout)
+    if has_compound {
+        for (id, rect) in &subgraph_bounds {
+            let node_id = NodeId(id.clone());
+            if let Some(existing) = nodes.get_mut(&node_id) {
+                *existing = *rect;
+            }
+        }
+    }
 
     // Build edge layouts, using waypoints for normalized edges
     let mut edges_by_orig_idx: HashMap<usize, EdgeLayout> = HashMap::new();
@@ -1853,6 +1863,48 @@ mod tests {
             (result.height - 40.0).abs() < 0.001,
             "height should be 40.0 (margin on both sides), got {}",
             result.height
+        );
+    }
+
+    #[test]
+    fn test_compound_node_rect_matches_subgraph_bounds() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("sg1", (0.0, 0.0));
+        graph.add_node("A", (40.0, 20.0));
+        graph.add_node("B", (40.0, 20.0));
+        graph.add_edge("A", "B");
+        graph.set_parent("A", "sg1");
+        graph.set_parent("B", "sg1");
+        graph.set_has_title("sg1");
+
+        let result = layout(&graph, &LayoutConfig::default(), |_, dims| *dims);
+
+        let bounds = &result.subgraph_bounds["sg1"];
+        let rect = result.nodes.get(&"sg1".into()).unwrap();
+
+        assert!(
+            (rect.x - bounds.x).abs() < 1e-6,
+            "compound node x={} should match bounds x={}",
+            rect.x,
+            bounds.x
+        );
+        assert!(
+            (rect.y - bounds.y).abs() < 1e-6,
+            "compound node y={} should match bounds y={}",
+            rect.y,
+            bounds.y
+        );
+        assert!(
+            (rect.width - bounds.width).abs() < 1e-6,
+            "compound node width={} should match bounds width={}",
+            rect.width,
+            bounds.width
+        );
+        assert!(
+            (rect.height - bounds.height).abs() < 1e-6,
+            "compound node height={} should match bounds height={}",
+            rect.height,
+            bounds.height
         );
     }
 
