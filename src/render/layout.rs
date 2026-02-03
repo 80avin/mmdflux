@@ -49,6 +49,34 @@ pub struct GridPos {
     pub pos: usize,
 }
 
+/// Coordinate transformation context from dagre float coordinates to draw coordinates.
+///
+/// Encapsulates the scaling, offset, and padding parameters needed to convert
+/// dagre's floating-point layout coordinates to integer character-grid positions.
+struct CoordTransform<'a> {
+    scale_x: f64,
+    scale_y: f64,
+    dagre_min_x: f64,
+    dagre_min_y: f64,
+    max_overhang_x: usize,
+    max_overhang_y: usize,
+    config: &'a LayoutConfig,
+}
+
+impl CoordTransform<'_> {
+    /// Convert dagre coordinates to draw coordinates.
+    fn to_draw(&self, x: f64, y: f64) -> (usize, usize) {
+        let dx = ((x - self.dagre_min_x) * self.scale_x).round() as isize;
+        let dy = ((y - self.dagre_min_y) * self.scale_y).round() as isize;
+        let draw_x = dx.max(0) as usize
+            + self.max_overhang_x
+            + self.config.padding
+            + self.config.left_label_margin;
+        let draw_y = dy.max(0) as usize + self.max_overhang_y + self.config.padding;
+        (draw_x, draw_y)
+    }
+}
+
 /// Layout result containing node positions and canvas dimensions.
 #[derive(Debug)]
 pub struct Layout {
@@ -663,9 +691,9 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                 && edge_waypoints_final
                     .get(&key)
                     .is_some_and(|wps| wps.len() >= BACKWARD_WAYPOINT_STRIP_THRESHOLD)
-                {
-                    edge_waypoints_final.remove(&key);
-                }
+            {
+                edge_waypoints_final.remove(&key);
+            }
         }
     }
 
@@ -686,9 +714,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .collect();
 
     // --- Phase K: Convert subgraph bounds to draw coordinates ---
-    let subgraph_bounds = dagre_subgraph_bounds_to_draw(
-        &diagram.subgraphs,
-        &result.subgraph_bounds,
+    let coord_transform = CoordTransform {
         scale_x,
         scale_y,
         dagre_min_x,
@@ -696,18 +722,17 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         max_overhang_x,
         max_overhang_y,
         config,
+    };
+    let subgraph_bounds = dagre_subgraph_bounds_to_draw(
+        &diagram.subgraphs,
+        &result.subgraph_bounds,
+        &coord_transform,
     );
     debug_compare_subgraph_bounds(
         &diagram.subgraphs,
         &subgraph_bounds,
         &result.subgraph_bounds,
-        scale_x,
-        scale_y,
-        dagre_min_x,
-        dagre_min_y,
-        max_overhang_x,
-        max_overhang_y,
-        config,
+        &coord_transform,
     );
     debug_subgraph_gaps(&diagram.subgraphs, &node_bounds, &subgraph_bounds);
 
@@ -1036,13 +1061,7 @@ fn build_children_map(
 fn dagre_subgraph_bounds_to_draw(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
     dagre_bounds: &HashMap<String, Rect>,
-    scale_x: f64,
-    scale_y: f64,
-    dagre_min_x: f64,
-    dagre_min_y: f64,
-    max_overhang_x: usize,
-    max_overhang_y: usize,
-    config: &LayoutConfig,
+    transform: &CoordTransform,
 ) -> HashMap<String, SubgraphBounds> {
     let mut bounds: HashMap<String, SubgraphBounds> = HashMap::new();
 
@@ -1052,28 +1071,8 @@ fn dagre_subgraph_bounds_to_draw(
             None => continue,
         };
 
-        let (x0, y0) = dagre_to_draw_coords(
-            rect.x,
-            rect.y,
-            scale_x,
-            scale_y,
-            dagre_min_x,
-            dagre_min_y,
-            max_overhang_x,
-            max_overhang_y,
-            config,
-        );
-        let (x1, y1) = dagre_to_draw_coords(
-            rect.x + rect.width,
-            rect.y + rect.height,
-            scale_x,
-            scale_y,
-            dagre_min_x,
-            dagre_min_y,
-            max_overhang_x,
-            max_overhang_y,
-            config,
-        );
+        let (x0, y0) = transform.to_draw(rect.x, rect.y);
+        let (x1, y1) = transform.to_draw(rect.x + rect.width, rect.y + rect.height);
 
         let mut final_x = x0;
         let mut final_width = x1.saturating_sub(x0);
@@ -1160,13 +1159,7 @@ fn debug_compare_subgraph_bounds(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
     computed: &HashMap<String, SubgraphBounds>,
     dagre_bounds: &HashMap<String, Rect>,
-    scale_x: f64,
-    scale_y: f64,
-    dagre_min_x: f64,
-    dagre_min_y: f64,
-    max_overhang_x: usize,
-    max_overhang_y: usize,
-    config: &LayoutConfig,
+    transform: &CoordTransform,
 ) {
     if !std::env::var("MMDFLUX_DEBUG_SUBGRAPH_BOUNDS").is_ok_and(|v| v == "1") {
         return;
@@ -1195,28 +1188,8 @@ fn debug_compare_subgraph_bounds(
         }
 
         let dagre_draw = dagre_rect.map(|rect| {
-            let (x0, y0) = dagre_to_draw_coords(
-                rect.x,
-                rect.y,
-                scale_x,
-                scale_y,
-                dagre_min_x,
-                dagre_min_y,
-                max_overhang_x,
-                max_overhang_y,
-                config,
-            );
-            let (x1, y1) = dagre_to_draw_coords(
-                rect.x + rect.width,
-                rect.y + rect.height,
-                scale_x,
-                scale_y,
-                dagre_min_x,
-                dagre_min_y,
-                max_overhang_x,
-                max_overhang_y,
-                config,
-            );
+            let (x0, y0) = transform.to_draw(rect.x, rect.y);
+            let (x1, y1) = transform.to_draw(rect.x + rect.width, rect.y + rect.height);
             (x0, y0, x1.saturating_sub(x0), y1.saturating_sub(y0))
         });
 
@@ -1276,240 +1249,6 @@ fn debug_subgraph_gaps(
             "[subgraph_gaps] {} top={} min_y={} max_y={} top_gap={} bottom_gap={}",
             sg_id, bounds.y, min_y, max_y, top_gap, bottom_gap
         );
-    }
-}
-
-fn dagre_to_draw_coords(
-    x: f64,
-    y: f64,
-    scale_x: f64,
-    scale_y: f64,
-    dagre_min_x: f64,
-    dagre_min_y: f64,
-    max_overhang_x: usize,
-    max_overhang_y: usize,
-    config: &LayoutConfig,
-) -> (usize, usize) {
-    let dx = ((x - dagre_min_x) * scale_x).round() as isize;
-    let dy = ((y - dagre_min_y) * scale_y).round() as isize;
-    let x = dx.max(0) as usize + max_overhang_x + config.padding + config.left_label_margin;
-    let y = dy.max(0) as usize + max_overhang_y + config.padding;
-    (x, y)
-}
-
-/// Check if `ancestor_id` is an ancestor of `descendant_id` in the subgraph hierarchy.
-#[cfg(test)]
-fn is_ancestor(
-    ancestor_id: &str,
-    descendant_id: &str,
-    subgraphs: &HashMap<String, crate::graph::Subgraph>,
-) -> bool {
-    let mut current = descendant_id;
-    while let Some(sg) = subgraphs.get(current) {
-        if let Some(ref parent) = sg.parent {
-            if parent == ancestor_id {
-                return true;
-            }
-            current = parent;
-        } else {
-            break;
-        }
-    }
-    false
-}
-
-/// Resolve overlapping subgraph bounds by trimming borders at the midpoint
-/// of the overlap region. For vertically stacked subgraphs, trims the upper's
-/// bottom and the lower's top. For horizontally adjacent, trims left/right.
-/// Skips nested pairs (ancestor/descendant) — only resolves sibling overlaps.
-#[cfg(test)]
-fn resolve_subgraph_overlap(
-    bounds: &mut HashMap<String, SubgraphBounds>,
-    subgraphs: &HashMap<String, crate::graph::Subgraph>,
-) {
-    let ids: Vec<String> = bounds.keys().cloned().collect();
-    for i in 0..ids.len() {
-        for j in (i + 1)..ids.len() {
-            // Skip nested pairs — parent/child overlap is intentional
-            if is_ancestor(&ids[i], &ids[j], subgraphs) || is_ancestor(&ids[j], &ids[i], subgraphs)
-            {
-                continue;
-            }
-            let (a_x, a_y, a_right, a_bottom) = {
-                let a = &bounds[&ids[i]];
-                (a.x, a.y, a.x + a.width, a.y + a.height)
-            };
-            let (b_x, b_y, b_right, b_bottom) = {
-                let b = &bounds[&ids[j]];
-                (b.x, b.y, b.x + b.width, b.y + b.height)
-            };
-
-            // Check for overlap (both axes must overlap for a true 2D overlap)
-            let x_overlap = a_x < b_right && b_x < a_right;
-            let y_overlap = a_y < b_bottom && b_y < a_bottom;
-
-            if !(x_overlap && y_overlap) {
-                continue;
-            }
-
-            // Determine the primary overlap axis (the one with less overlap)
-            let x_overlap_amount = a_right.min(b_right).saturating_sub(a_x.max(b_x));
-            let y_overlap_amount = a_bottom.min(b_bottom).saturating_sub(a_y.max(b_y));
-
-            if y_overlap_amount <= x_overlap_amount {
-                // Vertical overlap: trim the gap between upper and lower
-                let (upper_id, lower_id) = if a_y <= b_y {
-                    (&ids[i], &ids[j])
-                } else {
-                    (&ids[j], &ids[i])
-                };
-                let upper_bottom = {
-                    let u = &bounds[upper_id];
-                    u.y + u.height
-                };
-                let lower_top = bounds[lower_id].y;
-
-                if upper_bottom > lower_top {
-                    // Split the overlap: place the boundary at the midpoint
-                    let mid = lower_top + (upper_bottom - lower_top) / 2;
-                    let gap = 1; // minimum 1-cell gap between borders
-
-                    let upper = bounds.get_mut(upper_id).unwrap();
-                    let new_upper_bottom = mid.saturating_sub(gap / 2);
-                    if new_upper_bottom > upper.y {
-                        upper.height = new_upper_bottom - upper.y;
-                    }
-
-                    let lower = bounds.get_mut(lower_id).unwrap();
-                    let new_lower_top = mid + gap.div_ceil(2);
-                    if new_lower_top < lower.y + lower.height {
-                        let old_bottom = lower.y + lower.height;
-                        lower.y = new_lower_top;
-                        lower.height = old_bottom - new_lower_top;
-                    }
-                }
-            } else {
-                // Horizontal overlap: trim left/right
-                let (left_id, right_id) = if a_x <= b_x {
-                    (&ids[i], &ids[j])
-                } else {
-                    (&ids[j], &ids[i])
-                };
-                let left_right = {
-                    let l = &bounds[left_id];
-                    l.x + l.width
-                };
-                let right_left = bounds[right_id].x;
-
-                if left_right > right_left {
-                    let mid = right_left + (left_right - right_left) / 2;
-                    let gap = 1;
-
-                    let left = bounds.get_mut(left_id).unwrap();
-                    let new_left_right = mid.saturating_sub(gap / 2);
-                    if new_left_right > left.x {
-                        left.width = new_left_right - left.x;
-                    }
-
-                    let right = bounds.get_mut(right_id).unwrap();
-                    let new_right_left = mid + gap.div_ceil(2);
-                    if new_right_left < right.x + right.width {
-                        let old_right_edge = right.x + right.width;
-                        right.x = new_right_left;
-                        right.width = old_right_edge - new_right_left;
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Ensure sibling subgraphs (same parent) have at least 1 cell of space between them.
-/// After nudging, re-expand any parent whose children now exceed its bounds.
-#[cfg(test)]
-fn ensure_sibling_gap(
-    bounds: &mut HashMap<String, SubgraphBounds>,
-    subgraphs: &HashMap<String, crate::graph::Subgraph>,
-) {
-    let ids: Vec<String> = bounds.keys().cloned().collect();
-    for i in 0..ids.len() {
-        for j in (i + 1)..ids.len() {
-            // Only process siblings (same parent)
-            let parent_i = subgraphs.get(&ids[i]).and_then(|s| s.parent.as_deref());
-            let parent_j = subgraphs.get(&ids[j]).and_then(|s| s.parent.as_deref());
-            if parent_i != parent_j {
-                continue;
-            }
-
-            let a = &bounds[&ids[i]];
-            let b = &bounds[&ids[j]];
-
-            // Check horizontal adjacency (touching or within 0 gap)
-            let a_right = a.x + a.width;
-            let b_right = b.x + b.width;
-            let y_overlap = a.y < b.y + b.height && b.y < a.y + a.height;
-
-            if y_overlap {
-                if a_right == b.x {
-                    let b_mut = bounds.get_mut(&ids[j]).unwrap();
-                    b_mut.x += 1;
-                } else if b_right == a.x {
-                    let a_mut = bounds.get_mut(&ids[i]).unwrap();
-                    a_mut.x += 1;
-                }
-            }
-
-            // Check vertical adjacency
-            let a = &bounds[&ids[i]];
-            let b = &bounds[&ids[j]];
-            let a_bottom = a.y + a.height;
-            let b_bottom = b.y + b.height;
-            let x_overlap = a.x < b.x + b.width && b.x < a.x + a.width;
-
-            if x_overlap {
-                if a_bottom == b.y {
-                    let b_mut = bounds.get_mut(&ids[j]).unwrap();
-                    b_mut.y += 1;
-                } else if b_bottom == a.y {
-                    let a_mut = bounds.get_mut(&ids[i]).unwrap();
-                    a_mut.y += 1;
-                }
-            }
-        }
-    }
-
-    // Re-expand parents to contain children after nudging
-    let border_padding: usize = 2;
-    for sg_id in subgraphs.keys() {
-        if let Some(parent_bounds) = bounds.get(sg_id).cloned() {
-            // Find all children of this subgraph
-            let mut max_right = parent_bounds.x + parent_bounds.width;
-            let mut max_bottom = parent_bounds.y + parent_bounds.height;
-            let mut needs_expand = false;
-
-            for (child_id, child_sg) in subgraphs {
-                if child_sg.parent.as_deref() == Some(sg_id.as_str())
-                    && let Some(child_b) = bounds.get(child_id)
-                {
-                    let child_right = child_b.x + child_b.width + border_padding;
-                    let child_bottom = child_b.y + child_b.height + border_padding;
-                    if child_right > max_right {
-                        max_right = child_right;
-                        needs_expand = true;
-                    }
-                    if child_bottom > max_bottom {
-                        max_bottom = child_bottom;
-                        needs_expand = true;
-                    }
-                }
-            }
-
-            if needs_expand {
-                let p = bounds.get_mut(sg_id).unwrap();
-                p.width = max_right - p.x;
-                p.height = max_bottom - p.y;
-            }
-        }
     }
 }
 
@@ -2470,17 +2209,17 @@ mod tests {
             ..LayoutConfig::default()
         };
 
-        let result = dagre_subgraph_bounds_to_draw(
-            &subgraphs,
-            &dagre_bounds,
-            1.0,
-            1.0,
-            0.0,
-            0.0,
-            0,
-            0,
-            &config,
-        );
+        let transform = CoordTransform {
+            scale_x: 1.0,
+            scale_y: 1.0,
+            dagre_min_x: 0.0,
+            dagre_min_y: 0.0,
+            max_overhang_x: 0,
+            max_overhang_y: 0,
+            config: &config,
+        };
+
+        let result = dagre_subgraph_bounds_to_draw(&subgraphs, &dagre_bounds, &transform);
 
         let a = &result["sg1"];
         let b = &result["sg2"];
@@ -2535,17 +2274,17 @@ mod tests {
             ..LayoutConfig::default()
         };
 
-        let result = dagre_subgraph_bounds_to_draw(
-            &subgraphs,
-            &dagre_bounds,
-            1.0,
-            1.0,
-            0.0,
-            0.0,
-            0,
-            0,
-            &config,
-        );
+        let transform = CoordTransform {
+            scale_x: 1.0,
+            scale_y: 1.0,
+            dagre_min_x: 0.0,
+            dagre_min_y: 0.0,
+            max_overhang_x: 0,
+            max_overhang_y: 0,
+            config: &config,
+        };
+
+        let result = dagre_subgraph_bounds_to_draw(&subgraphs, &dagre_bounds, &transform);
 
         let b = &result["sg1"];
         // Title "G" requires min width = len("G") + 6 = 7, which exceeds rect width 5.

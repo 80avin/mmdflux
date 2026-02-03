@@ -322,12 +322,6 @@ pub fn get_layer(graph: &LayoutGraph, node: NodeIndex) -> usize {
     graph.ranks[node] as usize
 }
 
-/// Check if a node is a dummy node (from edge normalization).
-#[inline]
-pub fn is_dummy(graph: &LayoutGraph, node: NodeIndex) -> bool {
-    graph.is_dummy_index(node)
-}
-
 /// Get the "width" of a node in the coordinate axis being optimized.
 ///
 /// For TD/BT layouts, this returns the actual width (x-axis separation).
@@ -455,8 +449,8 @@ pub fn find_type1_conflicts(graph: &LayoutGraph) -> ConflictSet {
                 .unwrap_or(prev_layer_len as isize);
 
             if w.is_some() || Some(v) == last_node {
-                for idx in scan_pos..=i {
-                    let Some(scan_node) = layer[idx] else {
+                for scan_node_opt in layer.iter().take(i + 1).skip(scan_pos) {
+                    let Some(scan_node) = *scan_node_opt else {
                         continue;
                     };
                     for u in get_predecessors(graph, scan_node) {
@@ -516,23 +510,24 @@ pub fn find_type2_conflicts(graph: &LayoutGraph) -> ConflictSet {
 
         for (south_lookahead, slot) in south.iter().enumerate() {
             if let Some(v) = *slot
-                && is_border_node(graph, v) {
-                    let predecessors = get_predecessors(graph, v);
-                    if let Some(&first) = predecessors.first() {
-                        next_north_pos = Some(graph.order[first] as isize);
-                        scan_type2_conflicts(
-                            graph,
-                            &mut conflicts,
-                            south,
-                            south_pos,
-                            south_lookahead,
-                            prev_north_pos,
-                            next_north_pos.unwrap_or(north.len() as isize),
-                        );
-                        south_pos = south_lookahead;
-                        prev_north_pos = next_north_pos.unwrap_or(prev_north_pos);
-                    }
+                && is_border_node(graph, v)
+            {
+                let predecessors = get_predecessors(graph, v);
+                if let Some(&first) = predecessors.first() {
+                    next_north_pos = Some(graph.order[first] as isize);
+                    scan_type2_conflicts(
+                        graph,
+                        &mut conflicts,
+                        south,
+                        south_pos,
+                        south_lookahead,
+                        prev_north_pos,
+                        next_north_pos.unwrap_or(north.len() as isize),
+                    );
+                    south_pos = south_lookahead;
+                    prev_north_pos = next_north_pos.unwrap_or(prev_north_pos);
                 }
+            }
 
             let scan_prev = next_north_pos.unwrap_or(prev_north_pos);
             scan_type2_conflicts(
@@ -559,8 +554,8 @@ fn scan_type2_conflicts(
     prev_north_border: isize,
     next_north_border: isize,
 ) {
-    for i in south_pos..south_end {
-        let Some(v) = south[i] else {
+    for v_opt in south.iter().take(south_end).skip(south_pos) {
+        let Some(v) = *v_opt else {
             continue;
         };
         if !is_dummy_like(graph, v) {
@@ -1639,15 +1634,6 @@ mod tests {
         assert_eq!(get_width(&lg, a, Direction::TopBottom), 100.0);
         // For LR/RL layouts, get_width returns the height
         assert_eq!(get_width(&lg, a, Direction::LeftRight), 50.0);
-    }
-
-    #[test]
-    fn test_is_dummy() {
-        let lg = make_diamond_graph();
-        let a = lg.node_index[&"A".into()];
-
-        // Real nodes are not dummies
-        assert!(!is_dummy(&lg, a));
     }
 
     // =========================================================================

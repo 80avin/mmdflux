@@ -26,7 +26,8 @@ struct InputNode {
     width: f64,
     height: f64,
     parent: Option<String>,
-    is_subgraph: bool,
+    #[serde(rename = "is_subgraph")]
+    _is_subgraph: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,8 +57,10 @@ struct DagreNode {
 #[derive(Debug, Deserialize)]
 struct DagreEdge {
     index: usize,
-    from: String,
-    to: String,
+    #[serde(rename = "from")]
+    _from: String,
+    #[serde(rename = "to")]
+    _to: String,
     points: Vec<[f64; 2]>,
 }
 
@@ -154,28 +157,28 @@ fn parse_border_nodes(
         }
 
         // Check for rank left/right borders
-        if let Some(caps) = rank_re.captures(line) {
-            if let Some(ref compound) = current_compound {
-                let rank: i32 = caps[1].parse().unwrap();
-                let left_info = BorderNodeInfo {
-                    order: caps[2].parse().unwrap(),
-                    x: caps[3].parse().unwrap(),
-                    y: caps[4].parse().unwrap(),
-                };
-                let right_info = BorderNodeInfo {
-                    order: caps[5].parse().unwrap(),
-                    x: caps[6].parse().unwrap(),
-                    y: caps[7].parse().unwrap(),
-                };
-                result
-                    .get_mut(compound)
-                    .unwrap()
-                    .insert(format!("rank_{}_left", rank), left_info);
-                result
-                    .get_mut(compound)
-                    .unwrap()
-                    .insert(format!("rank_{}_right", rank), right_info);
-            }
+        if let Some(caps) = rank_re.captures(line)
+            && let Some(ref compound) = current_compound
+        {
+            let rank: i32 = caps[1].parse().unwrap();
+            let left_info = BorderNodeInfo {
+                order: caps[2].parse().unwrap(),
+                x: caps[3].parse().unwrap(),
+                y: caps[4].parse().unwrap(),
+            };
+            let right_info = BorderNodeInfo {
+                order: caps[5].parse().unwrap(),
+                x: caps[6].parse().unwrap(),
+                y: caps[7].parse().unwrap(),
+            };
+            result
+                .get_mut(compound)
+                .unwrap()
+                .insert(format!("rank_{}_left", rank), left_info);
+            result
+                .get_mut(compound)
+                .unwrap()
+                .insert(format!("rank_{}_right", rank), right_info);
         }
     }
 

@@ -120,14 +120,6 @@ impl ConstraintGraph {
         self.in_edges.entry(to).or_default().push(from);
     }
 
-    fn successors(&self, node: usize) -> &[usize] {
-        self.out_edges.get(&node).map_or(&[], |v| v.as_slice())
-    }
-
-    fn predecessors(&self, node: usize) -> &[usize] {
-        self.in_edges.get(&node).map_or(&[], |v| v.as_slice())
-    }
-
     fn edges(&self) -> Vec<(usize, usize)> {
         self.out_edges
             .iter()
@@ -360,6 +352,7 @@ fn consume_unsortable_entries(
 /// For parent=None (root):
 ///   - Position nodes at this rank with no parent
 ///   - Compound nodes spanning this rank with no parent
+///
 /// For parent=Some(idx):
 ///   - Position nodes at this rank with parent=idx
 ///   - Compound nodes spanning this rank with parent=idx
@@ -576,25 +569,18 @@ fn add_subgraph_constraints(graph: &LayoutGraph, cg: &mut ConstraintGraph, sorte
 
     'outer: for &v in sorted_vs {
         let mut child_opt = graph.parents[v]; // parent of v
-        loop {
-            match child_opt {
-                Some(child_idx) => {
-                    let parent = graph.parents[child_idx]; // grandparent of v
-                    if let Some(&prev_child) = prev.get(&parent) {
-                        prev.insert(parent, child_idx);
-                        if prev_child != child_idx {
-                            cg.add_edge(prev_child, child_idx);
-                            continue 'outer; // dagre's `return` in forEach
-                        }
-                    } else {
-                        prev.insert(parent, child_idx);
-                    }
-                    child_opt = parent;
+        while let Some(child_idx) = child_opt {
+            let parent = graph.parents[child_idx]; // grandparent of v
+            if let Some(&prev_child) = prev.get(&parent) {
+                prev.insert(parent, child_idx);
+                if prev_child != child_idx {
+                    cg.add_edge(prev_child, child_idx);
+                    continue 'outer; // dagre's `return` in forEach
                 }
-                None => {
-                    break;
-                }
+            } else {
+                prev.insert(parent, child_idx);
             }
+            child_opt = parent;
         }
     }
 }
