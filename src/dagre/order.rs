@@ -2,7 +2,7 @@
 //!
 //! Implements the barycenter heuristic with iterative sweeping.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::graph::LayoutGraph;
 use super::rank;
@@ -99,6 +99,8 @@ struct ConstraintGraph {
     out_edges: HashMap<usize, Vec<usize>>,
     /// Reverse adjacency: target -> [sources]
     in_edges: HashMap<usize, Vec<usize>>,
+    /// Dedup set: dagre's graphlib `setEdge` is idempotent.
+    edge_set: HashSet<(usize, usize)>,
 }
 
 impl ConstraintGraph {
@@ -106,10 +108,14 @@ impl ConstraintGraph {
         Self {
             out_edges: HashMap::new(),
             in_edges: HashMap::new(),
+            edge_set: HashSet::new(),
         }
     }
 
     fn add_edge(&mut self, from: usize, to: usize) {
+        if !self.edge_set.insert((from, to)) {
+            return; // Already exists — dagre's setEdge is idempotent
+        }
         self.out_edges.entry(from).or_default().push(to);
         self.in_edges.entry(to).or_default().push(from);
     }
@@ -311,10 +317,8 @@ fn sort_entries(entries: &[ResolvedEntry], bias_right: bool) -> SortResult {
         consume_unsortable_entries(&mut vs, &mut unsortable, &mut vs_index);
     }
 
-    // Drain remaining unsortable entries
-    while let Some(entry) = unsortable.pop() {
-        vs.extend(&entry.vs);
-    }
+    // No drain: dagre's sort.js relies solely on consumeUnsortable.
+    // Remaining unsortables (if any) are not appended.
 
     SortResult {
         vs,
@@ -360,30 +364,26 @@ fn consume_unsortable_entries(
 ///   - Position nodes at this rank with parent=idx
 ///   - Compound nodes spanning this rank with parent=idx
 fn get_children_at_rank(graph: &LayoutGraph, parent: Option<usize>, rank: i32) -> Vec<usize> {
+    // Single pass over node_ids in insertion order to match dagre's g.children(v)
+    // which preserves layer-graph insertion order (interleaving compounds and
+    // base nodes). The `i` values and tie-breaking depend on this order.
     let mut children = Vec::new();
 
-    // Position nodes at this rank with matching parent
     for n in 0..graph.node_ids.len() {
-        if !graph.is_position_node(n) {
+        if graph.parents[n] != parent {
             continue;
         }
-        if graph.ranks[n] != rank {
-            continue;
-        }
-        if graph.parents[n] == parent {
-            children.push(n);
-        }
-    }
 
-    // Compound nodes spanning this rank with matching parent
-    for &compound in &graph.compound_nodes {
-        if graph.parents[compound] != parent {
-            continue;
-        }
-        let min_r = graph.min_rank.get(&compound).copied().unwrap_or(i32::MAX);
-        let max_r = graph.max_rank.get(&compound).copied().unwrap_or(i32::MIN);
-        if min_r <= rank && rank <= max_r {
-            children.push(compound);
+        if graph.is_position_node(n) && graph.ranks[n] == rank {
+            // Base node at this rank
+            children.push(n);
+        } else if graph.compound_nodes.contains(&n) {
+            // Compound node spanning this rank
+            let min_r = graph.min_rank.get(&n).copied().unwrap_or(i32::MAX);
+            let max_r = graph.max_rank.get(&n).copied().unwrap_or(i32::MIN);
+            if min_r <= rank && rank <= max_r {
+                children.push(n);
+            }
         }
     }
 
