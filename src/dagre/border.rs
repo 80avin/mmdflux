@@ -160,11 +160,19 @@ pub fn remove_nodes(lg: &mut LayoutGraph) -> HashMap<String, Rect> {
         //
         // Left/right borders span all ranks and together define the full rectangle
         // in both x and y dimensions for any layout direction (TD, LR, etc.).
-        // We intentionally exclude border_top and border_bottom because they can
-        // be mispositioned due to BK alignment issues (they form their own blocks
-        // and may end up outside the left/right border range).
         //
-        // This matches dagre.js behavior where width comes from left/right borders.
+        // We intentionally exclude border_top and border_bottom because:
+        // 1. They can be mispositioned in x due to BK alignment (they form their
+        //    own blocks with no neighbors and may end up outside the left/right range)
+        // 2. Their y positions don't reliably span the content height (they're
+        //    centered in their rank, not at the content edges)
+        //
+        // Note: dagre.js uses top/bottom y for height, but this requires those nodes
+        // to be correctly positioned at content edges. Our BK alignment doesn't
+        // guarantee this, so we use left/right which span the full y range.
+        //
+        // TODO: The extra vertical padding in LR layouts could be improved by fixing
+        // how top/bottom borders are positioned during BK alignment.
         let mut x_min = f64::INFINITY;
         let mut x_max = f64::NEG_INFINITY;
         let mut y_min = f64::INFINITY;
