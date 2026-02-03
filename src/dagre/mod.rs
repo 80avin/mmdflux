@@ -485,9 +485,11 @@ fn position_self_edges(lg: &LayoutGraph, config: &LayoutConfig) -> Vec<SelfEdgeL
 
 /// Translate all layout coordinates so the minimum corner aligns with margins.
 ///
-/// Matches dagre.js `translateGraph`: computes min/max across nodes, edge points,
-/// subgraph bounds, waypoints, and label positions, then shifts everything so the
-/// minimum is at (margin_x, margin_y).
+/// Matches dagre.js `translateGraph` (layout.js:215-264): computes min/max across
+/// node bounding boxes and edge labels (not edge points), then shifts all coordinates
+/// (including edge points) so the minimum is at (margin_x, margin_y). Width/height
+/// include margin on both sides, matching dagre's `minX -= marginX` before the
+/// `width = maxX - minX + marginX` calculation.
 fn translate_layout_result(result: &mut LayoutResult, margin_x: f64, margin_y: f64) {
     let mut min_x = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
@@ -503,58 +505,40 @@ fn translate_layout_result(result: &mut LayoutResult, margin_x: f64, margin_y: f
         };
     }
 
-    macro_rules! update_point {
-        ($x:expr, $y:expr) => {
-            min_x = min_x.min($x);
-            max_x = max_x.max($x);
-            min_y = min_y.min($y);
-            max_y = max_y.max($y);
-        };
-    }
-
-    // Nodes
+    // Nodes (dagre: g.nodes().forEach(v => getExtremes(g.node(v))))
     for rect in result.nodes.values() {
         update_rect!(rect.x, rect.y, rect.width, rect.height);
     }
 
-    // Edge points
-    for edge in &result.edges {
-        for p in &edge.points {
-            update_point!(p.x, p.y);
-        }
+    // Edge labels — dagre only includes edges with edge.x (i.e. labels),
+    // not individual edge points. We don't store edge-level label rects in
+    // EdgeLayout, but label_positions serve the same role.
+    // (label_positions are point-sized, so they only affect min/max as points.)
+    for lp in result.label_positions.values() {
+        min_x = min_x.min(lp.point.x);
+        max_x = max_x.max(lp.point.x);
+        min_y = min_y.min(lp.point.y);
+        max_y = max_y.max(lp.point.y);
     }
 
-    // Subgraph bounds
+    // Subgraph bounds (mmdflux-specific, no dagre equivalent in translateGraph)
     for rect in result.subgraph_bounds.values() {
         update_rect!(rect.x, rect.y, rect.width, rect.height);
-    }
-
-    // Edge waypoints
-    for wps in result.edge_waypoints.values() {
-        for wp in wps {
-            update_point!(wp.point.x, wp.point.y);
-        }
-    }
-
-    // Label positions
-    for lp in result.label_positions.values() {
-        update_point!(lp.point.x, lp.point.y);
-    }
-
-    // Self-edge points
-    for se in &result.self_edges {
-        for p in &se.points {
-            update_point!(p.x, p.y);
-        }
     }
 
     if min_x == f64::INFINITY {
         return; // empty result
     }
 
-    // Shift = margin - min (dagre.js: minX -= marginX, then subtract minX)
-    let dx = margin_x - min_x;
-    let dy = margin_y - min_y;
+    // dagre.js: minX -= marginX; minY -= marginY;
+    // Then: node.x -= minX (which adds marginX since minX is now smaller).
+    // Net shift per coordinate: -(originalMinX - marginX) = marginX - originalMinX.
+    // This places the leftmost extent at marginX, with width including margin on both sides.
+    min_x -= margin_x;
+    min_y -= margin_y;
+
+    let dx = -min_x;
+    let dy = -min_y;
 
     // Shift nodes
     for rect in result.nodes.values_mut() {
@@ -598,7 +582,8 @@ fn translate_layout_result(result: &mut LayoutResult, margin_x: f64, margin_y: f
         }
     }
 
-    // Update dimensions: dagre.js uses maxX - minX + marginX
+    // dagre.js: graphLabel.width = maxX - minX + marginX
+    // Since minX was already reduced by marginX, this adds margin on both sides.
     result.width = max_x - min_x + margin_x;
     result.height = max_y - min_y + margin_y;
 }
@@ -1511,9 +1496,10 @@ mod tests {
     }
 
     #[test]
-    fn test_translate_layout_result_uses_edge_points() {
-        // Edge point at x=-5 extends left of node at x=10.
-        // Translation should use the edge point as the min, not the node.
+    fn test_translate_layout_result_uses_nodes_not_edge_points() {
+        // dagre.js translateGraph uses node bounding boxes and edge labels for
+        // min/max, NOT individual edge points. Edge points still get shifted,
+        // but don't influence the bounding box calculation.
         let mut result = LayoutResult {
             nodes: HashMap::from([(
                 "A".into(),
@@ -1541,19 +1527,29 @@ mod tests {
 
         translate_layout_result(&mut result, 10.0, 10.0);
 
-        // Min X is -5 (from edge point). Shift = -5 - 10 = -15. All coords += 15.
-        // Edge point: -5 + 15 = 10
-        assert!(
-            (result.edges[0].points[0].x - 10.0).abs() < 0.001,
-            "edge point x should be 10.0 (margin), got {}",
-            result.edges[0].points[0].x
-        );
-        // Node: 10 + 15 = 25
+        // Min X = 10 (from node, not edge point at -5). dagre: minX -= marginX => 0.
+        // dx = -minX = -0 = 0. Wait: minX=10, minX -= 10 => 0, dx = -0 = 0.
+        // Actually: minX=10 (node left), marginX=10. minX -= marginX => 0. dx = 0.
+        // Node stays at x=10, edge point stays at -5.
         let rect = result.nodes.get(&"A".into()).unwrap();
         assert!(
-            (rect.x - 25.0).abs() < 0.001,
-            "node x should be 25.0, got {}",
+            (rect.x - 10.0).abs() < 0.001,
+            "node x should stay at 10.0 (min already at margin), got {}",
             rect.x
+        );
+        // Edge point shifts by same dx=0
+        assert!(
+            (result.edges[0].points[0].x - (-5.0)).abs() < 0.001,
+            "edge point x should stay at -5.0, got {}",
+            result.edges[0].points[0].x
+        );
+
+        // Width: maxX=20 (node right), minX after margin reduction = 0.
+        // width = maxX - minX + marginX = 20 - 0 + 10 = 30
+        assert!(
+            (result.width - 30.0).abs() < 0.001,
+            "width should be 30.0 (margin on both sides), got {}",
+            result.width
         );
     }
 
@@ -1608,7 +1604,8 @@ mod tests {
 
         translate_layout_result(&mut result, 10.0, 10.0);
 
-        // Min X = 3 (subgraph), Min Y = 3 (subgraph). Shift = 3 - 10 = -7.
+        // Min from nodes: x=5, subgraph: x=3 => minX=3. label: x=12 (not smaller).
+        // dagre-style: minX -= marginX => 3 - 10 = -7. dx = -minX = 7.
         // All coords += 7.
         let sg = result.subgraph_bounds.get("sg1").unwrap();
         assert!(
@@ -1622,7 +1619,7 @@ mod tests {
             sg.y
         );
 
-        // Edge waypoints should be shifted
+        // Edge waypoints should be shifted by dx=7
         let wp = &result.edge_waypoints[&0][0];
         assert!(
             (wp.point.x - 19.0).abs() < 0.001,
@@ -1630,7 +1627,7 @@ mod tests {
             wp.point.x
         );
 
-        // Label position should be shifted
+        // Label position should be shifted by dx=7
         let lp = &result.label_positions[&0];
         assert!(
             (lp.point.x - 19.0).abs() < 0.001,
@@ -1638,18 +1635,18 @@ mod tests {
             lp.point.x
         );
 
-        // Width/height should be set
-        // maxX = 20+10 = 30 (node right edge) shifted: 37. maxY = 20+10 = 30 shifted: 37.
-        // Actually: maxX from node = 5+10=15, edge point=20, subgraph=3+20=23. Max=23, shifted=30.
-        // width = maxX - minX + marginX = 23 - 3 + 10 = 30
+        // Width/height with margin on both sides:
+        // maxX from node = 5+10=15, subgraph = 3+20=23, label = 12. Max=23.
+        // minX = 3 (before margin reduction).
+        // width = maxX - (minX - marginX) + marginX = 23 - (3 - 10) + 10 = 23 + 7 + 10 = 40
         assert!(
-            result.width > 0.0,
-            "width should be positive, got {}",
+            (result.width - 40.0).abs() < 0.001,
+            "width should be 40.0 (margin on both sides), got {}",
             result.width
         );
         assert!(
-            result.height > 0.0,
-            "height should be positive, got {}",
+            (result.height - 40.0).abs() < 0.001,
+            "height should be 40.0 (margin on both sides), got {}",
             result.height
         );
     }
