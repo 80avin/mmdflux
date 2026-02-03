@@ -51,7 +51,8 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
     };
     let x_coords = position_x(graph, &bk_config);
 
-    // Find minimum x to shift everything to start at margin
+    // Find minimum x to shift everything to start at 0.
+    // Dagre applies margin later in translateGraph; we do the same.
     let min_x = (0..graph.node_ids.len())
         .filter_map(|node| {
             x_coords
@@ -60,10 +61,10 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
         })
         .fold(f64::INFINITY, f64::min);
 
-    let x_shift = config.margin - min_x;
+    let x_shift = -min_x;
 
     // Assign Y based on rank, X from BK algorithm
-    let mut y = config.margin;
+    let mut y = 0.0;
 
     for layer in layers.iter() {
         for &node in layer {
@@ -97,7 +98,8 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
     };
     let y_coords = position_x(graph, &bk_config);
 
-    // Find minimum y to shift everything to start at margin
+    // Find minimum y to shift everything to start at 0.
+    // Dagre applies margin later in translateGraph; we do the same.
     let min_y = (0..graph.node_ids.len())
         .filter_map(|node| {
             y_coords
@@ -106,10 +108,10 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
         })
         .fold(f64::INFINITY, f64::min);
 
-    let y_shift = config.margin - min_y;
+    let y_shift = -min_y;
 
     // Assign X based on rank, Y from BK algorithm
-    let mut x = config.margin;
+    let mut x = 0.0;
 
     for layer in layers.iter() {
         for &node in layer {
@@ -324,8 +326,10 @@ mod tests {
 
         let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
 
+        // Put A on a different rank so it gets a non-zero position,
+        // while the compound parent remains unpositioned.
         lg.ranks[lg.node_index[&"sg".into()]] = 0;
-        lg.ranks[lg.node_index[&"A".into()]] = 0;
+        lg.ranks[lg.node_index[&"A".into()]] = 1;
 
         let config = LayoutConfig::default();
         run(&mut lg, &config);

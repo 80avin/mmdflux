@@ -113,6 +113,16 @@ pub struct LayoutConfig {
     pub right_label_margin: usize,
     /// Ranking algorithm override.
     pub ranker: Option<crate::dagre::types::Ranker>,
+    /// Dagre nodesep (node spacing).
+    pub dagre_node_sep: f64,
+    /// Dagre edgesep (edge segment spacing).
+    pub dagre_edge_sep: f64,
+    /// Dagre ranksep (rank spacing).
+    pub dagre_rank_sep: f64,
+    /// Dagre margin (applied in translateGraph).
+    pub dagre_margin: f64,
+    /// Additional ranksep applied when subgraphs are present (Mermaid clusters).
+    pub dagre_cluster_rank_sep: f64,
 }
 
 impl Default for LayoutConfig {
@@ -124,6 +134,11 @@ impl Default for LayoutConfig {
             left_label_margin: 0,
             right_label_margin: 0,
             ranker: None,
+            dagre_node_sep: 50.0,
+            dagre_edge_sep: 20.0,
+            dagre_rank_sep: 50.0,
+            dagre_margin: 8.0,
+            dagre_cluster_rank_sep: 25.0,
         }
     }
 }
@@ -219,28 +234,21 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         Direction::RightLeft => DagreDirection::RightLeft,
     };
 
-    let (node_sep, edge_sep) = match dagre_direction {
-        DagreDirection::LeftRight | DagreDirection::RightLeft => {
-            let total_height: f64 = diagram
-                .nodes
-                .values()
-                .map(|node| node_dimensions(node).1 as f64)
-                .sum();
-            let count = diagram.nodes.len().max(1) as f64;
-            let avg_height = total_height / count;
-            let ns = (avg_height * 2.0).max(6.0);
-            let es = (avg_height * 0.8).max(2.0);
-            (ns, es)
-        }
-        _ => (50.0, 20.0),
-    };
+    let node_sep = config.dagre_node_sep;
+    let edge_sep = config.dagre_edge_sep;
+    let mut rank_sep = config.dagre_rank_sep;
+    if diagram.has_subgraphs() && config.dagre_cluster_rank_sep > 0.0 {
+        // Mermaid increases ranksep for cluster graphs (ranksep + 25).
+        // We apply the offset when subgraphs are present to approximate that behavior.
+        rank_sep += config.dagre_cluster_rank_sep;
+    }
 
     let dagre_config = DagreConfig {
         direction: dagre_direction,
         node_sep,
         edge_sep,
-        rank_sep: 50.0,
-        margin: 10.0,
+        rank_sep,
+        margin: config.dagre_margin,
         acyclic: true,
         ranker: config.ranker.unwrap_or_default(),
     };

@@ -30,6 +30,30 @@ struct Cli {
     /// Ranking algorithm
     #[arg(long, value_enum, default_value_t = RankerArg::NetworkSimplex)]
     ranker: RankerArg,
+
+    /// Dagre nodesep (node spacing)
+    #[arg(long)]
+    node_spacing: Option<f64>,
+
+    /// Dagre ranksep (rank spacing)
+    #[arg(long)]
+    rank_spacing: Option<f64>,
+
+    /// Dagre edgesep (edge segment spacing)
+    #[arg(long)]
+    edge_spacing: Option<f64>,
+
+    /// Dagre margin (translateGraph margin)
+    #[arg(long)]
+    margin: Option<f64>,
+
+    /// Extra ranksep applied when subgraphs are present (Mermaid clusters)
+    #[arg(long)]
+    cluster_ranksep: Option<f64>,
+
+    /// ASCII padding around the diagram
+    #[arg(long)]
+    padding: Option<usize>,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -59,7 +83,18 @@ fn main() -> io::Result<()> {
         }
     };
 
-    let output = match render_input(&input, cli.debug, cli.ascii, cli.ranker) {
+    let options = RenderOptions {
+        ascii_only: cli.ascii,
+        ranker: Some(cli.ranker.to_ranker()),
+        node_spacing: cli.node_spacing,
+        rank_spacing: cli.rank_spacing,
+        edge_spacing: cli.edge_spacing,
+        margin: cli.margin,
+        cluster_ranksep: cli.cluster_ranksep,
+        padding: cli.padding,
+    };
+
+    let output = match render_input(&input, cli.debug, &options) {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Error: {}", e);
@@ -75,15 +110,10 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn render_input(
-    input: &str,
-    debug: bool,
-    ascii_only: bool,
-    ranker: RankerArg,
-) -> Result<String, String> {
+fn render_input(input: &str, debug: bool, options: &RenderOptions) -> Result<String, String> {
     // Detect diagram type and dispatch
     match detect_diagram_type(input) {
-        Some(DiagramType::Flowchart) => render_flowchart_diagram(input, debug, ascii_only, ranker),
+        Some(DiagramType::Flowchart) => render_flowchart_diagram(input, debug, options),
         Some(DiagramType::Info) => render_info_diagram(input),
         Some(DiagramType::Pie) => render_pie_diagram(input),
         Some(DiagramType::Packet) => render_packet_diagram(input),
@@ -94,8 +124,7 @@ fn render_input(
 fn render_flowchart_diagram(
     input: &str,
     debug: bool,
-    ascii_only: bool,
-    ranker: RankerArg,
+    options: &RenderOptions,
 ) -> Result<String, String> {
     let flowchart = parse_flowchart(input).map_err(|e| e.to_string())?;
     let diagram = build_diagram(&flowchart);
@@ -124,11 +153,7 @@ fn render_flowchart_diagram(
         }
         Ok(output)
     } else {
-        let options = RenderOptions {
-            ascii_only,
-            ranker: Some(ranker.to_ranker()),
-        };
-        Ok(render(&diagram, &options))
+        Ok(render(&diagram, options))
     }
 }
 

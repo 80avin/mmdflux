@@ -118,7 +118,7 @@ impl Default for LayoutConfig {
             node_sep: 50.0,
             edge_sep: 20.0,
             rank_sep: 50.0,
-            margin: 10.0,
+            margin: 8.0,
             acyclic: true,
             ranker: Ranker::default(),
         }

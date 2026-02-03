@@ -45,25 +45,12 @@ fn main() {
         Direction::RightLeft => "RL",
     };
 
-    // Match render/layout.rs dagre config defaults
-    let (node_sep, edge_sep) = match diagram.direction {
-        Direction::LeftRight | Direction::RightLeft => {
-            let total_height: f64 = diagram
-                .nodes
-                .values()
-                .map(|node| node_dimensions(node).1 as f64)
-                .sum();
-            let count = diagram.nodes.len().max(1) as f64;
-            let avg_height = total_height / count;
-            let ns = (avg_height * 2.0).max(6.0);
-            let es = (avg_height * 0.8).max(2.0);
-            (ns, es)
-        }
-        _ => (50.0, 20.0),
-    };
-
-    let ranksep = 50.0;
-    let margin = LayoutConfig::default().margin;
+    // Match dagre defaults (Mermaid flowchart defaults).
+    let config = LayoutConfig::default();
+    let node_sep = config.node_sep;
+    let edge_sep = config.edge_sep;
+    let ranksep = config.rank_sep;
+    let margin = config.margin;
 
     // Collect nodes (diagram nodes + subgraphs), sorted by id for determinism
     let mut nodes: Vec<(String, String, f64, f64, Option<String>, bool)> = Vec::new();
