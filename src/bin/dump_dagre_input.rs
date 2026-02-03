@@ -1,5 +1,6 @@
 use std::{env, fs};
 
+use mmdflux::dagre::LayoutConfig;
 use mmdflux::render::node_dimensions;
 use mmdflux::{Direction, build_diagram, parse_flowchart};
 
@@ -62,6 +63,7 @@ fn main() {
     };
 
     let ranksep = 50.0;
+    let margin = LayoutConfig::default().margin;
 
     // Collect nodes (diagram nodes + subgraphs), sorted by id for determinism
     let mut nodes: Vec<(String, String, f64, f64, Option<String>, bool)> = Vec::new();
@@ -100,6 +102,8 @@ fn main() {
     println!("    \"nodesep\": {},", node_sep);
     println!("    \"edgesep\": {},", edge_sep);
     println!("    \"ranksep\": {},", ranksep);
+    println!("    \"marginx\": {},", margin);
+    println!("    \"marginy\": {},", margin);
     println!("    \"ranker\": \"network-simplex\"");
     println!("  }},");
 

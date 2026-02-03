@@ -25,8 +25,8 @@ const graphAttrs = {
   ranksep: data.graph.ranksep ?? 50,
   ranker: data.graph.ranker || "network-simplex",
   rankalign: "center",
-  marginx: 10,
-  marginy: 10,
+  marginx: data.graph.marginx ?? 0,
+  marginy: data.graph.marginy ?? 0,
 };
 
 g.setGraph(graphAttrs);
