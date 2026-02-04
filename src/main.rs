@@ -147,8 +147,8 @@ fn render_flowchart_diagram(
                 .map(|l| format!("|{}|", l))
                 .unwrap_or_default();
             output.push_str(&format!(
-                "  {} --{}--> {} [{:?}, {:?}]\n",
-                edge.from, label, edge.to, edge.stroke, edge.arrow
+                "  {} --{}--> {} [{:?}, start={:?}, end={:?}]\n",
+                edge.from, label, edge.to, edge.stroke, edge.arrow_start, edge.arrow_end
             ));
         }
         Ok(output)

@@ -33,8 +33,10 @@ pub struct Edge {
     pub label: Option<String>,
     /// Line style.
     pub stroke: Stroke,
-    /// Arrow head type.
-    pub arrow: Arrow,
+    /// Arrow head at the start (source-side) of the edge.
+    pub arrow_start: Arrow,
+    /// Arrow head at the end (target-side) of the edge.
+    pub arrow_end: Arrow,
 }
 
 impl Edge {
@@ -45,7 +47,8 @@ impl Edge {
             to: to.into(),
             label: None,
             stroke: Stroke::default(),
-            arrow: Arrow::default(),
+            arrow_start: Arrow::None,
+            arrow_end: Arrow::default(),
         }
     }
 
@@ -61,9 +64,16 @@ impl Edge {
         self
     }
 
-    /// Set the arrow type.
+    /// Set the arrow type for the end (target-side) of the edge.
     pub fn with_arrow(mut self, arrow: Arrow) -> Self {
-        self.arrow = arrow;
+        self.arrow_end = arrow;
+        self
+    }
+
+    /// Set arrow types for both start and end.
+    pub fn with_arrows(mut self, start: Arrow, end: Arrow) -> Self {
+        self.arrow_start = start;
+        self.arrow_end = end;
         self
     }
 }

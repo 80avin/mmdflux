@@ -33,6 +33,20 @@ pub fn calc_label_position(segments: &[Segment]) -> Option<Point> {
     segments.last().map(Segment::end_point)
 }
 
+fn exit_direction_from_segments(segments: &[Segment]) -> AttachDirection {
+    match segments.first() {
+        Some(Segment::Vertical { y_start, y_end, .. }) if *y_end > *y_start => {
+            AttachDirection::Bottom
+        }
+        Some(Segment::Vertical { .. }) => AttachDirection::Top,
+        Some(Segment::Horizontal { x_start, x_end, .. }) if *x_end > *x_start => {
+            AttachDirection::Right
+        }
+        Some(Segment::Horizontal { .. }) => AttachDirection::Left,
+        None => AttachDirection::Bottom,
+    }
+}
+
 /// Render a routed edge onto the canvas.
 pub fn render_edge(
     canvas: &mut Canvas,
@@ -48,8 +62,14 @@ pub fn render_edge(
     }
 
     // Draw arrow at the end point using entry direction
-    if routed.edge.arrow != Arrow::None {
+    if routed.edge.arrow_end != Arrow::None {
         draw_arrow_with_entry(canvas, &routed.end, routed.entry_direction, charset);
+    }
+
+    // Draw arrow at the start point using exit direction (if not a self-edge)
+    if routed.edge.arrow_start != Arrow::None && !routed.is_self_edge {
+        let exit_direction = exit_direction_from_segments(&routed.segments);
+        draw_arrow_with_entry(canvas, &routed.start, exit_direction, charset);
     }
 
     // Draw label if present
@@ -226,10 +246,13 @@ fn draw_edge_label_with_tracking(
     // Labels can overwrite edge cells since they're drawn after edges and should appear on top
     // For horizontal layouts, don't overwrite the arrow at routed.end
     let arrow_pos = (routed.end.x, routed.end.y);
+    let arrow_start_pos = (routed.start.x, routed.start.y);
     for (i, ch) in label.chars().enumerate() {
         let x = label_x + i;
         // Skip if this would overwrite the arrow
-        if x == arrow_pos.0 && label_y == arrow_pos.1 {
+        if (x == arrow_pos.0 && label_y == arrow_pos.1)
+            || (x == arrow_start_pos.0 && label_y == arrow_start_pos.1)
+        {
             continue;
         }
         // Only write if cell is not part of a node (but edge cells can be overwritten)
@@ -705,8 +728,12 @@ pub fn render_all_edges_with_labels(
         for segment in &routed.segments {
             draw_segment(canvas, segment, routed.edge.stroke, charset);
         }
-        if routed.edge.arrow != Arrow::None {
+        if routed.edge.arrow_end != Arrow::None {
             draw_arrow_with_entry(canvas, &routed.end, routed.entry_direction, charset);
+        }
+        if routed.edge.arrow_start != Arrow::None && !routed.is_self_edge {
+            let exit_direction = exit_direction_from_segments(&routed.segments);
+            draw_arrow_with_entry(canvas, &routed.start, exit_direction, charset);
         }
     }
 

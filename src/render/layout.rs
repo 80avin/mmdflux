@@ -1977,7 +1977,8 @@ mod tests {
             to: "C".into(),
             label: None,
             stroke: Stroke::Solid,
-            arrow: Arrow::Normal,
+            arrow_start: Arrow::None,
+            arrow_end: Arrow::Normal,
         }];
 
         let mut waypoints = HashMap::new();
@@ -2019,7 +2020,8 @@ mod tests {
             to: "C".into(),
             label: None,
             stroke: Stroke::Solid,
-            arrow: Arrow::Normal,
+            arrow_start: Arrow::None,
+            arrow_end: Arrow::Normal,
         }];
 
         let mut waypoints = HashMap::new();
@@ -2059,7 +2061,8 @@ mod tests {
             to: "B".into(),
             label: None,
             stroke: Stroke::Solid,
-            arrow: Arrow::Normal,
+            arrow_start: Arrow::None,
+            arrow_end: Arrow::Normal,
         }];
 
         let mut waypoints = HashMap::new();
@@ -2120,7 +2123,8 @@ mod tests {
             to: "B".into(),
             label: Some("yes".into()),
             stroke: Stroke::Solid,
-            arrow: Arrow::Normal,
+            arrow_start: Arrow::None,
+            arrow_end: Arrow::Normal,
         }];
 
         let mut labels = HashMap::new();
@@ -2162,7 +2166,8 @@ mod tests {
             to: "B".into(),
             label: Some("yes".into()),
             stroke: Stroke::Solid,
-            arrow: Arrow::Normal,
+            arrow_start: Arrow::None,
+            arrow_end: Arrow::Normal,
         }];
 
         let mut labels = HashMap::new();
@@ -2362,7 +2367,8 @@ mod tests {
             to: "B".into(),
             label: Some("x".into()),
             stroke: Stroke::Solid,
-            arrow: Arrow::Normal,
+            arrow_start: Arrow::None,
+            arrow_end: Arrow::Normal,
         }];
 
         let mut labels = HashMap::new();

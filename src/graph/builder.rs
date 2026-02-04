@@ -121,11 +121,20 @@ fn convert_shape(shape_spec: &ShapeSpec) -> Shape {
 }
 
 fn convert_edge(edge_spec: &EdgeSpec) -> Edge {
-    let (stroke, arrow, label) = convert_connector(&edge_spec.connector);
+    let (stroke, mut arrow_start, mut arrow_end, label) = convert_connector(&edge_spec.connector);
 
-    let edge = Edge::new(&edge_spec.from.id, &edge_spec.to.id)
+    let mut from = edge_spec.from.id.clone();
+    let mut to = edge_spec.to.id.clone();
+
+    // If only the left arrow is present, treat it as a reversed edge.
+    if arrow_start != Arrow::None && arrow_end == Arrow::None {
+        std::mem::swap(&mut from, &mut to);
+        std::mem::swap(&mut arrow_start, &mut arrow_end);
+    }
+
+    let edge = Edge::new(from, to)
         .with_stroke(stroke)
-        .with_arrow(arrow);
+        .with_arrows(arrow_start, arrow_end);
 
     match label {
         Some(lbl) => edge.with_label(lbl),
@@ -133,21 +142,26 @@ fn convert_edge(edge_spec: &EdgeSpec) -> Edge {
     }
 }
 
-fn convert_connector(connector: &ConnectorSpec) -> (Stroke, Arrow, Option<String>) {
+fn convert_connector(connector: &ConnectorSpec) -> (Stroke, Arrow, Arrow, Option<String>) {
     let stroke = match connector.stroke {
         StrokeSpec::Solid => Stroke::Solid,
         StrokeSpec::Dotted => Stroke::Dotted,
         StrokeSpec::Thick => Stroke::Thick,
     };
 
-    // Map right arrow head to the graph-layer Arrow type.
+    // Map arrow heads to the graph-layer Arrow type.
     // Cross and Circle are not yet rendered differently, so map to Normal.
-    let arrow = match connector.right {
+    let arrow_start = map_arrow_head(connector.left);
+    let arrow_end = map_arrow_head(connector.right);
+
+    (stroke, arrow_start, arrow_end, connector.label.clone())
+}
+
+fn map_arrow_head(head: ArrowHead) -> Arrow {
+    match head {
         ArrowHead::None => Arrow::None,
         ArrowHead::Normal | ArrowHead::Cross | ArrowHead::Circle => Arrow::Normal,
-    };
-
-    (stroke, arrow, connector.label.clone())
+    }
 }
 
 #[cfg(test)]
@@ -221,16 +235,16 @@ mod tests {
         let diagram = build_diagram(&flowchart);
 
         assert_eq!(diagram.edges[0].stroke, Stroke::Solid);
-        assert_eq!(diagram.edges[0].arrow, Arrow::Normal);
+        assert_eq!(diagram.edges[0].arrow_end, Arrow::Normal);
 
         assert_eq!(diagram.edges[1].stroke, Stroke::Dotted);
-        assert_eq!(diagram.edges[1].arrow, Arrow::Normal);
+        assert_eq!(diagram.edges[1].arrow_end, Arrow::Normal);
 
         assert_eq!(diagram.edges[2].stroke, Stroke::Thick);
-        assert_eq!(diagram.edges[2].arrow, Arrow::Normal);
+        assert_eq!(diagram.edges[2].arrow_end, Arrow::Normal);
 
         assert_eq!(diagram.edges[3].stroke, Stroke::Solid);
-        assert_eq!(diagram.edges[3].arrow, Arrow::None);
+        assert_eq!(diagram.edges[3].arrow_end, Arrow::None);
     }
 
     #[test]
