@@ -547,11 +547,7 @@ fn segment_midpoint(segment: &Segment) -> (usize, usize) {
     }
 }
 
-/// Draw a single segment on the canvas.
-///
-/// TODO: Use `stroke` to render dotted (`┄`/`┆`) and thick edges differently.
-/// The `CharSet` already has `dotted_horizontal` and `dotted_vertical` characters;
-/// this function should select them based on `Stroke::Dotted` vs `Stroke::Solid`.
+/// Draw a single segment on the canvas, honoring stroke style.
 fn draw_segment(canvas: &mut Canvas, segment: &Segment, _stroke: Stroke, charset: &CharSet) {
     match segment {
         Segment::Vertical { x, y_start, y_end } => {
@@ -568,7 +564,7 @@ fn draw_segment(canvas: &mut Canvas, segment: &Segment, _stroke: Stroke, charset
                     left: false,
                     right: false,
                 };
-                canvas.set_with_connection(*x, y, connections, charset);
+                canvas.set_with_connection(*x, y, connections, charset, _stroke);
             }
         }
         Segment::Horizontal { y, x_start, x_end } => {
@@ -585,7 +581,7 @@ fn draw_segment(canvas: &mut Canvas, segment: &Segment, _stroke: Stroke, charset
                     left: x > x_min,
                     right: x < x_max,
                 };
-                canvas.set_with_connection(x, *y, connections, charset);
+                canvas.set_with_connection(x, *y, connections, charset, _stroke);
             }
         }
     }
@@ -1157,7 +1153,7 @@ mod tests {
             right: true,
         };
         for x in 5..15 {
-            canvas.set_with_connection(x, 5, connections, &charset);
+            canvas.set_with_connection(x, 5, connections, &charset, Stroke::Solid);
         }
 
         // Label at y=5 should collide with edge

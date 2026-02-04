@@ -3,6 +3,7 @@
 use std::fmt;
 
 use super::chars::CharSet;
+use crate::graph::Stroke;
 
 /// Tracks connections in four directions for a cell.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -163,7 +164,8 @@ impl Canvas {
     /// Set a cell with connection tracking for junction resolution.
     ///
     /// This merges the new connections with existing ones and uses the
-    /// charset to determine the appropriate junction character.
+    /// charset to determine the appropriate junction character (including
+    /// dotted/thick stroke variants).
     /// Also marks the cell as an edge cell (protected from label overwrite).
     ///
     /// Returns `false` if the position is out of bounds or the cell is protected.
@@ -173,6 +175,7 @@ impl Canvas {
         y: usize,
         connections: Connections,
         charset: &CharSet,
+        stroke: Stroke,
     ) -> bool {
         if let Some(cell) = self.get_mut(x, y) {
             if cell.is_node || cell.is_subgraph_title || charset.is_arrow(cell.ch) {
@@ -184,8 +187,23 @@ impl Canvas {
                 let border_conns = charset.infer_connections(cell.ch);
                 cell.connections.merge(border_conns);
             }
+            let existing_heavy = charset.is_heavy(cell.ch);
             cell.connections.merge(connections);
-            cell.ch = charset.junction(cell.connections);
+            let merged = cell.connections;
+            let heavy = existing_heavy || stroke == Stroke::Thick;
+            let horizontal_only = (merged.left || merged.right) && !merged.up && !merged.down;
+            let vertical_only = (merged.up || merged.down) && !merged.left && !merged.right;
+            cell.ch = if heavy {
+                charset.junction_heavy(merged)
+            } else if stroke == Stroke::Dotted && (horizontal_only || vertical_only) {
+                if horizontal_only {
+                    charset.dotted_horizontal
+                } else {
+                    charset.dotted_vertical
+                }
+            } else {
+                charset.junction(merged)
+            };
             cell.is_edge = true;
             true
         } else {
@@ -438,7 +456,7 @@ mod tests {
         };
 
         // Should return false because cell is protected
-        assert!(!canvas.set_with_connection(2, 2, connections, &charset));
+        assert!(!canvas.set_with_connection(2, 2, connections, &charset, Stroke::Solid));
         // Original character should be preserved
         assert_eq!(canvas.get(2, 2).unwrap().ch, '#');
     }
@@ -465,9 +483,9 @@ mod tests {
             left: false,
             right: false,
         };
-        canvas.set_with_connection(2, 1, conn_ud, &charset);
-        canvas.set_with_connection(2, 2, conn_ud, &charset);
-        canvas.set_with_connection(2, 3, conn_ud, &charset);
+        canvas.set_with_connection(2, 1, conn_ud, &charset, Stroke::Solid);
+        canvas.set_with_connection(2, 2, conn_ud, &charset, Stroke::Solid);
+        canvas.set_with_connection(2, 3, conn_ud, &charset, Stroke::Solid);
 
         // At the crossing point (2, 2), should be a junction ┼
         // (up+down from edge + left+right from border)
@@ -509,7 +527,7 @@ mod tests {
             left: false,
             right: false,
         };
-        let overwritten = canvas.set_with_connection(4, 0, conns, &charset);
+        let overwritten = canvas.set_with_connection(4, 0, conns, &charset, Stroke::Solid);
 
         // Title character should be protected
         assert!(
@@ -539,7 +557,7 @@ mod tests {
             left: false,
             right: false,
         };
-        let merged = canvas.set_with_connection(5, 0, conns, &charset);
+        let merged = canvas.set_with_connection(5, 0, conns, &charset, Stroke::Solid);
         assert!(merged, "Edge should merge with non-title border segment");
         // Should produce a junction (┼ or similar)
         assert_ne!(

@@ -41,6 +41,19 @@ pub struct CharSet {
     // Dotted lines
     pub dotted_horizontal: char,
     pub dotted_vertical: char,
+
+    // Heavy lines (thick)
+    pub heavy_horizontal: char,
+    pub heavy_vertical: char,
+    pub heavy_corner_tl: char,
+    pub heavy_corner_tr: char,
+    pub heavy_corner_bl: char,
+    pub heavy_corner_br: char,
+    pub heavy_tee_down: char,
+    pub heavy_tee_up: char,
+    pub heavy_tee_right: char,
+    pub heavy_tee_left: char,
+    pub heavy_cross: char,
 }
 
 impl CharSet {
@@ -68,6 +81,17 @@ impl CharSet {
             arrow_right: '►',
             dotted_horizontal: '┄',
             dotted_vertical: '┆',
+            heavy_horizontal: '━',
+            heavy_vertical: '┃',
+            heavy_corner_tl: '┏',
+            heavy_corner_tr: '┓',
+            heavy_corner_bl: '┗',
+            heavy_corner_br: '┛',
+            heavy_tee_down: '┳',
+            heavy_tee_up: '┻',
+            heavy_tee_right: '┣',
+            heavy_tee_left: '┫',
+            heavy_cross: '╋',
         }
     }
 
@@ -95,6 +119,17 @@ impl CharSet {
             arrow_right: '>',
             dotted_horizontal: '-',
             dotted_vertical: ':',
+            heavy_horizontal: '-',
+            heavy_vertical: '|',
+            heavy_corner_tl: '+',
+            heavy_corner_tr: '+',
+            heavy_corner_bl: '+',
+            heavy_corner_br: '+',
+            heavy_tee_down: '+',
+            heavy_tee_up: '+',
+            heavy_tee_right: '+',
+            heavy_tee_left: '+',
+            heavy_cross: '+',
         }
     }
 
@@ -112,71 +147,71 @@ impl CharSet {
     /// left+right, '┌' implies down+right). Returns `Connections::none()`
     /// for unrecognized characters.
     pub fn infer_connections(&self, ch: char) -> Connections {
-        if ch == self.horizontal {
+        if ch == self.horizontal || ch == self.heavy_horizontal || ch == self.dotted_horizontal {
             Connections {
                 left: true,
                 right: true,
                 ..Connections::none()
             }
-        } else if ch == self.vertical {
+        } else if ch == self.vertical || ch == self.heavy_vertical || ch == self.dotted_vertical {
             Connections {
                 up: true,
                 down: true,
                 ..Connections::none()
             }
-        } else if ch == self.corner_tl {
+        } else if ch == self.corner_tl || ch == self.heavy_corner_tl {
             Connections {
                 down: true,
                 right: true,
                 ..Connections::none()
             }
-        } else if ch == self.corner_tr {
+        } else if ch == self.corner_tr || ch == self.heavy_corner_tr {
             Connections {
                 down: true,
                 left: true,
                 ..Connections::none()
             }
-        } else if ch == self.corner_bl {
+        } else if ch == self.corner_bl || ch == self.heavy_corner_bl {
             Connections {
                 up: true,
                 right: true,
                 ..Connections::none()
             }
-        } else if ch == self.corner_br {
+        } else if ch == self.corner_br || ch == self.heavy_corner_br {
             Connections {
                 up: true,
                 left: true,
                 ..Connections::none()
             }
-        } else if ch == self.tee_down {
+        } else if ch == self.tee_down || ch == self.heavy_tee_down {
             Connections {
                 down: true,
                 left: true,
                 right: true,
                 ..Connections::none()
             }
-        } else if ch == self.tee_up {
+        } else if ch == self.tee_up || ch == self.heavy_tee_up {
             Connections {
                 up: true,
                 left: true,
                 right: true,
                 ..Connections::none()
             }
-        } else if ch == self.tee_right {
+        } else if ch == self.tee_right || ch == self.heavy_tee_right {
             Connections {
                 up: true,
                 down: true,
                 right: true,
                 ..Connections::none()
             }
-        } else if ch == self.tee_left {
+        } else if ch == self.tee_left || ch == self.heavy_tee_left {
             Connections {
                 up: true,
                 down: true,
                 left: true,
                 ..Connections::none()
             }
-        } else if ch == self.cross {
+        } else if ch == self.cross || ch == self.heavy_cross {
             Connections {
                 up: true,
                 down: true,
@@ -222,6 +257,54 @@ impl CharSet {
             // No connections
             (false, false, false, false) => ' ',
         }
+    }
+
+    /// Get a heavy junction character based on connections.
+    pub fn junction_heavy(&self, conn: Connections) -> char {
+        match (conn.up, conn.down, conn.left, conn.right) {
+            // Four-way
+            (true, true, true, true) => self.heavy_cross,
+
+            // T-junctions (three connections)
+            (false, true, true, true) => self.heavy_tee_down,
+            (true, false, true, true) => self.heavy_tee_up,
+            (true, true, false, true) => self.heavy_tee_right,
+            (true, true, true, false) => self.heavy_tee_left,
+
+            // Straight lines (two connections)
+            (true, true, false, false) => self.heavy_vertical,
+            (false, false, true, true) => self.heavy_horizontal,
+
+            // Corners (two connections)
+            (false, true, false, true) => self.heavy_corner_tl,
+            (false, true, true, false) => self.heavy_corner_tr,
+            (true, false, false, true) => self.heavy_corner_bl,
+            (true, false, true, false) => self.heavy_corner_br,
+
+            // Single connection (fallback)
+            (true, false, false, false) => self.heavy_vertical,
+            (false, true, false, false) => self.heavy_vertical,
+            (false, false, true, false) => self.heavy_horizontal,
+            (false, false, false, true) => self.heavy_horizontal,
+
+            // None
+            _ => ' ',
+        }
+    }
+
+    /// Check if a character is a heavy line/junction.
+    pub fn is_heavy(&self, ch: char) -> bool {
+        ch == self.heavy_horizontal
+            || ch == self.heavy_vertical
+            || ch == self.heavy_corner_tl
+            || ch == self.heavy_corner_tr
+            || ch == self.heavy_corner_bl
+            || ch == self.heavy_corner_br
+            || ch == self.heavy_tee_down
+            || ch == self.heavy_tee_up
+            || ch == self.heavy_tee_right
+            || ch == self.heavy_tee_left
+            || ch == self.heavy_cross
     }
 }
 
