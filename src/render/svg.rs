@@ -585,17 +585,22 @@ fn compute_svg_bounds(
         }
     }
 
-    for (index, pos) in &layout.label_positions {
-        let Some(edge) = diagram.edges.get(*index) else {
+    for (index, edge) in diagram.edges.iter().enumerate() {
+        let Some(label) = edge.label.as_ref() else {
             continue;
         };
-        let Some(label) = edge.label.as_ref() else {
+        let position = layout
+            .label_positions
+            .get(&index)
+            .map(|pos| pos.point)
+            .or_else(|| fallback_label_position(layout, index));
+        let Some(point) = position else {
             continue;
         };
         let (w, h) = metrics.edge_label_dimensions(label);
         let rect = Rect {
-            x: pos.point.x - w / 2.0,
-            y: pos.point.y - h / 2.0,
+            x: point.x - w / 2.0,
+            y: point.y - h / 2.0,
             width: w,
             height: h,
         };
