@@ -6,9 +6,9 @@
   </defs>
   <g class="clusters">
     <rect class="subgraph" x="8.00" y="8.00" width="182.80" height="386.40" fill="none" stroke="#888" stroke-width="1.00" />
-    <text x="14.40" y="12.80" text-anchor="start" dominant-baseline="hanging" fill="#333">Outer</text>
+    <text x="99.40" y="12.80" text-anchor="middle" dominant-baseline="hanging" fill="#333">Outer</text>
     <rect class="subgraph" x="28.00" y="149.30" width="142.80" height="207.60" fill="none" stroke="#888" stroke-width="1.00" />
-    <text x="34.40" y="154.10" text-anchor="start" dominant-baseline="hanging" fill="#333">Inner</text>
+    <text x="99.40" y="154.10" text-anchor="middle" dominant-baseline="hanging" fill="#333">Inner</text>
   </g>
   <g class="edgePaths">
     <path d="M99.40,215.60 L99.40,253.10 L99.40,290.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />

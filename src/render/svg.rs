@@ -132,10 +132,10 @@ fn render_subgraphs(
         writer.push_line(&rect_line);
 
         if !title.trim().is_empty() {
-            let title_x = rect.x + metrics.padding_x * scale;
+            let title_x = rect.x + rect.width / 2.0;
             let title_y = rect.y + metrics.padding_y * scale;
             let text = format!(
-                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"start\" dominant-baseline=\"hanging\" fill=\"{color}\">{label}</text>",
+                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"hanging\" fill=\"{color}\">{label}</text>",
                 x = fmt_f64(title_x),
                 y = fmt_f64(title_y),
                 color = TEXT_COLOR,
