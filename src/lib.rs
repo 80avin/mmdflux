@@ -17,6 +17,7 @@
 
 pub mod dagre;
 pub mod diagram;
+pub mod diagrams;
 pub mod graph;
 pub mod parser;
 pub mod registry;

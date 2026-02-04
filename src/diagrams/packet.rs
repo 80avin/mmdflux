@@ -1,0 +1,62 @@
+//! Packet diagram shim.
+//!
+//! Packet diagrams display network packet layouts.
+//! Currently renders as a simple text table.
+
+use crate::diagram::{DiagramFamily, OutputFormat, RenderConfig, RenderError};
+use crate::registry::{DiagramDefinition, DiagramDetector, DiagramInstance};
+
+/// Detect if input is a packet diagram.
+pub fn detect(input: &str) -> bool {
+    input.trim_start().starts_with("packet-beta")
+}
+
+/// Packet diagram definition for registry.
+pub fn definition() -> DiagramDefinition {
+    DiagramDefinition {
+        id: "packet",
+        family: DiagramFamily::Table,
+        detector: detect as DiagramDetector,
+        factory: || Box::new(PacketInstance::new()),
+        supported_formats: &[OutputFormat::Text, OutputFormat::Ascii],
+    }
+}
+
+/// Packet diagram instance.
+pub struct PacketInstance {
+    input: Option<String>,
+}
+
+impl PacketInstance {
+    /// Create a new packet diagram instance.
+    pub fn new() -> Self {
+        Self { input: None }
+    }
+}
+
+impl Default for PacketInstance {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DiagramInstance for PacketInstance {
+    fn parse(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        if !detect(input) {
+            return Err("Not a packet diagram".into());
+        }
+        self.input = Some(input.to_string());
+        Ok(())
+    }
+
+    fn render(&self, _format: OutputFormat, _config: &RenderConfig) -> Result<String, RenderError> {
+        let input = self.input.as_ref().ok_or("Not parsed")?;
+
+        // Trivial rendering: echo the input with a header
+        Ok(format!("[Packet Diagram]\n{}", input))
+    }
+
+    fn supports_format(&self, format: OutputFormat) -> bool {
+        matches!(format, OutputFormat::Text | OutputFormat::Ascii)
+    }
+}

@@ -122,79 +122,17 @@ pub trait DiagramInstance: Send + Sync {
 /// Registration order determines detection priority. Flowchart is
 /// registered first as the most common diagram type.
 pub fn default_registry() -> DiagramRegistry {
+    use crate::diagrams::{flowchart, info, packet, pie};
+
     let mut registry = DiagramRegistry::new();
 
     // Flowchart - most common, register first
-    registry.register(flowchart_definition());
+    registry.register(flowchart::definition());
 
     // Simple diagrams (shims)
-    registry.register(pie_definition());
-    registry.register(info_definition());
-    registry.register(packet_definition());
+    registry.register(pie::definition());
+    registry.register(info::definition());
+    registry.register(packet::definition());
 
     registry
-}
-
-// Stub implementations until the diagrams module is complete (Phase A3)
-
-struct StubInstance;
-
-impl DiagramInstance for StubInstance {
-    fn parse(&mut self, _: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        Err("Stub diagram - not yet implemented".into())
-    }
-
-    fn render(&self, _: OutputFormat, _: &RenderConfig) -> Result<String, RenderError> {
-        Err("Stub diagram - not yet implemented".into())
-    }
-
-    fn supports_format(&self, _: OutputFormat) -> bool {
-        false
-    }
-}
-
-fn flowchart_definition() -> DiagramDefinition {
-    DiagramDefinition {
-        id: "flowchart",
-        family: DiagramFamily::Graph,
-        detector: |input| {
-            let trimmed = input.trim_start();
-            trimmed.starts_with("graph ")
-                || trimmed.starts_with("graph\n")
-                || trimmed.starts_with("flowchart ")
-                || trimmed.starts_with("flowchart\n")
-        },
-        factory: || Box::new(StubInstance),
-        supported_formats: &[OutputFormat::Text, OutputFormat::Ascii, OutputFormat::Svg],
-    }
-}
-
-fn pie_definition() -> DiagramDefinition {
-    DiagramDefinition {
-        id: "pie",
-        family: DiagramFamily::Chart,
-        detector: |input| input.trim_start().starts_with("pie"),
-        factory: || Box::new(StubInstance),
-        supported_formats: &[OutputFormat::Text, OutputFormat::Ascii],
-    }
-}
-
-fn info_definition() -> DiagramDefinition {
-    DiagramDefinition {
-        id: "info",
-        family: DiagramFamily::Chart,
-        detector: |input| input.trim_start().starts_with("info"),
-        factory: || Box::new(StubInstance),
-        supported_formats: &[OutputFormat::Text, OutputFormat::Ascii],
-    }
-}
-
-fn packet_definition() -> DiagramDefinition {
-    DiagramDefinition {
-        id: "packet",
-        family: DiagramFamily::Table,
-        detector: |input| input.trim_start().starts_with("packet-beta"),
-        factory: || Box::new(StubInstance),
-        supported_formats: &[OutputFormat::Text, OutputFormat::Ascii],
-    }
 }
