@@ -67,8 +67,9 @@ fn add_vertex_to_diagram(diagram: &mut Diagram, vertex: &Vertex, parent: Option<
         if let Some(shape_spec) = &vertex.shape
             && existing.label == existing.id
         {
-            existing.label = shape_spec.text().to_string();
-            existing.shape = convert_shape(shape_spec);
+            let shape = convert_shape(shape_spec);
+            existing.label = normalize_shape_label(&vertex.id, shape_spec, shape);
+            existing.shape = shape;
         }
         // Set parent if provided and not already set
         if parent.is_some() && existing.parent.is_none() {
@@ -96,10 +97,26 @@ fn collect_node_ids(statements: &[Statement]) -> Vec<String> {
 
 fn convert_vertex(vertex: &Vertex) -> Node {
     match &vertex.shape {
-        Some(shape_spec) => Node::new(&vertex.id)
-            .with_label(shape_spec.text())
-            .with_shape(convert_shape(shape_spec)),
+        Some(shape_spec) => {
+            let shape = convert_shape(shape_spec);
+            let label = normalize_shape_label(&vertex.id, shape_spec, shape);
+            Node::new(&vertex.id).with_label(label).with_shape(shape)
+        }
         None => Node::new(&vertex.id),
+    }
+}
+
+fn normalize_shape_label(id: &str, shape_spec: &ShapeSpec, shape: Shape) -> String {
+    let text = shape_spec.text();
+    if text.is_empty()
+        && !matches!(
+            shape,
+            Shape::SmallCircle | Shape::FramedCircle | Shape::CrossedCircle | Shape::ForkJoin
+        )
+    {
+        id.to_string()
+    } else {
+        text.to_string()
     }
 }
 
@@ -111,12 +128,25 @@ fn convert_shape(shape_spec: &ShapeSpec) -> Shape {
         ShapeSpec::Stadium(_) => Shape::Stadium,
         ShapeSpec::Subroutine(_) => Shape::Subroutine,
         ShapeSpec::Cylinder(_) => Shape::Cylinder,
+        ShapeSpec::Document(_) => Shape::Document,
+        ShapeSpec::Documents(_) => Shape::Documents,
+        ShapeSpec::TaggedDocument(_) => Shape::TaggedDocument,
+        ShapeSpec::Card(_) => Shape::Card,
+        ShapeSpec::TaggedRect(_) => Shape::TaggedRect,
         ShapeSpec::Circle(_) => Shape::Circle,
         ShapeSpec::DoubleCircle(_) => Shape::DoubleCircle,
         ShapeSpec::Hexagon(_) => Shape::Hexagon,
+        ShapeSpec::Parallelogram(_) => Shape::Parallelogram,
+        ShapeSpec::InvParallelogram(_) => Shape::InvParallelogram,
+        ShapeSpec::ManualInput(_) => Shape::ManualInput,
         ShapeSpec::Asymmetric(_) => Shape::Asymmetric,
         ShapeSpec::Trapezoid(_) => Shape::Trapezoid,
         ShapeSpec::InvTrapezoid(_) => Shape::InvTrapezoid,
+        ShapeSpec::SmallCircle(_) => Shape::SmallCircle,
+        ShapeSpec::FramedCircle(_) => Shape::FramedCircle,
+        ShapeSpec::CrossedCircle(_) => Shape::CrossedCircle,
+        ShapeSpec::TextBlock(_) => Shape::TextBlock,
+        ShapeSpec::ForkJoin(_) => Shape::ForkJoin,
     }
 }
 
@@ -319,5 +349,20 @@ mod tests {
         assert_eq!(diagram.edges.len(), 2);
         assert_eq!(diagram.nodes["A"].parent, Some("sg1".to_string()));
         assert_eq!(diagram.nodes["C"].parent, None);
+    }
+
+    #[test]
+    fn test_build_diagram_shape_config_label_defaults() {
+        let input = "graph TD\nA@{shape: doc}\nJ@{shape: sm-circ}\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let node_a = diagram.get_node("A").unwrap();
+        assert_eq!(node_a.shape, Shape::Document);
+        assert_eq!(node_a.label, "A");
+
+        let node_j = diagram.get_node("J").unwrap();
+        assert_eq!(node_j.shape, Shape::SmallCircle);
+        assert_eq!(node_j.label, "");
     }
 }

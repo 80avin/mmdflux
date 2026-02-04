@@ -91,6 +91,139 @@ impl NodeBounds {
     }
 }
 
+/// Corner style for box-shaped nodes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CornerStyle {
+    /// Sharp 90-degree corners: `┌┐└┘`
+    Square,
+    /// Rounded corners: `╭╮╰╯`
+    Rounded,
+}
+
+/// Box modifier flags for special box variants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct BoxModifier {
+    /// Double vertical borders (subroutine)
+    pub double_vertical: bool,
+    /// Curved sides (cylinder)
+    pub cylinder_sides: bool,
+    /// Wavy bottom edge (document)
+    pub wavy_bottom: bool,
+    /// Folded corner (card/tagged)
+    pub folded_corner: bool,
+    /// Shadow offset (stacked docs)
+    pub shadow: bool,
+}
+
+/// Glyph kinds for single-character nodes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlyphKind {
+    SmallCircle,
+    FramedCircle,
+    CrossedCircle,
+}
+
+/// Shape rendering category.
+///
+/// Shapes are grouped into categories that share rendering logic.
+/// This simplifies the render dispatch and makes fallback behavior explicit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapeCategory {
+    /// Box with borders and optional corner style/modifier
+    Box {
+        corners: CornerStyle,
+        modifier: BoxModifier,
+    },
+    /// Diamond/angular shape: `< >`
+    Diamond,
+    /// No border (text only)
+    Borderless,
+    /// Single glyph character (for unlabeled nodes)
+    Glyph(GlyphKind),
+    /// Horizontal bar
+    Bar,
+}
+
+/// Categorize a shape for rendering.
+///
+/// Fallback table (explicit):
+/// - Stadium, Circle, DoubleCircle -> Rounded box
+/// - Hexagon -> Diamond
+/// - Documents -> Document (wavy bottom + shadow)
+/// - TaggedRect -> Card (folded corner)
+/// - Trapezoid, InvTrapezoid, Parallelogram, InvParallelogram, ManualInput, Asymmetric -> Rectangle
+pub fn categorize_shape(shape: Shape) -> ShapeCategory {
+    match shape {
+        Shape::Rectangle => ShapeCategory::Box {
+            corners: CornerStyle::Square,
+            modifier: BoxModifier::default(),
+        },
+        Shape::Round | Shape::Stadium | Shape::Circle | Shape::DoubleCircle => ShapeCategory::Box {
+            corners: CornerStyle::Rounded,
+            modifier: BoxModifier::default(),
+        },
+        Shape::Subroutine => ShapeCategory::Box {
+            corners: CornerStyle::Square,
+            modifier: BoxModifier {
+                double_vertical: true,
+                ..Default::default()
+            },
+        },
+        Shape::Cylinder => ShapeCategory::Box {
+            corners: CornerStyle::Square,
+            modifier: BoxModifier {
+                cylinder_sides: true,
+                ..Default::default()
+            },
+        },
+        Shape::Document => ShapeCategory::Box {
+            corners: CornerStyle::Square,
+            modifier: BoxModifier {
+                wavy_bottom: true,
+                ..Default::default()
+            },
+        },
+        Shape::Documents => ShapeCategory::Box {
+            corners: CornerStyle::Square,
+            modifier: BoxModifier {
+                wavy_bottom: true,
+                shadow: true,
+                ..Default::default()
+            },
+        },
+        Shape::TaggedDocument => ShapeCategory::Box {
+            corners: CornerStyle::Square,
+            modifier: BoxModifier {
+                wavy_bottom: true,
+                folded_corner: true,
+                ..Default::default()
+            },
+        },
+        Shape::Card | Shape::TaggedRect => ShapeCategory::Box {
+            corners: CornerStyle::Square,
+            modifier: BoxModifier {
+                folded_corner: true,
+                ..Default::default()
+            },
+        },
+        Shape::Diamond | Shape::Hexagon => ShapeCategory::Diamond,
+        Shape::TextBlock => ShapeCategory::Borderless,
+        Shape::ForkJoin => ShapeCategory::Bar,
+        Shape::SmallCircle => ShapeCategory::Glyph(GlyphKind::SmallCircle),
+        Shape::FramedCircle => ShapeCategory::Glyph(GlyphKind::FramedCircle),
+        Shape::CrossedCircle => ShapeCategory::Glyph(GlyphKind::CrossedCircle),
+        Shape::Trapezoid
+        | Shape::InvTrapezoid
+        | Shape::Parallelogram
+        | Shape::InvParallelogram
+        | Shape::ManualInput
+        | Shape::Asymmetric => ShapeCategory::Box {
+            corners: CornerStyle::Square,
+            modifier: BoxModifier::default(),
+        },
+    }
+}
+
 /// Calculate the dimensions needed to render a node.
 ///
 /// All shapes use the same formula: width = label_len + 4 (2 for borders/delimiters,
@@ -114,27 +247,77 @@ pub fn render_node(
     let label = &node.label;
     let label_len = label.chars().count();
 
-    match node.shape {
-        Shape::Diamond | Shape::Hexagon => {
+    match categorize_shape(node.shape) {
+        ShapeCategory::Diamond => {
             render_diamond(canvas, x, y, width, label_len, label, charset);
         }
-        shape => {
-            let corners = if matches!(shape, Shape::Round | Shape::Circle | Shape::DoubleCircle) {
-                (
-                    charset.round_tl,
-                    charset.round_tr,
-                    charset.round_bl,
-                    charset.round_br,
-                )
-            } else {
-                (
+        ShapeCategory::Box { corners, modifier } => {
+            let corners = match corners {
+                CornerStyle::Square => (
                     charset.corner_tl,
                     charset.corner_tr,
                     charset.corner_bl,
                     charset.corner_br,
-                )
+                ),
+                CornerStyle::Rounded => (
+                    charset.round_tl,
+                    charset.round_tr,
+                    charset.round_bl,
+                    charset.round_br,
+                ),
             };
-            render_box(canvas, x, y, width, height, label, charset, corners);
+            render_box(
+                canvas, x, y, width, height, label, charset, corners, modifier,
+            );
+        }
+        ShapeCategory::Borderless => {
+            render_borderless(canvas, x, y, width, height, label);
+        }
+        ShapeCategory::Glyph(kind) => {
+            if label.trim().is_empty() {
+                render_glyph(canvas, x, y, width, height, kind, charset);
+            } else {
+                let corners = (
+                    charset.round_tl,
+                    charset.round_tr,
+                    charset.round_bl,
+                    charset.round_br,
+                );
+                render_box(
+                    canvas,
+                    x,
+                    y,
+                    width,
+                    height,
+                    label,
+                    charset,
+                    corners,
+                    BoxModifier::default(),
+                );
+            }
+        }
+        ShapeCategory::Bar => {
+            if label.trim().is_empty() {
+                render_bar(canvas, x, y, width, height, charset);
+            } else {
+                let corners = (
+                    charset.corner_tl,
+                    charset.corner_tr,
+                    charset.corner_bl,
+                    charset.corner_br,
+                );
+                render_box(
+                    canvas,
+                    x,
+                    y,
+                    width,
+                    height,
+                    label,
+                    charset,
+                    corners,
+                    BoxModifier::default(),
+                );
+            }
         }
     }
 
@@ -169,30 +352,139 @@ fn render_box(
     label: &str,
     charset: &CharSet,
     corners: (char, char, char, char),
+    modifier: BoxModifier,
 ) {
     let (tl, tr, bl, br) = corners;
+    let top_horizontal = charset.horizontal;
+    let mut bottom_horizontal = charset.horizontal;
+    let mut left_vertical = charset.vertical;
+    let mut right_vertical = charset.vertical;
+    let mut fold_col = None;
+
+    if modifier.cylinder_sides {
+        left_vertical = charset.cylinder_left;
+        right_vertical = charset.cylinder_right;
+    } else if modifier.double_vertical {
+        left_vertical = charset.double_vertical;
+        right_vertical = charset.double_vertical;
+    }
+    if modifier.wavy_bottom {
+        bottom_horizontal = charset.wavy_horizontal;
+    }
+    if modifier.folded_corner && width > 2 {
+        fold_col = Some(x + width - 2);
+    }
+    if modifier.shadow {
+        render_shadow_box(canvas, x + 1, y + 1, width, height, charset, corners);
+    }
 
     // Top border
     canvas.set(x, y, tl);
     for dx in 1..width - 1 {
-        canvas.set(x + dx, y, charset.horizontal);
+        let ch = if fold_col == Some(x + dx) {
+            charset.fold_corner
+        } else {
+            top_horizontal
+        };
+        canvas.set(x + dx, y, ch);
     }
     canvas.set(x + width - 1, y, tr);
 
     // Middle row with label
     let mid_y = y + height / 2;
-    canvas.set(x, mid_y, charset.vertical);
+    canvas.set(x, mid_y, left_vertical);
     let label_start = x + (width - label.chars().count()) / 2;
     canvas.write_str(label_start, mid_y, label);
-    canvas.set(x + width - 1, mid_y, charset.vertical);
+    canvas.set(x + width - 1, mid_y, right_vertical);
 
     // Bottom border
     let bot_y = y + height - 1;
     canvas.set(x, bot_y, bl);
     for dx in 1..width - 1 {
-        canvas.set(x + dx, bot_y, charset.horizontal);
+        canvas.set(x + dx, bot_y, bottom_horizontal);
     }
     canvas.set(x + width - 1, bot_y, br);
+}
+
+fn render_shadow_box(
+    canvas: &mut Canvas,
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+    charset: &CharSet,
+    corners: (char, char, char, char),
+) {
+    let (_tl, _tr, _bl, br) = corners;
+    let bottom_horizontal = charset.horizontal;
+    let right_x = x + width - 1;
+    let bot_y = y + height - 1;
+
+    // Right edge only (shadow)
+    for dy in 0..height {
+        canvas.set(right_x, y + dy, charset.vertical);
+    }
+
+    // Bottom edge only (shadow)
+    for dx in 0..width {
+        canvas.set(x + dx, bot_y, bottom_horizontal);
+    }
+
+    canvas.set(right_x, bot_y, br);
+}
+
+/// Render a borderless text block (label only).
+fn render_borderless(
+    canvas: &mut Canvas,
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+    label: &str,
+) {
+    let mid_y = y + height / 2;
+    let label_len = label.chars().count();
+    if label_len == 0 {
+        return;
+    }
+    let label_start = x + (width - label_len) / 2;
+    canvas.write_str(label_start, mid_y, label);
+}
+
+/// Render a horizontal bar (fork/join).
+fn render_bar(
+    canvas: &mut Canvas,
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+    charset: &CharSet,
+) {
+    let mid_y = y + height / 2;
+    for dx in 0..width {
+        canvas.set(x + dx, mid_y, charset.heavy_horizontal);
+    }
+}
+
+/// Render a glyph node (single character or short string).
+fn render_glyph(
+    canvas: &mut Canvas,
+    x: usize,
+    y: usize,
+    width: usize,
+    height: usize,
+    kind: GlyphKind,
+    charset: &CharSet,
+) {
+    let glyph = match kind {
+        GlyphKind::SmallCircle => charset.glyph_small_circle,
+        GlyphKind::FramedCircle => charset.glyph_framed_circle,
+        GlyphKind::CrossedCircle => charset.glyph_crossed_circle,
+    };
+    let glyph_len = glyph.chars().count();
+    let mid_y = y + height / 2;
+    let start_x = x + (width.saturating_sub(glyph_len)) / 2;
+    canvas.write_str(start_x, mid_y, glyph);
 }
 
 /// Render a diamond shape.
@@ -345,6 +637,142 @@ mod tests {
         assert!(output.contains("┌──────────┐"));
         assert!(output.contains("< Decision >"));
         assert!(output.contains("└──────────┘"));
+    }
+
+    #[test]
+    fn test_categorize_shape_fallbacks() {
+        if let ShapeCategory::Box { corners, modifier } = categorize_shape(Shape::Rectangle) {
+            assert_eq!(corners, CornerStyle::Square);
+            assert_eq!(modifier, BoxModifier::default());
+        } else {
+            panic!("Rectangle should be Box");
+        }
+
+        if let ShapeCategory::Box { corners, modifier } = categorize_shape(Shape::Round) {
+            assert_eq!(corners, CornerStyle::Rounded);
+            assert_eq!(modifier, BoxModifier::default());
+        } else {
+            panic!("Round should be Box");
+        }
+
+        assert!(matches!(
+            categorize_shape(Shape::Diamond),
+            ShapeCategory::Diamond
+        ));
+        assert!(matches!(
+            categorize_shape(Shape::SmallCircle),
+            ShapeCategory::Glyph(GlyphKind::SmallCircle)
+        ));
+        assert!(matches!(
+            categorize_shape(Shape::TextBlock),
+            ShapeCategory::Borderless
+        ));
+        assert!(matches!(
+            categorize_shape(Shape::ForkJoin),
+            ShapeCategory::Bar
+        ));
+        for shape in [
+            Shape::Trapezoid,
+            Shape::InvTrapezoid,
+            Shape::Parallelogram,
+            Shape::InvParallelogram,
+            Shape::ManualInput,
+            Shape::Asymmetric,
+        ] {
+            if let ShapeCategory::Box { corners, modifier } = categorize_shape(shape) {
+                assert_eq!(corners, CornerStyle::Square);
+                assert_eq!(modifier, BoxModifier::default());
+            } else {
+                panic!("{shape:?} should be Box fallback");
+            }
+        }
+    }
+
+    #[test]
+    fn test_render_subroutine_double_vertical() {
+        let mut canvas = Canvas::new(15, 5);
+        let node = Node::new("S")
+            .with_label("Sub")
+            .with_shape(Shape::Subroutine);
+        let charset = CharSet::unicode();
+
+        render_node(&mut canvas, &node, 1, 1, &charset);
+        let output = canvas.to_string();
+        assert!(output.contains("║ Sub ║"));
+    }
+
+    #[test]
+    fn test_render_document_wavy_bottom() {
+        let mut canvas = Canvas::new(15, 5);
+        let node = Node::new("D").with_label("Doc").with_shape(Shape::Document);
+        let charset = CharSet::unicode();
+
+        render_node(&mut canvas, &node, 1, 1, &charset);
+        let output = canvas.to_string();
+        assert!(output.contains("~"));
+    }
+
+    #[test]
+    fn test_render_tagged_document_fold_and_wavy() {
+        let mut canvas = Canvas::new(15, 5);
+        let node = Node::new("T")
+            .with_label("Tag")
+            .with_shape(Shape::TaggedDocument);
+        let charset = CharSet::unicode();
+
+        render_node(&mut canvas, &node, 1, 1, &charset);
+        let output = canvas.to_string();
+        assert!(output.contains("~"));
+        assert!(output.contains(charset.fold_corner));
+    }
+
+    #[test]
+    fn test_render_documents_shadow_offset() {
+        let mut canvas = Canvas::new(16, 7);
+        let node = Node::new("D")
+            .with_label("Docs")
+            .with_shape(Shape::Documents);
+        let charset = CharSet::unicode();
+
+        render_node(&mut canvas, &node, 1, 1, &charset);
+        let shadow_cell = canvas.get(9, 4).unwrap().ch;
+        assert_eq!(shadow_cell, charset.corner_br);
+    }
+
+    #[test]
+    fn test_render_small_circle_glyph_unlabeled() {
+        let mut canvas = Canvas::new(7, 5);
+        let node = Node::new("J").with_label("").with_shape(Shape::SmallCircle);
+        let charset = CharSet::unicode();
+
+        render_node(&mut canvas, &node, 1, 1, &charset);
+        let output = canvas.to_string();
+        assert!(output.contains(charset.glyph_small_circle));
+    }
+
+    #[test]
+    fn test_render_small_circle_with_label_falls_back_to_round() {
+        let mut canvas = Canvas::new(15, 5);
+        let node = Node::new("J")
+            .with_label("Hub")
+            .with_shape(Shape::SmallCircle);
+        let charset = CharSet::unicode();
+
+        render_node(&mut canvas, &node, 1, 1, &charset);
+        let output = canvas.to_string();
+        assert!(output.contains("╭"));
+        assert!(output.contains("╯"));
+    }
+
+    #[test]
+    fn test_render_fork_join_bar() {
+        let mut canvas = Canvas::new(10, 5);
+        let node = Node::new("F").with_label("").with_shape(Shape::ForkJoin);
+        let charset = CharSet::unicode();
+
+        render_node(&mut canvas, &node, 1, 1, &charset);
+        let output = canvas.to_string();
+        assert!(output.contains(charset.heavy_horizontal));
     }
 
     #[test]

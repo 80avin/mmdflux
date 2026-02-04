@@ -3,31 +3,65 @@
 /// Shape of a node in the diagram.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Shape {
+    // === Box-style shapes ===
     /// Rectangle shape: [text]
     #[default]
     Rectangle,
     /// Rounded rectangle shape: (text)
     Round,
+    /// Stadium shape: ([text]) (renders as Round)
+    Stadium,
+    /// Subroutine shape: [[text]] (double vertical borders)
+    Subroutine,
+    /// Cylinder/database shape: [(text)] (curved sides)
+    Cylinder,
+
+    /// Document shape (wavy bottom): @{shape: doc}
+    Document,
+    /// Stacked documents (fallbacks to Document): @{shape: docs}
+    Documents,
+    /// Tagged document (folded corner + wavy bottom): @{shape: tag-doc}
+    TaggedDocument,
+    /// Card with folded corner: @{shape: card}
+    Card,
+    /// Tagged rectangle (fallbacks to Card): @{shape: tag-rect}
+    TaggedRect,
+
+    // === Angular shapes ===
     /// Diamond/decision shape: {text}
     Diamond,
-    /// Stadium shape: ([text])
-    Stadium,
-    /// Subroutine shape: [[text]]
-    Subroutine,
-    /// Cylinder/database shape: [(text)]
-    Cylinder,
-    /// Circle shape: ((text))
-    Circle,
-    /// Double circle shape: (((text)))
-    DoubleCircle,
-    /// Hexagon shape: {{text}}
+    /// Hexagon shape: {{text}} (renders as Diamond)
     Hexagon,
-    /// Asymmetric/flag shape: >text]
-    Asymmetric,
-    /// Trapezoid shape: [/text\]
+    /// Trapezoid shape: [/text\] (fallbacks to Rectangle)
     Trapezoid,
-    /// Inverse trapezoid shape: [\text/]
+    /// Inverse trapezoid shape: [\text/] (fallbacks to Rectangle)
     InvTrapezoid,
+    /// Parallelogram (lean right): @{shape: sl-rect} (fallbacks to Rectangle)
+    Parallelogram,
+    /// Inverted parallelogram (lean left): @{shape: inv-parallelogram} (fallbacks to Rectangle)
+    InvParallelogram,
+    /// Manual input (sloped top): @{shape: manual} (fallbacks to Rectangle)
+    ManualInput,
+    /// Asymmetric/flag shape: >text] (fallbacks to Rectangle)
+    Asymmetric,
+
+    // === Circular shapes ===
+    /// Circle shape: ((text)) (renders as Round)
+    Circle,
+    /// Double circle shape: (((text))) (renders as Round)
+    DoubleCircle,
+    /// Small circle (junction point): @{shape: sm-circ} (glyph when unlabeled)
+    SmallCircle,
+    /// Framed circle (junction point): @{shape: fr-circ} (glyph when unlabeled)
+    FramedCircle,
+    /// Crossed circle (inhibit): @{shape: cross-circ} (glyph when unlabeled)
+    CrossedCircle,
+
+    // === Special shapes ===
+    /// Text block with no border: @{shape: text}
+    TextBlock,
+    /// Fork/join bar: @{shape: fork}
+    ForkJoin,
 }
 
 /// A node in the flowchart diagram.

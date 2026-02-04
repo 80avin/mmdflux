@@ -3,30 +3,63 @@
 /// Shape specification from parsing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShapeSpec {
+    // === Box-style shapes ===
     /// Rectangle: [text]
     Rectangle(String),
     /// Rounded: (text)
     Round(String),
-    /// Diamond: {text}
-    Diamond(String),
     /// Stadium: ([text])
     Stadium(String),
     /// Subroutine: [[text]]
     Subroutine(String),
     /// Cylinder: [(text)]
     Cylinder(String),
-    /// Circle: ((text))
-    Circle(String),
-    /// Double circle: (((text)))
-    DoubleCircle(String),
+    /// Document (wavy bottom): @{shape: doc}
+    Document(String),
+    /// Stacked documents: @{shape: docs}
+    Documents(String),
+    /// Tagged document (folded corner + wavy bottom): @{shape: tag-doc}
+    TaggedDocument(String),
+    /// Card (folded corner): @{shape: card}
+    Card(String),
+    /// Tagged rectangle: @{shape: tag-rect}
+    TaggedRect(String),
+
+    // === Angular shapes ===
+    /// Diamond: {text}
+    Diamond(String),
     /// Hexagon: {{text}}
     Hexagon(String),
-    /// Asymmetric/flag: >text]
-    Asymmetric(String),
     /// Trapezoid: [/text\]
     Trapezoid(String),
     /// Inverse trapezoid: [\text/]
     InvTrapezoid(String),
+    /// Parallelogram: @{shape: sl-rect}
+    Parallelogram(String),
+    /// Inverted parallelogram: @{shape: inv-parallelogram}
+    InvParallelogram(String),
+    /// Manual input: @{shape: manual}
+    ManualInput(String),
+    /// Asymmetric/flag: >text]
+    Asymmetric(String),
+
+    // === Circular shapes ===
+    /// Circle: ((text))
+    Circle(String),
+    /// Double circle: (((text)))
+    DoubleCircle(String),
+    /// Small circle (junction): @{shape: sm-circ}
+    SmallCircle(String),
+    /// Framed circle (junction): @{shape: fr-circ}
+    FramedCircle(String),
+    /// Crossed circle (junction): @{shape: cross-circ}
+    CrossedCircle(String),
+
+    // === Special shapes ===
+    /// Text block with no border: @{shape: text}
+    TextBlock(String),
+    /// Fork/join bar: @{shape: fork}
+    ForkJoin(String),
 }
 
 impl ShapeSpec {
@@ -35,16 +68,29 @@ impl ShapeSpec {
         match self {
             ShapeSpec::Rectangle(s)
             | ShapeSpec::Round(s)
-            | ShapeSpec::Diamond(s)
             | ShapeSpec::Stadium(s)
             | ShapeSpec::Subroutine(s)
             | ShapeSpec::Cylinder(s)
+            | ShapeSpec::Document(s)
+            | ShapeSpec::Documents(s)
+            | ShapeSpec::TaggedDocument(s)
+            | ShapeSpec::Card(s)
+            | ShapeSpec::TaggedRect(s)
+            | ShapeSpec::Diamond(s)
+            | ShapeSpec::Hexagon(s)
+            | ShapeSpec::Trapezoid(s)
+            | ShapeSpec::InvTrapezoid(s)
+            | ShapeSpec::Parallelogram(s)
+            | ShapeSpec::InvParallelogram(s)
+            | ShapeSpec::ManualInput(s)
+            | ShapeSpec::Asymmetric(s)
             | ShapeSpec::Circle(s)
             | ShapeSpec::DoubleCircle(s)
-            | ShapeSpec::Hexagon(s)
-            | ShapeSpec::Asymmetric(s)
-            | ShapeSpec::Trapezoid(s)
-            | ShapeSpec::InvTrapezoid(s) => s,
+            | ShapeSpec::SmallCircle(s)
+            | ShapeSpec::FramedCircle(s)
+            | ShapeSpec::CrossedCircle(s)
+            | ShapeSpec::TextBlock(s)
+            | ShapeSpec::ForkJoin(s) => s,
         }
     }
 }

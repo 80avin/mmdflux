@@ -7,6 +7,8 @@ use super::canvas::Connections;
 /// Provides characters for lines, corners, junctions, and arrows.
 #[derive(Debug, Clone)]
 pub struct CharSet {
+    /// Whether this charset is ASCII-only.
+    pub ascii_only: bool,
     // Straight lines
     pub horizontal: char,
     pub vertical: char,
@@ -54,12 +56,23 @@ pub struct CharSet {
     pub heavy_tee_right: char,
     pub heavy_tee_left: char,
     pub heavy_cross: char,
+
+    // Shape-specific glyphs and modifiers
+    pub double_vertical: char,
+    pub wavy_horizontal: char,
+    pub fold_corner: char,
+    pub cylinder_left: char,
+    pub cylinder_right: char,
+    pub glyph_small_circle: &'static str,
+    pub glyph_framed_circle: &'static str,
+    pub glyph_crossed_circle: &'static str,
 }
 
 impl CharSet {
     /// Unicode box-drawing character set.
     pub fn unicode() -> Self {
         Self {
+            ascii_only: false,
             horizontal: '─',
             vertical: '│',
             corner_tl: '┌',
@@ -92,12 +105,21 @@ impl CharSet {
             heavy_tee_right: '┣',
             heavy_tee_left: '┫',
             heavy_cross: '╋',
+            double_vertical: '║',
+            wavy_horizontal: '~',
+            fold_corner: '╱',
+            cylinder_left: '(',
+            cylinder_right: ')',
+            glyph_small_circle: "●",
+            glyph_framed_circle: "◉",
+            glyph_crossed_circle: "⊗",
         }
     }
 
     /// ASCII-only character set.
     pub fn ascii() -> Self {
         Self {
+            ascii_only: true,
             horizontal: '-',
             vertical: '|',
             corner_tl: '+',
@@ -130,7 +152,20 @@ impl CharSet {
             heavy_tee_right: '+',
             heavy_tee_left: '+',
             heavy_cross: '+',
+            double_vertical: '|',
+            wavy_horizontal: '~',
+            fold_corner: '/',
+            cylinder_left: '(',
+            cylinder_right: ')',
+            glyph_small_circle: "o",
+            glyph_framed_circle: "(o)",
+            glyph_crossed_circle: "x",
         }
+    }
+
+    /// Check if this charset is ASCII-only.
+    pub fn is_ascii(&self) -> bool {
+        self.ascii_only
     }
 
     /// Check if a character is an arrow character in this charset.
