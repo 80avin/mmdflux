@@ -16,6 +16,7 @@
 //! ```
 
 pub mod dagre;
+pub mod diagram;
 pub mod graph;
 pub mod parser;
 pub mod render;

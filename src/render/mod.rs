@@ -19,7 +19,25 @@ pub use layout::{Layout, LayoutConfig, SubgraphBounds, compute_layout_direct};
 pub use router::{Point, RoutedEdge, Segment, route_all_edges, route_edge};
 pub use shape::{NodeBounds, node_dimensions, render_node};
 
+pub use crate::diagram::{
+    LayoutConfig as DiagramLayoutConfig, OutputFormat, RenderConfig, RenderError,
+};
 use crate::graph::{Diagram, Direction};
+
+impl From<&RenderConfig> for RenderOptions {
+    fn from(config: &RenderConfig) -> Self {
+        Self {
+            ascii_only: false, // Determined by OutputFormat, not config
+            ranker: Some(config.layout.ranker),
+            node_spacing: Some(config.layout.node_sep),
+            rank_spacing: Some(config.layout.rank_sep),
+            edge_spacing: Some(config.layout.edge_sep),
+            margin: Some(config.layout.margin),
+            cluster_ranksep: config.cluster_ranksep,
+            padding: config.padding,
+        }
+    }
+}
 
 /// Render options for ASCII output.
 #[derive(Debug, Clone, Default)]
