@@ -2,6 +2,7 @@
 //!
 //! These tests verify the full parsing and rendering pipeline using fixture files.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -176,6 +177,45 @@ mod parsing {
         // Check that at least some edges have labels
         let edges_with_labels = diagram.edges.iter().filter(|e| e.label.is_some()).count();
         assert!(edges_with_labels > 0, "Should have labeled edges");
+    }
+
+    #[test]
+    fn inline_edge_labels_parsed() {
+        let input = load_fixture("inline_edge_labels.mmd");
+        let flowchart = parse_flowchart(&input).expect("Should parse");
+        let diagram = build_diagram(&flowchart);
+
+        assert_eq!(diagram.edges.len(), 4);
+        assert_eq!(diagram.edges[0].label.as_deref(), Some("yes"));
+        assert_eq!(diagram.edges[1].label.as_deref(), Some("retry"));
+        assert_eq!(diagram.edges[2].label.as_deref(), Some("final step"));
+        assert_eq!(diagram.edges[3].label.as_deref(), Some("no"));
+
+        // Inline labels should not create nodes.
+        assert!(!diagram.nodes.contains_key("yes"));
+        assert!(!diagram.nodes.contains_key("retry"));
+        assert!(!diagram.nodes.contains_key("no"));
+    }
+
+    #[test]
+    fn inline_label_flowchart_parsed() {
+        let input = load_fixture("inline_label_flowchart.mmd");
+        let flowchart = parse_flowchart(&input).expect("Should parse");
+        let diagram = build_diagram(&flowchart);
+
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for label in diagram.edges.iter().filter_map(|e| e.label.as_deref()) {
+            *counts.entry(label).or_insert(0) += 1;
+        }
+
+        assert_eq!(counts.get("no"), Some(&2));
+        assert_eq!(counts.get("yes"), Some(&2));
+        assert_eq!(counts.get("sync"), Some(&1));
+        assert_eq!(counts.get("async"), Some(&1));
+        assert_eq!(counts.get("hit"), Some(&1));
+        assert_eq!(counts.get("miss"), Some(&1));
+        assert_eq!(counts.get("warn"), Some(&1));
+        assert_eq!(counts.values().sum::<usize>(), 9);
     }
 
     #[test]

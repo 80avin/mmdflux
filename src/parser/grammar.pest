@@ -72,6 +72,11 @@ node_group = { node ~ ("&" ~ node)* }
 edge_label_text = @{ (!"|" ~ ANY)+ }
 edge_label = { "|" ~ edge_label_text ~ "|" }
 
+// Inline edge label text (between link start/end)
+edge_label_inline_text_solid = @{ (!NEWLINE ~ !link_solid_end ~ ANY)+ }
+edge_label_inline_text_dotted = @{ (!NEWLINE ~ !link_dotted_end ~ ANY)+ }
+edge_label_inline_text_thick = @{ (!NEWLINE ~ !link_thick_end ~ ANY)+ }
+
 // Arrow heads (left and right ends)
 arrow_left = { "<" | "x" | "o" }
 arrow_right = { ">" | "x" | "o" }
@@ -81,20 +86,30 @@ arrow_right = { ">" | "x" | "o" }
 // Variable length: ----> (more dashes = longer)
 solid_dashes = @{ "-"+ }
 link_solid = { arrow_left? ~ "-" ~ solid_dashes ~ arrow_right? }
+link_solid_start = @{ arrow_left? ~ "-" ~ "-" ~ !("-" | ">" | "x" | "o") }
+link_solid_end = { "-" ~ solid_dashes ~ arrow_right? }
+link_solid_labeled = { link_solid_start ~ edge_label_inline_text_solid ~ link_solid_end }
 
 // Dotted edges: optional_left -. dots .- optional_right
 // Minimum: -.-> or -..-> (variable dots)
 dotted_dots = @{ "."+ }
 link_dotted = { arrow_left? ~ "-" ~ dotted_dots ~ "-" ~ arrow_right? }
+link_dotted_start = @{ arrow_left? ~ "-" ~ "." ~ !("." | "-" | ">" | "x" | "o") }
+link_dotted_end = { "-"? ~ dotted_dots ~ "-" ~ arrow_right? }
+link_dotted_labeled = { link_dotted_start ~ edge_label_inline_text_dotted ~ link_dotted_end }
 
 // Thick edges: optional_left == equals == optional_right
 // Minimum: ==> or ===> (variable equals)
 thick_equals = @{ "="+ }
 link_thick = { arrow_left? ~ "=" ~ thick_equals ~ arrow_right? }
+link_thick_start = @{ arrow_left? ~ "=" ~ "=" ~ !("=" | ">" | "x" | "o") }
+link_thick_end = { "=" ~ thick_equals ~ arrow_right? }
+link_thick_labeled = { link_thick_start ~ edge_label_inline_text_thick ~ link_thick_end }
 
 // Edge connector with optional label (label comes after the link)
 edge_connector = {
-    (link_dotted | link_thick | link_solid) ~ edge_label?
+    (link_dotted_labeled | link_thick_labeled | link_solid_labeled)
+    | (link_dotted | link_thick | link_solid) ~ edge_label?
 }
 
 // Edge segment: connector followed by node_group

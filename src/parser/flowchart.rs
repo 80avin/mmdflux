@@ -251,11 +251,56 @@ fn parse_connector(pair: pest::iterators::Pair<Rule>) -> ConnectorSpec {
             Rule::link_solid => (StrokeSpec::Solid, Rule::solid_dashes),
             Rule::link_dotted => (StrokeSpec::Dotted, Rule::dotted_dots),
             Rule::link_thick => (StrokeSpec::Thick, Rule::thick_equals),
+            Rule::link_solid_labeled => {
+                stroke = StrokeSpec::Solid;
+                let (l, r, len, lbl) = parse_labeled_link(
+                    inner,
+                    Rule::solid_dashes,
+                    Rule::edge_label_inline_text_solid,
+                );
+                left = l;
+                right = r;
+                length = len;
+                if lbl.is_some() {
+                    label = lbl;
+                }
+                continue;
+            }
+            Rule::link_dotted_labeled => {
+                stroke = StrokeSpec::Dotted;
+                let (l, r, len, lbl) = parse_labeled_link(
+                    inner,
+                    Rule::dotted_dots,
+                    Rule::edge_label_inline_text_dotted,
+                );
+                left = l;
+                right = r;
+                length = len;
+                if lbl.is_some() {
+                    label = lbl;
+                }
+                continue;
+            }
+            Rule::link_thick_labeled => {
+                stroke = StrokeSpec::Thick;
+                let (l, r, len, lbl) = parse_labeled_link(
+                    inner,
+                    Rule::thick_equals,
+                    Rule::edge_label_inline_text_thick,
+                );
+                left = l;
+                right = r;
+                length = len;
+                if lbl.is_some() {
+                    label = lbl;
+                }
+                continue;
+            }
             Rule::edge_label => {
                 label = inner
                     .into_inner()
                     .find(|t| t.as_rule() == Rule::edge_label_text)
-                    .map(|t| strip_quotes(t.as_str()).to_string());
+                    .and_then(|t| normalize_edge_label(t.as_str()));
                 continue;
             }
             _ => continue,
@@ -271,6 +316,36 @@ fn parse_connector(pair: pest::iterators::Pair<Rule>) -> ConnectorSpec {
         length,
         label,
     }
+}
+
+fn parse_labeled_link(
+    link: pest::iterators::Pair<Rule>,
+    length_rule: Rule,
+    label_rule: Rule,
+) -> (ArrowHead, ArrowHead, usize, Option<String>) {
+    let mut left = ArrowHead::None;
+    let mut right = ArrowHead::None;
+    let mut length = 1;
+    let mut label = None;
+
+    for part in link.into_inner() {
+        match part.as_rule() {
+            Rule::link_solid_start | Rule::link_dotted_start | Rule::link_thick_start => {
+                left = parse_start_arrow_head(part.as_str());
+            }
+            Rule::link_solid_end | Rule::link_dotted_end | Rule::link_thick_end => {
+                let (_, r, len) = parse_link_parts(part, length_rule);
+                right = r;
+                length = len;
+            }
+            rule if rule == label_rule => {
+                label = normalize_edge_label(part.as_str());
+            }
+            _ => {}
+        }
+    }
+
+    (left, right, length, label)
 }
 
 /// Parse common link parts: arrow heads and length from the line character rule.
@@ -301,6 +376,23 @@ fn parse_arrow_head(s: &str) -> ArrowHead {
         "o" => ArrowHead::Circle,
         _ => ArrowHead::None,
     }
+}
+
+fn parse_start_arrow_head(s: &str) -> ArrowHead {
+    match s.chars().next() {
+        Some('<') => ArrowHead::Normal,
+        Some('x') => ArrowHead::Cross,
+        Some('o') => ArrowHead::Circle,
+        _ => ArrowHead::None,
+    }
+}
+
+fn normalize_edge_label(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(strip_quotes(trimmed).to_string())
 }
 
 fn parse_node(pair: pest::iterators::Pair<Rule>) -> Vertex {
@@ -480,6 +572,18 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_solid_arrow_with_inline_label() {
+        let result = parse_flowchart("graph TD\nA -- yes --> B\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].from.id, "A");
+        assert_eq!(edges[0].to.id, "B");
+        assert_eq!(edges[0].connector.label(), Some("yes"));
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Solid);
+        assert_eq!(edges[0].connector.right, ArrowHead::Normal);
+    }
+
+    #[test]
     fn test_parse_dotted_arrow() {
         let result = parse_flowchart("graph TD\nA -.-> B\n").unwrap();
         let edges = result.edges();
@@ -489,12 +593,32 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_dotted_arrow_with_inline_label() {
+        let result = parse_flowchart("graph TD\nA -. no .-> B\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Dotted);
+        assert_eq!(edges[0].connector.right, ArrowHead::Normal);
+        assert_eq!(edges[0].connector.label(), Some("no"));
+    }
+
+    #[test]
     fn test_parse_thick_arrow() {
         let result = parse_flowchart("graph TD\nA ==> B\n").unwrap();
         let edges = result.edges();
         assert_eq!(edges.len(), 1);
         assert_eq!(edges[0].connector.stroke, StrokeSpec::Thick);
         assert_eq!(edges[0].connector.right, ArrowHead::Normal);
+    }
+
+    #[test]
+    fn test_parse_thick_arrow_with_inline_label() {
+        let result = parse_flowchart("graph TD\nA == \"maybe\" ==> B\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Thick);
+        assert_eq!(edges[0].connector.right, ArrowHead::Normal);
+        assert_eq!(edges[0].connector.label(), Some("maybe"));
     }
 
     #[test]
