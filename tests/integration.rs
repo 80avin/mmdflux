@@ -879,6 +879,7 @@ mod snapshots {
             .join("tests")
             .join("snapshots");
         fs::create_dir_all(&snapshot_dir).unwrap();
+        let regenerate = std::env::var("GENERATE_TEXT_SNAPSHOTS").is_ok();
 
         for entry in fs::read_dir(&fixture_dir).unwrap() {
             let path = entry.unwrap().path();
@@ -888,7 +889,22 @@ mod snapshots {
                 let flowchart = parse_flowchart(&input).expect("Failed to parse");
                 let diagram = build_diagram(&flowchart);
                 let output = render(&diagram, &RenderOptions::default());
-                fs::write(snapshot_dir.join(format!("{}.txt", name)), &output).unwrap();
+                let snapshot_path = snapshot_dir.join(format!("{}.txt", name));
+                if regenerate {
+                    fs::write(snapshot_path, &output).unwrap();
+                } else {
+                    let expected = fs::read_to_string(&snapshot_path).unwrap_or_else(|_| {
+                        panic!(
+                            "Missing snapshot: {}. Set GENERATE_TEXT_SNAPSHOTS=1 to generate.",
+                            snapshot_path.display()
+                        )
+                    });
+                    assert_eq!(
+                        output, expected,
+                        "Snapshot mismatch for {}. Set GENERATE_TEXT_SNAPSHOTS=1 to regenerate.",
+                        name
+                    );
+                }
             }
         }
     }
