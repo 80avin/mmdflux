@@ -19,6 +19,7 @@ pub mod dagre;
 pub mod diagram;
 pub mod graph;
 pub mod parser;
+pub mod registry;
 pub mod render;
 
 // Re-export commonly used items at the crate root
