@@ -30,17 +30,25 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         |edge| edge.label.as_ref().map(|label| metrics.edge_label_dimensions(label)),
     );
 
-    let width = layout.width * scale;
-    let height = layout.height * scale;
+    let bounds = compute_svg_bounds(diagram, &layout, &metrics);
+    let padding = (svg_options.font_size * 0.75).max(8.0);
+    let (min_x, min_y, max_x, max_y) =
+        bounds.finalize(layout.width, layout.height);
+    let width = (max_x - min_x + padding * 2.0) * scale;
+    let height = (max_y - min_y + padding * 2.0) * scale;
+    let offset_x = (-min_x + padding) * scale;
+    let offset_y = (-min_y + padding) * scale;
 
     let mut writer = SvgWriter::new();
     writer.start_svg(width, height, &svg_options.font_family, svg_options.font_size * scale);
 
     render_defs(&mut writer, scale);
+    writer.start_group_transform(offset_x, offset_y);
     render_subgraphs(&mut writer, diagram, &layout, &metrics, scale);
     render_edges(&mut writer, diagram, &layout, scale);
     render_edge_labels(&mut writer, diagram, &layout, &metrics, scale);
     render_nodes(&mut writer, diagram, &layout, &metrics, scale);
+    writer.end_group();
 
     writer.end_svg();
     writer.finish()
@@ -513,6 +521,90 @@ fn render_text_centered(
     }
 }
 
+struct SvgBounds {
+    min_x: f64,
+    min_y: f64,
+    max_x: f64,
+    max_y: f64,
+}
+
+impl SvgBounds {
+    fn new() -> Self {
+        Self {
+            min_x: f64::INFINITY,
+            min_y: f64::INFINITY,
+            max_x: f64::NEG_INFINITY,
+            max_y: f64::NEG_INFINITY,
+        }
+    }
+
+    fn update_point(&mut self, x: f64, y: f64) {
+        self.min_x = self.min_x.min(x);
+        self.min_y = self.min_y.min(y);
+        self.max_x = self.max_x.max(x);
+        self.max_y = self.max_y.max(y);
+    }
+
+    fn update_rect(&mut self, rect: &Rect) {
+        self.update_point(rect.x, rect.y);
+        self.update_point(rect.x + rect.width, rect.y + rect.height);
+    }
+
+    fn finalize(&self, fallback_width: f64, fallback_height: f64) -> (f64, f64, f64, f64) {
+        if !self.min_x.is_finite() || !self.min_y.is_finite() {
+            return (0.0, 0.0, fallback_width, fallback_height);
+        }
+        (self.min_x, self.min_y, self.max_x, self.max_y)
+    }
+}
+
+fn compute_svg_bounds(
+    diagram: &Diagram,
+    layout: &LayoutResult,
+    metrics: &SvgTextMetrics,
+) -> SvgBounds {
+    let mut bounds = SvgBounds::new();
+
+    for rect in layout.nodes.values() {
+        bounds.update_rect(rect);
+    }
+
+    for rect in layout.subgraph_bounds.values() {
+        bounds.update_rect(rect);
+    }
+
+    for edge in &layout.edges {
+        for point in &edge.points {
+            bounds.update_point(point.x, point.y);
+        }
+    }
+
+    for edge in &layout.self_edges {
+        for point in &edge.points {
+            bounds.update_point(point.x, point.y);
+        }
+    }
+
+    for (index, pos) in &layout.label_positions {
+        let Some(edge) = diagram.edges.get(*index) else {
+            continue;
+        };
+        let Some(label) = edge.label.as_ref() else {
+            continue;
+        };
+        let (w, h) = metrics.edge_label_dimensions(label);
+        let rect = Rect {
+            x: pos.point.x - w / 2.0,
+            y: pos.point.y - h / 2.0,
+            width: w,
+            height: h,
+        };
+        bounds.update_rect(&rect);
+    }
+
+    bounds
+}
+
 fn edge_style_attrs(edge: &Edge, scale: f64) -> String {
     let stroke_width = match edge.stroke {
         Stroke::Thick => 2.0 * scale,
@@ -667,6 +759,15 @@ impl SvgWriter {
         let line = format!(
             "<g class=\"{class}\">",
             class = escape_text(class_name)
+        );
+        self.start_tag(&line);
+    }
+
+    fn start_group_transform(&mut self, dx: f64, dy: f64) {
+        let line = format!(
+            "<g transform=\"translate({x},{y})\">",
+            x = fmt_f64(dx),
+            y = fmt_f64(dy)
         );
         self.start_tag(&line);
     }
