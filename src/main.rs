@@ -4,13 +4,12 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use mmdflux::dagre::Ranker;
-use mmdflux::parser::{DiagramType, detect_diagram_type, parse_info, parse_packet, parse_pie};
-use mmdflux::render::{RenderOptions, render};
-use mmdflux::{build_diagram, parse_flowchart};
+use mmdflux::diagram::{LayoutConfig, OutputFormat, RenderConfig};
+use mmdflux::registry::default_registry;
 
 #[derive(Parser)]
 #[command(name = "mmdflux")]
-#[command(about = "Convert Mermaid diagrams to ASCII art")]
+#[command(about = "Convert Mermaid diagrams to text or SVG")]
 struct Cli {
     /// Input file (reads from stdin if not provided)
     input: Option<PathBuf>,
@@ -23,9 +22,9 @@ struct Cli {
     #[arg(long)]
     debug: bool,
 
-    /// Use ASCII-only characters instead of Unicode box-drawing
-    #[arg(long)]
-    ascii: bool,
+    /// Output format (text, ascii, or svg)
+    #[arg(short = 'f', long, value_enum, default_value_t = FormatArg::Text)]
+    format: FormatArg,
 
     /// Ranking algorithm
     #[arg(long, value_enum, default_value_t = RankerArg::NetworkSimplex)]
@@ -56,15 +55,35 @@ struct Cli {
     padding: Option<usize>,
 }
 
-#[derive(Clone, Copy, ValueEnum)]
+#[derive(Clone, Copy, ValueEnum, Debug)]
+enum FormatArg {
+    /// Unicode text output (default)
+    Text,
+    /// ASCII-only text output
+    Ascii,
+    /// SVG vector graphics
+    Svg,
+}
+
+impl From<FormatArg> for OutputFormat {
+    fn from(arg: FormatArg) -> Self {
+        match arg {
+            FormatArg::Text => OutputFormat::Text,
+            FormatArg::Ascii => OutputFormat::Ascii,
+            FormatArg::Svg => OutputFormat::Svg,
+        }
+    }
+}
+
+#[derive(Clone, Copy, ValueEnum, Debug)]
 enum RankerArg {
     NetworkSimplex,
     LongestPath,
 }
 
-impl RankerArg {
-    fn to_ranker(self) -> Ranker {
-        match self {
+impl From<RankerArg> for Ranker {
+    fn from(arg: RankerArg) -> Self {
+        match arg {
             RankerArg::NetworkSimplex => Ranker::NetworkSimplex,
             RankerArg::LongestPath => Ranker::LongestPath,
         }
@@ -83,129 +102,66 @@ fn main() -> io::Result<()> {
         }
     };
 
-    let options = RenderOptions {
-        ascii_only: cli.ascii,
-        ranker: Some(cli.ranker.to_ranker()),
-        node_spacing: cli.node_spacing,
-        rank_spacing: cli.rank_spacing,
-        edge_spacing: cli.edge_spacing,
-        margin: cli.margin,
+    let format: OutputFormat = cli.format.into();
+
+    // Build render config from CLI options
+    let config = RenderConfig {
+        layout: LayoutConfig {
+            node_sep: cli.node_spacing.unwrap_or(50.0),
+            edge_sep: cli.edge_spacing.unwrap_or(20.0),
+            rank_sep: cli.rank_spacing.unwrap_or(50.0),
+            margin: cli.margin.unwrap_or(8.0),
+            ranker: cli.ranker.into(),
+            ..Default::default()
+        },
         cluster_ranksep: cli.cluster_ranksep,
         padding: cli.padding,
+        ..Default::default()
     };
 
-    let output = match render_input(&input, cli.debug, &options) {
-        Ok(result) => result,
-        Err(e) => {
-            eprintln!("Error: {}", e);
+    // Use registry for detection and rendering
+    let registry = default_registry();
+
+    let diagram_id = match registry.detect(&input) {
+        Some(id) => id,
+        None => {
+            eprintln!("Error: Unknown diagram type");
             std::process::exit(1);
         }
     };
 
-    match &cli.output {
-        Some(path) => fs::write(path, &output)?,
-        None => print!("{}", output),
+    if cli.debug {
+        eprintln!("Detected diagram type: {}", diagram_id);
+    }
+
+    let mut instance = registry.create(diagram_id).unwrap_or_else(|| {
+        eprintln!("Error: No implementation for diagram type: {}", diagram_id);
+        std::process::exit(1);
+    });
+
+    if let Err(e) = instance.parse(&input) {
+        eprintln!("Parse error: {}", e);
+        std::process::exit(1);
+    }
+
+    if !instance.supports_format(format) {
+        eprintln!(
+            "Error: {} diagrams do not support {} output",
+            diagram_id, format
+        );
+        std::process::exit(1);
+    }
+
+    match instance.render(format, &config) {
+        Ok(output) => match &cli.output {
+            Some(path) => fs::write(path, &output)?,
+            None => print!("{}", output),
+        },
+        Err(e) => {
+            eprintln!("Render error: {}", e);
+            std::process::exit(1);
+        }
     }
 
     Ok(())
-}
-
-fn render_input(input: &str, debug: bool, options: &RenderOptions) -> Result<String, String> {
-    // Detect diagram type and dispatch
-    match detect_diagram_type(input) {
-        Some(DiagramType::Flowchart) => render_flowchart_diagram(input, debug, options),
-        Some(DiagramType::Info) => render_info_diagram(input),
-        Some(DiagramType::Pie) => render_pie_diagram(input),
-        Some(DiagramType::Packet) => render_packet_diagram(input),
-        None => Err("unknown diagram type".to_string()),
-    }
-}
-
-fn render_flowchart_diagram(
-    input: &str,
-    debug: bool,
-    options: &RenderOptions,
-) -> Result<String, String> {
-    let flowchart = parse_flowchart(input).map_err(|e| e.to_string())?;
-    let diagram = build_diagram(&flowchart);
-
-    if debug {
-        let mut output = String::new();
-        output.push_str(&format!("Direction: {:?}\n", diagram.direction));
-        output.push_str(&format!("Nodes ({}):\n", diagram.nodes.len()));
-        for (id, node) in &diagram.nodes {
-            output.push_str(&format!(
-                "  {} [label=\"{}\", shape={:?}]\n",
-                id, node.label, node.shape
-            ));
-        }
-        output.push_str(&format!("Edges ({}):\n", diagram.edges.len()));
-        for edge in &diagram.edges {
-            let label = edge
-                .label
-                .as_ref()
-                .map(|l| format!("|{}|", l))
-                .unwrap_or_default();
-            output.push_str(&format!(
-                "  {} --{}--> {} [{:?}, start={:?}, end={:?}]\n",
-                edge.from, label, edge.to, edge.stroke, edge.arrow_start, edge.arrow_end
-            ));
-        }
-        Ok(output)
-    } else {
-        Ok(render(&diagram, options))
-    }
-}
-
-fn render_info_diagram(input: &str) -> Result<String, String> {
-    let info = parse_info(input).map_err(|e| e.to_string())?;
-    let mut output = String::new();
-    if let Some(title) = &info.title {
-        output.push_str(&format!("title: {}\n", title));
-    }
-    if info.show_info {
-        output.push_str("mmdflux v0.1.0\n");
-    }
-    Ok(output)
-}
-
-fn render_pie_diagram(input: &str) -> Result<String, String> {
-    let pie = parse_pie(input).map_err(|e| e.to_string())?;
-    let mut output = String::new();
-    if let Some(title) = &pie.title {
-        output.push_str(&format!("title: {}\n", title));
-    }
-    let total: f64 = pie.sections.iter().map(|s| s.value).sum();
-    for section in &pie.sections {
-        let pct = if total > 0.0 {
-            section.value / total * 100.0
-        } else {
-            0.0
-        };
-        output.push_str(&format!("  {}: {:.1}%\n", section.label, pct));
-    }
-    Ok(output)
-}
-
-fn render_packet_diagram(input: &str) -> Result<String, String> {
-    let packet = parse_packet(input).map_err(|e| e.to_string())?;
-    let mut output = String::new();
-    if let Some(title) = &packet.title {
-        output.push_str(&format!("title: {}\n", title));
-    }
-    for block in &packet.blocks {
-        match block {
-            mmdflux::parser::packet::PacketBlock::Range { start, end, label } => {
-                if let Some(e) = end {
-                    output.push_str(&format!("  {}-{}: {}\n", start, e, label));
-                } else {
-                    output.push_str(&format!("  {}: {}\n", start, label));
-                }
-            }
-            mmdflux::parser::packet::PacketBlock::Relative { bits, label } => {
-                output.push_str(&format!("  +{}: {}\n", bits, label));
-            }
-        }
-    }
-    Ok(output)
 }
