@@ -373,8 +373,20 @@ fn route_edge_with_waypoints(
     // the top-right corner should offset RIGHT for LR layouts, not UP)
     let is_backward = is_backward_edge(ep.from_bounds, ep.to_bounds, direction);
     let (src_face, tgt_face) = edge_faces(direction, is_backward);
-    let start = offset_for_face(src_attach, src_face);
+    let mut start = offset_for_face(src_attach, src_face);
     let end = offset_for_face(tgt_attach, tgt_face);
+
+    if let Some(&(wp_x, wp_y)) = waypoints.first() {
+        let should_skip_offset = match src_face {
+            NodeFace::Top => wp_y >= src_attach.1,
+            NodeFace::Bottom => wp_y <= src_attach.1,
+            NodeFace::Left => wp_x >= src_attach.0,
+            NodeFace::Right => wp_x <= src_attach.0,
+        };
+        if should_skip_offset {
+            start = Point::new(src_attach.0, src_attach.1);
+        }
+    }
 
     let mut segments = Vec::new();
 
@@ -931,11 +943,59 @@ fn build_orthogonal_path_with_waypoints(
         return build_orthogonal_path_for_direction(start, end, direction);
     }
 
+    let mut start_vertical_override = start_vertical;
+    let mut waypoint_slice = waypoints;
+    if vertical_first {
+        if let Some(&(wp_x, wp_y)) = waypoint_slice.first() {
+            if wp_y == start.y {
+                waypoint_slice = &waypoint_slice[1..];
+                if wp_x != start.x {
+                    start_vertical_override = false;
+                }
+            }
+        }
+    }
+    if waypoint_slice.is_empty() {
+        return build_orthogonal_path_for_direction(start, end, direction);
+    }
+    if vertical_first && start.x != end.x && waypoint_slice.iter().all(|(x, _)| *x == end.x) {
+        let mut mid_y = start.y;
+        if mid_y == end.y {
+            mid_y = match direction {
+                Direction::TopDown => end.y.saturating_sub(1),
+                Direction::BottomTop => end.y.saturating_add(1),
+                _ => mid_y,
+            };
+        }
+
+        let mut segments = Vec::new();
+        if start.y != mid_y {
+            segments.push(Segment::Vertical {
+                x: start.x,
+                y_start: start.y,
+                y_end: mid_y,
+            });
+        }
+        segments.push(Segment::Horizontal {
+            y: mid_y,
+            x_start: start.x,
+            x_end: end.x,
+        });
+        if mid_y != end.y {
+            segments.push(Segment::Vertical {
+                x: end.x,
+                y_start: mid_y,
+                y_end: end.y,
+            });
+        }
+        return segments;
+    }
+
     let mut segments = Vec::new();
 
     // Start → first waypoint
-    let first_wp = Point::new(waypoints[0].0, waypoints[0].1);
-    let first_vertical = if start_vertical {
+    let first_wp = Point::new(waypoint_slice[0].0, waypoint_slice[0].1);
+    let first_vertical = if start_vertical_override {
         true
     } else {
         !vertical_first
@@ -943,14 +1003,14 @@ fn build_orthogonal_path_with_waypoints(
     segments.extend(orthogonalize_segment(start, first_wp, first_vertical));
 
     // Through all intermediate waypoints
-    for window in waypoints.windows(2) {
+    for window in waypoint_slice.windows(2) {
         let from = Point::new(window[0].0, window[0].1);
         let to = Point::new(window[1].0, window[1].1);
         segments.extend(orthogonalize_segment(from, to, !vertical_first));
     }
 
     // Last waypoint → end: use direction-appropriate final segment
-    let &(last_x, last_y) = waypoints.last().unwrap();
+    let &(last_x, last_y) = waypoint_slice.last().unwrap();
     let last_wp = Point::new(last_x, last_y);
     segments.extend(build_orthogonal_path_for_direction(last_wp, end, direction));
 

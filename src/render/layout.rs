@@ -723,7 +723,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         max_overhang_y,
         config,
     };
-    let subgraph_bounds = dagre_subgraph_bounds_to_draw(
+    let mut subgraph_bounds = dagre_subgraph_bounds_to_draw(
         &diagram.subgraphs,
         &result.subgraph_bounds,
         &coord_transform,
@@ -733,6 +733,13 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         &subgraph_bounds,
         &result.subgraph_bounds,
         &coord_transform,
+    );
+    shrink_subgraph_vertical_gaps(
+        &diagram.subgraphs,
+        &diagram.edges,
+        &node_bounds,
+        &mut subgraph_bounds,
+        diagram.direction,
     );
     debug_subgraph_gaps(&diagram.subgraphs, &node_bounds, &subgraph_bounds);
 
@@ -1117,40 +1124,7 @@ fn dagre_subgraph_bounds_to_draw(
         );
     }
 
-    // Expand parent bounds to contain child bounds (inside-out).
-    let mut ids: Vec<String> = bounds.keys().cloned().collect();
-    ids.sort_by_key(|id| bounds.get(id).map(|b| b.depth).unwrap_or(0));
-    ids.reverse();
-    for id in ids {
-        let parent_id = subgraphs
-            .get(&id)
-            .and_then(|sg| sg.parent.as_ref())
-            .cloned();
-        let (Some(parent_id), Some(child_bounds)) = (parent_id, bounds.get(&id).cloned()) else {
-            continue;
-        };
-        let Some(parent_bounds) = bounds.get_mut(&parent_id) else {
-            continue;
-        };
-
-        let pad = 1usize;
-        let child_left = child_bounds.x.saturating_sub(pad);
-        let child_top = child_bounds.y.saturating_sub(pad);
-        let child_right = child_bounds.x + child_bounds.width + pad;
-        let child_bottom = child_bounds.y + child_bounds.height + pad;
-        let parent_right = parent_bounds.x + parent_bounds.width;
-        let parent_bottom = parent_bounds.y + parent_bounds.height;
-
-        let new_left = parent_bounds.x.min(child_left);
-        let new_top = parent_bounds.y.min(child_top);
-        let new_right = parent_right.max(child_right);
-        let new_bottom = parent_bottom.max(child_bottom);
-
-        parent_bounds.x = new_left;
-        parent_bounds.y = new_top;
-        parent_bounds.width = new_right.saturating_sub(new_left);
-        parent_bounds.height = new_bottom.saturating_sub(new_top);
-    }
+    expand_parent_subgraph_bounds(subgraphs, &mut bounds);
 
     bounds
 }
@@ -1249,6 +1223,237 @@ fn debug_subgraph_gaps(
             "[subgraph_gaps] {} top={} min_y={} max_y={} top_gap={} bottom_gap={}",
             sg_id, bounds.y, min_y, max_y, top_gap, bottom_gap
         );
+    }
+}
+
+fn shrink_subgraph_vertical_gaps(
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    edges: &[crate::graph::Edge],
+    node_bounds: &HashMap<String, NodeBounds>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+    direction: Direction,
+) {
+    let parent_map = build_subgraph_parent_map(subgraphs);
+    let incoming_map = build_subgraph_incoming_map(subgraphs, edges, &parent_map);
+    let outgoing_map = build_subgraph_outgoing_map(subgraphs, edges, &parent_map);
+
+    let mut ids: Vec<String> = subgraph_bounds.keys().cloned().collect();
+    ids.sort_by_key(|id| subgraph_bounds.get(id).map(|b| b.depth).unwrap_or(0));
+    ids.reverse();
+
+    for sg_id in ids {
+        let Some(bounds) = subgraph_bounds.get(&sg_id).cloned() else {
+            continue;
+        };
+        let Some(sg) = subgraphs.get(&sg_id) else {
+            continue;
+        };
+
+        let mut min_y: Option<usize> = None;
+        let mut max_y: Option<usize> = None;
+        for member in &sg.nodes {
+            if let Some(node) = node_bounds.get(member) {
+                let node_bottom = node.y.saturating_add(node.height.saturating_sub(1));
+                min_y = Some(min_y.map_or(node.y, |cur| cur.min(node.y)));
+                max_y = Some(max_y.map_or(node_bottom, |cur| cur.max(node_bottom)));
+                continue;
+            }
+            if let Some(child_bounds) = subgraph_bounds.get(member) {
+                let child_bottom = child_bounds
+                    .y
+                    .saturating_add(child_bounds.height.saturating_sub(1));
+                min_y = Some(min_y.map_or(child_bounds.y, |cur| cur.min(child_bounds.y)));
+                max_y = Some(max_y.map_or(child_bottom, |cur| cur.max(child_bottom)));
+            }
+        }
+
+        let (Some(min_y), Some(max_y)) = (min_y, max_y) else {
+            continue;
+        };
+
+        let content_top = bounds.y.saturating_add(1);
+        let content_bottom = bounds.y.saturating_add(bounds.height.saturating_sub(2));
+        let top_gap = min_y.saturating_sub(content_top);
+        let bottom_gap = content_bottom.saturating_sub(max_y);
+
+        let has_incoming = incoming_map.get(&sg_id).copied().unwrap_or(false);
+        let has_outgoing = outgoing_map.get(&sg_id).copied().unwrap_or(false);
+        let needs_gap = has_incoming || has_outgoing;
+        let incoming_gap = if needs_gap { 1 } else { 0 };
+        let outgoing_gap = 0;
+
+        let (min_top_gap, min_bottom_gap) = match direction {
+            Direction::TopDown => (
+                if has_incoming { incoming_gap } else { 0 },
+                if has_outgoing { outgoing_gap } else { 0 },
+            ),
+            Direction::BottomTop => (
+                if has_outgoing { outgoing_gap } else { 0 },
+                if has_incoming { incoming_gap } else { 0 },
+            ),
+            _ => (0, 0),
+        };
+
+        let base_target = top_gap.min(bottom_gap);
+        let desired_top = base_target.max(min_top_gap);
+        let desired_bottom = base_target.max(min_bottom_gap);
+        let shrink_top = top_gap.saturating_sub(desired_top);
+        let shrink_bottom = bottom_gap.saturating_sub(desired_bottom);
+        let expand_top = desired_top.saturating_sub(top_gap);
+        let expand_bottom = desired_bottom.saturating_sub(bottom_gap);
+
+        if shrink_top == 0 && shrink_bottom == 0 && expand_top == 0 && expand_bottom == 0 {
+            continue;
+        }
+
+        let new_y = bounds
+            .y
+            .saturating_sub(expand_top)
+            .saturating_add(shrink_top);
+        let new_height = bounds
+            .height
+            .saturating_add(expand_top.saturating_add(expand_bottom))
+            .saturating_sub(shrink_top.saturating_add(shrink_bottom));
+
+        if new_height < 2 {
+            continue;
+        }
+
+        if let Some(entry) = subgraph_bounds.get_mut(&sg_id) {
+            entry.y = new_y;
+            entry.height = new_height;
+        }
+    }
+
+    expand_parent_subgraph_bounds(subgraphs, subgraph_bounds);
+}
+
+fn build_subgraph_parent_map(
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+) -> HashMap<String, String> {
+    let mut parent_map = HashMap::new();
+    for sg in subgraphs.values() {
+        for node_id in &sg.nodes {
+            parent_map.insert(node_id.clone(), sg.id.clone());
+        }
+    }
+    parent_map
+}
+
+fn build_subgraph_incoming_map(
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    edges: &[crate::graph::Edge],
+    parent_map: &HashMap<String, String>,
+) -> HashMap<String, bool> {
+    let mut incoming: HashMap<String, bool> = HashMap::new();
+    for edge in edges {
+        let dst_ancestors = collect_subgraph_ancestors(&edge.to, subgraphs, parent_map);
+        if dst_ancestors.is_empty() {
+            continue;
+        }
+        for sg_id in dst_ancestors {
+            if !is_node_in_subgraph(&edge.from, &sg_id, subgraphs, parent_map) {
+                incoming.insert(sg_id, true);
+            }
+        }
+    }
+    incoming
+}
+
+fn build_subgraph_outgoing_map(
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    edges: &[crate::graph::Edge],
+    parent_map: &HashMap<String, String>,
+) -> HashMap<String, bool> {
+    let mut outgoing: HashMap<String, bool> = HashMap::new();
+    for edge in edges {
+        let src_ancestors = collect_subgraph_ancestors(&edge.from, subgraphs, parent_map);
+        if src_ancestors.is_empty() {
+            continue;
+        }
+        for sg_id in src_ancestors {
+            if !is_node_in_subgraph(&edge.to, &sg_id, subgraphs, parent_map) {
+                outgoing.insert(sg_id, true);
+            }
+        }
+    }
+    outgoing
+}
+
+fn collect_subgraph_ancestors(
+    node_id: &str,
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    parent_map: &HashMap<String, String>,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = parent_map.get(node_id).cloned();
+    while let Some(parent_id) = cur {
+        out.push(parent_id.clone());
+        cur = subgraphs
+            .get(&parent_id)
+            .and_then(|sg| sg.parent.as_ref())
+            .cloned();
+    }
+    out
+}
+
+fn is_node_in_subgraph(
+    node_id: &str,
+    sg_id: &str,
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    parent_map: &HashMap<String, String>,
+) -> bool {
+    let mut cur = parent_map.get(node_id).cloned();
+    while let Some(parent_id) = cur {
+        if parent_id == sg_id {
+            return true;
+        }
+        cur = subgraphs
+            .get(&parent_id)
+            .and_then(|sg| sg.parent.as_ref())
+            .cloned();
+    }
+    false
+}
+
+fn expand_parent_subgraph_bounds(
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+) {
+    // Expand parent bounds to contain child bounds (inside-out).
+    let mut ids: Vec<String> = subgraph_bounds.keys().cloned().collect();
+    ids.sort_by_key(|id| subgraph_bounds.get(id).map(|b| b.depth).unwrap_or(0));
+    ids.reverse();
+    for id in ids {
+        let parent_id = subgraphs
+            .get(&id)
+            .and_then(|sg| sg.parent.as_ref())
+            .cloned();
+        let (Some(parent_id), Some(child_bounds)) = (parent_id, subgraph_bounds.get(&id).cloned())
+        else {
+            continue;
+        };
+        let Some(parent_bounds) = subgraph_bounds.get_mut(&parent_id) else {
+            continue;
+        };
+
+        let pad = 1usize;
+        let child_left = child_bounds.x.saturating_sub(pad);
+        let child_top = child_bounds.y.saturating_sub(pad);
+        let child_right = child_bounds.x + child_bounds.width + pad;
+        let child_bottom = child_bounds.y + child_bounds.height + pad;
+        let parent_right = parent_bounds.x + parent_bounds.width;
+        let parent_bottom = parent_bounds.y + parent_bounds.height;
+
+        let new_left = parent_bounds.x.min(child_left);
+        let new_top = parent_bounds.y.min(child_top);
+        let new_right = parent_right.max(child_right);
+        let new_bottom = parent_bottom.max(child_bottom);
+
+        parent_bounds.x = new_left;
+        parent_bounds.y = new_top;
+        parent_bounds.width = new_right.saturating_sub(new_left);
+        parent_bounds.height = new_bottom.saturating_sub(new_top);
     }
 }
 
