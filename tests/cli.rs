@@ -1,10 +1,11 @@
 //! CLI integration tests for mmdflux binary.
 
 use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
 
 fn mmdflux() -> Command {
-    Command::cargo_bin("mmdflux").unwrap()
+    cargo_bin_cmd!("mmdflux")
 }
 
 // =============================================================================
