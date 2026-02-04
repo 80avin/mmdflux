@@ -1332,12 +1332,42 @@ fn build_subgraph_parent_map(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
 ) -> HashMap<String, String> {
     let mut parent_map = HashMap::new();
-    for sg in subgraphs.values() {
-        for node_id in &sg.nodes {
-            parent_map.insert(node_id.clone(), sg.id.clone());
+
+    let mut ids: Vec<&String> = subgraphs.keys().collect();
+    ids.sort_by(|a, b| {
+        let depth_a = subgraph_depth(subgraphs, a.as_str());
+        let depth_b = subgraph_depth(subgraphs, b.as_str());
+        depth_b.cmp(&depth_a).then_with(|| a.cmp(b))
+    });
+
+    for sg_id in ids {
+        if let Some(sg) = subgraphs.get(sg_id) {
+            for node_id in &sg.nodes {
+                parent_map
+                    .entry(node_id.clone())
+                    .or_insert_with(|| sg.id.clone());
+            }
         }
     }
+
     parent_map
+}
+
+fn subgraph_depth(
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    sg_id: &str,
+) -> usize {
+    let mut depth = 0usize;
+    let mut cur = sg_id;
+    while let Some(sg) = subgraphs.get(cur) {
+        if let Some(ref parent) = sg.parent {
+            depth += 1;
+            cur = parent;
+        } else {
+            break;
+        }
+    }
+    depth
 }
 
 fn build_subgraph_incoming_map(
