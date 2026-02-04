@@ -63,10 +63,9 @@ fn convert_direction(dir: ParseDirection) -> Direction {
 
 fn add_vertex_to_diagram(diagram: &mut Diagram, vertex: &Vertex, parent: Option<&str>) {
     if let Some(existing) = diagram.nodes.get_mut(&vertex.id) {
-        // Update existing node if this vertex has more info
-        if vertex.shape.is_some()
+        // Update existing node if this vertex has more specific shape info
+        if let Some(shape_spec) = &vertex.shape
             && existing.label == existing.id
-            && let Some(shape_spec) = &vertex.shape
         {
             existing.label = shape_spec.text().to_string();
             existing.shape = convert_shape(shape_spec);
@@ -84,20 +83,15 @@ fn add_vertex_to_diagram(diagram: &mut Diagram, vertex: &Vertex, parent: Option<
 
 fn collect_node_ids(statements: &[Statement]) -> Vec<String> {
     let mut seen = HashSet::new();
-    let mut ids = Vec::new();
-    for stmt in statements {
-        let new_ids: Vec<String> = match stmt {
+    statements
+        .iter()
+        .flat_map(|stmt| match stmt {
             Statement::Vertex(v) => vec![v.id.clone()],
             Statement::Edge(e) => vec![e.from.id.clone(), e.to.id.clone()],
             Statement::Subgraph(sg) => collect_node_ids(&sg.statements),
-        };
-        for id in new_ids {
-            if seen.insert(id.clone()) {
-                ids.push(id);
-            }
-        }
-    }
-    ids
+        })
+        .filter(|id| seen.insert(id.clone()))
+        .collect()
 }
 
 fn convert_vertex(vertex: &Vertex) -> Node {
@@ -129,15 +123,14 @@ fn convert_shape(shape_spec: &ShapeSpec) -> Shape {
 fn convert_edge(edge_spec: &EdgeSpec) -> Edge {
     let (stroke, arrow, label) = convert_connector(&edge_spec.connector);
 
-    let mut edge = Edge::new(&edge_spec.from.id, &edge_spec.to.id)
+    let edge = Edge::new(&edge_spec.from.id, &edge_spec.to.id)
         .with_stroke(stroke)
         .with_arrow(arrow);
 
-    if let Some(lbl) = label {
-        edge = edge.with_label(lbl);
+    match label {
+        Some(lbl) => edge.with_label(lbl),
+        None => edge,
     }
-
-    edge
 }
 
 fn convert_connector(connector: &ConnectorSpec) -> (Stroke, Arrow, Option<String>) {

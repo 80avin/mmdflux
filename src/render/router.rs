@@ -152,14 +152,11 @@ pub fn is_backward_edge(
     to_bounds: &NodeBounds,
     direction: Direction,
 ) -> bool {
+    // Backward means target is "before" source in the flow direction
     match direction {
-        // For TD, backward means target is above source
         Direction::TopDown => to_bounds.y < from_bounds.y,
-        // For BT, backward means target is below source
         Direction::BottomTop => to_bounds.y > from_bounds.y,
-        // For LR, backward means target is to the left of source
         Direction::LeftRight => to_bounds.x < from_bounds.x,
-        // For RL, backward means target is to the right of source
         Direction::RightLeft => to_bounds.x > from_bounds.x,
     }
 }
@@ -178,8 +175,7 @@ pub fn generate_backward_waypoints(
     tgt_bounds: &NodeBounds,
     direction: Direction,
 ) -> Vec<(usize, usize)> {
-    let is_backward = is_backward_edge(src_bounds, tgt_bounds, direction);
-    if !is_backward {
+    if !is_backward_edge(src_bounds, tgt_bounds, direction) {
         return vec![];
     }
 
@@ -188,38 +184,32 @@ pub fn generate_backward_waypoints(
             // Route to the right of both nodes
             let right_edge = (src_bounds.x + src_bounds.width).max(tgt_bounds.x + tgt_bounds.width);
             let route_x = right_edge + BACKWARD_ROUTE_GAP;
-
-            let src_center_y = src_bounds.center_y();
-            let tgt_center_y = tgt_bounds.center_y();
-
-            vec![(route_x, src_center_y), (route_x, tgt_center_y)]
+            vec![
+                (route_x, src_bounds.center_y()),
+                (route_x, tgt_bounds.center_y()),
+            ]
         }
-        Direction::LeftRight | Direction::RightLeft => {
-            // Route below both nodes
+        Direction::LeftRight => {
+            // Route below both nodes; backward edge flows right-to-left
             let bottom_edge =
                 (src_bounds.y + src_bounds.height).max(tgt_bounds.y + tgt_bounds.height);
             let route_y = bottom_edge + BACKWARD_ROUTE_GAP;
-
-            let left_edge = src_bounds.x.min(tgt_bounds.x);
             let right_edge = (src_bounds.x + src_bounds.width).max(tgt_bounds.x + tgt_bounds.width);
-
-            match direction {
-                Direction::LeftRight => {
-                    // Backward edge flows right-to-left: keep the route_x to the right
-                    // so the final segment enters the target from the right (left arrow).
-                    let start_x = src_bounds.x.saturating_sub(1);
-                    let route_x = right_edge + BACKWARD_ROUTE_GAP;
-                    vec![(start_x, route_y), (route_x, route_y)]
-                }
-                Direction::RightLeft => {
-                    // Backward edge flows left-to-right: keep the route_x to the left
-                    // so the final segment enters the target from the left (right arrow).
-                    let start_x = src_bounds.x + src_bounds.width;
-                    let route_x = left_edge.saturating_sub(BACKWARD_ROUTE_GAP);
-                    vec![(start_x, route_y), (route_x, route_y)]
-                }
-                _ => vec![],
-            }
+            vec![
+                (src_bounds.x.saturating_sub(1), route_y),
+                (right_edge + BACKWARD_ROUTE_GAP, route_y),
+            ]
+        }
+        Direction::RightLeft => {
+            // Route below both nodes; backward edge flows left-to-right
+            let bottom_edge =
+                (src_bounds.y + src_bounds.height).max(tgt_bounds.y + tgt_bounds.height);
+            let route_y = bottom_edge + BACKWARD_ROUTE_GAP;
+            let left_edge = src_bounds.x.min(tgt_bounds.x);
+            vec![
+                (src_bounds.x + src_bounds.width, route_y),
+                (left_edge.saturating_sub(BACKWARD_ROUTE_GAP), route_y),
+            ]
         }
     }
 }
@@ -735,30 +725,14 @@ fn add_connector_segment(segments: &mut Vec<Segment>, boundary: (usize, usize), 
 /// - Horizontal final segment going right → entry from Left (arrow ►)
 /// - Horizontal final segment going left → entry from Right (arrow ◄)
 fn entry_direction_from_segments(segments: &[Segment]) -> AttachDirection {
-    if let Some(last_segment) = segments.last() {
-        match last_segment {
-            Segment::Vertical { y_start, y_end, .. } => {
-                if *y_end > *y_start {
-                    // Moving downward: entering from Top (arrow points down ▼)
-                    AttachDirection::Top
-                } else {
-                    // Moving upward: entering from Bottom (arrow points up ▲)
-                    AttachDirection::Bottom
-                }
-            }
-            Segment::Horizontal { x_start, x_end, .. } => {
-                if *x_end > *x_start {
-                    // Moving rightward: entering from Left (arrow points right ►)
-                    AttachDirection::Left
-                } else {
-                    // Moving leftward: entering from Right (arrow points left ◄)
-                    AttachDirection::Right
-                }
-            }
+    match segments.last() {
+        Some(Segment::Vertical { y_start, y_end, .. }) if *y_end > *y_start => AttachDirection::Top,
+        Some(Segment::Vertical { .. }) => AttachDirection::Bottom,
+        Some(Segment::Horizontal { x_start, x_end, .. }) if *x_end > *x_start => {
+            AttachDirection::Left
         }
-    } else {
-        // No segments: shouldn't happen, default to Top
-        AttachDirection::Top
+        Some(Segment::Horizontal { .. }) => AttachDirection::Right,
+        None => AttachDirection::Top,
     }
 }
 
@@ -945,14 +919,13 @@ fn build_orthogonal_path_with_waypoints(
 
     let mut start_vertical_override = start_vertical;
     let mut waypoint_slice = waypoints;
-    if vertical_first {
-        if let Some(&(wp_x, wp_y)) = waypoint_slice.first() {
-            if wp_y == start.y {
-                waypoint_slice = &waypoint_slice[1..];
-                if wp_x != start.x {
-                    start_vertical_override = false;
-                }
-            }
+    if vertical_first
+        && let Some(&(wp_x, wp_y)) = waypoint_slice.first()
+        && wp_y == start.y
+    {
+        waypoint_slice = &waypoint_slice[1..];
+        if wp_x != start.x {
+            start_vertical_override = false;
         }
     }
     if waypoint_slice.is_empty() {
@@ -1349,49 +1322,48 @@ pub fn compute_attachment_plan(
 
 /// Route a self-edge as orthogonal segments from pre-computed draw-coordinate points.
 fn route_self_edge(data: &SelfEdgeDrawData, edge: &Edge, direction: Direction) -> RoutedEdge {
-    let mut segments = Vec::new();
+    let segments: Vec<Segment> = data
+        .points
+        .windows(2)
+        .flat_map(|window| {
+            let (x1, y1) = window[0];
+            let (x2, y2) = window[1];
 
-    for window in data.points.windows(2) {
-        let (x1, y1) = window[0];
-        let (x2, y2) = window[1];
+            match (x1 == x2, y1 == y2) {
+                (_, true) => vec![Segment::Horizontal {
+                    y: y1,
+                    x_start: x1.min(x2),
+                    x_end: x1.max(x2),
+                }],
+                (true, _) => vec![Segment::Vertical {
+                    x: x1,
+                    y_start: y1.min(y2),
+                    y_end: y1.max(y2),
+                }],
+                // Diagonal — split into L-shape (shouldn't happen with orthogonal points)
+                _ => vec![
+                    Segment::Vertical {
+                        x: x1,
+                        y_start: y1.min(y2),
+                        y_end: y1.max(y2),
+                    },
+                    Segment::Horizontal {
+                        y: y2,
+                        x_start: x1.min(x2),
+                        x_end: x1.max(x2),
+                    },
+                ],
+            }
+        })
+        .collect();
 
-        if y1 == y2 {
-            segments.push(Segment::Horizontal {
-                y: y1,
-                x_start: x1.min(x2),
-                x_end: x1.max(x2),
-            });
-        } else if x1 == x2 {
-            segments.push(Segment::Vertical {
-                x: x1,
-                y_start: y1.min(y2),
-                y_end: y1.max(y2),
-            });
-        } else {
-            // Diagonal — split into L-shape (shouldn't happen with orthogonal points)
-            segments.push(Segment::Vertical {
-                x: x1,
-                y_start: y1.min(y2),
-                y_end: y1.max(y2),
-            });
-            segments.push(Segment::Horizontal {
-                y: y2,
-                x_start: x1.min(x2),
-                x_end: x1.max(x2),
-            });
-        }
-    }
-
+    let to_point = |&(x, y)| Point::new(x, y);
     let start = data
         .points
         .first()
-        .map(|&(x, y)| Point::new(x, y))
+        .map(to_point)
         .unwrap_or(Point::new(0, 0));
-    let end = data
-        .points
-        .last()
-        .map(|&(x, y)| Point::new(x, y))
-        .unwrap_or(Point::new(0, 0));
+    let end = data.points.last().map(to_point).unwrap_or(Point::new(0, 0));
 
     // Entry direction: the arrow enters from the side where the loop is.
     // TD/BT: loop is on the right face. LR/RL: loop is on the bottom face.

@@ -425,13 +425,7 @@ impl LayoutGraph {
     /// This excludes compound parents and any nodes explicitly excluded via
     /// `position_excluded_nodes` (dagre `asNonCompoundGraph` semantics).
     pub fn is_position_node(&self, node: usize) -> bool {
-        if self.compound_nodes.contains(&node) {
-            return false;
-        }
-        if self.position_excluded_nodes.contains(&node) {
-            return false;
-        }
-        true
+        !self.compound_nodes.contains(&node) && !self.position_excluded_nodes.contains(&node)
     }
 
     /// Add an edge and return its index.

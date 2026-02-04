@@ -79,24 +79,18 @@ pub fn parse_flowchart(input: &str) -> Result<Flowchart, ParseError> {
     let mut direction = Direction::TopDown;
     let mut statements = Vec::new();
 
-    for pair in pairs {
-        if pair.as_rule() == Rule::flowchart {
-            for inner in pair.into_inner() {
-                match inner.as_rule() {
-                    Rule::header => {
-                        for header_part in inner.into_inner() {
-                            if header_part.as_rule() == Rule::direction {
-                                direction = Direction::from_str(header_part.as_str())
-                                    .unwrap_or(Direction::TopDown);
-                            }
-                        }
-                    }
-                    Rule::statement => {
-                        let stmts = parse_statement(inner);
-                        statements.extend(stmts);
-                    }
-                    _ => {}
+    for pair in pairs.filter(|p| p.as_rule() == Rule::flowchart) {
+        for inner in pair.into_inner() {
+            match inner.as_rule() {
+                Rule::header => {
+                    direction = inner
+                        .into_inner()
+                        .find(|p| p.as_rule() == Rule::direction)
+                        .and_then(|p| Direction::from_str(p.as_str()))
+                        .unwrap_or(Direction::TopDown);
                 }
+                Rule::statement => statements.extend(parse_statement(inner)),
+                _ => {}
             }
         }
     }
@@ -108,21 +102,13 @@ pub fn parse_flowchart(input: &str) -> Result<Flowchart, ParseError> {
 }
 
 fn parse_statement(pair: pest::iterators::Pair<Rule>) -> Vec<Statement> {
-    let mut statements = Vec::new();
-
-    for inner in pair.into_inner() {
-        match inner.as_rule() {
-            Rule::vertex_statement => {
-                statements.extend(parse_vertex_statement(inner));
-            }
-            Rule::subgraph_stmt => {
-                statements.push(Statement::Subgraph(parse_subgraph(inner)));
-            }
-            _ => {}
-        }
-    }
-
-    statements
+    pair.into_inner()
+        .flat_map(|inner| match inner.as_rule() {
+            Rule::vertex_statement => parse_vertex_statement(inner),
+            Rule::subgraph_stmt => vec![Statement::Subgraph(parse_subgraph(inner))],
+            _ => vec![],
+        })
+        .collect()
 }
 
 /// Strip surrounding double quotes from text (Mermaid convention).
@@ -146,22 +132,22 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
                             id = spec_inner.as_str().to_string();
                         }
                         Rule::subgraph_title_bracket => {
-                            for title_inner in spec_inner.into_inner() {
-                                if title_inner.as_rule() == Rule::subgraph_title_text {
-                                    title = Some(strip_quotes(title_inner.as_str()).to_string());
-                                }
-                            }
+                            title = spec_inner
+                                .into_inner()
+                                .find(|t| t.as_rule() == Rule::subgraph_title_text)
+                                .map(|t| strip_quotes(t.as_str()).to_string());
                         }
                         _ => {}
                     }
                 }
             }
             Rule::subgraph_body_line => {
-                for body_inner in inner.into_inner() {
-                    if body_inner.as_rule() == Rule::statement {
-                        body_statements.extend(parse_statement(body_inner));
-                    }
-                }
+                body_statements.extend(
+                    inner
+                        .into_inner()
+                        .filter(|b| b.as_rule() == Rule::statement)
+                        .flat_map(parse_statement),
+                );
             }
             _ => {}
         }
@@ -224,38 +210,31 @@ fn parse_vertex_statement(pair: pest::iterators::Pair<Rule>) -> Vec<Statement> {
 }
 
 fn parse_node_group(pair: pest::iterators::Pair<Rule>) -> Vec<Vertex> {
-    let mut nodes = Vec::new();
-
-    for inner in pair.into_inner() {
-        if inner.as_rule() == Rule::node {
-            nodes.push(parse_node(inner));
-        }
-    }
-
-    nodes
+    pair.into_inner()
+        .filter(|inner| inner.as_rule() == Rule::node)
+        .map(parse_node)
+        .collect()
 }
 
 fn parse_edge_segment(pair: pest::iterators::Pair<Rule>) -> (ConnectorSpec, Vec<Vertex>) {
-    let mut connector = ConnectorSpec {
+    let mut connector = None;
+    let mut nodes = Vec::new();
+
+    for inner in pair.into_inner() {
+        match inner.as_rule() {
+            Rule::edge_connector => connector = Some(parse_connector(inner)),
+            Rule::node_group => nodes = parse_node_group(inner),
+            _ => {}
+        }
+    }
+
+    let connector = connector.unwrap_or(ConnectorSpec {
         stroke: StrokeSpec::Solid,
         left: ArrowHead::None,
         right: ArrowHead::Normal,
         length: 1,
         label: None,
-    };
-    let mut nodes = Vec::new();
-
-    for inner in pair.into_inner() {
-        match inner.as_rule() {
-            Rule::edge_connector => {
-                connector = parse_connector(inner);
-            }
-            Rule::node_group => {
-                nodes = parse_node_group(inner);
-            }
-            _ => {}
-        }
-    }
+    });
 
     (connector, nodes)
 }
@@ -268,49 +247,21 @@ fn parse_connector(pair: pest::iterators::Pair<Rule>) -> ConnectorSpec {
     let mut label = None;
 
     for inner in pair.into_inner() {
-        match inner.as_rule() {
-            Rule::link_solid => {
-                stroke = StrokeSpec::Solid;
-                for part in inner.into_inner() {
-                    match part.as_rule() {
-                        Rule::arrow_left => left = parse_arrow_head(part.as_str()),
-                        Rule::arrow_right => right = parse_arrow_head(part.as_str()),
-                        Rule::solid_dashes => length = part.as_str().len(),
-                        _ => {}
-                    }
-                }
-            }
-            Rule::link_dotted => {
-                stroke = StrokeSpec::Dotted;
-                for part in inner.into_inner() {
-                    match part.as_rule() {
-                        Rule::arrow_left => left = parse_arrow_head(part.as_str()),
-                        Rule::arrow_right => right = parse_arrow_head(part.as_str()),
-                        Rule::dotted_dots => length = part.as_str().len(),
-                        _ => {}
-                    }
-                }
-            }
-            Rule::link_thick => {
-                stroke = StrokeSpec::Thick;
-                for part in inner.into_inner() {
-                    match part.as_rule() {
-                        Rule::arrow_left => left = parse_arrow_head(part.as_str()),
-                        Rule::arrow_right => right = parse_arrow_head(part.as_str()),
-                        Rule::thick_equals => length = part.as_str().len(),
-                        _ => {}
-                    }
-                }
-            }
+        let (link_stroke, length_rule) = match inner.as_rule() {
+            Rule::link_solid => (StrokeSpec::Solid, Rule::solid_dashes),
+            Rule::link_dotted => (StrokeSpec::Dotted, Rule::dotted_dots),
+            Rule::link_thick => (StrokeSpec::Thick, Rule::thick_equals),
             Rule::edge_label => {
-                for text in inner.into_inner() {
-                    if text.as_rule() == Rule::edge_label_text {
-                        label = Some(strip_quotes(text.as_str()).to_string());
-                    }
-                }
+                label = inner
+                    .into_inner()
+                    .find(|t| t.as_rule() == Rule::edge_label_text)
+                    .map(|t| strip_quotes(t.as_str()).to_string());
+                continue;
             }
-            _ => {}
-        }
+            _ => continue,
+        };
+        stroke = link_stroke;
+        (left, right, length) = parse_link_parts(inner, length_rule);
     }
 
     ConnectorSpec {
@@ -320,6 +271,27 @@ fn parse_connector(pair: pest::iterators::Pair<Rule>) -> ConnectorSpec {
         length,
         label,
     }
+}
+
+/// Parse common link parts: arrow heads and length from the line character rule.
+fn parse_link_parts(
+    link: pest::iterators::Pair<Rule>,
+    length_rule: Rule,
+) -> (ArrowHead, ArrowHead, usize) {
+    let mut left = ArrowHead::None;
+    let mut right = ArrowHead::None;
+    let mut length = 1;
+
+    for part in link.into_inner() {
+        match part.as_rule() {
+            Rule::arrow_left => left = parse_arrow_head(part.as_str()),
+            Rule::arrow_right => right = parse_arrow_head(part.as_str()),
+            rule if rule == length_rule => length = part.as_str().len(),
+            _ => {}
+        }
+    }
+
+    (left, right, length)
 }
 
 fn parse_arrow_head(s: &str) -> ArrowHead {

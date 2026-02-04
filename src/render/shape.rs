@@ -115,32 +115,26 @@ pub fn render_node(
     let label_len = label.chars().count();
 
     match node.shape {
-        Shape::Rectangle
-        | Shape::Stadium
-        | Shape::Subroutine
-        | Shape::Cylinder
-        | Shape::Asymmetric
-        | Shape::Trapezoid
-        | Shape::InvTrapezoid => {
-            let corners = (
-                charset.corner_tl,
-                charset.corner_tr,
-                charset.corner_bl,
-                charset.corner_br,
-            );
-            render_box(canvas, x, y, width, height, label, charset, corners);
-        }
-        Shape::Round | Shape::Circle | Shape::DoubleCircle => {
-            let corners = (
-                charset.round_tl,
-                charset.round_tr,
-                charset.round_bl,
-                charset.round_br,
-            );
-            render_box(canvas, x, y, width, height, label, charset, corners);
-        }
         Shape::Diamond | Shape::Hexagon => {
             render_diamond(canvas, x, y, width, label_len, label, charset);
+        }
+        shape => {
+            let corners = if matches!(shape, Shape::Round | Shape::Circle | Shape::DoubleCircle) {
+                (
+                    charset.round_tl,
+                    charset.round_tr,
+                    charset.round_bl,
+                    charset.round_br,
+                )
+            } else {
+                (
+                    charset.corner_tl,
+                    charset.corner_tr,
+                    charset.corner_bl,
+                    charset.corner_br,
+                )
+            };
+            render_box(canvas, x, y, width, height, label, charset, corners);
         }
     }
 

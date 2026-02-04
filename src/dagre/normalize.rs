@@ -227,13 +227,9 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
             (from_idx, to_idx)
         };
 
-        // Calculate label rank (midpoint)
-        let label_rank = if edge_labels.contains_key(&orig_edge_idx) {
-            Some((from_rank + to_rank) / 2)
-        } else {
-            None
-        };
+        // Calculate label rank (midpoint) if edge has a label
         let label_info = edge_labels.get(&orig_edge_idx);
+        let label_rank = label_info.map(|_| (from_rank + to_rank) / 2);
 
         let mut chain = DummyChain::new(orig_edge_idx);
         let mut prev_idx = chain_start;
@@ -244,22 +240,19 @@ pub(crate) fn run(graph: &mut LayoutGraph, edge_labels: &HashMap<usize, EdgeLabe
 
             let is_label_dummy = label_rank == Some(rank);
 
-            let (dummy_node, width, height) = if is_label_dummy {
-                let info = label_info.unwrap();
-                (
-                    DummyNode::edge_label(
+            let (dummy_node, width, height) =
+                if let (true, Some(info)) = (is_label_dummy, label_info) {
+                    let node = DummyNode::edge_label(
                         orig_edge_idx,
                         rank,
                         info.width,
                         info.height,
                         info.label_pos,
-                    ),
-                    info.width,
-                    info.height,
-                )
-            } else {
-                (DummyNode::edge(orig_edge_idx, rank), 0.0, 0.0)
-            };
+                    );
+                    (node, info.width, info.height)
+                } else {
+                    (DummyNode::edge(orig_edge_idx, rank), 0.0, 0.0)
+                };
 
             // Add dummy to the graph (node arrays are append-only, safe to mutate)
             graph.node_ids.push(dummy_id.clone());

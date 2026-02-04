@@ -59,7 +59,8 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
                 .get(&node)
                 .map(|&cx| cx - graph.dimensions[node].0 / 2.0)
         })
-        .fold(f64::INFINITY, f64::min);
+        .reduce(f64::min)
+        .unwrap_or(0.0);
 
     let x_shift = -min_x;
 
@@ -79,7 +80,8 @@ fn assign_vertical(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &Layo
         let max_height = layer
             .iter()
             .map(|&n| graph.dimensions[n].1)
-            .fold(0.0, f64::max);
+            .reduce(f64::max)
+            .unwrap_or(0.0);
         y += max_height + config.rank_sep;
     }
 }
@@ -106,7 +108,8 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
                 .get(&node)
                 .map(|&cy| cy - graph.dimensions[node].1 / 2.0)
         })
-        .fold(f64::INFINITY, f64::min);
+        .reduce(f64::min)
+        .unwrap_or(0.0);
 
     let y_shift = -min_y;
 
@@ -126,39 +129,39 @@ fn assign_horizontal(graph: &mut LayoutGraph, layers: &[Vec<usize>], config: &La
         let max_width = layer
             .iter()
             .map(|&n| graph.dimensions[n].0)
-            .fold(0.0, f64::max);
+            .reduce(f64::max)
+            .unwrap_or(0.0);
         x += max_width + config.rank_sep;
     }
 }
 
 fn reverse_positions(graph: &mut LayoutGraph, config: &LayoutConfig) {
-    // Find bounds
-    let max_x = graph
-        .positions
-        .iter()
-        .zip(graph.dimensions.iter())
-        .map(|(p, (w, _))| p.x + w)
-        .fold(0.0, f64::max);
-    let max_y = graph
-        .positions
-        .iter()
-        .zip(graph.dimensions.iter())
-        .map(|(p, (_, h))| p.y + h)
-        .fold(0.0, f64::max);
-
-    // Flip coordinates
     match config.direction {
         Direction::BottomTop => {
+            let max_y = graph
+                .positions
+                .iter()
+                .zip(graph.dimensions.iter())
+                .map(|(p, (_, h))| p.y + h)
+                .reduce(f64::max)
+                .unwrap_or(0.0);
             for (pos, (_, h)) in graph.positions.iter_mut().zip(graph.dimensions.iter()) {
                 pos.y = max_y - pos.y - h;
             }
         }
         Direction::RightLeft => {
+            let max_x = graph
+                .positions
+                .iter()
+                .zip(graph.dimensions.iter())
+                .map(|(p, (w, _))| p.x + w)
+                .reduce(f64::max)
+                .unwrap_or(0.0);
             for (pos, (w, _)) in graph.positions.iter_mut().zip(graph.dimensions.iter()) {
                 pos.x = max_x - pos.x - w;
             }
         }
-        _ => {}
+        Direction::TopBottom | Direction::LeftRight => {}
     }
 }
 

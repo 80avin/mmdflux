@@ -24,22 +24,17 @@ pub fn parse_info(input: &str) -> Result<Info, ParseError> {
     let mut show_info = false;
     let mut title = None;
 
-    for pair in pairs {
-        if pair.as_rule() == Rule::info_diagram {
-            for inner in pair.into_inner() {
-                match inner.as_rule() {
-                    Rule::show_info => {
-                        show_info = true;
-                    }
-                    Rule::title_stmt => {
-                        for t in inner.into_inner() {
-                            if t.as_rule() == Rule::title_text {
-                                title = Some(t.as_str().to_string());
-                            }
-                        }
-                    }
-                    _ => {}
+    for pair in pairs.filter(|p| p.as_rule() == Rule::info_diagram) {
+        for inner in pair.into_inner() {
+            match inner.as_rule() {
+                Rule::show_info => show_info = true,
+                Rule::title_stmt => {
+                    title = inner
+                        .into_inner()
+                        .find(|t| t.as_rule() == Rule::title_text)
+                        .map(|t| t.as_str().to_string());
                 }
+                _ => {}
             }
         }
     }

@@ -137,19 +137,22 @@ fn debug_dump_pipeline(lg: &LayoutGraph, stage: &str) {
         let is_compound = lg.compound_nodes.contains(&idx);
         let is_excluded = lg.position_excluded_nodes.contains(&idx);
 
-        let parent_json = parent
-            .as_ref()
-            .map(|p| format!("\"{}\"", json_escape(p)))
-            .unwrap_or_else(|| "null".to_string());
-        let dummy_json = dummy
-            .map(|d| format!("\"{}\"", d))
-            .unwrap_or_else(|| "null".to_string());
-        let dummy_edge_json = dummy_edge
-            .map(|d| d.to_string())
-            .unwrap_or_else(|| "null".to_string());
-        let border_json = border
-            .map(|b| format!("\"{}\"", b))
-            .unwrap_or_else(|| "null".to_string());
+        let parent_json = match parent.as_deref() {
+            Some(p) => format!("\"{}\"", json_escape(p)),
+            None => "null".to_string(),
+        };
+        let dummy_json = match dummy {
+            Some(d) => format!("\"{}\"", d),
+            None => "null".to_string(),
+        };
+        let dummy_edge_json = match dummy_edge {
+            Some(d) => d.to_string(),
+            None => "null".to_string(),
+        };
+        let border_json = match border {
+            Some(b) => format!("\"{}\"", b),
+            None => "null".to_string(),
+        };
 
         buf.push_str(&format!(
             "{{\"stage\":\"{}\",\"id\":\"{}\",\"rank\":{},\"order\":{},\"parent\":{},\"dummy\":{},\"dummy_edge\":{},\"border\":{},\"is_position\":{},\"is_compound\":{},\"is_excluded\":{}}}\n",
@@ -941,12 +944,11 @@ where
     // Reverse points and swap from/to for reversed edges.
     // Matches dagre.js reversePointsForReversedEdges + acyclic.undo:
     // internally, reversed edges are laid out in the flipped direction;
-    // this restores original source→target orientation.
-    let original_edges = graph.edges();
+    // this restores original source->target orientation.
     for edge in &mut edges {
         if reversed_edges.contains(&edge.index) {
             edge.points.reverse();
-            if let Some((orig_from, orig_to)) = original_edges.get(edge.index) {
+            if let Some((orig_from, orig_to)) = graph.edges().get(edge.index) {
                 edge.from = orig_from.clone();
                 edge.to = orig_to.clone();
             }

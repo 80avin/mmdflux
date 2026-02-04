@@ -41,40 +41,20 @@ pub fn parse_pie(input: &str) -> Result<Pie, ParseError> {
     let mut title = None;
     let mut sections = Vec::new();
 
-    for pair in pairs {
-        if pair.as_rule() == Rule::pie_diagram {
-            for inner in pair.into_inner() {
-                match inner.as_rule() {
-                    Rule::show_data => {
-                        show_data = true;
-                    }
-                    Rule::title_stmt => {
-                        for t in inner.into_inner() {
-                            if t.as_rule() == Rule::title_text {
-                                title = Some(t.as_str().to_string());
-                            }
-                        }
-                    }
-                    Rule::pie_section => {
-                        let mut label = String::new();
-                        let mut value = 0.0;
-                        for part in inner.into_inner() {
-                            match part.as_rule() {
-                                Rule::string => {
-                                    // Get the inner string_double or string_single
-                                    let raw = part.into_inner().next().unwrap().as_str();
-                                    label = strip_quotes(raw).to_string();
-                                }
-                                Rule::number => {
-                                    value = part.as_str().parse::<f64>().unwrap_or(0.0);
-                                }
-                                _ => {}
-                            }
-                        }
-                        sections.push(PieSection { label, value });
-                    }
-                    _ => {}
+    for pair in pairs.filter(|p| p.as_rule() == Rule::pie_diagram) {
+        for inner in pair.into_inner() {
+            match inner.as_rule() {
+                Rule::show_data => show_data = true,
+                Rule::title_stmt => {
+                    title = inner
+                        .into_inner()
+                        .find(|t| t.as_rule() == Rule::title_text)
+                        .map(|t| t.as_str().to_string());
                 }
+                Rule::pie_section => {
+                    sections.push(parse_pie_section(inner));
+                }
+                _ => {}
             }
         }
     }
@@ -84,6 +64,26 @@ pub fn parse_pie(input: &str) -> Result<Pie, ParseError> {
         title,
         sections,
     })
+}
+
+fn parse_pie_section(pair: pest::iterators::Pair<Rule>) -> PieSection {
+    let mut label = String::new();
+    let mut value = 0.0;
+
+    for part in pair.into_inner() {
+        match part.as_rule() {
+            Rule::string => {
+                let raw = part.into_inner().next().unwrap().as_str();
+                label = strip_quotes(raw).to_string();
+            }
+            Rule::number => {
+                value = part.as_str().parse::<f64>().unwrap_or(0.0);
+            }
+            _ => {}
+        }
+    }
+
+    PieSection { label, value }
 }
 
 #[cfg(test)]

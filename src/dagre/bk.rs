@@ -575,16 +575,9 @@ fn scan_type2_conflicts(
 }
 
 fn is_border_node(graph: &LayoutGraph, node: NodeIndex) -> bool {
-    if graph.border_type.contains_key(&node) {
-        return true;
-    }
-    if graph.border_top.values().any(|&idx| idx == node) {
-        return true;
-    }
-    if graph.border_bottom.values().any(|&idx| idx == node) {
-        return true;
-    }
-    false
+    graph.border_type.contains_key(&node)
+        || graph.border_top.values().any(|&idx| idx == node)
+        || graph.border_bottom.values().any(|&idx| idx == node)
 }
 
 fn is_dummy_like(graph: &LayoutGraph, node: NodeIndex) -> bool {
@@ -627,41 +620,42 @@ pub fn find_all_conflicts(graph: &LayoutGraph) -> ConflictSet {
     let type1 = find_type1_conflicts(graph);
     let type2 = find_type2_conflicts(graph);
 
-    let debug = std::env::var("MMDFLUX_DEBUG_CONFLICTS").is_ok_and(|v| v == "1");
-    if debug {
-        let layers = get_layers_with_order(graph);
-        // Build node-index to (layer, pos) map
-        let mut node_layer: Vec<(usize, usize)> = vec![(0, 0); graph.node_ids.len()];
-        for (li, layer) in layers.iter().enumerate() {
-            for (pos, slot) in layer.iter().enumerate() {
-                if let Some(idx) = *slot {
-                    node_layer[idx] = (li, pos);
-                }
-            }
-        }
-        for &(a, b) in &type1 {
-            let (la, pa) = node_layer[a];
-            let (lb, pb) = node_layer[b];
-            let layer = la.max(lb);
-            eprintln!(
-                "[conflicts] type1 layer {} pos {}({}) vs pos {}({})",
-                layer, pa, &graph.node_ids[a], pb, &graph.node_ids[b]
-            );
-        }
-        for &(a, b) in &type2 {
-            let (la, pa) = node_layer[a];
-            let (lb, pb) = node_layer[b];
-            let layer = la.max(lb);
-            eprintln!(
-                "[conflicts] type2 layer {} pos {}({}) vs pos {}({})",
-                layer, pa, &graph.node_ids[a], pb, &graph.node_ids[b]
-            );
-        }
+    if std::env::var("MMDFLUX_DEBUG_CONFLICTS").is_ok_and(|v| v == "1") {
+        debug_log_conflicts(graph, &type1, &type2);
     }
 
     let mut conflicts = type1;
     conflicts.extend(type2);
     conflicts
+}
+
+fn debug_log_conflicts(graph: &LayoutGraph, type1: &ConflictSet, type2: &ConflictSet) {
+    let layers = get_layers_with_order(graph);
+    let mut node_layer: Vec<(usize, usize)> = vec![(0, 0); graph.node_ids.len()];
+    for (li, layer) in layers.iter().enumerate() {
+        for (pos, slot) in layer.iter().enumerate() {
+            if let Some(idx) = *slot {
+                node_layer[idx] = (li, pos);
+            }
+        }
+    }
+
+    let log_conflict = |conflict_type: &str, a: usize, b: usize| {
+        let (la, pa) = node_layer[a];
+        let (lb, pb) = node_layer[b];
+        let layer = la.max(lb);
+        eprintln!(
+            "[conflicts] {} layer {} pos {}({}) vs pos {}({})",
+            conflict_type, layer, pa, &graph.node_ids[a], pb, &graph.node_ids[b]
+        );
+    };
+
+    for &(a, b) in type1 {
+        log_conflict("type1", a, b);
+    }
+    for &(a, b) in type2 {
+        log_conflict("type2", a, b);
+    }
 }
 
 /// Check if aligning two positions would violate a conflict.
@@ -713,9 +707,7 @@ fn vertical_alignment_with_layering(
         return alignment;
     }
 
-    let bk_trace = std::env::var("MMDFLUX_DEBUG_BK_TRACE")
-        .ok()
-        .is_some_and(|v| v == "1");
+    let bk_trace = std::env::var("MMDFLUX_DEBUG_BK_TRACE").is_ok_and(|v| v == "1");
 
     let mut pos: HashMap<NodeIndex, isize> = HashMap::new();
     for layer in layers {
@@ -802,24 +794,17 @@ fn vertical_alignment_with_layering(
 #[cfg(test)]
 fn get_medians(neighbors: &[NodeIndex], prefer_left: bool) -> Vec<NodeIndex> {
     let len = neighbors.len();
-    if len == 0 {
-        return vec![];
-    }
-    if len == 1 {
-        return vec![neighbors[0]];
+    if len <= 1 {
+        return neighbors.to_vec();
     }
 
     let mid = len / 2;
     if len % 2 == 1 {
-        // Odd: single median
         vec![neighbors[mid]]
+    } else if prefer_left {
+        vec![neighbors[mid - 1], neighbors[mid]]
     } else {
-        // Even: both middle elements, preferred one first
-        if prefer_left {
-            vec![neighbors[mid - 1], neighbors[mid]]
-        } else {
-            vec![neighbors[mid], neighbors[mid - 1]]
-        }
+        vec![neighbors[mid], neighbors[mid - 1]]
     }
 }
 
@@ -1113,7 +1098,7 @@ pub fn calculate_width(
     direction: Direction,
 ) -> f64 {
     let (min_x, max_x) = find_bounds(graph, result, direction);
-    if max_x > min_x { max_x - min_x } else { 0.0 }
+    (max_x - min_x).max(0.0)
 }
 
 // =============================================================================
@@ -1253,19 +1238,12 @@ fn balance(
 
         xs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
-        // Median of values
-        let median = if xs.len() == 4 {
-            // For 4 values: average of middle 2
-            (xs[1] + xs[2]) / 2.0
-        } else if xs.len() >= 2 {
-            let mid = xs.len() / 2;
-            if xs.len().is_multiple_of(2) {
-                (xs[mid - 1] + xs[mid]) / 2.0
-            } else {
-                xs[mid]
-            }
+        let len = xs.len();
+        let mid = len / 2;
+        let median = if len.is_multiple_of(2) {
+            (xs[mid - 1] + xs[mid]) / 2.0
         } else {
-            xs[0]
+            xs[mid]
         };
 
         final_x.insert(node, median);

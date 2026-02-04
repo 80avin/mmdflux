@@ -78,12 +78,14 @@ pub fn spread_points_on_face(
     let (start, end) = extent;
     let range = end.saturating_sub(start);
 
+    // Helper to convert a position along the face to (x, y) coordinates
+    let to_point = |pos: usize| match face {
+        NodeFace::Top | NodeFace::Bottom => (pos, fixed_coord),
+        NodeFace::Left | NodeFace::Right => (fixed_coord, pos),
+    };
+
     if count == 1 {
-        let mid = start + range / 2;
-        return match face {
-            NodeFace::Top | NodeFace::Bottom => vec![(mid, fixed_coord)],
-            NodeFace::Left | NodeFace::Right => vec![(fixed_coord, mid)],
-        };
+        return vec![to_point(start + range / 2)];
     }
 
     // Endpoint-maximizing: place edges at extremes of range for maximum separation
@@ -116,13 +118,7 @@ pub fn spread_points_on_face(
     }
     // When range < needed_span, keep endpoint formula as-is (graceful degradation)
 
-    positions
-        .into_iter()
-        .map(|pos| match face {
-            NodeFace::Top | NodeFace::Bottom => (pos, fixed_coord),
-            NodeFace::Left | NodeFace::Right => (fixed_coord, pos),
-        })
-        .collect()
+    positions.into_iter().map(to_point).collect()
 }
 
 /// A point in 2D space with floating-point coordinates.

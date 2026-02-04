@@ -12,13 +12,11 @@ use crate::graph::{Arrow, Direction, Stroke};
 /// Walks the segments by Manhattan distance and returns the point at 50%
 /// of the total path length. Returns `None` if the path has no segments.
 pub fn calc_label_position(segments: &[Segment]) -> Option<Point> {
-    if segments.is_empty() {
-        return None;
-    }
+    let first = segments.first()?;
 
-    let total_length: usize = segments.iter().map(|s| s.length()).sum();
+    let total_length: usize = segments.iter().map(Segment::length).sum();
     if total_length == 0 {
-        return Some(segments[0].start_point());
+        return Some(first.start_point());
     }
 
     let target = total_length / 2;
@@ -27,13 +25,12 @@ pub fn calc_label_position(segments: &[Segment]) -> Option<Point> {
     for seg in segments {
         let seg_len = seg.length();
         if accumulated + seg_len >= target {
-            let offset_in_seg = target - accumulated;
-            return Some(seg.point_at_offset(offset_in_seg));
+            return Some(seg.point_at_offset(target - accumulated));
         }
         accumulated += seg_len;
     }
 
-    segments.last().map(|s| s.end_point())
+    segments.last().map(Segment::end_point)
 }
 
 /// Render a routed edge onto the canvas.
@@ -438,10 +435,9 @@ fn label_adjacent_to_edge_on_far_side(
 /// stub segments near the source and target nodes. Falls back to the full
 /// slice when there are 2 or fewer segments.
 fn inner_segments(segments: &[Segment]) -> &[Segment] {
-    if segments.len() > 2 {
-        &segments[1..segments.len() - 1]
-    } else {
-        segments
+    match segments.len() {
+        0..=2 => segments,
+        n => &segments[1..n - 1],
     }
 }
 
@@ -455,43 +451,36 @@ fn inner_segments(segments: &[Segment]) -> &[Segment] {
 /// multiple ranks, which is isolated from other edges and avoids crowding near
 /// the target node.
 fn select_label_segment(segments: &[Segment]) -> Option<&Segment> {
-    // Backward edges routed through dagre waypoints typically have 6+ segments
-    // (exit source, horizontal turns, long vertical spans, horizontal to target,
-    // enter target). Forward Z-paths typically have 3-4 segments.
+    fn vertical_length(s: &Segment) -> usize {
+        match s {
+            Segment::Vertical { y_start, y_end, .. } => y_start.abs_diff(*y_end),
+            _ => 0,
+        }
+    }
+
+    fn longest_vertical<'a>(segs: impl Iterator<Item = &'a Segment>) -> Option<&'a Segment> {
+        segs.filter(|s| matches!(s, Segment::Vertical { .. }))
+            .max_by_key(|s| vertical_length(s))
+    }
+
+    // Backward edges routed through dagre waypoints typically have 6+ segments.
+    // Forward Z-paths typically have 3-4 segments.
     let is_long_path = segments.len() >= 6;
 
     if is_long_path {
-        // For long paths (backward edges), find the longest vertical segment.
-        // Skip the first and last segments (they're short stubs near nodes).
-        let inner = inner_segments(segments);
-        inner
-            .iter()
-            .filter(|s| matches!(s, Segment::Vertical { .. }))
-            .max_by_key(|s| match s {
-                Segment::Vertical { y_start, y_end, .. } => (*y_start).abs_diff(*y_end),
-                _ => 0,
-            })
-            .or_else(|| {
-                // Fallback: last vertical segment
-                segments
-                    .iter()
-                    .rev()
-                    .find(|s| matches!(s, Segment::Vertical { .. }))
-            })
+        // For long paths (backward edges), find the longest vertical segment
+        // in the inner portion, falling back to the last vertical segment.
+        longest_vertical(inner_segments(segments).iter()).or_else(|| {
+            segments
+                .iter()
+                .rev()
+                .find(|s| matches!(s, Segment::Vertical { .. }))
+        })
     } else {
-        // For short paths (forward edges), prefer the longest vertical segment
-        // nearest to the source node. Iterating in reverse makes max_by_key's
-        // last-wins tie-breaking favor earlier segments, placing labels near
-        // the source where branching originates rather than near the target
-        // where sibling-edge labels cluster.
-        segments
-            .iter()
-            .rev()
-            .filter(|s| matches!(s, Segment::Vertical { .. }))
-            .max_by_key(|s| match s {
-                Segment::Vertical { y_start, y_end, .. } => (*y_start).abs_diff(*y_end),
-                _ => 0,
-            })
+        // For short paths, prefer the longest vertical segment nearest to source.
+        // Iterating in reverse makes max_by_key's last-wins tie-breaking favor
+        // earlier segments.
+        longest_vertical(segments.iter().rev())
     }
 }
 
@@ -501,23 +490,27 @@ fn select_label_segment(segments: &[Segment]) -> Option<&Segment> {
 /// For long paths (backward edges, 6+ segments), returns the longest inner horizontal segment.
 /// For shorter paths, returns the last horizontal segment.
 fn select_label_segment_horizontal(segments: &[Segment]) -> Option<&Segment> {
+    fn horizontal_length(s: &Segment) -> usize {
+        match s {
+            Segment::Horizontal { x_start, x_end, .. } => x_start.abs_diff(*x_end),
+            _ => 0,
+        }
+    }
+
+    fn longest_horizontal<'a>(segs: impl Iterator<Item = &'a Segment>) -> Option<&'a Segment> {
+        segs.filter(|s| matches!(s, Segment::Horizontal { .. }))
+            .max_by_key(|s| horizontal_length(s))
+    }
+
     let is_long_path = segments.len() >= 6;
 
     if is_long_path {
-        let inner = inner_segments(segments);
-        inner
-            .iter()
-            .filter(|s| matches!(s, Segment::Horizontal { .. }))
-            .max_by_key(|s| match s {
-                Segment::Horizontal { x_start, x_end, .. } => x_start.abs_diff(*x_end),
-                _ => 0,
-            })
-            .or_else(|| {
-                segments
-                    .iter()
-                    .rev()
-                    .find(|s| matches!(s, Segment::Horizontal { .. }))
-            })
+        longest_horizontal(inner_segments(segments).iter()).or_else(|| {
+            segments
+                .iter()
+                .rev()
+                .find(|s| matches!(s, Segment::Horizontal { .. }))
+        })
     } else {
         // For LR/RL short paths, the last horizontal segment approaches the
         // target at a unique Y position, so labels on sibling edges naturally
@@ -597,8 +590,9 @@ fn draw_arrow_with_entry(
     charset: &CharSet,
 ) {
     // Protect node content from being overwritten by arrows
-    if let Some(cell) = canvas.get(point.x, point.y)
-        && cell.is_node
+    if canvas
+        .get(point.x, point.y)
+        .is_some_and(|cell| cell.is_node)
     {
         return;
     }
@@ -615,29 +609,25 @@ fn draw_arrow_with_entry(
 
     // If the arrow position is a subgraph title or border cell, nudge it one cell inward
     // (in the direction the edge is traveling). This keeps arrowheads inside boxes.
-    let (ax, ay) = if let Some(cell) = canvas.get(point.x, point.y)
-        && (cell.is_subgraph_title || cell.is_subgraph_border)
-    {
-        let (nx, ny) = match entry_direction {
-            AttachDirection::Top => (point.x, point.y + 1),
-            AttachDirection::Bottom => (point.x, point.y.saturating_sub(1)),
-            AttachDirection::Left => (point.x + 1, point.y),
-            AttachDirection::Right => (point.x.saturating_sub(1), point.y),
-        };
-        if let Some(inner) = canvas.get(nx, ny)
-            && inner.is_node
-        {
-            (point.x, point.y)
-        } else {
-            (nx, ny)
+    let (ax, ay) = match canvas.get(point.x, point.y) {
+        Some(cell) if cell.is_subgraph_title || cell.is_subgraph_border => {
+            let (nx, ny) = match entry_direction {
+                AttachDirection::Top => (point.x, point.y + 1),
+                AttachDirection::Bottom => (point.x, point.y.saturating_sub(1)),
+                AttachDirection::Left => (point.x + 1, point.y),
+                AttachDirection::Right => (point.x.saturating_sub(1), point.y),
+            };
+            // Don't nudge into a node cell
+            if canvas.get(nx, ny).is_some_and(|inner| inner.is_node) {
+                (point.x, point.y)
+            } else {
+                (nx, ny)
+            }
         }
-    } else {
-        (point.x, point.y)
+        _ => (point.x, point.y),
     };
 
     canvas.set(ax, ay, arrow_char);
-
-    // Border junctions are resolved in a later pass after edges are rendered.
 }
 
 /// Draw an arrow at the given point (legacy function for tests).

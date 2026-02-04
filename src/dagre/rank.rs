@@ -42,10 +42,9 @@ pub fn longest_path(graph: &mut LayoutGraph) {
     let mut ranks = vec![0i32; n];
 
     // Start with nodes that have no predecessors
-    for node in 0..n {
-        if in_degree[node] == 0 {
+    for (node, &degree) in in_degree.iter().enumerate() {
+        if degree == 0 {
             queue.push_back(node);
-            ranks[node] = 0;
         }
     }
 
@@ -85,14 +84,14 @@ pub fn longest_path(graph: &mut LayoutGraph) {
 
 /// Normalize ranks so minimum is 0.
 pub fn normalize(graph: &mut LayoutGraph) {
+    // Prefer minimum rank among position nodes, fall back to all nodes
     let min = graph
         .ranks
         .iter()
         .enumerate()
-        .filter(|(idx, _)| graph.is_position_node(*idx))
-        .map(|(_, &rank)| rank)
+        .filter_map(|(idx, &rank)| graph.is_position_node(idx).then_some(rank))
         .min()
-        .or_else(|| graph.ranks.iter().min().copied());
+        .or_else(|| graph.ranks.iter().copied().min());
 
     if let Some(min) = min {
         for rank in &mut graph.ranks {
@@ -129,14 +128,16 @@ pub fn remove_empty_ranks(graph: &mut LayoutGraph) {
     // Compute delta: for each empty layer at a non-factor position, decrement delta
     let mut delta: i32 = 0;
     for (i, layer) in layers.iter().enumerate() {
-        if layer.is_none() && (i as i32) % node_rank_factor != 0 {
-            delta -= 1;
-        } else if let Some(nodes) = layer
-            && delta != 0
-        {
-            for &node in nodes {
-                graph.ranks[node] += delta;
+        match layer {
+            None if (i as i32) % node_rank_factor != 0 => {
+                delta -= 1;
             }
+            Some(nodes) if delta != 0 => {
+                for &node in nodes {
+                    graph.ranks[node] += delta;
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -158,23 +159,22 @@ pub fn by_rank_filtered<F>(graph: &LayoutGraph, mut predicate: F) -> Vec<Vec<usi
 where
     F: FnMut(usize) -> bool,
 {
-    let mut max_rank: Option<i32> = None;
-    for (node, &rank) in graph.ranks.iter().enumerate() {
-        if predicate(node) {
-            max_rank = Some(max_rank.map_or(rank, |m| m.max(rank)));
-        }
-    }
+    // Collect matching nodes with their ranks
+    let matching: Vec<(usize, i32)> = graph
+        .ranks
+        .iter()
+        .enumerate()
+        .filter(|&(node, _)| predicate(node))
+        .map(|(node, &rank)| (node, rank))
+        .collect();
 
-    let Some(max_rank) = max_rank else {
+    let Some(&max_rank) = matching.iter().map(|(_, r)| r).max() else {
         return Vec::new();
     };
 
     let mut layers: Vec<Vec<usize>> = vec![Vec::new(); max_rank as usize + 1];
-
-    for (node, &rank) in graph.ranks.iter().enumerate() {
-        if predicate(node) {
-            layers[rank as usize].push(node);
-        }
+    for (node, rank) in matching {
+        layers[rank as usize].push(node);
     }
 
     layers

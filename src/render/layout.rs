@@ -1380,9 +1380,7 @@ fn shrink_subgraph_horizontal_gaps(
         };
 
         let content_left = bounds.x.saturating_add(1);
-        let content_right = bounds
-            .x
-            .saturating_add(bounds.width.saturating_sub(2));
+        let content_right = bounds.x.saturating_add(bounds.width.saturating_sub(2));
         let left_gap = min_x.saturating_sub(content_left);
         let right_gap = content_right.saturating_sub(max_x);
 
@@ -1484,10 +1482,7 @@ fn build_subgraph_parent_map(
     parent_map
 }
 
-fn subgraph_depth(
-    subgraphs: &HashMap<String, crate::graph::Subgraph>,
-    sg_id: &str,
-) -> usize {
+fn subgraph_depth(subgraphs: &HashMap<String, crate::graph::Subgraph>, sg_id: &str) -> usize {
     let mut depth = 0usize;
     let mut cur = sg_id;
     while let Some(sg) = subgraphs.get(cur) {

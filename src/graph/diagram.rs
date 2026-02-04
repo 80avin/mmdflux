@@ -97,13 +97,13 @@ impl Diagram {
     pub fn subgraph_depth(&self, sg_id: &str) -> usize {
         let mut depth = 0;
         let mut current = sg_id;
-        while let Some(sg) = self.subgraphs.get(current) {
-            if let Some(ref parent) = sg.parent {
-                depth += 1;
-                current = parent;
-            } else {
-                break;
-            }
+        while let Some(parent) = self
+            .subgraphs
+            .get(current)
+            .and_then(|sg| sg.parent.as_deref())
+        {
+            depth += 1;
+            current = parent;
         }
         depth
     }

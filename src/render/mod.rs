@@ -200,10 +200,7 @@ fn apply_subgraph_border_junctions(
     routed_edges: &[RoutedEdge],
     charset: &CharSet,
 ) {
-    if subgraph_bounds.is_empty() {
-        return;
-    }
-    if routed_edges.is_empty() {
+    if subgraph_bounds.is_empty() || routed_edges.is_empty() {
         return;
     }
 
@@ -236,19 +233,19 @@ fn apply_subgraph_border_junctions(
                             (y_end, y_start)
                         };
                         if x > left && x < right {
-                            if y_min < top && top <= y_max {
-                                if let Some(cell) = canvas.get(x, top)
-                                    && !should_skip_title_cell(cell)
-                                {
-                                    set_junction_cell(canvas, x, top, conns_all, charset);
-                                }
+                            if y_min < top
+                                && top <= y_max
+                                && let Some(cell) = canvas.get(x, top)
+                                && !should_skip_title_cell(cell)
+                            {
+                                set_junction_cell(canvas, x, top, conns_all, charset);
                             }
-                            if y_min <= bottom && bottom < y_max {
-                                if let Some(cell) = canvas.get(x, bottom)
-                                    && !should_skip_title_cell(cell)
-                                {
-                                    set_junction_cell(canvas, x, bottom, conns_all, charset);
-                                }
+                            if y_min <= bottom
+                                && bottom < y_max
+                                && let Some(cell) = canvas.get(x, bottom)
+                                && !should_skip_title_cell(cell)
+                            {
+                                set_junction_cell(canvas, x, bottom, conns_all, charset);
                             }
                         }
                     }
@@ -259,19 +256,19 @@ fn apply_subgraph_border_junctions(
                             (x_end, x_start)
                         };
                         if y > top && y < bottom {
-                            if x_min < left && left <= x_max {
-                                if let Some(cell) = canvas.get(left, y)
-                                    && !should_skip_title_cell(cell)
-                                {
-                                    set_junction_cell(canvas, left, y, conns_all, charset);
-                                }
+                            if x_min < left
+                                && left <= x_max
+                                && let Some(cell) = canvas.get(left, y)
+                                && !should_skip_title_cell(cell)
+                            {
+                                set_junction_cell(canvas, left, y, conns_all, charset);
                             }
-                            if x_min <= right && right < x_max {
-                                if let Some(cell) = canvas.get(right, y)
-                                    && !should_skip_title_cell(cell)
-                                {
-                                    set_junction_cell(canvas, right, y, conns_all, charset);
-                                }
+                            if x_min <= right
+                                && right < x_max
+                                && let Some(cell) = canvas.get(right, y)
+                                && !should_skip_title_cell(cell)
+                            {
+                                set_junction_cell(canvas, right, y, conns_all, charset);
                             }
                         }
                     }
@@ -317,22 +314,18 @@ fn branching_label_info(diagram: &Diagram) -> (bool, usize, usize) {
 
     // Find sources with 2+ labeled edges
     // First label goes left, rest go right (based on typical layout ordering)
-    let mut has_branching = false;
-    let mut max_left_len = 0;
-    let mut max_right_len = 0;
-    for labels in labeled_edges_per_source.values() {
-        if labels.len() >= 2 {
-            has_branching = true;
-            // First declared target typically ends up on the left
-            max_left_len = max_left_len.max(labels[0].chars().count());
-            // Remaining targets go to the right
-            for label in &labels[1..] {
-                max_right_len = max_right_len.max(label.chars().count());
-            }
-        }
-    }
-
-    (has_branching, max_left_len, max_right_len)
+    labeled_edges_per_source
+        .values()
+        .filter(|labels| labels.len() >= 2)
+        .fold((false, 0, 0), |(_, max_left, max_right), labels| {
+            let left_len = labels[0].chars().count();
+            let right_len = labels[1..]
+                .iter()
+                .map(|l| l.chars().count())
+                .max()
+                .unwrap_or(0);
+            (true, max_left.max(left_len), max_right.max(right_len))
+        })
 }
 
 #[cfg(test)]

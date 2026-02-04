@@ -46,23 +46,17 @@ pub fn parse_packet(input: &str) -> Result<Packet, ParseError> {
     let mut title = None;
     let mut blocks = Vec::new();
 
-    for pair in pairs {
-        if pair.as_rule() == Rule::packet_diagram {
-            for inner in pair.into_inner() {
-                match inner.as_rule() {
-                    Rule::title_stmt => {
-                        for t in inner.into_inner() {
-                            if t.as_rule() == Rule::title_text {
-                                title = Some(t.as_str().to_string());
-                            }
-                        }
-                    }
-                    Rule::packet_block => {
-                        let block = parse_block(inner);
-                        blocks.push(block);
-                    }
-                    _ => {}
+    for pair in pairs.filter(|p| p.as_rule() == Rule::packet_diagram) {
+        for inner in pair.into_inner() {
+            match inner.as_rule() {
+                Rule::title_stmt => {
+                    title = inner
+                        .into_inner()
+                        .find(|t| t.as_rule() == Rule::title_text)
+                        .map(|t| t.as_str().to_string());
                 }
+                Rule::packet_block => blocks.push(parse_block(inner)),
+                _ => {}
             }
         }
     }
@@ -108,34 +102,24 @@ fn parse_bit_spec(pair: pest::iterators::Pair<Rule>) -> BitSpec {
         match inner.as_rule() {
             Rule::bit_range => {
                 let mut ints = inner.into_inner();
-                let start: u32 = ints.next().unwrap().as_str().parse().unwrap_or(0);
-                let end: u32 = ints.next().unwrap().as_str().parse().unwrap_or(0);
+                let start = parse_u32(ints.next());
+                let end = parse_u32(ints.next());
                 return BitSpec::Range(start, Some(end));
             }
             Rule::bit_relative => {
-                let val: u32 = inner
-                    .into_inner()
-                    .next()
-                    .unwrap()
-                    .as_str()
-                    .parse()
-                    .unwrap_or(0);
-                return BitSpec::Relative(val);
+                return BitSpec::Relative(parse_u32(inner.into_inner().next()));
             }
             Rule::bit_single => {
-                let val: u32 = inner
-                    .into_inner()
-                    .next()
-                    .unwrap()
-                    .as_str()
-                    .parse()
-                    .unwrap_or(0);
-                return BitSpec::Range(val, None);
+                return BitSpec::Range(parse_u32(inner.into_inner().next()), None);
             }
             _ => {}
         }
     }
     BitSpec::Range(0, None)
+}
+
+fn parse_u32(pair: Option<pest::iterators::Pair<Rule>>) -> u32 {
+    pair.and_then(|p| p.as_str().parse().ok()).unwrap_or(0)
 }
 
 #[cfg(test)]
