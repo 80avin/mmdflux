@@ -56,8 +56,19 @@ fn flowchart_instance_supports_text_and_ascii() {
     let instance = FlowchartInstance::new();
     assert!(instance.supports_format(OutputFormat::Text));
     assert!(instance.supports_format(OutputFormat::Ascii));
-    // SVG planned for Sub-Plan C (0045)
-    assert!(!instance.supports_format(OutputFormat::Svg));
+    assert!(instance.supports_format(OutputFormat::Svg));
+}
+
+#[test]
+fn flowchart_instance_render_svg() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig::default();
+    let output = instance.render(OutputFormat::Svg, &config).unwrap();
+
+    assert!(output.starts_with("<svg"));
+    assert!(output.contains("<text"));
 }
 
 #[test]

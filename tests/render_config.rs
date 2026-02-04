@@ -1,3 +1,4 @@
+use mmdflux::diagram::OutputFormat;
 use mmdflux::render::{DiagramLayoutConfig, RenderConfig, RenderError};
 
 #[test]
@@ -20,7 +21,7 @@ fn render_config_to_render_options_conversion() {
     // Verify we can convert RenderConfig to existing RenderOptions
     let config = RenderConfig::default();
     let options: mmdflux::render::RenderOptions = (&config).into();
-    assert!(!options.ascii_only);
+    assert!(matches!(options.output_format, OutputFormat::Text));
 }
 
 #[test]

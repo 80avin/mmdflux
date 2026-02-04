@@ -49,31 +49,13 @@ impl DiagramInstance for FlowchartInstance {
         })?;
 
         // Convert RenderConfig to RenderOptions
-        let options = RenderOptions {
-            ascii_only: matches!(format, OutputFormat::Ascii),
-            ranker: Some(config.layout.ranker),
-            node_spacing: Some(config.layout.node_sep),
-            rank_spacing: Some(config.layout.rank_sep),
-            edge_spacing: Some(config.layout.edge_sep),
-            margin: Some(config.layout.margin),
-            cluster_ranksep: config.cluster_ranksep,
-            padding: config.padding,
-        };
+        let mut options: RenderOptions = config.into();
+        options.output_format = format;
 
-        match format {
-            OutputFormat::Text | OutputFormat::Ascii => Ok(render(diagram, &options)),
-            OutputFormat::Svg => {
-                // SVG rendering will be implemented in Sub-Plan C (0045)
-                // For now, return an error
-                Err(RenderError {
-                    message: "SVG output not yet implemented. See plan 0045.".to_string(),
-                })
-            }
-        }
+        Ok(render(diagram, &options))
     }
 
     fn supports_format(&self, format: OutputFormat) -> bool {
-        // SVG support planned for Sub-Plan C (0045)
-        matches!(format, OutputFormat::Text | OutputFormat::Ascii)
+        matches!(format, OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg)
     }
 }

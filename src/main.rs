@@ -53,6 +53,10 @@ struct Cli {
     /// ASCII padding around the diagram
     #[arg(long)]
     padding: Option<usize>,
+
+    /// SVG scale factor
+    #[arg(long)]
+    svg_scale: Option<f64>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -116,6 +120,7 @@ fn main() -> io::Result<()> {
         },
         cluster_ranksep: cli.cluster_ranksep,
         padding: cli.padding,
+        svg_scale: cli.svg_scale,
         ..Default::default()
     };
 

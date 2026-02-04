@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+use mmdflux::diagram::OutputFormat;
 use mmdflux::render::{
     Layout, LayoutConfig, RenderOptions, compute_layout_direct, render, route_all_edges,
 };
@@ -53,7 +54,7 @@ fn render_fixture_ascii(name: &str) -> String {
     render(
         &diagram,
         &RenderOptions {
-            ascii_only: true,
+            output_format: OutputFormat::Ascii,
             ..Default::default()
         },
     )
@@ -1774,7 +1775,7 @@ fn test_self_loop_ascii_mode() {
     let output = render(
         &diagram,
         &RenderOptions {
-            ascii_only: true,
+            output_format: OutputFormat::Ascii,
             ..Default::default()
         },
     );

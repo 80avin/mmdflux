@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="198.80" height="402.40" viewBox="0 0 198.80 402.40" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    </marker>
+  </defs>
+  <g class="clusters">
+    <rect class="subgraph" x="8.00" y="8.00" width="182.80" height="386.40" fill="none" stroke="#888" stroke-width="1.00" />
+    <text x="14.40" y="12.80" text-anchor="start" dominant-baseline="hanging" fill="#333">Outer</text>
+    <rect class="subgraph" x="28.00" y="149.30" width="142.80" height="207.60" fill="none" stroke="#888" stroke-width="1.00" />
+    <text x="34.40" y="154.10" text-anchor="start" dominant-baseline="hanging" fill="#333">Inner</text>
+  </g>
+  <g class="edgePaths">
+    <path d="M99.40,215.60 L99.40,253.10 L99.40,290.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    <path d="M99.40,74.30 L99.40,111.80 L99.40,149.30 L99.40,186.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+  </g>
+  <g class="edgeLabels">
+  </g>
+  <g class="nodes">
+    <rect x="75.00" y="45.50" width="48.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+    <text x="99.40" y="59.90" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
+    <rect x="63.00" y="186.80" width="72.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+    <text x="99.40" y="201.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Process</text>
+    <rect x="79.00" y="290.60" width="40.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+    <text x="99.40" y="305.00" text-anchor="middle" dominant-baseline="middle" fill="#333">End</text>
+  </g>
+</svg>

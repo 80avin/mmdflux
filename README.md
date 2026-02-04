@@ -1,6 +1,6 @@
 # mmdflux
 
-Parse and render Mermaid flowchart diagrams.
+Parse and render Mermaid flowchart diagrams to text or SVG.
 
 ## Installation
 
@@ -37,7 +37,18 @@ mmdflux diagram.mmd -o output.txt
 
 # Debug mode: show parsed AST and graph structure
 mmdflux --debug diagram.mmd
+
+# ASCII output
+mmdflux --format ascii diagram.mmd
+
+# SVG output
+mmdflux --format svg diagram.mmd -o diagram.svg
+
+# SVG output with scale factor
+mmdflux --format svg --svg-scale 1.5 diagram.mmd -o diagram.svg
 ```
+
+Note: SVG output is currently supported only for flowcharts; other diagram types return an error.
 
 ## Examples
 

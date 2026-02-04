@@ -11,8 +11,13 @@ fn compare_outputs(input: &str, ascii: bool) {
     // Old path: direct parsing and rendering
     let flowchart = parse_flowchart(input).expect("Old path parse failed");
     let diagram = build_diagram(&flowchart);
+    let output_format = if ascii {
+        OutputFormat::Ascii
+    } else {
+        OutputFormat::Text
+    };
     let old_options = RenderOptions {
-        ascii_only: ascii,
+        output_format,
         ..Default::default()
     };
     let old_output = render(&diagram, &old_options);
@@ -25,11 +30,7 @@ fn compare_outputs(input: &str, ascii: bool) {
     let mut instance = registry.create(diagram_id).expect("New path create failed");
     instance.parse(input).expect("New path parse failed");
 
-    let format = if ascii {
-        OutputFormat::Ascii
-    } else {
-        OutputFormat::Text
-    };
+    let format = output_format;
     let new_output = instance
         .render(format, &RenderConfig::default())
         .expect("New path render failed");

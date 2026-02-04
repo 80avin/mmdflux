@@ -1,6 +1,6 @@
-//! ASCII rendering for flowchart diagrams.
+//! Rendering for flowchart diagrams.
 //!
-//! This module converts a [`Diagram`] into ASCII art representation.
+//! Supports text (Unicode/ASCII) and SVG output formats.
 
 mod canvas;
 mod chars;
@@ -10,6 +10,8 @@ mod layout;
 mod router;
 mod shape;
 mod subgraph;
+mod svg;
+mod svg_metrics;
 
 pub use canvas::Canvas;
 use canvas::{Cell, Connections};
@@ -18,32 +20,56 @@ pub use edge::{render_all_edges, render_all_edges_with_labels, render_edge};
 pub use layout::{Layout, LayoutConfig, SubgraphBounds, compute_layout_direct};
 pub use router::{Point, RoutedEdge, Segment, route_all_edges, route_edge};
 pub use shape::{NodeBounds, node_dimensions, render_node};
+pub use svg::render_svg;
 
 pub use crate::diagram::{
     LayoutConfig as DiagramLayoutConfig, OutputFormat, RenderConfig, RenderError,
 };
 use crate::graph::{Diagram, Direction};
+use svg_metrics::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
 
 impl From<&RenderConfig> for RenderOptions {
     fn from(config: &RenderConfig) -> Self {
+        let mut options = RenderOptions::default();
+        options.ranker = Some(config.layout.ranker);
+        options.node_spacing = Some(config.layout.node_sep);
+        options.rank_spacing = Some(config.layout.rank_sep);
+        options.edge_spacing = Some(config.layout.edge_sep);
+        options.margin = Some(config.layout.margin);
+        options.cluster_ranksep = config.cluster_ranksep;
+        options.padding = config.padding;
+        if let Some(scale) = config.svg_scale {
+            options.svg.scale = scale;
+        }
+        options
+    }
+}
+
+/// SVG render options.
+#[derive(Debug, Clone)]
+pub struct SvgOptions {
+    pub scale: f64,
+    pub font_family: String,
+    pub font_size: f64,
+}
+
+impl Default for SvgOptions {
+    fn default() -> Self {
         Self {
-            ascii_only: false, // Determined by OutputFormat, not config
-            ranker: Some(config.layout.ranker),
-            node_spacing: Some(config.layout.node_sep),
-            rank_spacing: Some(config.layout.rank_sep),
-            edge_spacing: Some(config.layout.edge_sep),
-            margin: Some(config.layout.margin),
-            cluster_ranksep: config.cluster_ranksep,
-            padding: config.padding,
+            scale: 1.0,
+            font_family: DEFAULT_FONT_FAMILY.to_string(),
+            font_size: DEFAULT_FONT_SIZE,
         }
     }
 }
 
-/// Render options for ASCII output.
-#[derive(Debug, Clone, Default)]
+/// Render options for flowcharts.
+#[derive(Debug, Clone)]
 pub struct RenderOptions {
-    /// Use ASCII-only characters instead of Unicode box-drawing.
-    pub ascii_only: bool,
+    /// Output format (text, ascii, or svg).
+    pub output_format: OutputFormat,
+    /// SVG-specific options.
+    pub svg: SvgOptions,
     /// Ranking algorithm override. None uses the default (NetworkSimplex).
     pub ranker: Option<crate::dagre::types::Ranker>,
     /// Dagre nodesep override (node spacing).
@@ -60,7 +86,31 @@ pub struct RenderOptions {
     pub padding: Option<usize>,
 }
 
-/// Render a diagram to ASCII art.
+impl Default for RenderOptions {
+    fn default() -> Self {
+        Self {
+            output_format: OutputFormat::Text,
+            svg: SvgOptions::default(),
+            ranker: None,
+            node_spacing: None,
+            rank_spacing: None,
+            edge_spacing: None,
+            margin: None,
+            cluster_ranksep: None,
+            padding: None,
+        }
+    }
+}
+
+impl RenderOptions {
+    pub fn default_svg() -> Self {
+        let mut options = Self::default();
+        options.output_format = OutputFormat::Svg;
+        options
+    }
+}
+
+/// Render a diagram to the configured output format.
 ///
 /// # Example
 ///
@@ -74,10 +124,13 @@ pub struct RenderOptions {
 /// let ascii = render(&diagram, &RenderOptions::default());
 /// ```
 pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
-    let charset = if options.ascii_only {
-        CharSet::ascii()
-    } else {
-        CharSet::unicode()
+    if matches!(options.output_format, OutputFormat::Svg) {
+        return render_svg(diagram, options);
+    }
+
+    let charset = match options.output_format {
+        OutputFormat::Ascii => CharSet::ascii(),
+        _ => CharSet::unicode(),
     };
 
     // Step 1: Compute layout with direction-aware spacing

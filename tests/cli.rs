@@ -53,19 +53,17 @@ fn cli_debug_shows_packet_type() {
 }
 
 // =============================================================================
-// SVG Format Error Tests
+// SVG Format Tests
 // =============================================================================
 
 #[test]
-fn cli_svg_format_errors_for_flowchart() {
+fn cli_svg_format_renders_flowchart() {
     mmdflux()
         .args(["--format", "svg"])
         .write_stdin("graph TD\nA-->B")
         .assert()
-        .failure()
-        .stderr(predicate::str::contains(
-            "flowchart diagrams do not support svg output",
-        ));
+        .success()
+        .stdout(predicate::str::starts_with("<svg"));
 }
 
 #[test]

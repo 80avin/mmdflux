@@ -109,7 +109,13 @@ graph TD
     C --> F
     F --> G[Canvas]
     G --> H[String Output]
+    C --> I[SVG Renderer]
+    I --> H
 ```
+
+Text rendering uses the ASCII canvas pipeline. SVG rendering bypasses the router
+and canvas entirely, consuming dagre's floating-point `LayoutResult` directly in
+`render/svg.rs` and emitting SVG elements with presentation attributes.
 
 #### Layout Engine (`layout.rs`)
 

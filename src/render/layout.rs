@@ -10,7 +10,7 @@ use super::shape::{NodeBounds, node_dimensions};
 use crate::dagre::Point;
 use crate::dagre::normalize::WaypointWithRank;
 use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Rect};
-use crate::graph::{Diagram, Direction, Edge, Shape};
+use crate::graph::{Diagram, Direction, Edge, Node, Shape};
 
 /// Bounding box for a subgraph border in draw coordinates.
 #[derive(Debug, Clone)]
@@ -171,15 +171,44 @@ impl Default for LayoutConfig {
     }
 }
 
-/// Compute the layout using the dagre algorithm with direct coordinate translation.
-///
-/// This uses uniform scale factors to translate dagre's float coordinates to ASCII
-/// character cells, replacing the stagger pipeline. The 3-step process:
-/// 1. Compute per-axis scale factors
-/// 2. Apply uniform scaling + rounding to all dagre coordinates
-/// 3. Enforce minimum spacing via collision repair
-pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout {
-    // --- Phase A: Build dagre graph ---
+fn dagre_config_for_layout(diagram: &Diagram, config: &LayoutConfig) -> DagreConfig {
+    let dagre_direction = match diagram.direction {
+        Direction::TopDown => DagreDirection::TopBottom,
+        Direction::BottomTop => DagreDirection::BottomTop,
+        Direction::LeftRight => DagreDirection::LeftRight,
+        Direction::RightLeft => DagreDirection::RightLeft,
+    };
+
+    let node_sep = config.dagre_node_sep;
+    let edge_sep = config.dagre_edge_sep;
+    let mut rank_sep = config.dagre_rank_sep;
+    if diagram.has_subgraphs() && config.dagre_cluster_rank_sep > 0.0 {
+        // Mermaid increases ranksep for cluster graphs (ranksep + 25).
+        // We apply the offset when subgraphs are present to approximate that behavior.
+        rank_sep += config.dagre_cluster_rank_sep;
+    }
+
+    DagreConfig {
+        direction: dagre_direction,
+        node_sep,
+        edge_sep,
+        rank_sep,
+        margin: config.dagre_margin,
+        acyclic: true,
+        ranker: config.ranker.unwrap_or_default(),
+    }
+}
+
+fn build_dagre_layout_with_config<FN, FE>(
+    diagram: &Diagram,
+    dagre_config: &DagreConfig,
+    node_dims: FN,
+    edge_label_dims: FE,
+) -> dagre::LayoutResult
+where
+    FN: Fn(&Node) -> (f64, f64),
+    FE: Fn(&Edge) -> Option<(f64, f64)>,
+{
     let mut dgraph = dagre::DiGraph::new();
 
     let mut seen = std::collections::HashSet::new();
@@ -201,7 +230,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
 
     for id in &ordered_node_ids {
         if let Some(node) = diagram.nodes.get(id) {
-            let dims = node_dimensions(node);
+            let dims = node_dims(node);
             dgraph.add_node(id.as_str(), dims);
         }
     }
@@ -219,7 +248,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     };
     for sg_id in &subgraph_keys {
         let sg = &diagram.subgraphs[*sg_id];
-        dgraph.add_node(sg_id.as_str(), (0, 0));
+        dgraph.add_node(sg_id.as_str(), (0.0, 0.0));
         if !sg.title.trim().is_empty() {
             dgraph.set_has_title(sg_id.as_str());
         }
@@ -246,47 +275,15 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     let mut edge_labels: HashMap<usize, dagre::normalize::EdgeLabelInfo> = HashMap::new();
     for (edge_idx, edge) in diagram.edges.iter().enumerate() {
         dgraph.add_edge(edge.from.as_str(), edge.to.as_str());
-        if let Some(ref label) = edge.label {
-            let label_width = label.len() + 2;
+        if let Some((label_width, label_height)) = edge_label_dims(edge) {
             edge_labels.insert(
                 edge_idx,
-                dagre::normalize::EdgeLabelInfo::new(label_width as f64, 1.0),
+                dagre::normalize::EdgeLabelInfo::new(label_width, label_height),
             );
         }
     }
 
-    let dagre_direction = match diagram.direction {
-        Direction::TopDown => DagreDirection::TopBottom,
-        Direction::BottomTop => DagreDirection::BottomTop,
-        Direction::LeftRight => DagreDirection::LeftRight,
-        Direction::RightLeft => DagreDirection::RightLeft,
-    };
-
-    let node_sep = config.dagre_node_sep;
-    let edge_sep = config.dagre_edge_sep;
-    let mut rank_sep = config.dagre_rank_sep;
-    if diagram.has_subgraphs() && config.dagre_cluster_rank_sep > 0.0 {
-        // Mermaid increases ranksep for cluster graphs (ranksep + 25).
-        // We apply the offset when subgraphs are present to approximate that behavior.
-        rank_sep += config.dagre_cluster_rank_sep;
-    }
-
-    let dagre_config = DagreConfig {
-        direction: dagre_direction,
-        node_sep,
-        edge_sep,
-        rank_sep,
-        margin: config.dagre_margin,
-        acyclic: true,
-        ranker: config.ranker.unwrap_or_default(),
-    };
-
-    let result = dagre::layout_with_labels(
-        &dgraph,
-        &dagre_config,
-        |_, dims| (dims.0 as f64, dims.1 as f64),
-        &edge_labels,
-    );
+    let result = dagre::layout_with_labels(&dgraph, dagre_config, |_, dims| *dims, &edge_labels);
 
     if std::env::var("MMDFLUX_DEBUG_NODE_POS").is_ok_and(|v| v == "1") {
         for (id, rect) in &result.nodes {
@@ -296,6 +293,44 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             );
         }
     }
+
+    result
+}
+
+pub(crate) fn build_dagre_layout<FN, FE>(
+    diagram: &Diagram,
+    config: &LayoutConfig,
+    node_dims: FN,
+    edge_label_dims: FE,
+) -> dagre::LayoutResult
+where
+    FN: Fn(&Node) -> (f64, f64),
+    FE: Fn(&Edge) -> Option<(f64, f64)>,
+{
+    let dagre_config = dagre_config_for_layout(diagram, config);
+    build_dagre_layout_with_config(diagram, &dagre_config, node_dims, edge_label_dims)
+}
+
+/// Compute the layout using the dagre algorithm with direct coordinate translation.
+///
+/// This uses uniform scale factors to translate dagre's float coordinates to ASCII
+/// character cells, replacing the stagger pipeline. The 3-step process:
+/// 1. Compute per-axis scale factors
+/// 2. Apply uniform scaling + rounding to all dagre coordinates
+/// 3. Enforce minimum spacing via collision repair
+pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout {
+    // --- Phase A: Build dagre graph ---
+    let dagre_config = dagre_config_for_layout(diagram, config);
+    let dagre_direction = dagre_config.direction;
+    let result = build_dagre_layout_with_config(
+        diagram,
+        &dagre_config,
+        |node| {
+            let (w, h) = node_dimensions(node);
+            (w as f64, h as f64)
+        },
+        |edge| edge.label.as_ref().map(|label| (label.len() as f64 + 2.0, 1.0)),
+    );
 
     // --- Phase B: Group nodes into layers ---
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
@@ -1830,6 +1865,29 @@ mod tests {
         assert!(sy > 0.0, "sy should be positive, got {sy}");
         assert!(sx.is_finite());
         assert!(sy.is_finite());
+    }
+
+    // =========================================================================
+    // Dagre Helper Tests
+    // =========================================================================
+
+    #[test]
+    fn build_dagre_layout_includes_label_positions() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nA -- yes --> B\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let result = build_dagre_layout(
+            &diagram,
+            &LayoutConfig::default(),
+            |node| (node.label.len() as f64 + 4.0, 3.0),
+            |edge| edge.label.as_ref().map(|label| (label.len() as f64 + 2.0, 1.0)),
+        );
+
+        assert!(result.label_positions.contains_key(&0));
     }
 
     #[test]
