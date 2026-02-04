@@ -1,9 +1,10 @@
 //! SVG rendering for flowchart diagrams.
 
+use std::collections::HashMap;
 use std::fmt::Write;
 
 use crate::dagre::{LayoutResult, Point, Rect};
-use crate::graph::{Arrow, Diagram, Edge, Node, Shape, Stroke};
+use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 
 use super::RenderOptions;
 use super::layout::build_dagre_layout;
@@ -27,26 +28,42 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         diagram,
         &config,
         |node| svg_node_dimensions(&metrics, node),
-        |edge| edge.label.as_ref().map(|label| metrics.edge_label_dimensions(label)),
+        |edge| {
+            edge.label
+                .as_ref()
+                .map(|label| metrics.edge_label_dimensions(label))
+        },
     );
 
-    let bounds = compute_svg_bounds(diagram, &layout, &metrics);
+    let self_edge_paths = compute_self_edge_paths(diagram, &layout, &metrics);
+    let bounds = compute_svg_bounds(diagram, &layout, &metrics, &self_edge_paths);
     let padding = (svg_options.font_size * 0.75).max(8.0);
-    let (min_x, min_y, max_x, max_y) =
-        bounds.finalize(layout.width, layout.height);
+    let (min_x, min_y, max_x, max_y) = bounds.finalize(layout.width, layout.height);
     let width = (max_x - min_x + padding * 2.0) * scale;
     let height = (max_y - min_y + padding * 2.0) * scale;
     let offset_x = (-min_x + padding) * scale;
     let offset_y = (-min_y + padding) * scale;
 
     let mut writer = SvgWriter::new();
-    writer.start_svg(width, height, &svg_options.font_family, svg_options.font_size * scale);
+    writer.start_svg(
+        width,
+        height,
+        &svg_options.font_family,
+        svg_options.font_size * scale,
+    );
 
     render_defs(&mut writer, scale);
     writer.start_group_transform(offset_x, offset_y);
     render_subgraphs(&mut writer, diagram, &layout, &metrics, scale);
-    render_edges(&mut writer, diagram, &layout, scale);
-    render_edge_labels(&mut writer, diagram, &layout, &metrics, scale);
+    render_edges(&mut writer, diagram, &layout, &self_edge_paths, scale);
+    render_edge_labels(
+        &mut writer,
+        diagram,
+        &layout,
+        &self_edge_paths,
+        &metrics,
+        scale,
+    );
     render_nodes(&mut writer, diagram, &layout, &metrics, scale);
     writer.end_group();
 
@@ -155,18 +172,25 @@ fn render_subgraphs(
     writer.end_group();
 }
 
-fn render_edges(writer: &mut SvgWriter, diagram: &Diagram, layout: &LayoutResult, scale: f64) {
+fn render_edges(
+    writer: &mut SvgWriter,
+    diagram: &Diagram,
+    layout: &LayoutResult,
+    self_edge_paths: &HashMap<usize, Vec<Point>>,
+    scale: f64,
+) {
     let mut edge_paths: Vec<(usize, Vec<Point>)> = layout
         .edges
         .iter()
         .map(|edge| (edge.index, edge.points.clone()))
         .collect();
-    edge_paths.extend(
-        layout
-            .self_edges
-            .iter()
-            .map(|edge| (edge.edge_index, edge.points.clone())),
-    );
+    edge_paths.extend(layout.self_edges.iter().map(|edge| {
+        let points = self_edge_paths
+            .get(&edge.edge_index)
+            .cloned()
+            .unwrap_or_else(|| edge.points.clone());
+        (edge.edge_index, points)
+    }));
     edge_paths.sort_by_key(|(index, _)| *index);
 
     writer.start_group("edgePaths");
@@ -190,6 +214,7 @@ fn render_edge_labels(
     writer: &mut SvgWriter,
     diagram: &Diagram,
     layout: &LayoutResult,
+    self_edge_paths: &HashMap<usize, Vec<Point>>,
     metrics: &SvgTextMetrics,
     scale: f64,
 ) {
@@ -203,7 +228,7 @@ fn render_edge_labels(
             .label_positions
             .get(&index)
             .map(|pos| pos.point)
-            .or_else(|| fallback_label_position(layout, index));
+            .or_else(|| fallback_label_position(layout, index, self_edge_paths));
         let Some(point) = position else {
             continue;
         };
@@ -562,6 +587,7 @@ fn compute_svg_bounds(
     diagram: &Diagram,
     layout: &LayoutResult,
     metrics: &SvgTextMetrics,
+    self_edge_paths: &HashMap<usize, Vec<Point>>,
 ) -> SvgBounds {
     let mut bounds = SvgBounds::new();
 
@@ -580,7 +606,11 @@ fn compute_svg_bounds(
     }
 
     for edge in &layout.self_edges {
-        for point in &edge.points {
+        let points = self_edge_paths
+            .get(&edge.edge_index)
+            .map(Vec::as_slice)
+            .unwrap_or_else(|| edge.points.as_slice());
+        for point in points {
             bounds.update_point(point.x, point.y);
         }
     }
@@ -593,7 +623,7 @@ fn compute_svg_bounds(
             .label_positions
             .get(&index)
             .map(|pos| pos.point)
-            .or_else(|| fallback_label_position(layout, index));
+            .or_else(|| fallback_label_position(layout, index, self_edge_paths));
         let Some(point) = position else {
             continue;
         };
@@ -676,7 +706,132 @@ fn scale_rect(rect: &Rect, scale: f64) -> Rect {
     }
 }
 
-fn fallback_label_position(layout: &LayoutResult, edge_index: usize) -> Option<Point> {
+fn compute_self_edge_paths(
+    diagram: &Diagram,
+    layout: &LayoutResult,
+    metrics: &SvgTextMetrics,
+) -> HashMap<usize, Vec<Point>> {
+    let pad = metrics.padding_x.max(metrics.padding_y).max(4.0);
+    let mut paths = HashMap::new();
+
+    for edge in &layout.self_edges {
+        let Some(rect) = layout.nodes.get(&edge.node) else {
+            continue;
+        };
+        if edge.points.is_empty() {
+            continue;
+        }
+        let adjusted = adjust_self_edge_points(rect, &edge.points, diagram.direction, pad);
+        paths.insert(edge.edge_index, adjusted);
+    }
+
+    paths
+}
+
+fn adjust_self_edge_points(
+    rect: &Rect,
+    points: &[Point],
+    direction: Direction,
+    pad: f64,
+) -> Vec<Point> {
+    if points.len() < 2 {
+        return points.to_vec();
+    }
+
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    match direction {
+        Direction::TopDown => {
+            let loop_x = points
+                .iter()
+                .map(|point| point.x)
+                .fold(right, f64::max)
+                .max(right + pad);
+            vec![
+                Point { x: right, y: top },
+                Point { x: loop_x, y: top },
+                Point {
+                    x: loop_x,
+                    y: bottom,
+                },
+                Point {
+                    x: right,
+                    y: bottom,
+                },
+            ]
+        }
+        Direction::BottomTop => {
+            let loop_x = points
+                .iter()
+                .map(|point| point.x)
+                .fold(right, f64::max)
+                .max(right + pad);
+            vec![
+                Point {
+                    x: right,
+                    y: bottom,
+                },
+                Point {
+                    x: loop_x,
+                    y: bottom,
+                },
+                Point { x: loop_x, y: top },
+                Point { x: right, y: top },
+            ]
+        }
+        Direction::LeftRight => {
+            let loop_y = points
+                .iter()
+                .map(|point| point.y)
+                .fold(bottom, f64::max)
+                .max(bottom + pad);
+            vec![
+                Point {
+                    x: right,
+                    y: bottom,
+                },
+                Point {
+                    x: right,
+                    y: loop_y,
+                },
+                Point { x: left, y: loop_y },
+                Point { x: left, y: bottom },
+            ]
+        }
+        Direction::RightLeft => {
+            let loop_y = points
+                .iter()
+                .map(|point| point.y)
+                .fold(bottom, f64::max)
+                .max(bottom + pad);
+            vec![
+                Point { x: left, y: bottom },
+                Point { x: left, y: loop_y },
+                Point {
+                    x: right,
+                    y: loop_y,
+                },
+                Point {
+                    x: right,
+                    y: bottom,
+                },
+            ]
+        }
+    }
+}
+
+fn fallback_label_position(
+    layout: &LayoutResult,
+    edge_index: usize,
+    self_edge_paths: &HashMap<usize, Vec<Point>>,
+) -> Option<Point> {
+    if let Some(points) = self_edge_paths.get(&edge_index) {
+        return points.get(points.len() / 2).copied();
+    }
+
     let points = layout
         .edges
         .iter()
@@ -761,10 +916,7 @@ impl SvgWriter {
     }
 
     fn start_group(&mut self, class_name: &str) {
-        let line = format!(
-            "<g class=\"{class}\">",
-            class = escape_text(class_name)
-        );
+        let line = format!("<g class=\"{class}\">", class = escape_text(class_name));
         self.start_tag(&line);
     }
 
