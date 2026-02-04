@@ -12,15 +12,12 @@ use crate::registry::{DiagramDefinition, DiagramDetector};
 
 /// Detect if input is a flowchart diagram.
 ///
-/// Matches:
-/// - `graph TD`, `graph LR`, etc.
-/// - `flowchart TD`, `flowchart LR`, etc.
+/// Delegates to the centralized parser detection to ensure consistent behavior:
+/// - Skips `%%` comment lines
+/// - Case-insensitive keyword matching
+/// - Exact first-word matching (not prefix)
 pub fn detect(input: &str) -> bool {
-    let trimmed = input.trim_start();
-    trimmed.starts_with("graph ")
-        || trimmed.starts_with("graph\n")
-        || trimmed.starts_with("flowchart ")
-        || trimmed.starts_with("flowchart\n")
+    crate::parser::detect_diagram_type(input) == Some(crate::parser::DiagramType::Flowchart)
 }
 
 /// Flowchart diagram definition for registry.

@@ -7,8 +7,13 @@ use crate::diagram::{DiagramFamily, OutputFormat, RenderConfig, RenderError};
 use crate::registry::{DiagramDefinition, DiagramDetector, DiagramInstance};
 
 /// Detect if input is a packet diagram.
+///
+/// Delegates to the centralized parser detection to ensure consistent behavior:
+/// - Skips `%%` comment lines
+/// - Case-insensitive keyword matching
+/// - Accepts both `packet` and `packet-beta`
 pub fn detect(input: &str) -> bool {
-    input.trim_start().starts_with("packet-beta")
+    crate::parser::detect_diagram_type(input) == Some(crate::parser::DiagramType::Packet)
 }
 
 /// Packet diagram definition for registry.

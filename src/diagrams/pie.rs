@@ -7,8 +7,13 @@ use crate::diagram::{DiagramFamily, OutputFormat, RenderConfig, RenderError};
 use crate::registry::{DiagramDefinition, DiagramDetector, DiagramInstance};
 
 /// Detect if input is a pie diagram.
+///
+/// Delegates to the centralized parser detection to ensure consistent behavior:
+/// - Skips `%%` comment lines
+/// - Case-insensitive keyword matching
+/// - Exact first-word matching (not prefix)
 pub fn detect(input: &str) -> bool {
-    input.trim_start().starts_with("pie")
+    crate::parser::detect_diagram_type(input) == Some(crate::parser::DiagramType::Pie)
 }
 
 /// Pie diagram definition for registry.

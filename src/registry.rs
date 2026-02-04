@@ -68,10 +68,10 @@ impl DiagramRegistry {
     #[must_use]
     pub fn detect(&self, input: &str) -> Option<&'static str> {
         for id in &self.detection_order {
-            if let Some(def) = self.diagrams.get(id) {
-                if (def.detector)(input) {
-                    return Some(def.id);
-                }
+            if let Some(def) = self.diagrams.get(id)
+                && (def.detector)(input)
+            {
+                return Some(def.id);
             }
         }
         None

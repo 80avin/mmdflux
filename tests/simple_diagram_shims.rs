@@ -17,6 +17,23 @@ fn pie_detector_works() {
 }
 
 #[test]
+fn pie_detector_skips_comments() {
+    assert!(pie::detect("%% comment\npie\n\"A\": 50"));
+}
+
+#[test]
+fn pie_detector_case_insensitive() {
+    assert!(pie::detect("PIE\n\"A\": 50"));
+    assert!(pie::detect("Pie\n\"A\": 50"));
+}
+
+#[test]
+fn pie_detector_first_word_only() {
+    // "piechart" should NOT match "pie" - must be exact first word
+    assert!(!pie::detect("piechart\n\"A\": 50"));
+}
+
+#[test]
 fn pie_instance_renders() {
     let mut instance = pie::PieInstance::new();
     instance.parse("pie\n\"A\": 50\n\"B\": 50").unwrap();
@@ -42,6 +59,23 @@ fn info_detector_works() {
 }
 
 #[test]
+fn info_detector_skips_comments() {
+    assert!(info::detect("%% comment\ninfo"));
+}
+
+#[test]
+fn info_detector_case_insensitive() {
+    assert!(info::detect("INFO"));
+    assert!(info::detect("Info"));
+}
+
+#[test]
+fn info_detector_first_word_only() {
+    // "infographic" should NOT match "info"
+    assert!(!info::detect("infographic"));
+}
+
+#[test]
 fn info_instance_renders() {
     let mut instance = info::InfoInstance::new();
     instance.parse("info").unwrap();
@@ -62,8 +96,23 @@ fn packet_definition_exists() {
 
 #[test]
 fn packet_detector_works() {
+    // Both "packet" and "packet-beta" should be detected
     assert!(packet::detect("packet-beta"));
+    assert!(packet::detect("packet"));
     assert!(!packet::detect("graph TD"));
+}
+
+#[test]
+fn packet_detector_skips_comments() {
+    assert!(packet::detect("%% comment\npacket-beta"));
+    assert!(packet::detect("%% comment\npacket"));
+}
+
+#[test]
+fn packet_detector_case_insensitive() {
+    assert!(packet::detect("PACKET-BETA"));
+    assert!(packet::detect("Packet-Beta"));
+    assert!(packet::detect("PACKET"));
 }
 
 #[test]

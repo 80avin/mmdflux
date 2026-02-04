@@ -6,8 +6,13 @@ use crate::diagram::{DiagramFamily, OutputFormat, RenderConfig, RenderError};
 use crate::registry::{DiagramDefinition, DiagramDetector, DiagramInstance};
 
 /// Detect if input is an info diagram.
+///
+/// Delegates to the centralized parser detection to ensure consistent behavior:
+/// - Skips `%%` comment lines
+/// - Case-insensitive keyword matching
+/// - Exact first-word matching (not prefix)
 pub fn detect(input: &str) -> bool {
-    input.trim_start().starts_with("info")
+    crate::parser::detect_diagram_type(input) == Some(crate::parser::DiagramType::Info)
 }
 
 /// Info diagram definition for registry.
