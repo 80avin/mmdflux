@@ -741,6 +741,13 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         &mut subgraph_bounds,
         diagram.direction,
     );
+    shrink_subgraph_horizontal_gaps(
+        &diagram.subgraphs,
+        &diagram.edges,
+        &node_bounds,
+        &mut subgraph_bounds,
+        diagram.direction,
+    );
     debug_subgraph_gaps(&diagram.subgraphs, &node_bounds, &subgraph_bounds);
 
     // --- Phase L: Compute self-edge loop paths in draw coordinates ---
@@ -1322,6 +1329,130 @@ fn shrink_subgraph_vertical_gaps(
         if let Some(entry) = subgraph_bounds.get_mut(&sg_id) {
             entry.y = new_y;
             entry.height = new_height;
+        }
+    }
+
+    expand_parent_subgraph_bounds(subgraphs, subgraph_bounds);
+}
+
+fn shrink_subgraph_horizontal_gaps(
+    subgraphs: &HashMap<String, crate::graph::Subgraph>,
+    edges: &[crate::graph::Edge],
+    node_bounds: &HashMap<String, NodeBounds>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+    direction: Direction,
+) {
+    let parent_map = build_subgraph_parent_map(subgraphs);
+    let incoming_map = build_subgraph_incoming_map(subgraphs, edges, &parent_map);
+
+    let mut ids: Vec<String> = subgraph_bounds.keys().cloned().collect();
+    ids.sort_by_key(|id| subgraph_bounds.get(id).map(|b| b.depth).unwrap_or(0));
+    ids.reverse();
+
+    for sg_id in ids {
+        let Some(bounds) = subgraph_bounds.get(&sg_id).cloned() else {
+            continue;
+        };
+        let Some(sg) = subgraphs.get(&sg_id) else {
+            continue;
+        };
+
+        let mut min_x: Option<usize> = None;
+        let mut max_x: Option<usize> = None;
+        for member in &sg.nodes {
+            if let Some(node) = node_bounds.get(member) {
+                let node_right = node.x.saturating_add(node.width.saturating_sub(1));
+                min_x = Some(min_x.map_or(node.x, |cur| cur.min(node.x)));
+                max_x = Some(max_x.map_or(node_right, |cur| cur.max(node_right)));
+                continue;
+            }
+            if let Some(child_bounds) = subgraph_bounds.get(member) {
+                let child_right = child_bounds
+                    .x
+                    .saturating_add(child_bounds.width.saturating_sub(1));
+                min_x = Some(min_x.map_or(child_bounds.x, |cur| cur.min(child_bounds.x)));
+                max_x = Some(max_x.map_or(child_right, |cur| cur.max(child_right)));
+            }
+        }
+
+        let (Some(min_x), Some(max_x)) = (min_x, max_x) else {
+            continue;
+        };
+
+        let content_left = bounds.x.saturating_add(1);
+        let content_right = bounds
+            .x
+            .saturating_add(bounds.width.saturating_sub(2));
+        let left_gap = min_x.saturating_sub(content_left);
+        let right_gap = content_right.saturating_sub(max_x);
+
+        let has_incoming = incoming_map.get(&sg_id).copied().unwrap_or(false);
+        let incoming_gap = if has_incoming { 1 } else { 0 };
+
+        let (min_left_gap, min_right_gap) = match direction {
+            Direction::LeftRight => (incoming_gap, 0),
+            Direction::RightLeft => (0, incoming_gap),
+            _ => (0, 0),
+        };
+
+        let base_target = left_gap.min(right_gap);
+        let desired_left = base_target.max(min_left_gap);
+        let desired_right = base_target.max(min_right_gap);
+        let mut shrink_left = left_gap.saturating_sub(desired_left);
+        let mut shrink_right = right_gap.saturating_sub(desired_right);
+        let expand_left = desired_left.saturating_sub(left_gap);
+        let expand_right = desired_right.saturating_sub(right_gap);
+
+        let mut new_width = bounds
+            .width
+            .saturating_add(expand_left.saturating_add(expand_right))
+            .saturating_sub(shrink_left.saturating_add(shrink_right));
+
+        if new_width < 2 {
+            continue;
+        }
+
+        let inner_width = bounds.width.saturating_sub(2);
+        let visible_title_len = if !bounds.title.trim().is_empty() && inner_width >= 5 {
+            let max_title_len = inner_width.saturating_sub(4);
+            bounds.title.len().min(max_title_len)
+        } else {
+            0
+        };
+        let title_width = if visible_title_len > 0 {
+            visible_title_len.saturating_add(6)
+        } else {
+            2
+        };
+        let max_width_without_shrink = bounds
+            .width
+            .saturating_add(expand_left.saturating_add(expand_right));
+        let min_width = title_width.min(max_width_without_shrink);
+
+        if new_width < min_width {
+            let deficit = min_width.saturating_sub(new_width);
+            let reduce_left = deficit.min(shrink_left);
+            shrink_left = shrink_left.saturating_sub(reduce_left);
+            let reduce_right = deficit.saturating_sub(reduce_left);
+            shrink_right = shrink_right.saturating_sub(reduce_right);
+            new_width = bounds
+                .width
+                .saturating_add(expand_left.saturating_add(expand_right))
+                .saturating_sub(shrink_left.saturating_add(shrink_right));
+        }
+
+        if new_width < 2 {
+            continue;
+        }
+
+        let new_x = bounds
+            .x
+            .saturating_sub(expand_left)
+            .saturating_add(shrink_left);
+
+        if let Some(entry) = subgraph_bounds.get_mut(&sg_id) {
+            entry.x = new_x;
+            entry.width = new_width;
         }
     }
 
