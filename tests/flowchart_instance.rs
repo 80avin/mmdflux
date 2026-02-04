@@ -56,7 +56,8 @@ fn flowchart_instance_supports_text_and_ascii() {
     let instance = FlowchartInstance::new();
     assert!(instance.supports_format(OutputFormat::Text));
     assert!(instance.supports_format(OutputFormat::Ascii));
-    assert!(instance.supports_format(OutputFormat::Svg)); // Planned support
+    // SVG planned for Sub-Plan C (0045)
+    assert!(!instance.supports_format(OutputFormat::Svg));
 }
 
 #[test]

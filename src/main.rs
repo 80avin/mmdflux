@@ -18,7 +18,7 @@ struct Cli {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
-    /// Show debug information (AST and graph dump)
+    /// Show diagnostic info (detected diagram type)
     #[arg(long)]
     debug: bool,
 

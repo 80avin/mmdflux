@@ -73,10 +73,7 @@ impl DiagramInstance for FlowchartInstance {
     }
 
     fn supports_format(&self, format: OutputFormat) -> bool {
-        // SVG support is planned
-        matches!(
-            format,
-            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg
-        )
+        // SVG support planned for Sub-Plan C (0045)
+        matches!(format, OutputFormat::Text | OutputFormat::Ascii)
     }
 }

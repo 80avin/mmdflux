@@ -27,6 +27,7 @@ pub fn definition() -> DiagramDefinition {
         family: DiagramFamily::Graph,
         detector: detect as DiagramDetector,
         factory: || Box::new(FlowchartInstance::new()),
-        supported_formats: &[OutputFormat::Text, OutputFormat::Ascii, OutputFormat::Svg],
+        // SVG support planned for Sub-Plan C (0045)
+        supported_formats: &[OutputFormat::Text, OutputFormat::Ascii],
     }
 }

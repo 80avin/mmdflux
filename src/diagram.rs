@@ -107,34 +107,10 @@ pub trait LayoutEngine: Send + Sync {
 }
 
 /// Configuration for layout computation.
-#[derive(Debug, Clone)]
-pub struct LayoutConfig {
-    /// Layout direction.
-    pub direction: crate::dagre::Direction,
-    /// Minimum separation between adjacent nodes in the same rank.
-    pub node_sep: f64,
-    /// Minimum separation between edges.
-    pub edge_sep: f64,
-    /// Minimum separation between ranks.
-    pub rank_sep: f64,
-    /// Margin around the entire diagram.
-    pub margin: f64,
-    /// Ranking algorithm.
-    pub ranker: crate::dagre::types::Ranker,
-}
-
-impl Default for LayoutConfig {
-    fn default() -> Self {
-        Self {
-            direction: crate::dagre::Direction::default(),
-            node_sep: 50.0,
-            edge_sep: 20.0,
-            rank_sep: 50.0,
-            margin: 8.0,
-            ranker: crate::dagre::types::Ranker::default(),
-        }
-    }
-}
+///
+/// This is a re-export of `dagre::types::LayoutConfig` to provide a single
+/// canonical layout configuration type across the crate.
+pub type LayoutConfig = crate::dagre::types::LayoutConfig;
 
 /// Configuration for rendering.
 #[derive(Debug, Clone, Default)]
