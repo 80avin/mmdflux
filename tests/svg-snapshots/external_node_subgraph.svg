@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 482.56 378.00" style="max-width: 482.56px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 8.00 8.00" refX="8.00" refY="4.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L8.00,4.00 L0,8.00 Z" fill="#333" />
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
   <g transform="translate(0.00,0.00)">
@@ -14,10 +14,10 @@
       <text x="129.64" y="141.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">US West Region</text>
     </g>
     <g class="edgePaths">
-      <path d="M352.92,216.00 L352.92,220.17 C352.92,224.33 352.92,232.67 352.92,241.00 C352.92,249.33 352.92,257.67 352.92,261.83 L352.92,266.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M129.64,216.00 L129.64,220.17 C129.64,224.33 129.64,232.67 129.64,241.00 C129.64,249.33 129.64,257.67 129.64,261.83 L129.64,266.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M299.25,62.00 L308.19,66.17 C317.14,70.33 335.03,78.67 343.97,87.00 C352.92,95.33 352.92,103.67 352.92,112.00 C352.92,120.33 352.92,128.67 352.92,137.00 C352.92,145.33 352.92,153.67 352.92,157.83 L352.92,162.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M183.31,62.00 L174.37,66.17 C165.42,70.33 147.53,78.67 138.59,87.00 C129.64,95.33 129.64,103.67 129.64,112.00 C129.64,120.33 129.64,128.67 129.64,137.00 C129.64,145.33 129.64,153.67 129.64,157.83 L129.64,162.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M352.92,216.00 L352.92,220.17 C352.92,224.33 352.92,232.67 352.92,240.33 C352.92,248.00 352.92,255.00 352.92,258.50 L352.92,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M129.64,216.00 L129.64,220.17 C129.64,224.33 129.64,232.67 129.64,240.33 C129.64,248.00 129.64,255.00 129.64,258.50 L129.64,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M299.25,62.00 L308.19,66.17 C317.14,70.33 335.03,78.67 343.97,87.00 C352.92,95.33 352.92,103.67 352.92,112.00 C352.92,120.33 352.92,128.67 352.92,136.33 C352.92,144.00 352.92,151.00 352.92,154.50 L352.92,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M183.31,62.00 L174.37,66.17 C165.42,70.33 147.53,78.67 138.59,87.00 C129.64,95.33 129.64,103.67 129.64,112.00 C129.64,120.33 129.64,128.67 129.64,136.33 C129.64,144.00 129.64,151.00 129.64,154.50 L129.64,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

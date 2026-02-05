@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 235.60 378.00" style="max-width: 235.60px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 8.00 8.00" refX="8.00" refY="4.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L8.00,4.00 L0,8.00 Z" fill="#333" />
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
   <g transform="translate(0.00,0.00)">
@@ -12,8 +12,8 @@
       <text x="117.80" y="141.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Inner</text>
     </g>
     <g class="edgePaths">
-      <path d="M117.80,216.00 L117.80,220.17 C117.80,224.33 117.80,232.67 117.80,241.00 C117.80,249.33 117.80,257.67 117.80,261.83 L117.80,266.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M117.80,87.00 L117.80,91.17 C117.80,95.33 117.80,103.67 117.80,112.00 C117.80,120.33 117.80,128.67 117.80,137.00 C117.80,145.33 117.80,153.67 117.80,157.83 L117.80,162.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M117.80,216.00 L117.80,220.17 C117.80,224.33 117.80,232.67 117.80,240.33 C117.80,248.00 117.80,255.00 117.80,258.50 L117.80,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M117.80,87.00 L117.80,91.17 C117.80,95.33 117.80,103.67 117.80,112.00 C117.80,120.33 117.80,128.67 117.80,136.33 C117.80,144.00 117.80,151.00 117.80,154.50 L117.80,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

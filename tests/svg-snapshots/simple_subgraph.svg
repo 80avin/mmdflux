@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 187.28 328.00" style="max-width: 187.28px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 8.00 8.00" refX="8.00" refY="4.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L8.00,4.00 L0,8.00 Z" fill="#333" />
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
   <g transform="translate(0.00,0.00)">
@@ -10,8 +10,8 @@
       <text x="93.64" y="12.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Process</text>
     </g>
     <g class="edgePaths">
-      <path d="M93.64,87.00 L93.64,91.17 C93.64,95.33 93.64,103.67 93.64,112.00 C93.64,120.33 93.64,128.67 93.64,132.83 L93.64,137.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M93.64,191.00 L93.64,195.17 C93.64,199.33 93.64,207.67 93.64,216.00 C93.64,224.33 93.64,232.67 93.64,241.00 C93.64,249.33 93.64,257.67 93.64,261.83 L93.64,266.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M93.64,87.00 L93.64,91.17 C93.64,95.33 93.64,103.67 93.64,111.33 C93.64,119.00 93.64,126.00 93.64,129.50 L93.64,133.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M93.64,191.00 L93.64,195.17 C93.64,199.33 93.64,207.67 93.64,216.00 C93.64,224.33 93.64,232.67 93.64,240.33 C93.64,248.00 93.64,255.00 93.64,258.50 L93.64,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

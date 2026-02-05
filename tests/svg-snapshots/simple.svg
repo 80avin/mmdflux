@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 106.40 174.00" style="max-width: 106.40px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 8.00 8.00" refX="8.00" refY="4.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L8.00,4.00 L0,8.00 Z" fill="#333" />
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M53.20,62.00 L53.20,66.17 C53.20,70.33 53.20,78.67 53.20,87.00 C53.20,95.33 53.20,103.67 53.20,107.83 L53.20,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M53.20,62.00 L53.20,66.17 C53.20,70.33 53.20,78.67 53.20,86.33 C53.20,94.00 53.20,101.00 53.20,104.50 L53.20,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

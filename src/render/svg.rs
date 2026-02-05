@@ -122,22 +122,25 @@ fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node) -> (f64, f64) {
 }
 
 fn render_defs(writer: &mut SvgWriter, scale: f64) {
-    let size = 8.0 * scale;
-    let half = size / 2.0;
+    let base = 10.0;
+    let half = base / 2.0;
+    let marker_size = 8.0 * scale;
 
     writer.start_tag("<defs>");
     let marker = format!(
-        "<marker id=\"arrowhead\" viewBox=\"0 0 {size} {size}\" refX=\"{ref_x}\" refY=\"{ref_y}\" markerWidth=\"{size}\" markerHeight=\"{size}\" orient=\"auto-start-reverse\" markerUnits=\"userSpaceOnUse\">",
-        size = fmt_f64(size),
-        ref_x = fmt_f64(size),
-        ref_y = fmt_f64(half)
+        "<marker id=\"arrowhead\" viewBox=\"0 0 {base} {base}\" refX=\"{ref_x}\" refY=\"{ref_y}\" markerWidth=\"{mw}\" markerHeight=\"{mh}\" orient=\"auto-start-reverse\" markerUnits=\"userSpaceOnUse\">",
+        base = fmt_f64(base),
+        ref_x = fmt_f64(half),
+        ref_y = fmt_f64(half),
+        mw = fmt_f64(marker_size),
+        mh = fmt_f64(marker_size)
     );
     writer.start_tag(&marker);
     let path = format!(
-        "<path d=\"M0,0 L{tip},{mid} L0,{size} Z\" fill=\"{color}\" />",
-        tip = fmt_f64(size),
+        "<path d=\"M 0 0 L {tip} {mid} L 0 {size} z\" fill=\"{color}\" />",
+        tip = fmt_f64(base),
         mid = fmt_f64(half),
-        size = fmt_f64(size),
+        size = fmt_f64(base),
         color = STROKE_COLOR
     );
     writer.push_line(&path);
@@ -228,7 +231,9 @@ fn render_edges(
         let Some(edge) = diagram.edges.get(index) else {
             continue;
         };
-        let points = adjust_edge_points_for_shapes(diagram, layout, edge, &points);
+        let mut points = adjust_edge_points_for_shapes(diagram, layout, edge, &points);
+        points = fix_corner_points(&points);
+        points = apply_marker_offsets(&points, edge);
         let d = path_from_points(&points, scale, edge_curve, edge_curve_radius);
         if d.is_empty() {
             continue;
@@ -980,6 +985,243 @@ fn adjust_edge_points_for_shapes(
     adjusted[last] = intersect_svg_node(to_rect, to_target, to_node.shape);
 
     adjusted
+}
+
+fn fix_corner_points(points: &[Point]) -> Vec<Point> {
+    if points.len() < 3 {
+        return points.to_vec();
+    }
+
+    let mut corner_positions = Vec::new();
+    for i in 1..points.len() - 1 {
+        let prev = points[i - 1];
+        let curr = points[i];
+        let next = points[i + 1];
+        let dx_prev = (curr.x - prev.x).abs();
+        let dy_prev = (curr.y - prev.y).abs();
+        let dx_next = (next.x - curr.x).abs();
+        let dy_next = (next.y - curr.y).abs();
+
+        let is_corner = (prev.x == curr.x
+            && (curr.y - next.y).abs() > 5.0
+            && dx_next > 5.0
+            && dy_prev > 5.0)
+            || (prev.y == curr.y
+                && (curr.x - next.x).abs() > 5.0
+                && dx_prev > 5.0
+                && dy_next > 5.0);
+
+        if is_corner {
+            corner_positions.push(i);
+        }
+    }
+
+    if corner_positions.is_empty() {
+        return points.to_vec();
+    }
+
+    let mut out = Vec::new();
+    for i in 0..points.len() {
+        if !corner_positions.contains(&i) {
+            out.push(points[i]);
+            continue;
+        }
+
+        let prev = points[i - 1];
+        let curr = points[i];
+        let next = points[i + 1];
+
+        let new_prev = find_adjacent_point(prev, curr, 5.0);
+        let new_next = find_adjacent_point(next, curr, 5.0);
+
+        let x_diff = new_next.x - new_prev.x;
+        let y_diff = new_next.y - new_prev.y;
+        out.push(new_prev);
+
+        let mut new_corner = curr;
+        let a = (2.0_f64).sqrt() * 2.0;
+        if (next.x - prev.x).abs() > 10.0 && (next.y - prev.y).abs() >= 10.0 {
+            let r = 5.0;
+            if (curr.x - new_prev.x).abs() < f64::EPSILON {
+                new_corner = Point {
+                    x: if x_diff < 0.0 {
+                        new_prev.x - r + a
+                    } else {
+                        new_prev.x + r - a
+                    },
+                    y: if y_diff < 0.0 {
+                        new_prev.y - a
+                    } else {
+                        new_prev.y + a
+                    },
+                };
+            } else {
+                new_corner = Point {
+                    x: if x_diff < 0.0 {
+                        new_prev.x - a
+                    } else {
+                        new_prev.x + a
+                    },
+                    y: if y_diff < 0.0 {
+                        new_prev.y - r + a
+                    } else {
+                        new_prev.y + r - a
+                    },
+                };
+            }
+        }
+
+        out.push(new_corner);
+        out.push(new_next);
+    }
+
+    out
+}
+
+fn find_adjacent_point(point_a: Point, point_b: Point, distance: f64) -> Point {
+    let x_diff = point_b.x - point_a.x;
+    let y_diff = point_b.y - point_a.y;
+    let length = (x_diff * x_diff + y_diff * y_diff).sqrt();
+    if length <= f64::EPSILON {
+        return point_b;
+    }
+    let ratio = distance / length;
+    Point {
+        x: point_b.x - ratio * x_diff,
+        y: point_b.y - ratio * y_diff,
+    }
+}
+
+fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
+    if points.len() < 2 {
+        return points.to_vec();
+    }
+
+    let start_offset = if edge.arrow_start == Arrow::Normal {
+        4.0
+    } else {
+        0.0
+    };
+    let end_offset = if edge.arrow_end == Arrow::Normal {
+        4.0
+    } else {
+        0.0
+    };
+
+    let start = points[0];
+    let end = points[points.len() - 1];
+    let direction_x = if start.x < end.x { "left" } else { "right" };
+    let direction_y = if start.y < end.y { "down" } else { "up" };
+
+    let mut out = Vec::with_capacity(points.len());
+    for (i, point) in points.iter().enumerate() {
+        let mut offset_x = 0.0;
+        if i == 0 && start_offset > 0.0 {
+            offset_x = marker_offset_component(points[0], points[1], start_offset, true);
+        } else if i == points.len() - 1 && end_offset > 0.0 {
+            offset_x = marker_offset_component(
+                points[points.len() - 1],
+                points[points.len() - 2],
+                end_offset,
+                true,
+            );
+        }
+
+        let diff_end = (point.x - end.x).abs();
+        let diff_in_y_end = (point.y - end.y).abs();
+        let diff_start = (point.x - start.x).abs();
+        let diff_in_y_start = (point.y - start.y).abs();
+        let extra_room = 1.0;
+
+        if end_offset > 0.0 && diff_end < end_offset && diff_end > 0.0 && diff_in_y_end < end_offset
+        {
+            let mut adjustment = end_offset + extra_room - diff_end;
+            if direction_x == "right" {
+                adjustment *= -1.0;
+            }
+            offset_x -= adjustment;
+        }
+
+        if start_offset > 0.0
+            && diff_start < start_offset
+            && diff_start > 0.0
+            && diff_in_y_start < start_offset
+        {
+            let mut adjustment = start_offset + extra_room - diff_start;
+            if direction_x == "right" {
+                adjustment *= -1.0;
+            }
+            offset_x += adjustment;
+        }
+
+        let mut offset_y = 0.0;
+        if i == 0 && start_offset > 0.0 {
+            offset_y = marker_offset_component(points[0], points[1], start_offset, false);
+        } else if i == points.len() - 1 && end_offset > 0.0 {
+            offset_y = marker_offset_component(
+                points[points.len() - 1],
+                points[points.len() - 2],
+                end_offset,
+                false,
+            );
+        }
+
+        let diff_end_y = (point.y - end.y).abs();
+        let diff_in_x_end = (point.x - end.x).abs();
+        let diff_start_y = (point.y - start.y).abs();
+        let diff_in_x_start = (point.x - start.x).abs();
+
+        if end_offset > 0.0
+            && diff_end_y < end_offset
+            && diff_end_y > 0.0
+            && diff_in_x_end < end_offset
+        {
+            let mut adjustment = end_offset + extra_room - diff_end_y;
+            if direction_y == "up" {
+                adjustment *= -1.0;
+            }
+            offset_y -= adjustment;
+        }
+
+        if start_offset > 0.0
+            && diff_start_y < start_offset
+            && diff_start_y > 0.0
+            && diff_in_x_start < start_offset
+        {
+            let mut adjustment = start_offset + extra_room - diff_start_y;
+            if direction_y == "up" {
+                adjustment *= -1.0;
+            }
+            offset_y += adjustment;
+        }
+
+        out.push(Point {
+            x: point.x + offset_x,
+            y: point.y + offset_y,
+        });
+    }
+
+    out
+}
+
+fn marker_offset_component(point_a: Point, point_b: Point, offset: f64, use_x: bool) -> f64 {
+    let delta_x = point_b.x - point_a.x;
+    let delta_y = point_b.y - point_a.y;
+    let angle = if delta_x.abs() < f64::EPSILON {
+        if delta_y >= 0.0 {
+            std::f64::consts::FRAC_PI_2
+        } else {
+            -std::f64::consts::FRAC_PI_2
+        }
+    } else {
+        (delta_y / delta_x).atan()
+    };
+
+    if use_x {
+        offset * angle.cos() * if delta_x >= 0.0 { 1.0 } else { -1.0 }
+    } else {
+        offset * angle.sin().abs() * if delta_y >= 0.0 { 1.0 } else { -1.0 }
+    }
 }
 
 fn intersect_svg_node(rect: &Rect, point: Point, shape: Shape) -> Point {
