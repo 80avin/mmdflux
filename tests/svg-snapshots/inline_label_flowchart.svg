@@ -1,90 +1,90 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="825.60" height="1183.20" viewBox="0 0 825.60 1183.20" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="1298.40" height="2151.00" viewBox="0 0 1298.40 2151.00" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="22.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(4.00,4.00)">
+  <g transform="translate(8.50,8.50)">
     <g class="edgePaths">
-      <path d="M408.70,56.80 L408.70,81.80 L408.70,106.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M380.27,135.60 L330.90,160.60 L330.90,185.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M289.38,214.40 L217.30,239.40 L217.30,264.40 L217.30,318.20 L234.50,372.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M205.06,399.56 L99.90,440.20 L99.90,479.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M84.44,508.40 L57.60,533.40 L57.60,587.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-end="url(#arrowhead)" />
-      <path d="M115.36,508.40 L142.20,533.40 L142.20,587.20 L142.20,641.00 L142.20,666.00 L142.20,719.80 L142.20,744.80 L142.20,798.60 L142.20,852.40 L142.20,906.20 L142.20,960.00 L142.20,1013.80 L494.50,1047.93" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M263.24,400.80 L329.30,440.20 L329.30,479.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M304.65,508.40 L237.20,547.80 L237.20,587.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M351.46,508.40 L412.10,547.80 L412.10,587.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M395.69,616.00 L367.20,641.00 L367.20,666.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M367.20,694.80 L367.20,719.80 L367.20,744.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M367.20,773.60 L367.20,798.60 L367.20,852.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M374.53,881.20 L394.60,920.60 L427.48,960.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M443.22,960.00 L457.10,906.20 L457.10,852.40 L457.10,798.60 L457.10,744.80 L457.10,719.80 L457.10,666.00 L457.10,641.00 L428.55,616.00" stroke="#333" stroke-width="2.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M359.87,881.20 L339.80,920.60 L279.16,960.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M237.20,616.00 L237.20,641.00 L237.20,666.00 L237.20,719.80 L237.20,744.80 L237.20,798.60 L237.20,852.40 L237.20,906.20 L252.82,960.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M257.00,988.80 L257.00,1013.80 L494.50,1045.86" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M392.50,208.67 L610.90,239.40 L610.90,264.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M618.88,293.20 L640.70,332.60 L640.70,372.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M640.70,400.80 L640.70,425.80 L640.70,479.60 L640.70,533.40 L640.70,587.20 L640.70,641.00 L640.70,666.00 L640.70,719.80 L640.70,744.80 L640.70,798.60 L640.70,852.40 L640.70,906.20 L640.70,960.00 L640.70,1013.80 L582.45,1038.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M586.33,293.20 L519.10,332.60 L273.14,379.86" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M475.10,128.53 L765.60,160.60 L765.60,185.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M765.60,214.40 L765.60,239.40 L765.60,264.40 L765.60,318.20 L765.60,372.00 L765.60,425.80 L765.60,479.60 L765.60,533.40 L765.60,587.20 L765.60,641.00 L765.60,666.00 L765.60,719.80 L765.60,744.80 L765.60,798.60 L765.60,852.40 L765.60,906.20 L765.60,960.00 L765.60,1013.80 L603.30,1043.31" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M415.83,773.60 L548.90,813.00 L548.90,852.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M548.90,881.20 L548.90,906.20 L548.90,960.00 L548.90,1013.80 L548.90,1038.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-end="url(#arrowhead)" />
-      <path d="M548.90,1067.60 L548.90,1092.60 L548.90,1117.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M639.05,92.70 L639.05,117.70 L639.05,142.70" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M562.23,224.10 L515.05,249.10 L515.05,274.10" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M412.39,355.50 L349.32,380.50 L349.32,405.50 L349.32,511.90 L362.14,576.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M307.90,680.70 L167.40,756.60 L167.40,801.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M152.48,882.80 L102.60,1018.90 L102.60,1083.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-end="url(#arrowhead)" />
+      <path d="M182.32,882.80 L232.20,1018.90 L232.20,1083.50 L232.20,1189.90 L232.20,1214.90 L232.20,1321.30 L232.20,1346.30 L232.20,1452.70 L232.20,1517.30 L232.20,1712.80 L232.20,1777.40 L232.20,1883.80 L750.40,1938.77" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M443.20,699.56 L512.85,756.60 L512.85,801.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M419.53,993.90 L376.10,1038.70 L376.10,1083.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M602.16,993.90 L643.72,1038.70 L643.72,1083.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M601.37,1164.90 L575.35,1189.90 L575.35,1214.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M575.35,1296.30 L575.35,1321.30 L575.35,1346.30" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M575.35,1427.70 L575.35,1452.70 L575.35,1517.30" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M606.77,1687.80 L623.27,1732.60 L659.10,1777.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M699.55,1777.40 L712.10,1712.80 L712.10,1517.30 L712.10,1452.70 L712.10,1346.30 L712.10,1321.30 L712.10,1214.90 L712.10,1189.90 L686.08,1164.90" stroke="#333" stroke-width="2.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M545.92,1687.80 L530.45,1732.60 L461.87,1777.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M376.10,1164.90 L376.10,1189.90 L376.10,1214.90 L376.10,1321.30 L376.10,1346.30 L376.10,1452.70 L376.10,1517.30 L376.10,1712.80 L390.50,1777.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M399.57,1858.80 L399.57,1883.80 L750.40,1934.79" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M626.15,331.43 L953.87,380.50 L953.87,405.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M971.59,486.90 L991.10,531.70 L991.10,576.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M991.10,657.90 L991.10,736.80 L991.10,801.40 L991.10,1018.90 L991.10,1083.50 L991.10,1189.90 L991.10,1214.90 L991.10,1321.30 L991.10,1346.30 L991.10,1452.70 L991.10,1517.30 L991.10,1712.80 L991.10,1777.40 L991.10,1883.80 L938.02,1908.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M887.47,486.90 L814.37,531.70 L443.20,626.81" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M756.75,197.53 L1186.50,249.10 L1186.50,274.10" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M1186.50,355.50 L1186.50,380.50 L1186.50,405.50 L1186.50,511.90 L1186.50,576.50 L1186.50,736.80 L1186.50,801.40 L1186.50,1018.90 L1186.50,1083.50 L1186.50,1189.90 L1186.50,1214.90 L1186.50,1321.30 L1186.50,1346.30 L1186.50,1452.70 L1186.50,1517.30 L1186.50,1712.80 L1186.50,1777.40 L1186.50,1883.80 L952.80,1929.65" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M677.10,1418.49 L851.60,1472.50 L851.60,1517.30" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M851.60,1598.70 L851.60,1712.80 L851.60,1777.40 L851.60,1883.80 L851.60,1908.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-end="url(#arrowhead)" />
+      <path d="M851.60,1990.20 L851.60,2015.20 L851.60,2040.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
-      <text x="99.90" y="440.20" text-anchor="middle" dominant-baseline="middle" fill="#333">no</text>
-      <text x="329.30" y="440.20" text-anchor="middle" dominant-baseline="middle" fill="#333">yes</text>
-      <text x="237.20" y="547.80" text-anchor="middle" dominant-baseline="middle" fill="#333">sync</text>
-      <text x="412.10" y="547.80" text-anchor="middle" dominant-baseline="middle" fill="#333">async</text>
-      <text x="394.60" y="920.60" text-anchor="middle" dominant-baseline="middle" fill="#333">no</text>
-      <text x="339.80" y="920.60" text-anchor="middle" dominant-baseline="middle" fill="#333">yes</text>
-      <text x="640.70" y="332.60" text-anchor="middle" dominant-baseline="middle" fill="#333">hit</text>
-      <text x="519.10" y="332.60" text-anchor="middle" dominant-baseline="middle" fill="#333">miss</text>
-      <text x="548.90" y="813.00" text-anchor="middle" dominant-baseline="middle" fill="#333">warn</text>
+      <text x="167.40" y="756.60" text-anchor="middle" dominant-baseline="middle" fill="#333">no</text>
+      <text x="512.85" y="756.60" text-anchor="middle" dominant-baseline="middle" fill="#333">yes</text>
+      <text x="376.10" y="1038.70" text-anchor="middle" dominant-baseline="middle" fill="#333">sync</text>
+      <text x="643.72" y="1038.70" text-anchor="middle" dominant-baseline="middle" fill="#333">async</text>
+      <text x="623.27" y="1732.60" text-anchor="middle" dominant-baseline="middle" fill="#333">no</text>
+      <text x="530.45" y="1732.60" text-anchor="middle" dominant-baseline="middle" fill="#333">yes</text>
+      <text x="991.10" y="531.70" text-anchor="middle" dominant-baseline="middle" fill="#333">hit</text>
+      <text x="814.37" y="531.70" text-anchor="middle" dominant-baseline="middle" fill="#333">miss</text>
+      <text x="851.60" y="1472.50" text-anchor="middle" dominant-baseline="middle" fill="#333">warn</text>
     </g>
     <g class="nodes">
-      <ellipse cx="548.90" cy="1142.40" rx="24.80" ry="24.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="548.90" y="1142.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Done</text>
-      <rect x="492.10" y="852.40" width="113.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="548.90" y="866.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Page On-call</text>
-      <rect x="721.60" y="185.60" width="88.00" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="765.60" y="200.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Audit Log</text>
-      <rect x="550.10" y="264.40" width="121.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="610.90" y="278.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Lookup Cache</text>
-      <rect x="581.50" y="372.00" width="118.40" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="640.70" y="386.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Serve Cached</text>
-      <rect x="342.30" y="106.80" width="132.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="408.70" y="121.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Ingest Request</text>
-      <rect x="494.50" y="1038.80" width="108.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="548.90" y="1053.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Emit Metrics</text>
-      <rect x="8.00" y="587.20" width="99.20" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="57.60" y="601.60" text-anchor="middle" dominant-baseline="middle" fill="#333">Notify User</text>
-      <rect x="269.30" y="185.60" width="123.20" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="330.90" y="200.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Parse Payload</text>
-      <rect x="196.20" y="960.00" width="121.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="257.00" y="974.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Persist Result</text>
-      <rect x="312.40" y="744.80" width="109.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="367.20" y="759.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Process Job</text>
-      <rect x="355.70" y="587.20" width="112.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="412.10" y="601.60" text-anchor="middle" dominant-baseline="middle" fill="#333">Enqueue Job</text>
-      <rect x="69.50" y="479.60" width="60.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="99.90" y="494.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Reject</text>
-      <rect x="413.50" y="960.00" width="52.00" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="439.50" y="974.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Retry</text>
-      <polygon points="329.30,479.60 387.26,494.00 329.30,508.40 271.34,494.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="329.30" y="494.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Route Type</text>
-      <ellipse cx="408.70" cy="32.40" rx="24.40" ry="24.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="408.70" y="32.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
-      <polygon points="367.20,852.40 415.96,866.80 367.20,881.20 318.44,866.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="367.20" y="866.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Success?</text>
-      <rect x="178.00" y="587.20" width="118.40" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="237.20" y="601.60" text-anchor="middle" dominant-baseline="middle" fill="#333">Sync Pipeline</text>
-      <polygon points="239.10,372.00 273.14,386.40 239.10,400.80 205.06,386.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="239.10" y="386.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Valid?</text>
-      <rect x="315.20" y="666.00" width="104.00" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="367.20" y="680.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Worker Pool</text>
+      <ellipse cx="851.60" cy="2083.10" rx="42.90" ry="42.90" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="851.60" y="2083.10" text-anchor="middle" dominant-baseline="middle" fill="#333">Done</text>
+      <rect x="747.10" y="1517.30" width="209.00" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="851.60" y="1558.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Page On-call</text>
+      <rect x="1099.60" y="274.10" width="173.80" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="1186.50" y="314.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Audit Log</text>
+      <rect x="843.87" y="405.50" width="220.00" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="953.87" y="446.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Lookup Cache</text>
+      <rect x="883.30" y="576.50" width="215.60" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="991.10" y="617.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Serve Cached</text>
+      <rect x="521.35" y="142.70" width="235.40" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="639.05" y="183.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Ingest Request</text>
+      <rect x="750.40" y="1908.80" width="202.40" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="851.60" y="1949.50" text-anchor="middle" dominant-baseline="middle" fill="#333">Emit Metrics</text>
+      <rect x="8.00" y="1083.50" width="189.20" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="102.60" y="1124.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Notify User</text>
+      <rect x="403.95" y="274.10" width="222.20" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="515.05" y="314.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Parse Payload</text>
+      <rect x="289.57" y="1777.40" width="220.00" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="399.57" y="1818.10" text-anchor="middle" dominant-baseline="middle" fill="#333">Persist Result</text>
+      <rect x="473.60" y="1346.30" width="203.50" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="575.35" y="1387.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Process Job</text>
+      <rect x="539.77" y="1083.50" width="207.90" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="643.72" y="1124.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Enqueue Job</text>
+      <rect x="99.20" y="801.40" width="136.40" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="167.40" y="842.10" text-anchor="middle" dominant-baseline="middle" fill="#333">Reject</text>
+      <rect x="629.50" y="1777.40" width="124.30" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="691.65" y="1818.10" text-anchor="middle" dominant-baseline="middle" fill="#333">Retry</text>
+      <polygon points="512.85,801.40 609.10,897.65 512.85,993.90 416.60,897.65" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="512.85" y="897.65" text-anchor="middle" dominant-baseline="middle" fill="#333">Route Type</text>
+      <ellipse cx="639.05" cy="50.35" rx="42.35" ry="42.35" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="639.05" y="50.35" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
+      <polygon points="575.35,1517.30 660.60,1602.55 575.35,1687.80 490.10,1602.55" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="575.35" y="1602.55" text-anchor="middle" dominant-baseline="middle" fill="#333">Success?</text>
+      <rect x="268.30" y="1083.50" width="215.60" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="376.10" y="1124.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Sync Pipeline</text>
+      <polygon points="375.55,576.50 443.20,644.15 375.55,711.80 307.90,644.15" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="375.55" y="644.15" text-anchor="middle" dominant-baseline="middle" fill="#333">Valid?</text>
+      <rect x="477.45" y="1214.90" width="195.80" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="575.35" y="1255.60" text-anchor="middle" dominant-baseline="middle" fill="#333">Worker Pool</text>
     </g>
   </g>
 </svg>

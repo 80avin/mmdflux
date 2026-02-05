@@ -1,29 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="237.20" height="210.40" viewBox="0 0 237.20 210.40" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="413.00" height="377.20" viewBox="0 0 413.00 377.20" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="22.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(4.00,4.00)">
+  <g transform="translate(8.50,8.50)">
     <g class="edgePaths">
-      <path d="M48.80,36.80 L48.80,61.80 L90.55,86.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M180.40,36.80 L180.40,61.80 L138.65,86.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M91.14,115.60 L50.40,140.60 L50.40,165.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M138.06,115.60 L178.80,140.60 L178.80,165.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M90.50,89.40 L90.50,114.40 L132.55,140.10" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M305.50,89.40 L305.50,114.40 L263.45,140.10" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M132.77,220.80 L92.70,245.80 L92.70,270.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M263.23,220.80 L303.30,245.80 L303.30,270.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
-      <rect x="8.00" y="8.00" width="81.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="48.80" y="22.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Source 1</text>
-      <rect x="139.60" y="8.00" width="81.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="180.40" y="22.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Source 2</text>
-      <rect x="86.20" y="86.80" width="56.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="114.60" y="101.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Merge</text>
-      <rect x="11.20" y="165.60" width="78.40" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="50.40" y="180.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Output 1</text>
-      <rect x="139.60" y="165.60" width="78.40" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="178.80" y="180.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Output 2</text>
+      <rect x="8.00" y="8.00" width="165.00" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="90.50" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Source 1</text>
+      <rect x="223.00" y="8.00" width="165.00" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="305.50" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Source 2</text>
+      <rect x="132.55" y="139.40" width="130.90" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="198.00" y="180.10" text-anchor="middle" dominant-baseline="middle" fill="#333">Merge</text>
+      <rect x="12.40" y="270.80" width="160.60" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="92.70" y="311.50" text-anchor="middle" dominant-baseline="middle" fill="#333">Output 1</text>
+      <rect x="223.00" y="270.80" width="160.60" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="303.30" y="311.50" text-anchor="middle" dominant-baseline="middle" fill="#333">Output 2</text>
     </g>
   </g>
 </svg>

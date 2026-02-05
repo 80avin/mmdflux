@@ -57,6 +57,14 @@ struct Cli {
     /// SVG scale factor
     #[arg(long)]
     svg_scale: Option<f64>,
+
+    /// SVG node padding on x-axis (px)
+    #[arg(long)]
+    svg_node_padding_x: Option<f64>,
+
+    /// SVG node padding on y-axis (px)
+    #[arg(long)]
+    svg_node_padding_y: Option<f64>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -122,6 +130,8 @@ fn main() -> io::Result<()> {
         cluster_ranksep: cli.cluster_ranksep,
         padding: cli.padding,
         svg_scale: cli.svg_scale,
+        svg_node_padding_x: cli.svg_node_padding_x,
+        svg_node_padding_y: cli.svg_node_padding_y,
     };
 
     // Use registry for detection and rendering

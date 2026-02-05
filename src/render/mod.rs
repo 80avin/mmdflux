@@ -30,13 +30,16 @@ use crate::graph::{Diagram, Direction};
 
 impl From<&RenderConfig> for RenderOptions {
     fn from(config: &RenderConfig) -> Self {
-        let svg = match config.svg_scale {
-            Some(scale) => SvgOptions {
-                scale,
-                ..SvgOptions::default()
-            },
-            None => SvgOptions::default(),
-        };
+        let mut svg = SvgOptions::default();
+        if let Some(scale) = config.svg_scale {
+            svg.scale = scale;
+        }
+        if let Some(padding_x) = config.svg_node_padding_x {
+            svg.node_padding_x = padding_x;
+        }
+        if let Some(padding_y) = config.svg_node_padding_y {
+            svg.node_padding_y = padding_y;
+        }
 
         RenderOptions {
             output_format: OutputFormat::Text,
@@ -58,14 +61,19 @@ pub struct SvgOptions {
     pub scale: f64,
     pub font_family: String,
     pub font_size: f64,
+    pub node_padding_x: f64,
+    pub node_padding_y: f64,
 }
 
 impl Default for SvgOptions {
     fn default() -> Self {
+        let font_size = DEFAULT_FONT_SIZE;
         Self {
             scale: 1.0,
             font_family: DEFAULT_FONT_FAMILY.to_string(),
-            font_size: DEFAULT_FONT_SIZE,
+            font_size,
+            node_padding_x: font_size * 0.8,
+            node_padding_y: font_size * 1.25,
         }
     }
 }

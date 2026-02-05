@@ -7,6 +7,8 @@ fn render_config_default() {
     assert!(config.padding.is_none());
     assert!(config.cluster_ranksep.is_none());
     assert!(config.svg_scale.is_none());
+    assert!(config.svg_node_padding_x.is_none());
+    assert!(config.svg_node_padding_y.is_none());
 }
 
 #[test]

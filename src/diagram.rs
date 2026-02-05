@@ -123,6 +123,10 @@ pub struct RenderConfig {
     pub padding: Option<usize>,
     /// SVG-specific: scale factor.
     pub svg_scale: Option<f64>,
+    /// SVG-specific: node padding on x-axis (px).
+    pub svg_node_padding_x: Option<f64>,
+    /// SVG-specific: node padding on y-axis (px).
+    pub svg_node_padding_y: Option<f64>,
 }
 
 /// Error type for rendering failures.

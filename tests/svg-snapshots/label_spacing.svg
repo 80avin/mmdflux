@@ -1,25 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="155.20" height="160.40" viewBox="0 0 155.20 160.40" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="252.95" height="285.40" viewBox="0 0 252.95 285.40" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="22.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(16.80,4.00)">
+  <g transform="translate(8.50,8.50)">
     <g class="edgePaths">
-      <path d="M47.28,36.80 L19.60,76.20 L19.60,115.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M67.52,36.80 L95.20,76.20 L95.20,115.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M85.64,89.40 L50.35,134.20 L50.35,179.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M149.76,89.40 L185.05,134.20 L185.05,179.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
-      <text x="19.60" y="76.20" text-anchor="middle" dominant-baseline="middle" fill="#333">valid</text>
-      <text x="95.20" y="76.20" text-anchor="middle" dominant-baseline="middle" fill="#333">invalid</text>
+      <text x="50.35" y="134.20" text-anchor="middle" dominant-baseline="middle" fill="#333">valid</text>
+      <text x="185.05" y="134.20" text-anchor="middle" dominant-baseline="middle" fill="#333">invalid</text>
     </g>
     <g class="nodes">
-      <rect x="45.80" y="8.00" width="23.20" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="57.40" y="22.40" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
-      <rect x="8.00" y="115.60" width="23.20" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="19.60" y="130.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
-      <rect x="83.60" y="115.60" width="23.20" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="95.20" y="130.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
+      <rect x="75.35" y="8.00" width="84.70" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="117.70" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
+      <rect x="8.00" y="179.00" width="84.70" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="50.35" y="219.70" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="142.70" y="179.00" width="84.70" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="185.05" y="219.70" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
     </g>
   </g>
 </svg>

@@ -17,7 +17,11 @@ const TEXT_COLOR: &str = "#333";
 pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let svg_options = &options.svg;
     let scale = svg_options.scale;
-    let metrics = SvgTextMetrics::new(svg_options.font_size);
+    let metrics = SvgTextMetrics::new(
+        svg_options.font_size,
+        svg_options.node_padding_x,
+        svg_options.node_padding_y,
+    );
 
     let mut config = layout_config_for_diagram(diagram, options);
     config.ranker = options.ranker;
@@ -70,14 +74,27 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 }
 
 fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node) -> (f64, f64) {
-    let (mut width, mut height) = metrics.node_dimensions(&node.label);
+    let (label_w, label_h) = metrics.measure_text_with_padding(&node.label, 0.0, 0.0);
+
+    let (mut width, mut height) = match node.shape {
+        Shape::Rectangle => (
+            label_w + metrics.node_padding_x * 4.0,
+            label_h + metrics.node_padding_y * 2.0,
+        ),
+        Shape::Diamond => {
+            let w = label_w + metrics.node_padding_x;
+            let h = label_h + metrics.node_padding_y;
+            let size = w + h;
+            (size, size)
+        }
+        _ => (
+            label_w + metrics.node_padding_x * 2.0,
+            label_h + metrics.node_padding_y * 2.0,
+        ),
+    };
 
     match node.shape {
-        Shape::Diamond
-        | Shape::Hexagon
-        | Shape::Trapezoid
-        | Shape::InvTrapezoid
-        | Shape::Asymmetric => {
+        Shape::Hexagon | Shape::Trapezoid | Shape::InvTrapezoid | Shape::Asymmetric => {
             width *= 1.15;
         }
         Shape::Circle | Shape::DoubleCircle => {
@@ -141,7 +158,8 @@ fn render_subgraphs(
 
     writer.start_group("clusters");
     for (_id, rect, title, _depth) in subgraphs {
-        let rect = scale_rect(rect, scale);
+        let rect = expand_subgraph_rect(rect, title, metrics);
+        let rect = scale_rect(&rect, scale);
         let stroke_width = fmt_f64(1.0 * scale);
         let rect_line = format!(
             "<rect class=\"subgraph\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" />",
@@ -156,7 +174,7 @@ fn render_subgraphs(
 
         if !title.trim().is_empty() {
             let title_x = rect.x + rect.width / 2.0;
-            let title_y = rect.y + metrics.padding_y * scale;
+            let title_y = rect.y + metrics.label_padding_y * scale;
             let text = format!(
                 "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"hanging\" fill=\"{color}\">{label}</text>",
                 x = fmt_f64(title_x),
@@ -806,8 +824,13 @@ fn compute_svg_bounds(
         bounds.update_rect(rect);
     }
 
-    for rect in layout.subgraph_bounds.values() {
-        bounds.update_rect(rect);
+    for (id, rect) in &layout.subgraph_bounds {
+        if let Some(sg) = diagram.subgraphs.get(id) {
+            let expanded = expand_subgraph_rect(rect, &sg.title, metrics);
+            bounds.update_rect(&expanded);
+        } else {
+            bounds.update_rect(rect);
+        }
     }
 
     for edge in &layout.edges {
@@ -849,6 +872,24 @@ fn compute_svg_bounds(
     }
 
     bounds
+}
+
+fn expand_subgraph_rect(rect: &Rect, title: &str, metrics: &SvgTextMetrics) -> Rect {
+    let has_title = !title.trim().is_empty();
+    let title_height = if has_title { metrics.line_height } else { 0.0 };
+    let top_pad = if has_title {
+        title_height + metrics.label_padding_y * 2.0
+    } else {
+        metrics.label_padding_y * 2.0
+    };
+    let bottom_pad = metrics.label_padding_y * 2.0;
+
+    Rect {
+        x: rect.x,
+        y: rect.y - top_pad,
+        width: rect.width,
+        height: rect.height + top_pad + bottom_pad,
+    }
 }
 
 fn edge_style_attrs(edge: &Edge, scale: f64) -> String {
@@ -922,7 +963,10 @@ fn compute_self_edge_paths(
     layout: &LayoutResult,
     metrics: &SvgTextMetrics,
 ) -> HashMap<usize, Vec<Point>> {
-    let pad = metrics.padding_x.max(metrics.padding_y).max(4.0);
+    let pad = metrics
+        .node_padding_x
+        .max(metrics.node_padding_y)
+        .max(4.0);
     let mut paths = HashMap::new();
 
     for edge in &layout.self_edges {
