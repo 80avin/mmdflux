@@ -9,8 +9,7 @@ fn list_fixtures() -> Vec<String> {
         .join("tests")
         .join("fixtures");
     let mut fixtures = Vec::new();
-    for entry in fs::read_dir(&dir).unwrap_or_else(|e| panic!("Failed to read fixtures dir: {e}"))
-    {
+    for entry in fs::read_dir(&dir).unwrap_or_else(|e| panic!("Failed to read fixtures dir: {e}")) {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.extension().and_then(|ext| ext.to_str()) == Some("mmd") {

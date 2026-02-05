@@ -893,7 +893,6 @@ fn compute_svg_bounds(
     bounds
 }
 
-
 fn edge_style_attrs(edge: &Edge, scale: f64) -> String {
     let stroke_width = match edge.stroke {
         Stroke::Thick => 2.0 * scale,
@@ -938,9 +937,7 @@ fn path_from_points(
         .collect();
     match curve {
         SvgEdgeCurve::Basis => path_from_points_basis(&scaled),
-        SvgEdgeCurve::Rounded => {
-            path_from_points_rounded(&scaled, curve_radius * scale)
-        }
+        SvgEdgeCurve::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
         SvgEdgeCurve::Linear => path_from_points_linear(&scaled),
     }
 }
@@ -1002,14 +999,12 @@ fn fix_corner_points(points: &[Point]) -> Vec<Point> {
         let dx_next = (next.x - curr.x).abs();
         let dy_next = (next.y - curr.y).abs();
 
-        let is_corner = (prev.x == curr.x
-            && (curr.y - next.y).abs() > 5.0
-            && dx_next > 5.0
-            && dy_prev > 5.0)
-            || (prev.y == curr.y
-                && (curr.x - next.x).abs() > 5.0
-                && dx_prev > 5.0
-                && dy_next > 5.0);
+        let is_corner =
+            (prev.x == curr.x && (curr.y - next.y).abs() > 5.0 && dx_next > 5.0 && dy_prev > 5.0)
+                || (prev.y == curr.y
+                    && (curr.x - next.x).abs() > 5.0
+                    && dx_prev > 5.0
+                    && dy_next > 5.0);
 
         if is_corner {
             corner_positions.push(i);
@@ -1459,10 +1454,7 @@ fn compute_self_edge_paths(
     layout: &LayoutResult,
     metrics: &SvgTextMetrics,
 ) -> HashMap<usize, Vec<Point>> {
-    let pad = metrics
-        .node_padding_x
-        .max(metrics.node_padding_y)
-        .max(4.0);
+    let pad = metrics.node_padding_x.max(metrics.node_padding_y).max(4.0);
     let mut paths = HashMap::new();
 
     for edge in &layout.self_edges {
