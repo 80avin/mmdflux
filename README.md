@@ -52,6 +52,8 @@ Note: SVG output is currently supported only for flowcharts; other diagram types
 
 ## Examples
 
+See the [gallery](docs/gallery.md) for rendered fixtures.
+
 ### Simple Flow (LR)
 
 Input:
