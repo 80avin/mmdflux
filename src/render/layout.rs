@@ -117,12 +117,32 @@ pub struct Layout {
 
     /// Self-edge loop data in draw coordinates.
     pub self_edges: Vec<SelfEdgeDrawData>,
+
+    /// Effective layout direction per node.
+    /// Nodes inside a direction-override subgraph use the subgraph's direction;
+    /// other nodes use the diagram's root direction.
+    pub node_directions: HashMap<String, Direction>,
 }
 
 impl Layout {
     /// Get the bounding box for a node.
     pub fn get_bounds(&self, node_id: &str) -> Option<&NodeBounds> {
         self.node_bounds.get(node_id)
+    }
+
+    /// Get the effective layout direction for an edge.
+    ///
+    /// If both endpoints share the same direction override (e.g. both are in an LR
+    /// subgraph), returns that override direction.  Otherwise returns the fallback
+    /// (typically the diagram's root direction).
+    pub fn effective_edge_direction(&self, from: &str, to: &str, fallback: Direction) -> Direction {
+        let src_dir = self.node_directions.get(from).copied().unwrap_or(fallback);
+        let tgt_dir = self.node_directions.get(to).copied().unwrap_or(fallback);
+        if src_dir == tgt_dir {
+            src_dir
+        } else {
+            fallback
+        }
     }
 }
 
@@ -965,7 +985,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         }
     }
 
-    let edge_label_positions_converted = transform_label_positions_direct(
+    let mut edge_label_positions_converted = transform_label_positions_direct(
         &result.label_positions,
         &diagram.edges,
         &ctx,
@@ -1156,6 +1176,45 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             &mut width,
             &mut height,
         );
+
+        // Invalidate waypoints and label positions for edges internal to
+        // direction-override subgraphs.  The main layout computed these for
+        // the parent direction; after reconciliation the node positions have
+        // moved, so the old waypoints are stale.  Removing them causes the
+        // edge router to use direct routing with the correct effective
+        // direction (from node_directions).
+        for sg in diagram.subgraphs.values() {
+            if sg.dir.is_none() {
+                continue;
+            }
+            let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+            for edge in &diagram.edges {
+                if sg_node_set.contains(edge.from.as_str())
+                    && sg_node_set.contains(edge.to.as_str())
+                {
+                    let key = (edge.from.clone(), edge.to.clone());
+                    edge_waypoints_final.remove(&key);
+                    edge_label_positions_converted.remove(&key);
+                }
+            }
+        }
+    }
+
+    // Build per-node effective direction map.
+    // Nodes inside a direction-override subgraph get the subgraph's direction;
+    // all other nodes get the diagram's root direction.
+    let mut node_directions: HashMap<String, Direction> = HashMap::new();
+    for node_id in diagram.nodes.keys() {
+        node_directions.insert(node_id.clone(), diagram.direction);
+    }
+    for sg in diagram.subgraphs.values() {
+        if let Some(override_dir) = sg.dir {
+            for node_id in &sg.nodes {
+                if !diagram.is_subgraph(node_id) {
+                    node_directions.insert(node_id.clone(), override_dir);
+                }
+            }
+        }
     }
 
     Layout {
@@ -1171,6 +1230,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         node_shapes,
         subgraph_bounds,
         self_edges,
+        node_directions,
     }
 }
 
@@ -3640,6 +3700,68 @@ mod tests {
                 ext_node
             );
         }
+    }
+
+    // =========================================================================
+    // Cross-Boundary Edge Routing (Phase 4, Task 4.5)
+    // =========================================================================
+
+    #[test]
+    fn cross_boundary_edge_no_panic() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+        use crate::render::RenderOptions;
+        use crate::render::render;
+
+        let input =
+            "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA --> B\nend\nC --> A\nB --> D\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let options = RenderOptions::default();
+
+        // Full render pipeline should not panic
+        let output = render(&diagram, &options);
+        assert!(output.contains("A"));
+        assert!(output.contains("B"));
+        assert!(output.contains("C"));
+        assert!(output.contains("D"));
+        assert!(output.contains("Horizontal"));
+    }
+
+    #[test]
+    fn node_effective_direction_populated() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Group]\ndirection LR\nA --> B\nend\nC --> A\nB --> D\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        // Nodes inside the LR subgraph should have LR effective direction
+        assert_eq!(
+            layout.node_directions.get("A"),
+            Some(&Direction::LeftRight),
+            "A should have LR direction"
+        );
+        assert_eq!(
+            layout.node_directions.get("B"),
+            Some(&Direction::LeftRight),
+            "B should have LR direction"
+        );
+
+        // Nodes outside the subgraph should have the parent direction (TD)
+        assert_eq!(
+            layout.node_directions.get("C"),
+            Some(&Direction::TopDown),
+            "C should have TD direction"
+        );
+        assert_eq!(
+            layout.node_directions.get("D"),
+            Some(&Direction::TopDown),
+            "D should have TD direction"
+        );
     }
 
     #[test]

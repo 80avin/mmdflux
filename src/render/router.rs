@@ -1198,21 +1198,26 @@ pub fn compute_attachment_plan(
             .and_then(|wps| wps.last().copied())
             .unwrap_or((src_bounds.center_x(), src_bounds.center_y()));
 
+        // Determine the effective direction for this edge.
+        // Internal edges within a direction-override subgraph use that
+        // subgraph's direction; cross-boundary edges use the diagram direction.
+        let edge_dir = layout.effective_edge_direction(&edge.from, &edge.to, direction);
+
         // Determine faces for this edge.
         // Backward edges without dagre waypoints use synthetic routing (around
         // the right/bottom of nodes), so they must be classified on the face
         // that matches the synthetic path — not the geometric approach angle.
-        let is_backward = is_backward_edge(src_bounds, tgt_bounds, direction);
+        let is_backward = is_backward_edge(src_bounds, tgt_bounds, edge_dir);
         let has_dagre_waypoints = waypoints.is_some_and(|wps| !wps.is_empty());
         let (src_face, tgt_face) = if is_backward && !has_dagre_waypoints {
-            backward_routing_faces(direction)
-        } else if matches!(direction, Direction::TopDown | Direction::BottomTop) && !is_backward {
+            backward_routing_faces(edge_dir)
+        } else if matches!(edge_dir, Direction::TopDown | Direction::BottomTop) && !is_backward {
             // For forward edges in vertical layouts, stick to canonical faces to
             // keep fan-in/out attachment spreading stable.
-            edge_faces(direction, false)
+            edge_faces(edge_dir, false)
         } else {
-            match direction {
-                Direction::LeftRight | Direction::RightLeft => edge_faces(direction, is_backward),
+            match edge_dir {
+                Direction::LeftRight | Direction::RightLeft => edge_faces(edge_dir, is_backward),
                 _ => (
                     classify_face(src_bounds, src_approach, src_shape),
                     classify_face(tgt_bounds, tgt_approach, tgt_shape),
@@ -1404,10 +1409,11 @@ pub fn route_all_edges(
                 .get(&i)
                 .map(|ov| (ov.source, ov.target, ov.source_first_vertical))
                 .unwrap_or((None, None, false));
+            let edge_dir = layout.effective_edge_direction(&edge.from, &edge.to, diagram_direction);
             route_edge(
                 edge,
                 layout,
-                diagram_direction,
+                edge_dir,
                 src_override,
                 tgt_override,
                 src_first_vertical,
