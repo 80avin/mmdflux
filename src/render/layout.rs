@@ -3524,6 +3524,52 @@ mod tests {
     }
 
     #[test]
+    fn direction_override_bt_subgraph_taller_than_wide() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        // BT subgraph inside an LR parent: subgraph should be taller than wide
+        let input =
+            "graph LR\nsubgraph sg1[Vertical]\ndirection BT\nA[Top] --> B[Mid] --> C[Bot]\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let sg = &layout.subgraph_bounds["sg1"];
+        assert!(
+            sg.height > sg.width,
+            "BT subgraph should be taller than wide: {}w x {}h",
+            sg.width,
+            sg.height
+        );
+    }
+
+    #[test]
+    fn direction_override_subgraph_title_width_minimum() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        // Subgraph with a long title should have bounds wide enough for the title
+        let input =
+            "graph TD\nsubgraph sg1[A Very Long Section Title]\ndirection LR\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let sg = &layout.subgraph_bounds["sg1"];
+        let title = "A Very Long Section Title";
+        // Title with padding characters on either side
+        assert!(
+            sg.width >= title.len(),
+            "Subgraph width ({}) should accommodate title length ({})",
+            sg.width,
+            title.len()
+        );
+    }
+
+    #[test]
     fn direction_override_nodes_inside_subgraph_bounds() {
         use crate::graph::build_diagram;
         use crate::parser::parse_flowchart;
