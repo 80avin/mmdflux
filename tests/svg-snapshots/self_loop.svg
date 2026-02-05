@@ -1,18 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="221.40" height="114.40" viewBox="0 0 221.40 114.40" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="22.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="161.10" height="70.00" viewBox="0 0 161.10 70.00" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    <marker id="arrowhead" viewBox="0 0 8.00 8.00" refX="8.00" refY="4.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8.00,4.00 L0,8.00 Z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(8.50,8.50)">
+  <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M160.90,8.00 L189.80,8.00 Q196.40,8.00 196.40,14.60 L196.40,82.80 Q196.40,89.40 189.80,89.40 L160.90,89.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M117.60,18.61 L123.52,16.85 C129.43,15.08 141.27,11.54 147.18,18.77 C153.10,26.00 153.10,44.00 147.18,51.23 C141.27,58.46 129.43,54.92 123.52,53.15 L117.60,51.39" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
-      <rect x="8.00" y="8.00" width="152.90" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="84.45" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Process</text>
+      <rect x="8.00" y="8.00" width="109.60" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="62.80" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Process</text>
     </g>
   </g>
 </svg>

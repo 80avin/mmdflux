@@ -1,33 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="160.60" height="798.40" viewBox="0 0 160.60 798.40" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="22.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="109.76" height="582.00" viewBox="0 0 109.76 582.00" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    <marker id="arrowhead" viewBox="0 0 8.00 8.00" refX="8.00" refY="4.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8.00,4.00 L0,8.00 Z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(8.50,8.50)">
+  <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M71.80,89.40 L71.80,134.20 L71.80,179.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M71.80,260.40 L71.80,305.20 L71.80,350.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-end="url(#arrowhead)" />
-      <path d="M71.80,431.40 L71.80,476.20 L71.80,521.00" stroke="#333" stroke-width="2.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M71.80,602.40 L71.80,647.20 L71.80,692.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M54.88,62.00 L54.88,68.17 C54.88,74.33 54.88,86.67 54.88,99.00 C54.88,111.33 54.88,123.67 54.88,129.83 L54.88,136.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M54.88,190.00 L54.88,196.17 C54.88,202.33 54.88,214.67 54.88,227.00 C54.88,239.33 54.88,251.67 54.88,257.83 L54.88,264.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-end="url(#arrowhead)" />
+      <path d="M54.88,318.00 L54.88,324.17 C54.88,330.33 54.88,342.67 54.88,355.00 C54.88,367.33 54.88,379.67 54.88,385.83 L54.88,392.00" stroke="#333" stroke-width="2.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M54.88,446.00 L54.88,452.17 C54.88,458.33 54.88,470.67 54.88,483.00 C54.88,495.33 54.88,507.67 54.88,513.83 L54.88,520.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
-      <text x="71.80" y="134.20" text-anchor="middle" dominant-baseline="middle" fill="#333">yes</text>
-      <text x="71.80" y="305.20" text-anchor="middle" dominant-baseline="middle" fill="#333">retry</text>
-      <text x="71.80" y="476.20" text-anchor="middle" dominant-baseline="middle" fill="#333">final step</text>
-      <text x="71.80" y="647.20" text-anchor="middle" dominant-baseline="middle" fill="#333">no</text>
+      <text x="54.88" y="99.00" text-anchor="middle" dominant-baseline="middle" fill="#333">yes</text>
+      <text x="54.88" y="227.00" text-anchor="middle" dominant-baseline="middle" fill="#333">retry</text>
+      <text x="54.88" y="355.00" text-anchor="middle" dominant-baseline="middle" fill="#333">final step</text>
+      <text x="54.88" y="483.00" text-anchor="middle" dominant-baseline="middle" fill="#333">no</text>
     </g>
     <g class="nodes">
-      <rect x="11.85" y="8.00" width="119.90" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="71.80" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
-      <rect x="13.50" y="179.00" width="116.60" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="71.80" y="219.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Next</text>
-      <rect x="8.00" y="350.00" width="127.60" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="71.80" y="390.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Again</text>
-      <rect x="11.30" y="521.00" width="121.00" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="71.80" y="561.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Done</text>
-      <rect x="13.50" y="692.00" width="116.60" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="71.80" y="732.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Stop</text>
+      <rect x="9.68" y="8.00" width="90.40" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="54.88" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
+      <rect x="11.12" y="136.00" width="87.52" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="54.88" y="163.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Next</text>
+      <rect x="8.00" y="264.00" width="93.76" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="54.88" y="291.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Again</text>
+      <rect x="10.00" y="392.00" width="89.76" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="54.88" y="419.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Done</text>
+      <rect x="11.12" y="520.00" width="87.52" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="54.88" y="547.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Stop</text>
     </g>
   </g>
 </svg>

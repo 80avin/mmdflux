@@ -3,7 +3,7 @@
 /// Mermaid default font family for SVG output.
 pub const DEFAULT_FONT_FAMILY: &str = "\"trebuchet ms\", verdana, arial, sans-serif";
 /// Default font size (px) for SVG output.
-pub const DEFAULT_FONT_SIZE: f64 = 22.0;
+pub const DEFAULT_FONT_SIZE: f64 = 16.0;
 
 #[derive(Debug, Clone)]
 pub struct SvgTextMetrics {
@@ -19,11 +19,11 @@ impl SvgTextMetrics {
     pub fn new(font_size: f64, node_padding_x: f64, node_padding_y: f64) -> Self {
         Self {
             font_size,
-            line_height: font_size * 1.2,
+            line_height: font_size * 1.5,
             node_padding_x,
             node_padding_y,
-            label_padding_x: font_size * 0.4,
-            label_padding_y: font_size * 0.3,
+            label_padding_x: 0.0,
+            label_padding_y: 0.0,
         }
     }
 
@@ -56,11 +56,11 @@ impl SvgTextMetrics {
 
     fn char_width_ratio(&self, c: char) -> f64 {
         match c {
-            'i' | 'l' | '!' | '|' | '.' | ',' | ':' | ';' | '\'' => 0.3,
-            'f' | 'j' | 't' | 'r' => 0.35,
-            'm' | 'w' | 'M' | 'W' => 0.75,
-            'A'..='Z' => 0.65,
-            _ => 0.55,
+            'i' | 'l' | '!' | '|' | '.' | ',' | ':' | ';' | '\'' => 0.25,
+            'f' | 'j' | 't' | 'r' => 0.32,
+            'm' | 'w' | 'M' | 'W' => 0.7,
+            'A'..='Z' => 0.48,
+            _ => 0.46,
         }
     }
 }

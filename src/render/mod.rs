@@ -46,6 +46,9 @@ impl From<&RenderConfig> for RenderOptions {
         if let Some(radius) = config.svg_edge_curve_radius {
             svg.edge_curve_radius = radius;
         }
+        if let Some(padding) = config.svg_diagram_padding {
+            svg.diagram_padding = padding;
+        }
 
         RenderOptions {
             output_format: OutputFormat::Text,
@@ -71,6 +74,7 @@ pub struct SvgOptions {
     pub node_padding_y: f64,
     pub edge_curve: SvgEdgeCurve,
     pub edge_curve_radius: f64,
+    pub diagram_padding: f64,
 }
 
 impl Default for SvgOptions {
@@ -80,10 +84,11 @@ impl Default for SvgOptions {
             scale: 1.0,
             font_family: DEFAULT_FONT_FAMILY.to_string(),
             font_size,
-            node_padding_x: font_size * 0.8,
-            node_padding_y: font_size * 1.25,
-            edge_curve: SvgEdgeCurve::Rounded,
-            edge_curve_radius: font_size * 0.3,
+            node_padding_x: 15.0,
+            node_padding_y: 15.0,
+            edge_curve: SvgEdgeCurve::Basis,
+            edge_curve_radius: 5.0,
+            diagram_padding: 8.0,
         }
     }
 }

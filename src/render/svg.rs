@@ -25,6 +25,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 
     let mut config = layout_config_for_diagram(diagram, options);
     config.ranker = options.ranker;
+    if options.cluster_ranksep.is_none() {
+        // Mermaid's dagre renderer does not add extra rank separation for clusters.
+        // Keep the default for text output but disable it for SVG unless overridden.
+        config.dagre_cluster_rank_sep = 0.0;
+    }
 
     let layout = build_dagre_layout(
         diagram,
@@ -39,7 +44,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 
     let self_edge_paths = compute_self_edge_paths(diagram, &layout, &metrics);
     let bounds = compute_svg_bounds(diagram, &layout, &metrics, &self_edge_paths);
-    let padding = (svg_options.font_size * 0.75).max(8.0);
+    let padding = svg_options.diagram_padding;
     let (min_x, min_y, max_x, max_y) = bounds.finalize(layout.width, layout.height);
     let width = (max_x - min_x + padding * 2.0) * scale;
     let height = (max_y - min_y + padding * 2.0) * scale;
@@ -117,7 +122,7 @@ fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node) -> (f64, f64) {
 }
 
 fn render_defs(writer: &mut SvgWriter, scale: f64) {
-    let size = 10.0 * scale;
+    let size = 8.0 * scale;
     let half = size / 2.0;
 
     writer.start_tag("<defs>");
@@ -166,8 +171,7 @@ fn render_subgraphs(
 
     writer.start_group("clusters");
     for (_id, rect, title, _depth) in subgraphs {
-        let rect = expand_subgraph_rect(rect, title, metrics);
-        let rect = scale_rect(&rect, scale);
+        let rect = scale_rect(rect, scale);
         let stroke_width = fmt_f64(1.0 * scale);
         let rect_line = format!(
             "<rect class=\"subgraph\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" />",
@@ -182,7 +186,7 @@ fn render_subgraphs(
 
         if !title.trim().is_empty() {
             let title_x = rect.x + rect.width / 2.0;
-            let title_y = rect.y + metrics.label_padding_y * scale;
+            let title_y = rect.y + metrics.font_size * 0.25;
             let text = format!(
                 "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"hanging\" fill=\"{color}\">{label}</text>",
                 x = fmt_f64(title_x),
@@ -224,6 +228,7 @@ fn render_edges(
         let Some(edge) = diagram.edges.get(index) else {
             continue;
         };
+        let points = adjust_edge_points_for_shapes(diagram, layout, edge, &points);
         let d = path_from_points(&points, scale, edge_curve, edge_curve_radius);
         if d.is_empty() {
             continue;
@@ -834,16 +839,15 @@ fn compute_svg_bounds(
         bounds.update_rect(rect);
     }
 
-    for (id, rect) in &layout.subgraph_bounds {
-        if let Some(sg) = diagram.subgraphs.get(id) {
-            let expanded = expand_subgraph_rect(rect, &sg.title, metrics);
-            bounds.update_rect(&expanded);
-        } else {
-            bounds.update_rect(rect);
-        }
+    for rect in layout.subgraph_bounds.values() {
+        bounds.update_rect(rect);
     }
 
+    let edge_count = diagram.edges.len();
     for edge in &layout.edges {
+        if edge.index >= edge_count {
+            continue;
+        }
         for point in &edge.points {
             bounds.update_point(point.x, point.y);
         }
@@ -884,23 +888,6 @@ fn compute_svg_bounds(
     bounds
 }
 
-fn expand_subgraph_rect(rect: &Rect, title: &str, metrics: &SvgTextMetrics) -> Rect {
-    let has_title = !title.trim().is_empty();
-    let title_height = if has_title { metrics.line_height } else { 0.0 };
-    let top_pad = if has_title {
-        title_height + metrics.label_padding_y * 2.0
-    } else {
-        metrics.label_padding_y * 2.0
-    };
-    let bottom_pad = metrics.label_padding_y * 2.0;
-
-    Rect {
-        x: rect.x,
-        y: rect.y - top_pad,
-        width: rect.width,
-        height: rect.height + top_pad + bottom_pad,
-    }
-}
 
 fn edge_style_attrs(edge: &Edge, scale: f64) -> String {
     let stroke_width = match edge.stroke {
@@ -945,10 +932,105 @@ fn path_from_points(
         .map(|point| (point.x * scale, point.y * scale))
         .collect();
     match curve {
+        SvgEdgeCurve::Basis => path_from_points_basis(&scaled),
         SvgEdgeCurve::Rounded => {
             path_from_points_rounded(&scaled, curve_radius * scale)
         }
         SvgEdgeCurve::Linear => path_from_points_linear(&scaled),
+    }
+}
+
+fn adjust_edge_points_for_shapes(
+    diagram: &Diagram,
+    layout: &LayoutResult,
+    edge: &Edge,
+    points: &[Point],
+) -> Vec<Point> {
+    if points.len() < 2 {
+        return points.to_vec();
+    }
+
+    let Some(from_rect) = layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())) else {
+        return points.to_vec();
+    };
+    let Some(to_rect) = layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())) else {
+        return points.to_vec();
+    };
+    let Some(from_node) = diagram.nodes.get(&edge.from) else {
+        return points.to_vec();
+    };
+    let Some(to_node) = diagram.nodes.get(&edge.to) else {
+        return points.to_vec();
+    };
+
+    let mut adjusted = points.to_vec();
+    let from_target = if points.len() > 1 {
+        points[1]
+    } else {
+        from_rect.center()
+    };
+    let to_target = if points.len() > 1 {
+        points[points.len() - 2]
+    } else {
+        to_rect.center()
+    };
+
+    adjusted[0] = intersect_svg_node(from_rect, from_target, from_node.shape);
+    let last = adjusted.len() - 1;
+    adjusted[last] = intersect_svg_node(to_rect, to_target, to_node.shape);
+
+    adjusted
+}
+
+fn intersect_svg_node(rect: &Rect, point: Point, shape: Shape) -> Point {
+    match shape {
+        Shape::Diamond | Shape::Hexagon => intersect_svg_diamond(rect, point),
+        _ => intersect_svg_rect(rect, point),
+    }
+}
+
+fn intersect_svg_rect(rect: &Rect, point: Point) -> Point {
+    let cx = rect.x + rect.width / 2.0;
+    let cy = rect.y + rect.height / 2.0;
+    let dx = point.x - cx;
+    let dy = point.y - cy;
+    let w = rect.width / 2.0;
+    let h = rect.height / 2.0;
+
+    if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+        return Point { x: cx, y: cy + h };
+    }
+
+    let (sx, sy) = if dy.abs() * w > dx.abs() * h {
+        let h = if dy < 0.0 { -h } else { h };
+        (h * dx / dy, h)
+    } else {
+        let w = if dx < 0.0 { -w } else { w };
+        (w, w * dy / dx)
+    };
+
+    Point {
+        x: cx + sx,
+        y: cy + sy,
+    }
+}
+
+fn intersect_svg_diamond(rect: &Rect, point: Point) -> Point {
+    let cx = rect.x + rect.width / 2.0;
+    let cy = rect.y + rect.height / 2.0;
+    let dx = point.x - cx;
+    let dy = point.y - cy;
+    let w = rect.width / 2.0;
+    let h = rect.height / 2.0;
+
+    if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+        return Point { x: cx, y: cy + h };
+    }
+
+    let t = 1.0 / (dx.abs() / w + dy.abs() / h);
+    Point {
+        x: cx + t * dx,
+        y: cy + t * dy,
     }
 }
 
@@ -965,6 +1047,81 @@ fn path_from_points_linear(points: &[(f64, f64)]) -> String {
         }
     }
     d
+}
+
+fn path_from_points_basis(points: &[(f64, f64)]) -> String {
+    if points.is_empty() {
+        return String::new();
+    }
+    if points.len() == 1 {
+        let (x, y) = points[0];
+        return format!("M{},{}", fmt_f64(x), fmt_f64(y));
+    }
+
+    let mut d = String::new();
+    let mut x0 = f64::NAN;
+    let mut x1 = f64::NAN;
+    let mut y0 = f64::NAN;
+    let mut y1 = f64::NAN;
+    let mut point = 0;
+
+    for &(x, y) in points {
+        match point {
+            0 => {
+                point = 1;
+                let _ = write!(d, "M{},{}", fmt_f64(x), fmt_f64(y));
+            }
+            1 => {
+                point = 2;
+            }
+            2 => {
+                point = 3;
+                let px = (5.0 * x0 + x1) / 6.0;
+                let py = (5.0 * y0 + y1) / 6.0;
+                let _ = write!(d, " L{},{}", fmt_f64(px), fmt_f64(py));
+                basis_bezier(&mut d, x0, y0, x1, y1, x, y);
+            }
+            _ => {
+                basis_bezier(&mut d, x0, y0, x1, y1, x, y);
+            }
+        }
+        x0 = x1;
+        x1 = x;
+        y0 = y1;
+        y1 = y;
+    }
+
+    match point {
+        3 => {
+            basis_bezier(&mut d, x0, y0, x1, y1, x1, y1);
+            let _ = write!(d, " L{},{}", fmt_f64(x1), fmt_f64(y1));
+        }
+        2 => {
+            let _ = write!(d, " L{},{}", fmt_f64(x1), fmt_f64(y1));
+        }
+        _ => {}
+    }
+
+    d
+}
+
+fn basis_bezier(d: &mut String, x0: f64, y0: f64, x1: f64, y1: f64, x: f64, y: f64) {
+    let c1x = (2.0 * x0 + x1) / 3.0;
+    let c1y = (2.0 * y0 + y1) / 3.0;
+    let c2x = (x0 + 2.0 * x1) / 3.0;
+    let c2y = (y0 + 2.0 * y1) / 3.0;
+    let ex = (x0 + 4.0 * x1 + x) / 6.0;
+    let ey = (y0 + 4.0 * y1 + y) / 6.0;
+    let _ = write!(
+        d,
+        " C{},{} {},{} {},{}",
+        fmt_f64(c1x),
+        fmt_f64(c1y),
+        fmt_f64(c2x),
+        fmt_f64(c2y),
+        fmt_f64(ex),
+        fmt_f64(ey)
+    );
 }
 
 fn path_from_points_rounded(points: &[(f64, f64)], radius: f64) -> String {

@@ -1,26 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="238.45" height="472.90" viewBox="0 0 238.45 472.90" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="22.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="160.54" height="342.00" viewBox="0 0 160.54 342.00" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    <marker id="arrowhead" viewBox="0 0 8.00 8.00" refX="8.00" refY="4.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8.00,4.00 L0,8.00 Z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(8.50,8.50)">
+  <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M76.75,89.40 L76.75,114.40 L76.75,139.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M145.50,139.40 L174.40,139.40 Q181.00,139.40 181.00,146.00 L181.00,270.30 Q181.00,276.90 174.40,276.90 L145.50,276.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M76.75,276.90 L76.75,321.70 L76.75,366.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M55.00,62.00 L55.00,66.17 C55.00,70.33 55.00,78.67 55.00,87.00 C55.00,95.33 55.00,103.67 55.00,107.83 L55.00,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M84.94,141.94 L93.70,136.95 C102.46,131.96 119.98,121.98 128.74,132.66 C137.50,143.33 137.50,174.67 128.74,185.34 C119.98,196.02 102.46,186.04 93.70,181.05 L84.94,176.06" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M55.00,206.00 L55.00,212.17 C55.00,218.33 55.00,230.67 55.00,243.00 C55.00,255.33 55.00,267.67 55.00,273.83 L55.00,280.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
-      <text x="181.00" y="276.90" text-anchor="middle" dominant-baseline="middle" fill="#333">retry</text>
-      <text x="76.75" y="321.70" text-anchor="middle" dominant-baseline="middle" fill="#333">done</text>
+      <text x="137.50" y="206.00" text-anchor="middle" dominant-baseline="middle" fill="#333">retry</text>
+      <text x="55.00" y="243.00" text-anchor="middle" dominant-baseline="middle" fill="#333">done</text>
     </g>
     <g class="nodes">
-      <rect x="16.80" y="8.00" width="119.90" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="76.75" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
-      <polygon points="76.75,139.40 145.50,208.15 76.75,276.90 8.00,208.15" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="76.75" y="208.15" text-anchor="middle" dominant-baseline="middle" fill="#333">Retry?</text>
-      <rect x="22.30" y="366.50" width="108.90" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="76.75" y="407.20" text-anchor="middle" dominant-baseline="middle" fill="#333">End</text>
+      <rect x="9.80" y="8.00" width="90.40" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="55.00" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
+      <polygon points="55.00,112.00 102.00,159.00 55.00,206.00 8.00,159.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="55.00" y="159.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Retry?</text>
+      <rect x="13.80" y="280.00" width="82.40" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="55.00" y="307.00" text-anchor="middle" dominant-baseline="middle" fill="#333">End</text>
     </g>
   </g>
 </svg>

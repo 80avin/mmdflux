@@ -35,6 +35,7 @@ pub enum OutputFormat {
 /// SVG edge curve style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SvgEdgeCurve {
+    Basis,
     Linear,
     Rounded,
 }
@@ -134,6 +135,8 @@ pub struct RenderConfig {
     pub svg_edge_curve: Option<SvgEdgeCurve>,
     /// SVG-specific: edge curve radius (px) for rounded corners.
     pub svg_edge_curve_radius: Option<f64>,
+    /// SVG-specific: diagram padding (px).
+    pub svg_diagram_padding: Option<f64>,
     /// SVG-specific: node padding on x-axis (px).
     pub svg_node_padding_x: Option<f64>,
     /// SVG-specific: node padding on y-axis (px).

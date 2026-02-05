@@ -1,23 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="547.70" height="114.40" viewBox="0 0 547.70 114.40" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="22.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="417.12" height="70.00" viewBox="0 0 417.12 70.00" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    <marker id="arrowhead" viewBox="0 0 8.00 8.00" refX="8.00" refY="4.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8.00,4.00 L0,8.00 Z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(8.50,8.50)">
+  <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M388.50,48.70 L363.50,48.70 L338.50,48.70" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M185.60,48.70 L160.60,48.70 L135.60,48.70" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M311.36,35.00 L307.19,35.00 C303.03,35.00 294.69,35.00 286.36,35.00 C278.03,35.00 269.69,35.00 265.53,35.00 L261.36,35.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M151.76,35.00 L147.59,35.00 C143.43,35.00 135.09,35.00 126.76,35.00 C118.43,35.00 110.09,35.00 105.93,35.00 L101.76,35.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
-      <rect x="388.50" y="8.00" width="134.20" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="455.60" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Finish</text>
-      <rect x="185.60" y="8.00" width="152.90" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="262.05" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Process</text>
-      <rect x="8.00" y="8.00" width="127.60" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="71.80" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Begin</text>
+      <rect x="311.36" y="8.00" width="97.76" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="360.24" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Finish</text>
+      <rect x="151.76" y="8.00" width="109.60" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="206.56" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Process</text>
+      <rect x="8.00" y="8.00" width="93.76" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="54.88" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Begin</text>
     </g>
   </g>
 </svg>

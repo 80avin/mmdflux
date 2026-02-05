@@ -66,13 +66,17 @@ struct Cli {
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
 
-    /// SVG edge curve style (linear or rounded)
+    /// SVG edge curve style (basis, linear, or rounded)
     #[arg(long, value_enum)]
     svg_edge_curve: Option<EdgeCurveArg>,
 
     /// SVG edge curve radius (px) for rounded corners
     #[arg(long)]
     svg_edge_curve_radius: Option<f64>,
+
+    /// SVG diagram padding (px)
+    #[arg(long)]
+    svg_diagram_padding: Option<f64>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -112,6 +116,7 @@ impl From<RankerArg> for Ranker {
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
 enum EdgeCurveArg {
+    Basis,
     Linear,
     Rounded,
 }
@@ -119,6 +124,7 @@ enum EdgeCurveArg {
 impl From<EdgeCurveArg> for SvgEdgeCurve {
     fn from(arg: EdgeCurveArg) -> Self {
         match arg {
+            EdgeCurveArg::Basis => SvgEdgeCurve::Basis,
             EdgeCurveArg::Linear => SvgEdgeCurve::Linear,
             EdgeCurveArg::Rounded => SvgEdgeCurve::Rounded,
         }
@@ -157,6 +163,7 @@ fn main() -> io::Result<()> {
         svg_node_padding_y: cli.svg_node_padding_y,
         svg_edge_curve: cli.svg_edge_curve.map(Into::into),
         svg_edge_curve_radius: cli.svg_edge_curve_radius,
+        svg_diagram_padding: cli.svg_diagram_padding,
     };
 
     // Use registry for detection and rendering

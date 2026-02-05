@@ -1,24 +1,24 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="225.12" height="377.20" viewBox="0 0 225.12 377.20" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="22.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="160.90" height="278.00" viewBox="0 0 160.90 278.00" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    <marker id="arrowhead" viewBox="0 0 8.00 8.00" refX="8.00" refY="4.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8.00,4.00 L0,8.00 Z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(8.50,8.50)">
+  <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M105.65,89.40 L88.72,109.37 Q84.45,114.40 84.45,121.00 L84.45,139.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M84.45,220.80 L84.45,239.20 Q84.45,245.80 88.72,250.83 L105.65,270.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M174.70,270.80 L191.63,250.83 Q195.90,245.80 195.90,239.20 L195.90,139.40 L195.90,121.00 Q195.90,114.40 191.63,109.37 L174.70,89.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M84.39,62.00 L80.79,66.17 C77.19,70.33 70.00,78.67 66.40,87.00 C62.80,95.33 62.80,103.67 62.80,107.83 L62.80,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M62.80,166.00 L62.80,170.17 C62.80,174.33 62.80,182.67 66.40,191.00 C70.00,199.33 77.19,207.67 80.79,211.83 L84.39,216.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M131.01,216.00 L134.61,211.83 C138.21,207.67 145.40,199.33 149.00,182.00 C152.60,164.67 152.60,138.33 152.60,121.00 C152.60,103.67 152.60,95.33 149.00,87.00 C145.40,78.67 138.21,70.33 134.61,66.17 L131.01,62.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
-      <rect x="80.22" y="8.00" width="119.90" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="140.18" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
-      <rect x="8.00" y="139.40" width="152.90" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="84.45" y="180.10" text-anchor="middle" dominant-baseline="middle" fill="#333">Process</text>
-      <rect x="85.72" y="270.80" width="108.90" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="140.18" y="311.50" text-anchor="middle" dominant-baseline="middle" fill="#333">End</text>
+      <rect x="62.50" y="8.00" width="90.40" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="107.70" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
+      <rect x="8.00" y="112.00" width="109.60" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="62.80" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Process</text>
+      <rect x="66.50" y="216.00" width="82.40" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="107.70" y="243.00" text-anchor="middle" dominant-baseline="middle" fill="#333">End</text>
     </g>
   </g>
 </svg>

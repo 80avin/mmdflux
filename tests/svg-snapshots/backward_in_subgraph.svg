@@ -1,25 +1,25 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="256.10" height="398.60" viewBox="0 0 256.10 398.60" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="22.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="183.12" height="224.00" viewBox="0 0 183.12 224.00" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
-    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    <marker id="arrowhead" viewBox="0 0 8.00 8.00" refX="8.00" refY="4.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8.00,4.00 L0,8.00 Z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(8.50,48.10)">
+  <g transform="translate(0.00,0.00)">
     <g class="clusters">
-      <rect class="subgraph" x="8.00" y="-31.60" width="203.10" height="365.60" fill="none" stroke="#888" stroke-width="1.00" />
-      <text x="109.55" y="-25.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Group</text>
+      <rect class="subgraph" x="8.00" y="8.00" width="167.12" height="208.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="91.56" y="12.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Group</text>
     </g>
     <g class="edgePaths">
-      <path d="M88.33,126.90 L71.83,158.55 Q68.78,164.40 71.83,170.25 L88.33,201.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M130.77,201.90 L147.27,170.25 Q150.33,164.40 147.27,158.55 L130.77,126.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M75.06,87.00 L72.51,91.17 C69.97,95.33 64.87,103.67 64.87,112.00 C64.87,120.33 69.97,128.67 72.51,132.83 L75.06,137.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M108.06,137.00 L110.61,132.83 C113.15,128.67 118.25,120.33 118.25,112.00 C118.25,103.67 113.15,95.33 110.61,91.17 L108.06,87.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
-      <rect x="49.05" y="45.50" width="121.00" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="109.55" y="86.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Node</text>
-      <rect x="43.00" y="201.90" width="133.10" height="81.40" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="109.55" y="242.60" text-anchor="middle" dominant-baseline="middle" fill="#333">Node2</text>
+      <rect x="46.68" y="33.00" width="89.76" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="91.56" y="60.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Node</text>
+      <rect x="43.00" y="137.00" width="97.12" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="91.56" y="164.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Node2</text>
     </g>
   </g>
 </svg>
