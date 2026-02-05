@@ -71,10 +71,27 @@ impl Flowchart {
     }
 }
 
+/// Pre-process input to strip Mermaid directives before parsing.
+fn preprocess(input: &str) -> String {
+    let mut result: String = input
+        .lines()
+        .filter(|line| {
+            let trimmed = line.trim();
+            !(trimmed.starts_with("%%{") && trimmed.ends_with("}%%"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    if input.ends_with('\n') && !result.ends_with('\n') {
+        result.push('\n');
+    }
+    result
+}
+
 /// Parse a flowchart string.
 pub fn parse_flowchart(input: &str) -> Result<Flowchart, ParseError> {
+    let input = preprocess(input);
     let pairs =
-        FlowchartParser::parse(Rule::flowchart, input).map_err(ParseError::from_pest_error)?;
+        FlowchartParser::parse(Rule::flowchart, &input).map_err(ParseError::from_pest_error)?;
 
     let mut direction = Direction::TopDown;
     let mut statements = Vec::new();
@@ -568,6 +585,35 @@ fn shape_from_keyword(keyword: &str, label: String) -> ShapeSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Directive stripping tests (Task 1.1)
+    #[test]
+    fn test_strip_single_line_directive() {
+        let input = "%%{init: {\"theme\": \"dark\"}}%%\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_strip_directive_with_spaces() {
+        let input = "  %%{ init: { 'theme': 'forest' } }%%  \ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_strip_multiple_directives() {
+        let input = "%%{init: {}}%%\n%%{init: {\"flowchart\": {}}}%%\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_regular_comments_preserved() {
+        let input = "graph TD\n%% This is a comment\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
 
     // Phase 1: Header tests
     #[test]
