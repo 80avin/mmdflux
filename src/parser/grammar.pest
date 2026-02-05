@@ -40,6 +40,7 @@ text_hexagon = @{ (!"}}" ~ ANY)+ }
 text_asymmetric = @{ (!"]" ~ ANY)+ }
 text_trapezoid = @{ (!"\\]" ~ ANY)+ }
 text_inv_trapezoid = @{ (!"/]" ~ ANY)+ }
+shape_config_body = @{ (!"}" ~ ANY)* }
 
 // Node shapes (order matters: more specific delimiters first)
 shape_double_circle = { "(((" ~ text_double_circle ~ ")))" }
@@ -54,12 +55,13 @@ shape_asymmetric = { ">" ~ text_asymmetric ~ "]" }
 shape_rect = { "[" ~ text_rect ~ "]" }       // Rectangle [text]
 shape_round = { "(" ~ text_round ~ ")" }     // Rounded (text)
 shape_diamond = { "{" ~ text_diamond ~ "}" }  // Diamond {text}
+shape_config = { "@{" ~ shape_config_body ~ "}" }
 
 shape = {
     shape_double_circle | shape_circle | shape_stadium |
     shape_subroutine | shape_cylinder | shape_hexagon |
     shape_trapezoid | shape_inv_trapezoid | shape_asymmetric |
-    shape_rect | shape_round | shape_diamond
+    shape_rect | shape_round | shape_diamond | shape_config
 }
 
 // Node definition: identifier with optional shape

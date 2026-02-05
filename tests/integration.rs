@@ -122,6 +122,46 @@ mod parsing {
     }
 
     #[test]
+    fn shape_keywords_parse_document_and_card() {
+        let diagram = parse_and_build("shapes_document.mmd");
+        assert_eq!(diagram.nodes["doc"].shape, Shape::Document);
+        assert_eq!(diagram.nodes["docs"].shape, Shape::Documents);
+        assert_eq!(diagram.nodes["tagdoc"].shape, Shape::TaggedDocument);
+        assert_eq!(diagram.nodes["card"].shape, Shape::Card);
+        assert_eq!(diagram.nodes["tag"].shape, Shape::TaggedRect);
+    }
+
+    #[test]
+    fn shape_keywords_parse_junctions_and_specials() {
+        let diagram = parse_and_build("shapes_junction.mmd");
+        assert_eq!(diagram.nodes["j1"].shape, Shape::SmallCircle);
+        assert_eq!(diagram.nodes["j2"].shape, Shape::FramedCircle);
+        assert_eq!(diagram.nodes["j3"].shape, Shape::CrossedCircle);
+
+        let diagram = parse_and_build("shapes_special.mmd");
+        assert_eq!(diagram.nodes["fork"].shape, Shape::ForkJoin);
+        assert_eq!(diagram.nodes["note"].shape, Shape::TextBlock);
+    }
+
+    #[test]
+    fn shape_keywords_parse_degenerate_fallbacks() {
+        let diagram = parse_and_build("shapes_degenerate.mmd");
+        for id in [
+            "cloud",
+            "bolt",
+            "bang",
+            "icon",
+            "image",
+            "hourglass",
+            "tri",
+            "flip",
+            "notch",
+        ] {
+            assert_eq!(diagram.nodes[id].shape, Shape::Rectangle);
+        }
+    }
+
+    #[test]
     fn left_right_direction() {
         let input = load_fixture("left_right.mmd");
         let flowchart = parse_flowchart(&input).expect("Should parse");
@@ -271,6 +311,54 @@ mod rendering {
         assert!(output.contains("Rectangle Node"));
         assert!(output.contains("Rounded Node"));
         assert!(output.contains("Diamond Node"));
+    }
+
+    #[test]
+    fn shapes_document_render_distinctly() {
+        let output = render_fixture("shapes_document.mmd");
+        assert!(output.contains("Doc"));
+        assert!(output.contains("Docs"));
+        assert!(output.contains("TagDoc"));
+        assert!(output.contains("Card"));
+        assert!(output.contains("Tag"));
+        assert!(output.contains('~'), "Document should use wavy bottom");
+        assert!(
+            output.contains('╱'),
+            "Tagged doc/card should use folded corner"
+        );
+    }
+
+    #[test]
+    fn shapes_junction_render_glyphs() {
+        let output = render_fixture("shapes_junction.mmd");
+        assert!(output.contains('●'));
+        assert!(output.contains('◉'));
+        assert!(output.contains('⊗'));
+    }
+
+    #[test]
+    fn shapes_special_render_bar_and_text() {
+        let output = render_fixture("shapes_special.mmd");
+        assert!(output.contains('━'), "Fork/join should use heavy bar");
+        assert!(output.contains("Note"));
+    }
+
+    #[test]
+    fn shapes_junction_ascii_degrades() {
+        let output = render_fixture_ascii("shapes_junction.mmd");
+        assert!(output.contains("o"));
+        assert!(output.contains("(o)"));
+        assert!(output.contains("x"));
+    }
+
+    #[test]
+    fn shapes_degenerate_render_labels() {
+        let output = render_fixture("shapes_degenerate.mmd");
+        for label in [
+            "Cloud", "Bolt", "Bang", "Icon", "Image", "Hour", "Tri", "Flip", "Notch",
+        ] {
+            assert!(output.contains(label));
+        }
     }
 
     #[test]
@@ -921,6 +1009,11 @@ mod all_fixtures {
         "simple.mmd",
         "decision.mmd",
         "shapes.mmd",
+        "shapes_basic.mmd",
+        "shapes_junction.mmd",
+        "shapes_document.mmd",
+        "shapes_special.mmd",
+        "shapes_degenerate.mmd",
         "edge_styles.mmd",
         "left_right.mmd",
         "bottom_top.mmd",

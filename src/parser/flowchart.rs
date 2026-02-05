@@ -118,6 +118,17 @@ fn strip_quotes(s: &str) -> &str {
         .unwrap_or(s)
 }
 
+/// Strip surrounding single or double quotes from text.
+fn strip_quotes_any(s: &str) -> &str {
+    if let Some(stripped) = s.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+        return stripped;
+    }
+    if let Some(stripped) = s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')) {
+        return stripped;
+    }
+    s
+}
+
 fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
     let mut id = String::new();
     let mut title = None;
@@ -416,6 +427,9 @@ fn parse_node(pair: pest::iterators::Pair<Rule>) -> Vertex {
 
 fn parse_shape(pair: pest::iterators::Pair<Rule>) -> Option<ShapeSpec> {
     for inner in pair.into_inner() {
+        if inner.as_rule() == Rule::shape_config {
+            return parse_shape_config(inner);
+        }
         let (text_rule, constructor): (Rule, fn(String) -> ShapeSpec) = match inner.as_rule() {
             Rule::shape_rect => (Rule::text_rect, ShapeSpec::Rectangle),
             Rule::shape_round => (Rule::text_round, ShapeSpec::Round),
@@ -438,6 +452,117 @@ fn parse_shape(pair: pest::iterators::Pair<Rule>) -> Option<ShapeSpec> {
         }
     }
     None
+}
+
+fn parse_shape_config(pair: pest::iterators::Pair<Rule>) -> Option<ShapeSpec> {
+    let raw = pair
+        .into_inner()
+        .find(|p| p.as_rule() == Rule::shape_config_body)
+        .map(|p| p.as_str())
+        .unwrap_or("");
+    let mut shape_keyword = None;
+    let mut label_value = None;
+
+    let mut token = String::new();
+    let mut quote = None;
+    let flush_token = |token: &mut String,
+                       shape_keyword: &mut Option<String>,
+                       label_value: &mut Option<String>| {
+        let trimmed = token.trim();
+        if trimmed.is_empty() {
+            token.clear();
+            return;
+        }
+        let (key, value) = trimmed
+            .split_once(':')
+            .or_else(|| trimmed.split_once('='))
+            .map(|(k, v)| (k.trim(), v.trim()))
+            .unwrap_or((trimmed, ""));
+        if key.is_empty() {
+            token.clear();
+            return;
+        }
+        let key = key.to_lowercase();
+        let value = strip_quotes_any(value).trim().to_string();
+        match key.as_str() {
+            "shape" => {
+                if !value.is_empty() {
+                    *shape_keyword = Some(value);
+                }
+            }
+            "label" | "text" => {
+                *label_value = Some(value);
+            }
+            _ => {}
+        }
+        token.clear();
+    };
+
+    for ch in raw.chars() {
+        match quote {
+            Some(q) => {
+                if ch == q {
+                    quote = None;
+                }
+                token.push(ch);
+            }
+            None => match ch {
+                '"' | '\'' => {
+                    quote = Some(ch);
+                    token.push(ch);
+                }
+                ',' | ';' => {
+                    flush_token(&mut token, &mut shape_keyword, &mut label_value);
+                }
+                _ => token.push(ch),
+            },
+        }
+    }
+    flush_token(&mut token, &mut shape_keyword, &mut label_value);
+
+    let label = label_value.unwrap_or_default();
+    let shape = shape_keyword.unwrap_or_else(|| "rect".to_string());
+    Some(shape_from_keyword(&shape, label))
+}
+
+fn shape_from_keyword(keyword: &str, label: String) -> ShapeSpec {
+    let key = keyword.trim().to_lowercase();
+    match key.as_str() {
+        "rect" | "rectangle" | "lin-rect" | "st-rect" | "div-rect" | "win-pane" => {
+            ShapeSpec::Rectangle(label)
+        }
+        "round" | "rounded" => ShapeSpec::Round(label),
+        "stadium" | "pill" => ShapeSpec::Stadium(label),
+        "sub" | "subroutine" => ShapeSpec::Subroutine(label),
+        "cyl" | "cylinder" | "h-cyl" | "lin-cyl" | "bow-rect" => ShapeSpec::Cylinder(label),
+        "circle" => ShapeSpec::Circle(label),
+        "double-circ" | "double-circle" | "doublecirc" | "dbl-circ" => {
+            ShapeSpec::DoubleCircle(label)
+        }
+        "diamond" | "rhombus" | "decision" => ShapeSpec::Diamond(label),
+        "hex" | "hexagon" => ShapeSpec::Hexagon(label),
+        "trap" | "trapezoid" | "trap-t" | "curv-trap" => ShapeSpec::Trapezoid(label),
+        "inv-trap" | "inv-trapezoid" | "trap-b" => ShapeSpec::InvTrapezoid(label),
+        "sl-rect" | "parallelogram" => ShapeSpec::Parallelogram(label),
+        "inv-parallelogram" | "inv-sl-rect" => ShapeSpec::InvParallelogram(label),
+        "manual" | "manual-input" => ShapeSpec::ManualInput(label),
+        "flag" | "asymmetric" => ShapeSpec::Asymmetric(label),
+        "doc" | "document" | "lin-doc" => ShapeSpec::Document(label),
+        "docs" => ShapeSpec::Documents(label),
+        "tag-doc" => ShapeSpec::TaggedDocument(label),
+        "card" => ShapeSpec::Card(label),
+        "tag-rect" => ShapeSpec::TaggedRect(label),
+        "text" => ShapeSpec::TextBlock(label),
+        "fork" | "join" => ShapeSpec::ForkJoin(label),
+        "sm-circ" => ShapeSpec::SmallCircle(label),
+        "fr-circ" => ShapeSpec::FramedCircle(label),
+        "cross-circ" => ShapeSpec::CrossedCircle(label),
+        "f-circ" => ShapeSpec::SmallCircle(label),
+        // Degenerate / unsupported shapes: fall back to rectangle with label
+        "cloud" | "bolt" | "bang" | "icon" | "image" | "hourglass" | "tri" | "flip-tri"
+        | "notch-pent" | "delay" | "display" => ShapeSpec::Rectangle(label),
+        _ => ShapeSpec::Rectangle(label),
+    }
 }
 
 #[cfg(test)]
@@ -524,6 +649,42 @@ mod tests {
         assert_eq!(
             vertices[0].shape,
             Some(ShapeSpec::Diamond("Decision?".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_node_shape_config_document() {
+        let result = parse_flowchart("graph TD\nA@{shape: doc, label: \"Doc\"}\n").unwrap();
+        let vertices = result.vertices();
+        assert_eq!(vertices.len(), 1);
+        assert_eq!(vertices[0].id, "A");
+        assert_eq!(
+            vertices[0].shape,
+            Some(ShapeSpec::Document("Doc".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_node_shape_config_small_circle_unlabeled() {
+        let result = parse_flowchart("graph TD\nJ@{shape: sm-circ}\n").unwrap();
+        let vertices = result.vertices();
+        assert_eq!(vertices.len(), 1);
+        assert_eq!(vertices[0].id, "J");
+        assert_eq!(
+            vertices[0].shape,
+            Some(ShapeSpec::SmallCircle("".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_node_shape_config_label_only_defaults_to_rect() {
+        let result = parse_flowchart("graph TD\nA@{label: \"Only\"}\n").unwrap();
+        let vertices = result.vertices();
+        assert_eq!(vertices.len(), 1);
+        assert_eq!(vertices[0].id, "A");
+        assert_eq!(
+            vertices[0].shape,
+            Some(ShapeSpec::Rectangle("Only".to_string()))
         );
     }
 
