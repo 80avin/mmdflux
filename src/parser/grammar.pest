@@ -128,7 +128,22 @@ end_keyword = { ^"end" }
 subgraph_id = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
 subgraph_title_text = @{ (!"]" ~ ANY)+ }
 subgraph_title_bracket = { "[" ~ subgraph_title_text ~ "]" }
-subgraph_spec = { subgraph_id ~ subgraph_title_bracket? }
+
+// Quoted title for multi-word subgraph titles
+subgraph_quoted_title_text = @{ (!"\"" ~ ANY)+ }
+subgraph_quoted_title = { "\"" ~ subgraph_quoted_title_text ~ "\"" }
+
+// subgraph_spec supports:
+//   subgraph id[Title]      -- existing bracket syntax
+//   subgraph id "Title"     -- explicit ID + quoted title
+//   subgraph "Title"        -- quoted title only (auto-ID)
+//   subgraph id             -- ID only (title = ID)
+subgraph_spec = {
+    subgraph_id ~ subgraph_title_bracket
+    | subgraph_id ~ subgraph_quoted_title
+    | subgraph_quoted_title
+    | subgraph_id
+}
 
 subgraph_body_line = { !(end_keyword ~ (NEWLINE | ";" | EOI)) ~ (statement | comment) }
 

@@ -132,6 +132,7 @@ fn strip_quotes_any(s: &str) -> &str {
 fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
     let mut id = String::new();
     let mut title = None;
+    let mut has_explicit_id = false;
     let mut body_statements = Vec::new();
 
     for inner in pair.into_inner() {
@@ -141,12 +142,19 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
                     match spec_inner.as_rule() {
                         Rule::subgraph_id => {
                             id = spec_inner.as_str().to_string();
+                            has_explicit_id = true;
                         }
                         Rule::subgraph_title_bracket => {
                             title = spec_inner
                                 .into_inner()
                                 .find(|t| t.as_rule() == Rule::subgraph_title_text)
                                 .map(|t| strip_quotes(t.as_str()).to_string());
+                        }
+                        Rule::subgraph_quoted_title => {
+                            title = spec_inner
+                                .into_inner()
+                                .find(|t| t.as_rule() == Rule::subgraph_quoted_title_text)
+                                .map(|t| t.as_str().to_string());
                         }
                         _ => {}
                     }
@@ -162,6 +170,20 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
             }
             _ => {}
         }
+    }
+
+    // Auto-generate ID if only a quoted title was provided
+    if !has_explicit_id && let Some(ref t) = title {
+        id = t
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
     }
 
     SubgraphSpec {
@@ -1234,6 +1256,45 @@ mod tests {
         assert_eq!(edge.connector.stroke, StrokeSpec::Thick);
         assert_eq!(edge.connector.left, ArrowHead::Normal);
         assert_eq!(edge.connector.right, ArrowHead::Normal);
+    }
+
+    #[test]
+    fn test_parse_subgraph_quoted_multi_word_title() {
+        let input = "graph TD\nsubgraph \"Multi Word Title\"\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.title, "Multi Word Title");
+                assert!(!sg.id.is_empty());
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_id_space_quoted_title() {
+        let input = "graph TD\nsubgraph myId \"My Title\"\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "myId");
+                assert_eq!(sg.title, "My Title");
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_existing_bracket_syntax_unchanged() {
+        let input = "graph TD\nsubgraph sg1[My Group]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "sg1");
+                assert_eq!(sg.title, "My Group");
+            }
+            _ => panic!("Expected subgraph"),
+        }
     }
 
     #[test]
