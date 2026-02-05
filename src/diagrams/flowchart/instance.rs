@@ -2,9 +2,10 @@
 
 use crate::diagram::{OutputFormat, RenderConfig, RenderError};
 use crate::graph::{Diagram, build_diagram};
+use crate::json::to_json;
 use crate::parser::parse_flowchart;
 use crate::registry::DiagramInstance;
-use crate::render::{RenderOptions, render};
+use crate::render::{RenderOptions, compute_layout_direct, layout_config_for_diagram, render};
 
 /// Flowchart diagram instance.
 ///
@@ -39,6 +40,14 @@ impl DiagramInstance for FlowchartInstance {
         let diagram = self.diagram.as_ref().ok_or_else(|| RenderError {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
+
+        if matches!(format, OutputFormat::Json) {
+            let mut options: RenderOptions = config.into();
+            options.output_format = format;
+            let layout_config = layout_config_for_diagram(diagram, &options);
+            let layout = compute_layout_direct(diagram, &layout_config);
+            return Ok(to_json(diagram, Some(&layout)));
+        }
 
         // Convert RenderConfig to RenderOptions
         let mut options: RenderOptions = config.into();

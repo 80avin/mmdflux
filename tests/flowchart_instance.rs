@@ -72,6 +72,30 @@ fn flowchart_instance_render_svg() {
 }
 
 #[test]
+fn flowchart_instance_render_json() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA[Start] --> B[End]").unwrap();
+
+    let config = RenderConfig::default();
+    let output = instance.render(OutputFormat::Json, &config).unwrap();
+
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(parsed["version"], 1);
+    assert_eq!(parsed["nodes"].as_array().unwrap().len(), 2);
+    assert_eq!(parsed["edges"].as_array().unwrap().len(), 1);
+
+    // Should include positions since layout is computed
+    let nodes = parsed["nodes"].as_array().unwrap();
+    for node in nodes {
+        assert!(
+            node["position"].is_object(),
+            "Node should have position: {}",
+            node
+        );
+    }
+}
+
+#[test]
 fn flowchart_instance_matches_existing_render_output() {
     // Verify that FlowchartInstance produces the same output as the
     // existing render() function
