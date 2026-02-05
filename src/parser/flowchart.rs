@@ -71,8 +71,33 @@ impl Flowchart {
     }
 }
 
-/// Pre-process input to strip Mermaid directives before parsing.
+/// Strip YAML frontmatter delimited by `---` at the start of input.
+fn strip_frontmatter(input: &str) -> &str {
+    let trimmed = input.trim_start();
+    if !trimmed.starts_with("---") {
+        return input;
+    }
+    let after_open = &trimmed[3..];
+    let after_first_newline = match after_open.find('\n') {
+        Some(pos) => &after_open[pos + 1..],
+        None => return input,
+    };
+    for (i, line) in after_first_newline.lines().enumerate() {
+        if line.trim() == "---" {
+            let consumed: usize = after_first_newline
+                .lines()
+                .take(i + 1)
+                .map(|l| l.len() + 1)
+                .sum();
+            return &after_first_newline[consumed..];
+        }
+    }
+    input
+}
+
+/// Pre-process input to strip frontmatter and Mermaid directives before parsing.
 fn preprocess(input: &str) -> String {
+    let input = strip_frontmatter(input);
     let mut result: String = input
         .lines()
         .filter(|line| {
@@ -611,6 +636,35 @@ mod tests {
     #[test]
     fn test_regular_comments_preserved() {
         let input = "graph TD\n%% This is a comment\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    // Frontmatter stripping tests (Task 1.2)
+    #[test]
+    fn test_strip_yaml_frontmatter() {
+        let input = "---\nconfig:\n  theme: dark\n---\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_strip_empty_frontmatter() {
+        let input = "---\n---\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_strip_frontmatter_with_directive() {
+        let input = "---\nconfig:\n  theme: dark\n---\n%%{init: {}}%%\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_no_frontmatter_still_works() {
+        let input = "graph TD\nA --> B\n";
         let result = parse_flowchart(input).unwrap();
         assert_eq!(result.edges().len(), 1);
     }
