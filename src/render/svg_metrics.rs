@@ -4,6 +4,8 @@
 pub const DEFAULT_FONT_FAMILY: &str = "\"trebuchet ms\", verdana, arial, sans-serif";
 /// Default font size (px) for SVG output.
 pub const DEFAULT_FONT_SIZE: f64 = 16.0;
+/// Scale factor applied to approximate Mermaid's measured text widths.
+const TEXT_WIDTH_SCALE: f64 = 1.16;
 
 #[derive(Debug, Clone)]
 pub struct SvgTextMetrics {
@@ -39,7 +41,7 @@ impl SvgTextMetrics {
             .iter()
             .map(|line| self.measure_line_width(line))
             .fold(0.0, f64::max);
-        let width = max_width + padding_x * 2.0;
+        let width = max_width * TEXT_WIDTH_SCALE + padding_x * 2.0;
         let height = self.line_height * line_count + padding_y * 2.0;
         (width, height)
     }

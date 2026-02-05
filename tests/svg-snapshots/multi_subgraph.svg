@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 599.76 140.00" style="max-width: 599.76px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 614.76 140.00" style="max-width: 614.76px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
@@ -6,27 +6,27 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="clusters">
-      <rect class="subgraph" x="8.00" y="8.00" width="258.40" height="124.00" fill="none" stroke="#888" stroke-width="1.00" />
-      <text x="137.20" y="12.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Frontend</text>
-      <rect class="subgraph" x="316.40" y="8.00" width="275.36" height="124.00" fill="none" stroke="#888" stroke-width="1.00" />
-      <text x="454.08" y="12.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Backend</text>
+      <rect class="subgraph" x="8.00" y="8.00" width="264.54" height="124.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="140.27" y="12.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Frontend</text>
+      <rect class="subgraph" x="322.54" y="8.00" width="284.22" height="124.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="464.65" y="12.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Backend</text>
     </g>
     <g class="edgePaths">
-      <path d="M108.36,70.00 L112.53,70.00 C116.69,70.00 125.03,70.00 132.69,70.00 C140.36,70.00 147.36,70.00 150.86,70.00 L154.36,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M441.40,70.00 L445.57,70.00 C449.73,70.00 458.07,70.00 465.73,70.00 C473.40,70.00 480.40,70.00 483.90,70.00 L487.40,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M241.40,70.00 L245.57,70.00 C249.73,70.00 258.07,70.00 266.40,70.00 C274.73,70.00 283.07,70.00 291.40,70.00 C299.73,70.00 308.07,70.00 315.73,70.00 C323.40,70.00 330.40,70.00 333.90,70.00 L337.40,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M110.82,70.00 L114.98,70.00 C119.15,70.00 127.48,70.00 135.15,70.00 C142.82,70.00 149.82,70.00 153.32,70.00 L156.82,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M453.94,70.00 L458.11,70.00 C462.28,70.00 470.61,70.00 478.28,70.00 C485.94,70.00 492.94,70.00 496.44,70.00 L499.94,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M247.54,70.00 L251.71,70.00 C255.88,70.00 264.21,70.00 272.54,70.00 C280.88,70.00 289.21,70.00 297.54,70.00 C305.88,70.00 314.21,70.00 321.88,70.00 C329.54,70.00 336.54,70.00 340.04,70.00 L343.54,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
-      <rect x="33.00" y="43.00" width="75.36" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="70.68" y="70.00" text-anchor="middle" dominant-baseline="middle" fill="#333">UI</text>
-      <rect x="158.36" y="43.00" width="83.04" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="199.88" y="70.00" text-anchor="middle" dominant-baseline="middle" fill="#333">API</text>
-      <rect x="341.40" y="43.00" width="100.00" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="391.40" y="70.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Server</text>
-      <rect x="491.40" y="43.00" width="75.36" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="529.08" y="70.00" text-anchor="middle" dominant-baseline="middle" fill="#333">DB</text>
+      <rect x="33.00" y="43.00" width="77.82" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="71.91" y="70.00" text-anchor="middle" dominant-baseline="middle" fill="#333">UI</text>
+      <rect x="160.82" y="43.00" width="86.73" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="204.18" y="70.00" text-anchor="middle" dominant-baseline="middle" fill="#333">API</text>
+      <rect x="347.54" y="43.00" width="106.40" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="400.74" y="70.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Server</text>
+      <rect x="503.94" y="43.00" width="77.82" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="542.85" y="70.00" text-anchor="middle" dominant-baseline="middle" fill="#333">DB</text>
     </g>
   </g>
 </svg>
