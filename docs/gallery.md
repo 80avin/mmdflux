@@ -1,6 +1,6 @@
 # mmdflux gallery
 
-_Generated from commit `87cf4fb` — 46 fixtures_
+_Generated from commit `7d6f099` — 46 fixtures_
 
 This gallery is generated from test fixtures in `tests/fixtures`,
 text snapshots in `tests/snapshots`, and SVG snapshots in `tests/svg-snapshots`.
@@ -514,41 +514,6 @@ graph TD
 
 </details>
 
-## fan_in
-
-`tests/fixtures/fan_in.mmd`
-
-**Text**
-
-```text
-┌──────────┐    ┌──────────┐    ┌──────────┐
-│ Source A │    │ Source B │    │ Source C │
-└──────────┘    └──────────┘    └──────────┘
-      │              │               │
-      └──────────┐  ┌┘  ┌────────────┘
-                 ▼  ▼   ▼
-                ┌────────┐
-                │ Target │
-                └────────┘
-```
-
-**SVG**
-
-![fan_in svg](../tests/svg-snapshots/fan_in.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
-graph TD
-    A[Source A] --> D[Target]
-    B[Source B] --> D
-    C[Source C] --> D
-
-```
-
-</details>
-
 ## fan_in_lr
 
 `tests/fixtures/fan_in_lr.mmd`
@@ -585,6 +550,41 @@ graph LR
     A[Src A] --> D[Target]
     B[Src B] --> D
     C[Src C] --> D
+
+```
+
+</details>
+
+## fan_in
+
+`tests/fixtures/fan_in.mmd`
+
+**Text**
+
+```text
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Source A │    │ Source B │    │ Source C │
+└──────────┘    └──────────┘    └──────────┘
+      │              │               │
+      └──────────┐  ┌┘  ┌────────────┘
+                 ▼  ▼   ▼
+                ┌────────┐
+                │ Target │
+                └────────┘
+```
+
+**SVG**
+
+![fan_in svg](../tests/svg-snapshots/fan_in.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    A[Source A] --> D[Target]
+    B[Source B] --> D
+    C[Source C] --> D
 
 ```
 
@@ -1211,6 +1211,51 @@ graph TD
 
 </details>
 
+## nested_subgraph_only
+
+`tests/fixtures/nested_subgraph_only.mmd`
+
+**Text**
+
+```text
+┌───── Outer ─────┐
+│                 │
+│                 │
+│  ┌── Inner ──┐  │
+│  │   ┌───┐   │  │
+│  │   │ A │   │  │
+│  │   └───┘   │  │
+│  │     │     │  │
+│  │     │     │  │
+│  │     ▼     │  │
+│  │   ┌───┐   │  │
+│  │   │ B │   │  │
+│  │   └───┘   │  │
+│  └───────────┘  │
+│                 │
+│                 │
+└─────────────────┘
+```
+
+**SVG**
+
+![nested_subgraph_only svg](../tests/svg-snapshots/nested_subgraph_only.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+subgraph outer[Outer]
+subgraph inner[Inner]
+A --> B
+end
+end
+
+```
+
+</details>
+
 ## nested_subgraph
 
 `tests/fixtures/nested_subgraph.mmd`
@@ -1258,51 +1303,6 @@ B[Process] --> C[End]
 end
 end
 A --> B
-
-```
-
-</details>
-
-## nested_subgraph_only
-
-`tests/fixtures/nested_subgraph_only.mmd`
-
-**Text**
-
-```text
-┌───── Outer ─────┐
-│                 │
-│                 │
-│  ┌── Inner ──┐  │
-│  │   ┌───┐   │  │
-│  │   │ A │   │  │
-│  │   └───┘   │  │
-│  │     │     │  │
-│  │     │     │  │
-│  │     ▼     │  │
-│  │   ┌───┐   │  │
-│  │   │ B │   │  │
-│  │   └───┘   │  │
-│  └───────────┘  │
-│                 │
-│                 │
-└─────────────────┘
-```
-
-**SVG**
-
-![nested_subgraph_only svg](../tests/svg-snapshots/nested_subgraph_only.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
-graph TD
-subgraph outer[Outer]
-subgraph inner[Inner]
-A --> B
-end
-end
 
 ```
 
@@ -1374,33 +1374,6 @@ B --> C
 graph RL
     End[Finish] --> Middle[Process]
     Middle --> Start[Begin]
-
-```
-
-</details>
-
-## self_loop
-
-`tests/fixtures/self_loop.mmd`
-
-**Text**
-
-```text
-┌─────────┐───┐
-│ Process │   │
-└─────────┘◄──┘
-```
-
-**SVG**
-
-![self_loop svg](../tests/svg-snapshots/self_loop.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
-graph TD
-    A[Process] --> A
 
 ```
 
@@ -1492,43 +1465,28 @@ graph TD
 
 </details>
 
-## shapes
+## self_loop
 
-`tests/fixtures/shapes.mmd`
+`tests/fixtures/self_loop.mmd`
 
 **Text**
 
 ```text
-┌────────────────┐
-│ Rectangle Node │
-└────────────────┘
-         │
-         │
-         ▼
- ╭──────────────╮
- │ Rounded Node │
- ╰──────────────╯
-         │
-         │
-         ▼
- ┌──────────────┐
- < Diamond Node >
- └──────────────┘
+┌─────────┐───┐
+│ Process │   │
+└─────────┘◄──┘
 ```
 
 **SVG**
 
-![shapes svg](../tests/svg-snapshots/shapes.svg)
+![self_loop svg](../tests/svg-snapshots/self_loop.svg)
 
 <details>
 <summary>Mermaid source</summary>
 
 ```mermaid
 graph TD
-    rect[Rectangle Node]
-    round(Rounded Node)
-    diamond{Diamond Node}
-    rect --> round --> diamond
+    A[Process] --> A
 
 ```
 
@@ -1799,34 +1757,43 @@ graph LR
 
 </details>
 
-## simple
+## shapes
 
-`tests/fixtures/simple.mmd`
+`tests/fixtures/shapes.mmd`
 
 **Text**
 
 ```text
-┌───────┐
-│ Start │
-└───────┘
-    │
-    │
-    ▼
- ┌─────┐
- │ End │
- └─────┘
+┌────────────────┐
+│ Rectangle Node │
+└────────────────┘
+         │
+         │
+         ▼
+ ╭──────────────╮
+ │ Rounded Node │
+ ╰──────────────╯
+         │
+         │
+         ▼
+ ┌──────────────┐
+ < Diamond Node >
+ └──────────────┘
 ```
 
 **SVG**
 
-![simple svg](../tests/svg-snapshots/simple.svg)
+![shapes svg](../tests/svg-snapshots/shapes.svg)
 
 <details>
 <summary>Mermaid source</summary>
 
 ```mermaid
 graph TD
-    A[Start] --> B[End]
+    rect[Rectangle Node]
+    round(Rounded Node)
+    diamond{Diamond Node}
+    rect --> round --> diamond
 
 ```
 
@@ -1914,6 +1881,39 @@ subgraph sg1[Process]
 A[Start] --> B[Middle]
 end
 B --> C[End]
+
+```
+
+</details>
+
+## simple
+
+`tests/fixtures/simple.mmd`
+
+**Text**
+
+```text
+┌───────┐
+│ Start │
+└───────┘
+    │
+    │
+    ▼
+ ┌─────┐
+ │ End │
+ └─────┘
+```
+
+**SVG**
+
+![simple svg](../tests/svg-snapshots/simple.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    A[Start] --> B[End]
 
 ```
 
@@ -2008,56 +2008,6 @@ graph TD
 
 </details>
 
-## subgraph_edges
-
-`tests/fixtures/subgraph_edges.mmd`
-
-**Text**
-
-```text
-  ┌───────── Input ──────────┐
-  │  ┌──────┐    ┌────────┐  │
-  │  │ Data │    │ Config │  │
-  │  └──────┘    └────────┘  │
-  └──────┼───────────┼───────┘
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-┌────────┼ Output ───┼──────┐
-│        ▼           ▼      │
-│   ┌────────┐    ┌─────┐   │
-│   │ Result │    │ Log │   │
-│   └────────┘    └─────┘   │
-└───────────────────────────┘
-```
-
-**SVG**
-
-![subgraph_edges svg](../tests/svg-snapshots/subgraph_edges.svg)
-
-<details>
-<summary>Mermaid source</summary>
-
-```mermaid
-graph TD
-subgraph sg1[Input]
-A[Data]
-B[Config]
-end
-subgraph sg2[Output]
-C[Result]
-D[Log]
-end
-A --> C
-B --> D
-
-```
-
-</details>
-
 ## subgraph_edges_bottom_top
 
 `tests/fixtures/subgraph_edges_bottom_top.mmd`
@@ -2093,6 +2043,56 @@ B --> D
 
 ```mermaid
 graph BT
+subgraph sg1[Input]
+A[Data]
+B[Config]
+end
+subgraph sg2[Output]
+C[Result]
+D[Log]
+end
+A --> C
+B --> D
+
+```
+
+</details>
+
+## subgraph_edges
+
+`tests/fixtures/subgraph_edges.mmd`
+
+**Text**
+
+```text
+  ┌───────── Input ──────────┐
+  │  ┌──────┐    ┌────────┐  │
+  │  │ Data │    │ Config │  │
+  │  └──────┘    └────────┘  │
+  └──────┼───────────┼───────┘
+         │           │
+         │           │
+         │           │
+         │           │
+         │           │
+         │           │
+┌────────┼ Output ───┼──────┐
+│        ▼           ▼      │
+│   ┌────────┐    ┌─────┐   │
+│   │ Result │    │ Log │   │
+│   └────────┘    └─────┘   │
+└───────────────────────────┘
+```
+
+**SVG**
+
+![subgraph_edges svg](../tests/svg-snapshots/subgraph_edges.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
 subgraph sg1[Input]
 A[Data]
 B[Config]
