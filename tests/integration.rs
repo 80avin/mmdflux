@@ -2004,3 +2004,67 @@ fn test_subgraph_as_node_edge_no_sg_node() {
         assert_ne!(edge.to, "sg1", "Edge target should not be sg1");
     }
 }
+
+// ============================================================================
+// Phase 5: Integration test fixtures
+// ============================================================================
+
+// --- 5.1: Subgraph-as-node edge fixtures ---
+
+#[test]
+fn test_render_subgraph_to_subgraph_edge() {
+    let output = render_fixture("subgraph_to_subgraph_edge.mmd");
+
+    assert!(output.contains("Frontend"), "Should render Frontend title");
+    assert!(output.contains("Backend"), "Should render Backend title");
+    assert!(
+        output.contains("User Interface"),
+        "Should render User Interface"
+    );
+    assert!(output.contains("API Server"), "Should render API Server");
+}
+
+#[test]
+fn test_subgraph_to_subgraph_edge_resolution() {
+    let diagram = parse_and_build("subgraph_to_subgraph_edge.mmd");
+
+    // Neither frontend nor backend should exist as regular nodes
+    assert!(!diagram.nodes.contains_key("frontend"));
+    assert!(!diagram.nodes.contains_key("backend"));
+
+    // Both should exist as subgraphs
+    assert!(diagram.subgraphs.contains_key("frontend"));
+    assert!(diagram.subgraphs.contains_key("backend"));
+
+    // The edge "frontend --> backend" should be resolved to child nodes
+    for edge in &diagram.edges {
+        assert_ne!(edge.from, "frontend");
+        assert_ne!(edge.to, "backend");
+    }
+}
+
+#[test]
+fn test_render_nested_subgraph_edge() {
+    let output = render_fixture("nested_subgraph_edge.mmd");
+
+    assert!(output.contains("Cloud"), "Should render Cloud title");
+    assert!(output.contains("US East"), "Should render US East title");
+    assert!(output.contains("Client"), "Should render Client");
+    assert!(output.contains("Monitoring"), "Should render Monitoring");
+    assert!(output.contains("Server1"), "Should render Server1");
+}
+
+#[test]
+fn test_nested_subgraph_edge_resolution() {
+    let diagram = parse_and_build("nested_subgraph_edge.mmd");
+
+    // cloud should not exist as a regular node
+    assert!(!diagram.nodes.contains_key("cloud"));
+    assert!(diagram.subgraphs.contains_key("cloud"));
+
+    // Edges targeting "cloud" should resolve to a child node
+    for edge in &diagram.edges {
+        assert_ne!(edge.to, "cloud", "Edge target should not be cloud");
+        assert_ne!(edge.from, "cloud", "Edge source should not be cloud");
+    }
+}

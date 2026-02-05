@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 497.08 378.00" style="max-width: 497.08px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(0.00,0.00)">
+    <g class="clusters">
+      <rect class="subgraph" x="8.00" y="137.00" width="211.66" height="233.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="113.83" y="141.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Backend</text>
+      <rect class="subgraph" x="239.66" y="8.00" width="249.41" height="233.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="364.37" y="12.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Frontend</text>
+    </g>
+    <g class="edgePaths">
+      <path d="M364.79,87.00 L365.60,91.17 C366.40,95.33 368.00,103.67 368.80,112.00 C369.60,120.33 369.60,128.67 369.60,136.33 C369.60,144.00 369.60,151.00 369.60,154.50 L369.60,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M113.83,216.00 L113.83,220.17 C113.83,224.33 113.83,232.67 113.83,241.00 C113.83,249.33 113.83,257.67 113.83,265.33 C113.83,273.00 113.83,280.00 113.83,283.50 L113.83,287.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M333.66,87.00 L329.65,91.17 C325.65,95.33 317.64,103.67 313.64,111.17 C309.63,118.67 309.63,125.33 309.27,129.14 C308.91,132.94 308.19,133.89 307.38,134.93 C306.57,135.98 305.69,137.13 285.87,142.85 C266.04,148.58 227.29,158.87 207.91,164.02 L188.53,169.16" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="43.00" y="162.00" width="141.66" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="113.83" y="189.00" text-anchor="middle" dominant-baseline="middle" fill="#333">API Server</text>
+      <rect x="50.80" y="291.00" width="126.07" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="113.83" y="318.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Database</text>
+      <rect x="285.59" y="162.00" width="168.02" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="369.60" y="189.00" text-anchor="middle" dominant-baseline="middle" fill="#333">State Manager</text>
+      <rect x="274.66" y="33.00" width="169.88" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="359.60" y="60.00" text-anchor="middle" dominant-baseline="middle" fill="#333">User Interface</text>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 405.88 378.00" style="max-width: 405.88px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(0.00,0.00)">
+    <g class="clusters">
+      <rect class="subgraph" x="8.00" y="112.00" width="389.88" height="154.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="202.94" y="116.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Cloud</text>
+      <rect class="subgraph" x="28.00" y="137.00" width="349.88" height="104.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="202.94" y="141.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">US East</text>
+    </g>
+    <g class="edgePaths">
+      <path d="M120.47,62.00 L120.47,66.17 C120.47,70.33 120.47,78.67 120.47,87.00 C120.47,95.33 120.47,103.67 120.47,112.00 C120.47,120.33 120.47,128.67 120.47,136.33 C120.47,144.00 120.47,151.00 120.47,154.50 L120.47,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M120.47,216.00 L120.47,220.17 C120.47,224.33 120.47,232.67 120.47,241.00 C120.47,249.33 120.47,257.67 120.47,266.00 C120.47,274.33 120.47,282.67 120.47,290.33 C120.47,298.00 120.47,305.00 120.47,308.50 L120.47,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="69.87" y="8.00" width="101.20" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="120.47" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Client</text>
+      <rect x="52.05" y="316.00" width="136.84" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="120.47" y="343.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Monitoring</text>
+      <rect x="63.00" y="162.00" width="114.94" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="120.47" y="189.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Server1</text>
+      <rect x="227.94" y="162.00" width="114.94" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="285.41" y="189.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Server2</text>
+    </g>
+  </g>
+</svg>
