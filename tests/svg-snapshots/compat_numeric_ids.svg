@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 418.12 70.00" style="max-width: 418.12px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(0.00,0.00)">
+    <g class="edgePaths">
+      <path d="M101.96,35.00 L106.13,35.00 C110.30,35.00 118.63,35.00 126.30,35.00 C133.96,35.00 140.96,35.00 144.46,35.00 L147.96,35.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M263.56,35.00 L267.73,35.00 C271.89,35.00 280.23,35.00 287.89,35.00 C295.56,35.00 302.56,35.00 306.06,35.00 L309.56,35.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="8.00" y="8.00" width="93.96" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="54.98" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">First</text>
+      <rect x="151.96" y="8.00" width="111.60" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="207.76" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Second</text>
+      <rect x="313.56" y="8.00" width="96.56" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="361.84" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Third</text>
+    </g>
+  </g>
+</svg>
