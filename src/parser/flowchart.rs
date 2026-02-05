@@ -669,6 +669,21 @@ mod tests {
         assert_eq!(result.edges().len(), 1);
     }
 
+    // Default direction tests (Task 2.1)
+    #[test]
+    fn test_parse_graph_no_direction() {
+        let result = parse_flowchart("graph\nA --> B\n").unwrap();
+        assert_eq!(result.direction, Direction::TopDown);
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_parse_flowchart_no_direction() {
+        let result = parse_flowchart("flowchart\nA --> B\n").unwrap();
+        assert_eq!(result.direction, Direction::TopDown);
+        assert_eq!(result.edges().len(), 1);
+    }
+
     // Phase 1: Header tests
     #[test]
     fn test_parse_graph_td() {

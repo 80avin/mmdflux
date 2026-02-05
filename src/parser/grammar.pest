@@ -21,7 +21,7 @@ direction = {
 
 // Graph header: "graph TD" or "flowchart LR"
 header = {
-    (graph_keyword | flowchart_keyword) ~ direction
+    (graph_keyword | flowchart_keyword) ~ direction?
 }
 
 // Node identifiers: alphanumeric with underscores, must start with letter or underscore
