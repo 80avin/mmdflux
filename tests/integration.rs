@@ -2272,6 +2272,29 @@ fn test_subgraph_direction_cross_boundary_no_stale_waypoints() {
     let ca_key = ("C".to_string(), "A".to_string());
     let bd_key = ("B".to_string(), "D".to_string());
 
+    // Ensure the fixture makes these long edges (rank span > 1), so waypoints
+    // would exist without invalidation.
+    let ca_layer_diff = layout
+        .grid_positions
+        .get("C")
+        .unwrap()
+        .layer
+        .abs_diff(layout.grid_positions.get("A").unwrap().layer);
+    let bd_layer_diff = layout
+        .grid_positions
+        .get("B")
+        .unwrap()
+        .layer
+        .abs_diff(layout.grid_positions.get("D").unwrap().layer);
+    assert!(
+        ca_layer_diff > 1,
+        "fixture should make C->A a long edge (layer diff > 1)"
+    );
+    assert!(
+        bd_layer_diff > 1,
+        "fixture should make B->D a long edge (layer diff > 1)"
+    );
+
     // Verify the waypoints were cleared (router will recompute direct paths)
     assert!(
         !layout.edge_waypoints.contains_key(&ca_key) || layout.edge_waypoints[&ca_key].is_empty(),
