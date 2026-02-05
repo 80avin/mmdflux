@@ -2,11 +2,14 @@
 
 use std::collections::HashMap;
 
+use serde::Serialize;
+
 use super::edge::Edge;
 use super::node::Node;
 
 /// Direction of the diagram layout.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Direction {
     /// Top to bottom (vertical, downward).
     #[default]
@@ -20,7 +23,7 @@ pub enum Direction {
 }
 
 /// A subgraph grouping of nodes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Subgraph {
     /// Unique identifier for this subgraph.
     pub id: String,

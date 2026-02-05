@@ -1,7 +1,10 @@
 //! Node types and shape definitions.
 
+use serde::Serialize;
+
 /// Shape of a node in the diagram.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Shape {
     // === Box-style shapes ===
     /// Rectangle shape: [text]
@@ -65,7 +68,7 @@ pub enum Shape {
 }
 
 /// A node in the flowchart diagram.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Node {
     /// Unique identifier for this node.
     pub id: String,
@@ -74,6 +77,7 @@ pub struct Node {
     /// Shape of the node.
     pub shape: Shape,
     /// Parent subgraph ID, if this node belongs to a subgraph.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
 }
 
