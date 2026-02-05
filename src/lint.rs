@@ -86,6 +86,11 @@ impl LintResult {
     pub fn exit_code(&self) -> i32 {
         if self.valid { 0 } else { 1 }
     }
+
+    /// Serialize the lint result to JSON.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).expect("LintResult serialization should not fail")
+    }
 }
 
 /// Lint/validate Mermaid input, returning structured diagnostics.

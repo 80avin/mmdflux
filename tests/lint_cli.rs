@@ -1,6 +1,7 @@
 use assert_cmd::Command;
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
+use serde_json::Value;
 
 fn mmdflux() -> Command {
     cargo_bin_cmd!("mmdflux")
@@ -52,4 +53,47 @@ fn test_lint_with_warnings() {
         .assert()
         .success()
         .stderr(predicate::str::contains("warning"));
+}
+
+#[test]
+fn test_lint_json_valid_input() {
+    let output = mmdflux()
+        .args(["--lint", "-f", "json"])
+        .write_stdin("graph TD\nA --> B\n")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["valid"], true);
+    assert!(json["errors"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn test_lint_json_invalid_input() {
+    let output = mmdflux()
+        .args(["--lint", "-f", "json"])
+        .write_stdin("not valid mermaid")
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["valid"], false);
+    assert!(!json["errors"].as_array().unwrap().is_empty());
+    assert_eq!(json["errors"][0]["severity"], "error");
+}
+
+#[test]
+fn test_lint_json_with_warnings() {
+    let output = mmdflux()
+        .args(["--lint", "-f", "json"])
+        .write_stdin("graph TD\nA --> B\nstyle A fill:#f9f\n")
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+    let json: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["valid"], true);
+    assert!(!json["warnings"].as_array().unwrap().is_empty());
 }

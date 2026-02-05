@@ -157,12 +157,17 @@ fn main() -> io::Result<()> {
     // Lint mode: validate and exit
     if cli.lint {
         let result = mmdflux::lint::lint(&input);
+        let format: OutputFormat = cli.format.into();
 
-        for diag in &result.errors {
-            eprintln!("{}", diag);
-        }
-        for diag in &result.warnings {
-            eprintln!("{}", diag);
+        if matches!(format, OutputFormat::Json) {
+            println!("{}", result.to_json());
+        } else {
+            for diag in &result.errors {
+                eprintln!("{}", diag);
+            }
+            for diag in &result.warnings {
+                eprintln!("{}", diag);
+            }
         }
 
         std::process::exit(result.exit_code());
