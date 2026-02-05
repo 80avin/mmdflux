@@ -3584,6 +3584,65 @@ mod tests {
     }
 
     #[test]
+    fn direction_override_no_node_overlap() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA[Step 1] --> B[Step 2] --> C[Step 3]\nend\nStart --> A\nC --> End\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        // Verify no overlap between A, B, C
+        let nodes = ["A", "B", "C"];
+        for i in 0..nodes.len() {
+            for j in (i + 1)..nodes.len() {
+                let a = layout.get_bounds(nodes[i]).unwrap();
+                let b = layout.get_bounds(nodes[j]).unwrap();
+                let overlap_x = a.x < b.x + b.width && b.x < a.x + a.width;
+                let overlap_y = a.y < b.y + b.height && b.y < a.y + a.height;
+                assert!(
+                    !(overlap_x && overlap_y),
+                    "Nodes {} and {} should not overlap: {:?} vs {:?}",
+                    nodes[i],
+                    nodes[j],
+                    (a.x, a.y, a.width, a.height),
+                    (b.x, b.y, b.width, b.height)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn direction_override_external_nodes_outside_subgraph() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA[Step 1] --> B[Step 2]\nend\nStart --> A\nB --> End\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let sg = &layout.subgraph_bounds["sg1"];
+
+        // Start and End should NOT be inside the subgraph bounds
+        // (they are external to sg1)
+        for ext_node in &["Start", "End"] {
+            let bounds = layout.get_bounds(ext_node).unwrap();
+            let inside_x = bounds.x >= sg.x && bounds.x + bounds.width <= sg.x + sg.width;
+            let inside_y = bounds.y >= sg.y && bounds.y + bounds.height <= sg.y + sg.height;
+            // At least one dimension should be outside
+            assert!(
+                !(inside_x && inside_y),
+                "External node {} should not be fully inside sg1 bounds",
+                ext_node
+            );
+        }
+    }
+
+    #[test]
     fn sublayout_excludes_cross_boundary_edges() {
         use crate::graph::build_diagram;
         use crate::parser::parse_flowchart;
