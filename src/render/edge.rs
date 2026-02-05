@@ -1028,10 +1028,7 @@ mod tests {
         diagram.add_node(Node::new("B").with_label("End"));
         diagram.add_edge(Edge::new("A", "B").with_label("Yes"));
 
-        let output = crate::render::render(
-            &diagram,
-            &crate::render::RenderOptions::default(),
-        );
+        let output = crate::render::render(&diagram, &crate::render::RenderOptions::default());
         // Should contain the label
         assert!(output.contains("Yes"));
     }

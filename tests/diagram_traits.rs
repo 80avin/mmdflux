@@ -1,5 +1,5 @@
 use mmdflux::diagram::{
-    DiagramFamily, DiagramModel, DiagramParser, DiagramRenderer, LayoutEngine, OutputFormat,
+    DiagramFamily, DiagramModel, OutputFormat,
 };
 
 #[test]
@@ -28,4 +28,13 @@ impl DiagramModel for DummyModel {
     fn acc_description(&self) -> Option<&str> {
         None
     }
+}
+
+#[test]
+fn dummy_model_compiles() {
+    let mut model = DummyModel;
+    model.clear();
+    assert!(model.title().is_none());
+    assert!(model.acc_title().is_none());
+    assert!(model.acc_description().is_none());
 }

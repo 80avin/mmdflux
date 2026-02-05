@@ -117,6 +117,7 @@ pub struct BoxModifier {
 
 /// Glyph kinds for single-character nodes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 pub enum GlyphKind {
     SmallCircle,
     FramedCircle,

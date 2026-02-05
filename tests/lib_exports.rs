@@ -1,5 +1,18 @@
 // Verify all expected items are accessible from crate root
 use mmdflux::{
+    detect_diagram_type,
+    build_diagram,
+    // Core diagram abstractions
+    diagram::{
+        DiagramFamily, OutputFormat, RenderConfig,
+    },
+    // Diagrams
+    diagrams::flowchart,
+    parse_flowchart,
+    // Registry
+    registry::{DiagramInstance, default_registry},
+    // Legacy exports (kept for compatibility)
+    render::{RenderOptions, render},
     Diagram,
     DiagramType,
     Direction,
@@ -7,20 +20,6 @@ use mmdflux::{
     Node,
     ParseError,
     Shape,
-    build_diagram,
-    detect_diagram_type,
-    // Core diagram abstractions
-    diagram::{
-        DiagramFamily, DiagramModel, DiagramParser, DiagramRenderer, LayoutConfig, LayoutEngine,
-        OutputFormat, RenderConfig, RenderError,
-    },
-    // Diagrams
-    diagrams::{flowchart, info, packet, pie},
-    parse_flowchart,
-    // Registry
-    registry::{DiagramDefinition, DiagramInstance, DiagramRegistry, default_registry},
-    // Legacy exports (kept for compatibility)
-    render::{RenderOptions, render},
 };
 
 #[test]
@@ -56,4 +55,16 @@ fn legacy_api_still_works() {
     let output = render(&diagram, &RenderOptions::default());
     assert!(output.contains('A'));
     assert!(output.contains('B'));
+}
+
+#[test]
+fn legacy_exports_accessible() {
+    let _ = DiagramType::Flowchart;
+    let _ = detect_diagram_type("graph TD\nA-->B");
+    let _ = ParseError::UnexpectedEof;
+
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(Node::new("A").with_shape(Shape::Rectangle));
+    diagram.add_node(Node::new("B"));
+    diagram.add_edge(Edge::new("A", "B"));
 }

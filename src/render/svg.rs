@@ -3,13 +3,11 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use super::layout::build_dagre_layout;
+use super::svg_metrics::SvgTextMetrics;
+use super::{RenderOptions, layout_config_for_diagram};
 use crate::dagre::{LayoutResult, Point, Rect};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
-
-use super::RenderOptions;
-use super::layout::build_dagre_layout;
-use super::layout_config_for_diagram;
-use super::svg_metrics::SvgTextMetrics;
 
 const STROKE_COLOR: &str = "#333";
 const SUBGRAPH_STROKE: &str = "#888";
@@ -328,7 +326,11 @@ fn render_node_shape(writer: &mut SvgWriter, node: &Node, rect: &Rect, scale: f6
             );
             writer.push_line(&line);
         }
-        Shape::Document | Shape::Documents | Shape::TaggedDocument | Shape::Card | Shape::TaggedRect => {
+        Shape::Document
+        | Shape::Documents
+        | Shape::TaggedDocument
+        | Shape::Card
+        | Shape::TaggedRect => {
             // Base rectangle
             let line = format!(
                 "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"{style} />",
@@ -341,7 +343,10 @@ fn render_node_shape(writer: &mut SvgWriter, node: &Node, rect: &Rect, scale: f6
             writer.push_line(&line);
 
             // Optional folded corner for card/tagged shapes
-            if matches!(node.shape, Shape::Card | Shape::TaggedRect | Shape::TaggedDocument) {
+            if matches!(
+                node.shape,
+                Shape::Card | Shape::TaggedRect | Shape::TaggedDocument
+            ) {
                 let fold = (rect.width.min(rect.height) * 0.2).max(4.0 * scale);
                 let x1 = rect.x + rect.width - fold;
                 let y1 = rect.y;
@@ -364,7 +369,10 @@ fn render_node_shape(writer: &mut SvgWriter, node: &Node, rect: &Rect, scale: f6
             }
 
             // Optional wavy bottom for document shapes
-            if matches!(node.shape, Shape::Document | Shape::Documents | Shape::TaggedDocument) {
+            if matches!(
+                node.shape,
+                Shape::Document | Shape::Documents | Shape::TaggedDocument
+            ) {
                 let wave_height = (rect.height * 0.12).max(3.0 * scale);
                 let y = rect.y + rect.height - wave_height;
                 let wave_count = 2;

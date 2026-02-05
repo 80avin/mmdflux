@@ -21,27 +21,34 @@ pub use layout::{Layout, LayoutConfig, SubgraphBounds, compute_layout_direct};
 pub use router::{Point, RoutedEdge, Segment, route_all_edges, route_edge};
 pub use shape::{NodeBounds, node_dimensions, render_node};
 pub use svg::render_svg;
+use svg_metrics::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
 
 pub use crate::diagram::{
     LayoutConfig as DiagramLayoutConfig, OutputFormat, RenderConfig, RenderError,
 };
 use crate::graph::{Diagram, Direction};
-use svg_metrics::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
 
 impl From<&RenderConfig> for RenderOptions {
     fn from(config: &RenderConfig) -> Self {
-        let mut options = RenderOptions::default();
-        options.ranker = Some(config.layout.ranker);
-        options.node_spacing = Some(config.layout.node_sep);
-        options.rank_spacing = Some(config.layout.rank_sep);
-        options.edge_spacing = Some(config.layout.edge_sep);
-        options.margin = Some(config.layout.margin);
-        options.cluster_ranksep = config.cluster_ranksep;
-        options.padding = config.padding;
-        if let Some(scale) = config.svg_scale {
-            options.svg.scale = scale;
+        let svg = match config.svg_scale {
+            Some(scale) => SvgOptions {
+                scale,
+                ..SvgOptions::default()
+            },
+            None => SvgOptions::default(),
+        };
+
+        RenderOptions {
+            output_format: OutputFormat::Text,
+            svg,
+            ranker: Some(config.layout.ranker),
+            node_spacing: Some(config.layout.node_sep),
+            rank_spacing: Some(config.layout.rank_sep),
+            edge_spacing: Some(config.layout.edge_sep),
+            margin: Some(config.layout.margin),
+            cluster_ranksep: config.cluster_ranksep,
+            padding: config.padding,
         }
-        options
     }
 }
 
@@ -104,9 +111,10 @@ impl Default for RenderOptions {
 
 impl RenderOptions {
     pub fn default_svg() -> Self {
-        let mut options = Self::default();
-        options.output_format = OutputFormat::Svg;
-        options
+        Self {
+            output_format: OutputFormat::Svg,
+            ..Self::default()
+        }
     }
 }
 

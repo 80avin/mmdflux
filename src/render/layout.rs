@@ -329,7 +329,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             let (w, h) = node_dimensions(node);
             (w as f64, h as f64)
         },
-        |edge| edge.label.as_ref().map(|label| (label.len() as f64 + 2.0, 1.0)),
+        |edge| {
+            edge.label
+                .as_ref()
+                .map(|label| (label.len() as f64 + 2.0, 1.0))
+        },
     );
 
     // --- Phase B: Group nodes into layers ---
@@ -1884,7 +1888,11 @@ mod tests {
             &diagram,
             &LayoutConfig::default(),
             |node| (node.label.len() as f64 + 4.0, 3.0),
-            |edge| edge.label.as_ref().map(|label| (label.len() as f64 + 2.0, 1.0)),
+            |edge| {
+                edge.label
+                    .as_ref()
+                    .map(|label| (label.len() as f64 + 2.0, 1.0))
+            },
         );
 
         assert!(result.label_positions.contains_key(&0));
