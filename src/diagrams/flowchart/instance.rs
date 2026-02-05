@@ -41,6 +41,15 @@ impl DiagramInstance for FlowchartInstance {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
 
+        // Apply ID annotations if requested
+        let annotated;
+        let diagram = if config.show_ids {
+            annotated = annotate_node_ids(diagram);
+            &annotated
+        } else {
+            diagram
+        };
+
         if matches!(format, OutputFormat::Json) {
             let mut options: RenderOptions = config.into();
             options.output_format = format;
@@ -62,4 +71,16 @@ impl DiagramInstance for FlowchartInstance {
             OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
         )
     }
+}
+
+/// Create a copy of the diagram with node labels annotated as "ID: Label".
+/// Skips nodes where label == id (bare nodes).
+fn annotate_node_ids(diagram: &Diagram) -> Diagram {
+    let mut annotated = diagram.clone();
+    for node in annotated.nodes.values_mut() {
+        if node.label != node.id {
+            node.label = format!("{}: {}", node.id, node.label);
+        }
+    }
+    annotated
 }

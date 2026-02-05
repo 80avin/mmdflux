@@ -118,3 +118,56 @@ fn flowchart_instance_matches_existing_render_output() {
 
     assert_eq!(old_output, new_output);
 }
+
+#[test]
+fn test_show_ids_annotates_labels() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA[Start] --> B[End]\n").unwrap();
+
+    let config = RenderConfig {
+        show_ids: true,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(
+        output.contains("A: Start"),
+        "Should contain 'A: Start', got: {}",
+        output
+    );
+    assert!(
+        output.contains("B: End"),
+        "Should contain 'B: End', got: {}",
+        output
+    );
+}
+
+#[test]
+fn test_show_ids_bare_nodes_unchanged() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA --> B\n").unwrap();
+
+    let config = RenderConfig {
+        show_ids: true,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(
+        !output.contains("A: A"),
+        "Bare node should not be annotated: {}",
+        output
+    );
+}
+
+#[test]
+fn test_show_ids_false_no_annotation() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA[Start] --> B[End]\n").unwrap();
+
+    let config = RenderConfig::default();
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(
+        !output.contains("A:"),
+        "Default should not annotate: {}",
+        output
+    );
+}
