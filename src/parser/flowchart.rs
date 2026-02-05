@@ -191,9 +191,29 @@ fn looks_like_flowchart_statement(line: &str) -> bool {
     first_char.is_ascii_alphanumeric() || first_char == '_' || first_char == ';'
 }
 
-/// Parse a flowchart string.
+/// Options for the flowchart parser.
+#[derive(Debug, Clone, Default)]
+pub struct ParseOptions {
+    /// When true, the parser rejects any syntax it doesn't understand.
+    /// When false (default), unrecognized syntax is silently stripped.
+    pub strict: bool,
+}
+
+/// Parse a flowchart string (permissive mode, the default).
 pub fn parse_flowchart(input: &str) -> Result<Flowchart, ParseError> {
-    let input = preprocess(input);
+    parse_flowchart_with_options(input, &ParseOptions::default())
+}
+
+/// Parse a flowchart string with options.
+pub fn parse_flowchart_with_options(
+    input: &str,
+    options: &ParseOptions,
+) -> Result<Flowchart, ParseError> {
+    let input = if options.strict {
+        input.to_string()
+    } else {
+        preprocess(input)
+    };
     let pairs =
         FlowchartParser::parse(Rule::flowchart, &input).map_err(ParseError::from_pest_error)?;
 
@@ -696,6 +716,30 @@ fn shape_from_keyword(keyword: &str, label: String) -> ShapeSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Strict mode tests (Task 3.2)
+    #[test]
+    fn test_strict_mode_rejects_directive() {
+        let input = "%%{init: {}}%%\ngraph TD\nA --> B\n";
+        let opts = ParseOptions { strict: true };
+        let result = parse_flowchart_with_options(input, &opts);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_permissive_mode_accepts_directive() {
+        let input = "%%{init: {}}%%\ngraph TD\nA --> B\n";
+        let opts = ParseOptions { strict: false };
+        let result = parse_flowchart_with_options(input, &opts);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_default_is_permissive() {
+        let input = "%%{init: {}}%%\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input);
+        assert!(result.is_ok());
+    }
 
     // Permissive preprocessing tests (Task 3.1)
     #[test]
