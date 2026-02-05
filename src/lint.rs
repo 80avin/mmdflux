@@ -7,6 +7,8 @@ use std::fmt;
 
 use serde::Serialize;
 
+use crate::parser::{ParseError, detect_diagram_type, parse_flowchart};
+
 /// Severity level of a diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -83,6 +85,70 @@ impl LintResult {
     /// 1 = invalid (parse errors)
     pub fn exit_code(&self) -> i32 {
         if self.valid { 0 } else { 1 }
+    }
+}
+
+/// Lint/validate Mermaid input, returning structured diagnostics.
+///
+/// Attempts to parse the input and reports any errors or warnings.
+/// This is designed for LLM repair loops: the output provides enough
+/// context for an LLM to fix syntax errors.
+pub fn lint(input: &str) -> LintResult {
+    if detect_diagram_type(input).is_none() {
+        return LintResult {
+            valid: false,
+            errors: vec![LintDiagnostic {
+                severity: Severity::Error,
+                line: Some(1),
+                column: Some(1),
+                message: "Unknown or missing diagram type. Expected 'graph' or 'flowchart' header."
+                    .to_string(),
+            }],
+            warnings: vec![],
+        };
+    }
+
+    match parse_flowchart(input) {
+        Ok(_) => LintResult {
+            valid: true,
+            errors: vec![],
+            warnings: vec![],
+        },
+        Err(parse_error) => {
+            let diagnostic = parse_error_to_diagnostic(&parse_error);
+            LintResult {
+                valid: false,
+                errors: vec![diagnostic],
+                warnings: vec![],
+            }
+        }
+    }
+}
+
+fn parse_error_to_diagnostic(err: &ParseError) -> LintDiagnostic {
+    match err {
+        ParseError::Syntax {
+            line,
+            column,
+            message,
+        } => LintDiagnostic {
+            severity: Severity::Error,
+            line: Some(*line),
+            column: Some(*column),
+            message: message.clone(),
+        },
+        ParseError::UnexpectedEof => LintDiagnostic {
+            severity: Severity::Error,
+            line: None,
+            column: None,
+            message: "Unexpected end of input".to_string(),
+        },
+        ParseError::Other(msg) => LintDiagnostic {
+            severity: Severity::Error,
+            line: None,
+            column: None,
+            message: msg.clone(),
+        },
     }
 }
 
@@ -178,5 +244,39 @@ mod tests {
         let json = serde_json::to_string(&result).unwrap();
         assert!(json.contains("\"valid\":false"));
         assert!(json.contains("\"severity\":\"error\""));
+    }
+
+    #[test]
+    fn test_lint_valid_input() {
+        let result = lint("graph TD\nA --> B\n");
+        assert!(result.is_valid());
+        assert!(result.errors.is_empty());
+    }
+
+    #[test]
+    fn test_lint_invalid_syntax() {
+        let result = lint("graph TD\nA --> --> B\n");
+        assert!(!result.is_valid());
+        assert!(!result.errors.is_empty());
+        assert_eq!(result.errors[0].severity, Severity::Error);
+        assert!(result.errors[0].line.is_some());
+    }
+
+    #[test]
+    fn test_lint_empty_input() {
+        let result = lint("");
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn test_lint_no_header() {
+        let result = lint("A --> B\n");
+        assert!(!result.is_valid());
+    }
+
+    #[test]
+    fn test_lint_valid_complex() {
+        let result = lint("graph LR\nA[Start] -->|yes| B(Process)\nB -.-> C{Decision}\n");
+        assert!(result.is_valid());
     }
 }
