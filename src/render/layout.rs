@@ -3426,6 +3426,38 @@ mod tests {
     }
 
     #[test]
+    fn sublayout_rl_reverses_node_order() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Reverse]\ndirection RL\nA[Left] --> B[Right]\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let a = layout.get_bounds("A").unwrap();
+        let b = layout.get_bounds("B").unwrap();
+
+        // RL: A (start) should be RIGHT of B (end) since flow goes right-to-left
+        assert!(
+            a.center_x() > b.center_x(),
+            "In RL layout, A should be right of B: A_cx={} B_cx={}",
+            a.center_x(),
+            b.center_x()
+        );
+
+        // Both should be at similar y
+        let y_tolerance = 2;
+        assert!(
+            (a.center_y() as isize - b.center_y() as isize).abs() <= y_tolerance,
+            "A and B should be at similar y in RL: {} vs {}",
+            a.center_y(),
+            b.center_y()
+        );
+    }
+
+    #[test]
     fn direction_override_nodes_horizontal_in_final_layout() {
         use crate::graph::build_diagram;
         use crate::parser::parse_flowchart;
