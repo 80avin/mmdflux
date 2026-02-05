@@ -144,6 +144,8 @@ pub struct RenderConfig {
     pub svg_node_padding_x: Option<f64>,
     /// SVG-specific: node padding on y-axis (px).
     pub svg_node_padding_y: Option<f64>,
+    /// Show node IDs alongside labels (e.g., "A: Start").
+    pub show_ids: bool,
 }
 
 /// Error type for rendering failures.

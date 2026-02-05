@@ -54,6 +54,10 @@ struct Cli {
     #[arg(long)]
     lint: bool,
 
+    /// Show node IDs alongside labels (e.g., "A: Start")
+    #[arg(long)]
+    show_ids: bool,
+
     /// ASCII padding around the diagram
     #[arg(long)]
     padding: Option<usize>,
@@ -185,6 +189,7 @@ fn main() -> io::Result<()> {
         svg_edge_curve: cli.svg_edge_curve.map(Into::into),
         svg_edge_curve_radius: cli.svg_edge_curve_radius,
         svg_diagram_padding: cli.svg_diagram_padding,
+        show_ids: cli.show_ids,
     };
 
     // Use registry for detection and rendering
