@@ -78,6 +78,7 @@ pub fn parse_flowchart(input: &str) -> Result<Flowchart, ParseError> {
 
     let mut direction = Direction::TopDown;
     let mut statements = Vec::new();
+    let mut subgraph_counter = 0usize;
 
     for pair in pairs.filter(|p| p.as_rule() == Rule::flowchart) {
         for inner in pair.into_inner() {
@@ -89,7 +90,9 @@ pub fn parse_flowchart(input: &str) -> Result<Flowchart, ParseError> {
                         .and_then(|p| Direction::from_str(p.as_str()))
                         .unwrap_or(Direction::TopDown);
                 }
-                Rule::statement => statements.extend(parse_statement(inner)),
+                Rule::statement => {
+                    statements.extend(parse_statement(inner, &mut subgraph_counter));
+                }
                 _ => {}
             }
         }
@@ -101,11 +104,16 @@ pub fn parse_flowchart(input: &str) -> Result<Flowchart, ParseError> {
     })
 }
 
-fn parse_statement(pair: pest::iterators::Pair<Rule>) -> Vec<Statement> {
+fn parse_statement(
+    pair: pest::iterators::Pair<Rule>,
+    subgraph_counter: &mut usize,
+) -> Vec<Statement> {
     pair.into_inner()
         .flat_map(|inner| match inner.as_rule() {
             Rule::vertex_statement => parse_vertex_statement(inner),
-            Rule::subgraph_stmt => vec![Statement::Subgraph(parse_subgraph(inner))],
+            Rule::subgraph_stmt => {
+                vec![Statement::Subgraph(parse_subgraph(inner, subgraph_counter))]
+            }
             _ => vec![],
         })
         .collect()
@@ -129,7 +137,7 @@ fn strip_quotes_any(s: &str) -> &str {
     s
 }
 
-fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
+fn parse_subgraph(pair: pest::iterators::Pair<Rule>, counter: &mut usize) -> SubgraphSpec {
     let mut id = String::new();
     let mut title = None;
     let mut has_explicit_id = false;
@@ -165,25 +173,16 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
                     inner
                         .into_inner()
                         .filter(|b| b.as_rule() == Rule::statement)
-                        .flat_map(parse_statement),
+                        .flat_map(|s| parse_statement(s, counter)),
                 );
             }
             _ => {}
         }
     }
 
-    // Auto-generate ID if only a quoted title was provided
-    if !has_explicit_id && let Some(ref t) = title {
-        id = t
-            .chars()
-            .map(|c| {
-                if c.is_alphanumeric() || c == '_' {
-                    c
-                } else {
-                    '_'
-                }
-            })
-            .collect();
+    if !has_explicit_id {
+        id = format!("subGraph{}", counter);
+        *counter += 1;
     }
 
     SubgraphSpec {
@@ -1282,6 +1281,44 @@ mod tests {
             }
             _ => panic!("Expected subgraph"),
         }
+    }
+
+    #[test]
+    fn test_auto_ids_are_unique() {
+        let input = "graph TD\nsubgraph \"First\"\nA\nend\nsubgraph \"Second\"\nB\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        let subgraphs: Vec<_> = result
+            .statements
+            .iter()
+            .filter_map(|s| match s {
+                Statement::Subgraph(sg) => Some(sg),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(subgraphs.len(), 2);
+        assert_ne!(
+            subgraphs[0].id, subgraphs[1].id,
+            "Auto-generated IDs should be unique"
+        );
+    }
+
+    #[test]
+    fn test_auto_ids_unique_same_title() {
+        let input = "graph TD\nsubgraph \"Same\"\nA\nend\nsubgraph \"Same\"\nB\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        let subgraphs: Vec<_> = result
+            .statements
+            .iter()
+            .filter_map(|s| match s {
+                Statement::Subgraph(sg) => Some(sg),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(subgraphs.len(), 2);
+        assert_ne!(
+            subgraphs[0].id, subgraphs[1].id,
+            "Auto-generated IDs should be unique even with same title"
+        );
     }
 
     #[test]
