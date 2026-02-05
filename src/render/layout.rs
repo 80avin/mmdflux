@@ -3710,8 +3710,7 @@ mod tests {
     fn cross_boundary_edge_no_panic() {
         use crate::graph::build_diagram;
         use crate::parser::parse_flowchart;
-        use crate::render::RenderOptions;
-        use crate::render::render;
+        use crate::render::{RenderOptions, render};
 
         let input =
             "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA --> B\nend\nC --> A\nB --> D\n";
