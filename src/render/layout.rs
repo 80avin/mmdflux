@@ -3258,7 +3258,42 @@ mod tests {
     }
 
     // =========================================================================
-    // Direction Override Sub-Layout Prototype Tests (Phase 3)
+    // Direction Override: Field Plumbing (Phase 4, Task 4.1)
+    // =========================================================================
+
+    #[test]
+    fn direction_override_field_available_at_layout() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Group]\ndirection LR\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        // Direction override is present on the subgraph
+        assert_eq!(diagram.subgraphs["sg1"].dir, Some(Direction::LeftRight));
+
+        // Layout computation succeeds without panic
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+        assert!(!layout.node_bounds.is_empty());
+    }
+
+    #[test]
+    fn direction_override_none_when_not_specified() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        // No direction override: field should be None
+        assert_eq!(diagram.subgraphs["sg1"].dir, None);
+    }
+
+    // =========================================================================
+    // Direction Override Sub-Layout Tests (Phase 4, Tasks 4.2-4.4)
     // =========================================================================
 
     /// Helper: compute a sub-layout for a direction-override subgraph.
