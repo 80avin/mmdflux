@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="85.60" height="683.20" viewBox="0 0 85.60 683.20" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(4.00,4.00)">
+    <g class="edgePaths">
+      <path d="M38.80,36.80 L38.80,61.80 L38.80,86.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M38.80,115.60 L38.80,140.60 L38.80,165.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M38.80,194.40 L38.80,219.40 L38.80,244.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M38.80,273.20 L38.80,298.20 L38.80,323.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M38.80,352.00 L38.80,377.00 L38.80,402.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M38.80,430.80 L38.80,455.80 L38.80,480.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M38.80,509.60 L38.80,534.60 L38.80,559.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M38.80,588.40 L38.80,613.40 L38.80,638.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="14.00" y="165.60" width="49.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="38.80" y="180.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Bang</text>
+      <rect x="17.60" y="86.80" width="42.40" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="38.80" y="101.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Bolt</text>
+      <rect x="11.60" y="8.00" width="54.40" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="38.80" y="22.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Cloud</text>
+      <rect x="18.00" y="559.60" width="41.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="38.80" y="574.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Flip</text>
+      <rect x="15.60" y="402.00" width="46.40" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="38.80" y="416.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Hour</text>
+      <rect x="14.00" y="244.40" width="49.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="38.80" y="258.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Icon</text>
+      <rect x="8.00" y="323.20" width="61.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="38.80" y="337.60" text-anchor="middle" dominant-baseline="middle" fill="#333">Image</text>
+      <rect x="11.20" y="638.40" width="55.20" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="38.80" y="652.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Notch</text>
+      <rect x="22.00" y="480.80" width="33.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="38.80" y="495.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Tri</text>
+    </g>
+  </g>
+</svg>

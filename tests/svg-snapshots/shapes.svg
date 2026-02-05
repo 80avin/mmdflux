@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="162.92" height="210.40" viewBox="0 0 162.92 210.40" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(4.00,4.00)">
+    <g class="edgePaths">
+      <path d="M77.46,36.80 L77.46,61.80 L77.46,86.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M77.46,115.60 L77.46,140.60 L77.46,165.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <polygon points="77.46,165.60 146.92,180.00 77.46,194.40 8.00,180.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.46" y="180.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Diamond Node</text>
+      <rect x="11.46" y="8.00" width="132.00" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.46" y="22.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Rectangle Node</text>
+      <rect x="16.66" y="86.80" width="121.60" height="28.80" rx="5.76" ry="5.76" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.46" y="101.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Rounded Node</text>
+    </g>
+  </g>
+</svg>

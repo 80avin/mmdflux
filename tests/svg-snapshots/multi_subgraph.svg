@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="571.00" height="142.80" viewBox="0 0 571.00 142.80" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(4.00,4.00)">
+    <g class="clusters">
+      <rect class="subgraph" x="8.00" y="8.00" width="227.60" height="98.80" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="121.80" y="12.80" text-anchor="middle" dominant-baseline="hanging" fill="#333">Frontend</text>
+      <rect class="subgraph" x="310.60" y="8.00" width="244.40" height="98.80" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="432.80" y="12.80" text-anchor="middle" dominant-baseline="hanging" fill="#333">Backend</text>
+    </g>
+    <g class="edgePaths">
+      <path d="M79.10,57.40 L116.60,57.40 L154.10,57.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M408.90,57.40 L446.40,57.40 L483.90,57.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M198.10,57.40 L235.60,57.40 L273.10,57.40 L310.60,57.40 L348.10,57.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="45.50" y="43.00" width="33.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="62.30" y="57.40" text-anchor="middle" dominant-baseline="middle" fill="#333">UI</text>
+      <rect x="154.10" y="43.00" width="44.00" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="176.10" y="57.40" text-anchor="middle" dominant-baseline="middle" fill="#333">API</text>
+      <rect x="348.10" y="43.00" width="60.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="378.50" y="57.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Server</text>
+      <rect x="483.90" y="43.00" width="33.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="500.70" y="57.40" text-anchor="middle" dominant-baseline="middle" fill="#333">DB</text>
+    </g>
+  </g>
+</svg>

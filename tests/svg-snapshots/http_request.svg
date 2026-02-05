@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="496.25" height="425.60" viewBox="0 0 496.25 425.60" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(4.00,4.00)">
+    <g class="edgePaths">
+      <path d="M239.08,36.80 L175.40,76.20 L175.40,115.60" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M175.40,144.40 L175.40,169.40 L175.40,194.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M149.54,223.20 L78.80,262.60 L78.80,302.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M201.26,223.20 L272.00,262.60 L272.00,302.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M78.80,330.80 L78.80,355.80 L206.80,381.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M272.00,330.80 L272.00,355.80 L272.00,380.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M323.41,380.80 L412.65,355.80 L412.65,302.00 L412.65,248.20 L412.65,208.80 L412.65,169.40 L412.65,115.60 L412.65,61.80 L290.35,29.74" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+      <text x="175.40" y="76.20" text-anchor="middle" dominant-baseline="middle" fill="#333">HTTP Request</text>
+      <text x="78.80" y="262.60" text-anchor="middle" dominant-baseline="middle" fill="#333">Yes</text>
+      <text x="272.00" y="262.60" text-anchor="middle" dominant-baseline="middle" fill="#333">No</text>
+      <text x="412.65" y="208.80" text-anchor="middle" dominant-baseline="middle" fill="#333">HTTP Response</text>
+    </g>
+    <g class="nodes">
+      <polygon points="175.40,194.40 246.70,208.80 175.40,223.20 104.10,208.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="175.40" y="208.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Authenticated?</text>
+      <rect x="234.35" y="8.00" width="56.00" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="262.35" y="22.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Client</text>
+      <rect x="8.00" y="302.00" width="141.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="78.80" y="316.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Process Request</text>
+      <rect x="199.60" y="302.00" width="144.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="272.00" y="316.40" text-anchor="middle" dominant-baseline="middle" fill="#333">401 Unauthorized</text>
+      <rect x="206.80" y="380.80" width="130.40" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="272.00" y="395.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Send Response</text>
+      <rect x="145.00" y="115.60" width="60.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="175.40" y="130.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Server</text>
+    </g>
+  </g>
+</svg>

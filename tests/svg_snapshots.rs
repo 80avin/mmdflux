@@ -4,6 +4,30 @@ use std::path::{Path, PathBuf};
 use mmdflux::render::{RenderOptions, render_svg};
 use mmdflux::{build_diagram, parse_flowchart};
 
+fn list_fixtures() -> Vec<String> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures");
+    let mut fixtures = Vec::new();
+    for entry in fs::read_dir(&dir).unwrap_or_else(|e| panic!("Failed to read fixtures dir: {e}"))
+    {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) == Some("mmd") {
+            let name = path
+                .file_name()
+                .and_then(|os| os.to_str())
+                .unwrap_or_default()
+                .to_string();
+            if !name.is_empty() {
+                fixtures.push(name);
+            }
+        }
+    }
+    fixtures.sort();
+    fixtures
+}
+
 fn load_fixture(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -44,36 +68,8 @@ fn assert_snapshot(fixture: &str) {
 }
 
 #[test]
-fn svg_snapshot_simple() {
-    assert_snapshot("simple.mmd");
-}
-
-#[test]
-fn svg_snapshot_edge_styles() {
-    assert_snapshot("edge_styles.mmd");
-}
-
-#[test]
-fn svg_snapshot_nested_subgraph() {
-    assert_snapshot("nested_subgraph.mmd");
-}
-
-#[test]
-fn svg_snapshot_simple_cycle() {
-    assert_snapshot("simple_cycle.mmd");
-}
-
-#[test]
-fn svg_snapshot_left_right() {
-    assert_snapshot("left_right.mmd");
-}
-
-#[test]
-fn svg_snapshot_right_left() {
-    assert_snapshot("right_left.mmd");
-}
-
-#[test]
-fn svg_snapshot_bottom_top() {
-    assert_snapshot("bottom_top.mmd");
+fn svg_snapshot_all_fixtures() {
+    for fixture in list_fixtures() {
+        assert_snapshot(&fixture);
+    }
 }

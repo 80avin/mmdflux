@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="871.20" height="131.60" viewBox="0 0 871.20 131.60" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="10.00" refY="5.00" markerWidth="10.00" markerHeight="10.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10.00,5.00 L0,10.00 Z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(4.00,4.00)">
+    <g class="edgePaths">
+      <path d="M87.20,61.80 L112.20,61.80 L137.20,61.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M187.60,61.80 L212.60,61.80 L237.60,61.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M329.60,61.80 L354.60,61.80 L379.60,61.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M476.40,61.80 L501.40,61.80 L526.40,61.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M604.35,47.40 L667.80,22.40 L749.60,22.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M608.59,76.20 L679.40,101.20 L749.60,101.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+      <text x="667.80" y="22.40" text-anchor="middle" dominant-baseline="middle" fill="#333">staging</text>
+      <text x="679.40" y="101.20" text-anchor="middle" dominant-baseline="middle" fill="#333">production</text>
+    </g>
+    <g class="nodes">
+      <rect x="137.20" y="47.40" width="50.40" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="162.40" y="61.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Build</text>
+      <polygon points="567.80,47.40 609.20,61.80 567.80,76.20 526.40,61.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="567.80" y="61.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Deploy?</text>
+      <rect x="379.60" y="47.40" width="96.80" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="428.00" y="61.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Lint Check</text>
+      <rect x="749.60" y="86.80" width="92.00" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="795.60" y="101.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Production</text>
+      <rect x="8.00" y="47.40" width="79.20" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="47.60" y="61.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Git Push</text>
+      <rect x="749.60" y="8.00" width="105.60" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="802.40" y="22.40" text-anchor="middle" dominant-baseline="middle" fill="#333">Staging Env</text>
+      <rect x="237.60" y="47.40" width="92.00" height="28.80" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="283.60" y="61.80" text-anchor="middle" dominant-baseline="middle" fill="#333">Run Tests</text>
+    </g>
+  </g>
+</svg>
