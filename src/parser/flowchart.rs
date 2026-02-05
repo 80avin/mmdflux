@@ -95,21 +95,100 @@ fn strip_frontmatter(input: &str) -> &str {
     input
 }
 
-/// Pre-process input to strip frontmatter and Mermaid directives before parsing.
+/// Pre-process input to strip frontmatter, directives, and unrecognized lines.
 fn preprocess(input: &str) -> String {
     let input = strip_frontmatter(input);
-    let mut result: String = input
-        .lines()
-        .filter(|line| {
-            let trimmed = line.trim();
-            !(trimmed.starts_with("%%{") && trimmed.ends_with("}%%"))
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let mut result = String::with_capacity(input.len());
+    let mut header_seen = false;
+
+    for line in input.lines() {
+        let trimmed = line.trim();
+
+        // Always strip directives
+        if trimmed.starts_with("%%{") && trimmed.ends_with("}%%") {
+            continue;
+        }
+
+        // Pass through comments
+        if trimmed.starts_with("%%") {
+            push_line(&mut result, line);
+            continue;
+        }
+
+        // Pass through empty/whitespace lines
+        if trimmed.is_empty() {
+            push_line(&mut result, line);
+            continue;
+        }
+
+        // Header line
+        if !header_seen {
+            let first_word = trimmed.split_whitespace().next().unwrap_or("");
+            if first_word.eq_ignore_ascii_case("graph")
+                || first_word.eq_ignore_ascii_case("flowchart")
+            {
+                header_seen = true;
+                push_line(&mut result, line);
+                continue;
+            }
+            // Strip non-header lines before the header (e.g. accTitle)
+            continue;
+        }
+
+        // Known passthrough keywords
+        if is_known_passthrough(trimmed) {
+            push_line(&mut result, line);
+            continue;
+        }
+
+        // A flowchart statement starts with an identifier-like char
+        if looks_like_flowchart_statement(trimmed) {
+            push_line(&mut result, line);
+            continue;
+        }
+
+        // Unknown line -- strip it
+    }
+
     if input.ends_with('\n') && !result.ends_with('\n') {
         result.push('\n');
     }
     result
+}
+
+fn push_line(result: &mut String, line: &str) {
+    if !result.is_empty() {
+        result.push('\n');
+    }
+    result.push_str(line);
+}
+
+fn is_known_passthrough(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    lower.starts_with("style ")
+        || lower.starts_with("classdef ")
+        || lower.starts_with("class ")
+        || lower.starts_with("click ")
+        || lower.starts_with("linkstyle ")
+        || lower.starts_with("direction ")
+        || lower.starts_with("subgraph ")
+        || lower.starts_with("subgraph\n")
+        || lower == "end"
+        || lower.starts_with("end ")
+        || lower.starts_with("end;")
+}
+
+fn is_known_strip(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    lower.starts_with("acctitle") || lower.starts_with("accdescr")
+}
+
+fn looks_like_flowchart_statement(line: &str) -> bool {
+    if is_known_strip(line) {
+        return false;
+    }
+    let first_char = line.chars().next().unwrap_or(' ');
+    first_char.is_ascii_alphanumeric() || first_char == '_' || first_char == ';'
 }
 
 /// Parse a flowchart string.
@@ -617,6 +696,59 @@ fn shape_from_keyword(keyword: &str, label: String) -> ShapeSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Permissive preprocessing tests (Task 3.1)
+    #[test]
+    fn test_permissive_strips_acc_title() {
+        let input = "graph TD\naccTitle: My Diagram\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_permissive_strips_acc_descr() {
+        let input = "graph TD\naccDescr: Description here\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_permissive_strips_unknown_line() {
+        let input = "graph TD\n@startuml\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_permissive_preserves_all_known_syntax() {
+        let input = concat!(
+            "graph TD\n",
+            "A[Start] --> B{Decision}\n",
+            "B -->|yes| C(Process)\n",
+            "B -->|no| D\n",
+            "style A fill:#f9f\n",
+            "classDef warning fill:#ff0\n",
+            "class B warning\n",
+            "%% comment\n",
+            "subgraph sg1[Group]\n",
+            "E --> F\n",
+            "end\n",
+        );
+        let result = parse_flowchart(input).unwrap();
+        let edge_count = count_edges_recursive(&result.statements);
+        assert_eq!(edge_count, 4);
+    }
+
+    fn count_edges_recursive(stmts: &[Statement]) -> usize {
+        stmts
+            .iter()
+            .map(|s| match s {
+                Statement::Edge(_) => 1,
+                Statement::Subgraph(sg) => count_edges_recursive(&sg.statements),
+                _ => 0,
+            })
+            .sum()
+    }
 
     // Directive stripping tests (Task 1.1)
     #[test]
