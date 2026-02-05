@@ -1,6 +1,6 @@
 # mmdflux gallery
 
-_Generated from commit `51bbd9c` — 46 fixtures_
+_Generated from commit `c3c82b2` — 46 fixtures_
 
 This gallery is generated from test fixtures in `tests/fixtures`,
 text snapshots in `tests/snapshots`, and SVG snapshots in `tests/svg-snapshots`.
