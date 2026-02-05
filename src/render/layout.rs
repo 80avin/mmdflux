@@ -279,7 +279,19 @@ fn reconcile_sublayouts_draw(
     canvas_width: &mut usize,
     canvas_height: &mut usize,
 ) {
-    for (sg_id, sublayout) in sublayouts {
+    // Process sublayouts in deterministic depth order (shallowest first).
+    // This ensures that when both parent and child subgraphs have direction
+    // overrides, the deeper override writes last and wins.
+    let mut sorted_sg_ids: Vec<&String> = sublayouts.keys().collect();
+    sorted_sg_ids.sort_by(|a, b| {
+        diagram
+            .subgraph_depth(a)
+            .cmp(&diagram.subgraph_depth(b))
+            .then_with(|| a.cmp(b))
+    });
+
+    for sg_id in sorted_sg_ids {
+        let sublayout = &sublayouts[sg_id];
         let sg = &diagram.subgraphs[sg_id];
 
         // Get the current subgraph draw bounds as the anchor position
@@ -1177,12 +1189,16 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             &mut height,
         );
 
-        // Invalidate waypoints and label positions for edges internal to
+        // Invalidate waypoints and label positions for edges touching
         // direction-override subgraphs.  The main layout computed these for
         // the parent direction; after reconciliation the node positions have
         // moved, so the old waypoints are stale.  Removing them causes the
         // edge router to use direct routing with the correct effective
         // direction (from node_directions).
+        //
+        // We invalidate when *either* endpoint is in an override subgraph,
+        // not just when both are.  Cross-boundary edges also have stale
+        // waypoints because the inside node moved during reconciliation.
         for sg in diagram.subgraphs.values() {
             if sg.dir.is_none() {
                 continue;
@@ -1190,7 +1206,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
             for edge in &diagram.edges {
                 if sg_node_set.contains(edge.from.as_str())
-                    && sg_node_set.contains(edge.to.as_str())
+                    || sg_node_set.contains(edge.to.as_str())
                 {
                     let key = (edge.from.clone(), edge.to.clone());
                     edge_waypoints_final.remove(&key);
@@ -1203,16 +1219,31 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Build per-node effective direction map.
     // Nodes inside a direction-override subgraph get the subgraph's direction;
     // all other nodes get the diagram's root direction.
+    //
+    // Process subgraphs in depth order (shallowest first) so the deepest
+    // override deterministically wins for nodes in nested subgraphs.
     let mut node_directions: HashMap<String, Direction> = HashMap::new();
     for node_id in diagram.nodes.keys() {
         node_directions.insert(node_id.clone(), diagram.direction);
     }
-    for sg in diagram.subgraphs.values() {
-        if let Some(override_dir) = sg.dir {
-            for node_id in &sg.nodes {
-                if !diagram.is_subgraph(node_id) {
-                    node_directions.insert(node_id.clone(), override_dir);
-                }
+    let mut dir_sg_ids: Vec<&String> = diagram
+        .subgraphs
+        .iter()
+        .filter(|(_, sg)| sg.dir.is_some())
+        .map(|(id, _)| id)
+        .collect();
+    dir_sg_ids.sort_by(|a, b| {
+        diagram
+            .subgraph_depth(a)
+            .cmp(&diagram.subgraph_depth(b))
+            .then_with(|| a.cmp(b))
+    });
+    for sg_id in dir_sg_ids {
+        let sg = &diagram.subgraphs[sg_id];
+        let override_dir = sg.dir.unwrap();
+        for node_id in &sg.nodes {
+            if !diagram.is_subgraph(node_id) {
+                node_directions.insert(node_id.clone(), override_dir);
             }
         }
     }

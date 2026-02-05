@@ -2212,3 +2212,89 @@ fn test_subgraph_direction_mixed_layout() {
     assert_eq!(layout.node_directions.get("A"), Some(&Direction::LeftRight));
     assert_eq!(layout.node_directions.get("C"), Some(&Direction::BottomTop));
 }
+
+#[test]
+fn test_render_subgraph_direction_nested_both() {
+    // Both parent (LR) and child (BT) have direction overrides.
+    // Nodes in the inner subgraph should get the inner direction (BT),
+    // not the outer (LR), regardless of HashMap iteration order.
+    let output = render_fixture("subgraph_direction_nested_both.mmd");
+
+    assert!(output.contains("Outer LR"), "Should render outer title");
+    assert!(output.contains("Inner BT"), "Should render inner title");
+    assert!(output.contains("A"), "Should render node A");
+    assert!(output.contains("B"), "Should render node B");
+    assert!(output.contains("C"), "Should render node C");
+    assert!(output.contains("D"), "Should render node D");
+}
+
+#[test]
+fn test_subgraph_direction_nested_both_layout() {
+    // Verify deterministic direction assignment for nested overrides.
+    let (_, layout) = layout_fixture("subgraph_direction_nested_both.mmd");
+
+    // A, B are in inner (BT): deepest override wins → BottomTop
+    assert_eq!(
+        layout.node_directions.get("A"),
+        Some(&Direction::BottomTop),
+        "A should get inner BT direction, not outer LR"
+    );
+    assert_eq!(
+        layout.node_directions.get("B"),
+        Some(&Direction::BottomTop),
+        "B should get inner BT direction, not outer LR"
+    );
+
+    // C is only in outer (LR): gets outer direction
+    assert_eq!(
+        layout.node_directions.get("C"),
+        Some(&Direction::LeftRight),
+        "C should get outer LR direction"
+    );
+
+    // D is outside both: gets diagram root direction (TD)
+    assert_eq!(
+        layout.node_directions.get("D"),
+        Some(&Direction::TopDown),
+        "D should get root TD direction"
+    );
+}
+
+#[test]
+fn test_subgraph_direction_cross_boundary_no_stale_waypoints() {
+    // Cross-boundary edges (one endpoint inside override subgraph, one outside)
+    // should NOT retain waypoints from the parent layout after reconciliation.
+    let (_, layout) = layout_fixture("subgraph_direction_cross_boundary.mmd");
+
+    // C-->A crosses into the LR subgraph; B-->D crosses out.
+    // After reconciliation, these edges should have their waypoints invalidated
+    // (empty or absent) so the router recomputes from reconciled positions.
+    let ca_key = ("C".to_string(), "A".to_string());
+    let bd_key = ("B".to_string(), "D".to_string());
+
+    // Verify the waypoints were cleared (router will recompute direct paths)
+    assert!(
+        !layout.edge_waypoints.contains_key(&ca_key) || layout.edge_waypoints[&ca_key].is_empty(),
+        "C->A cross-boundary edge should not have stale waypoints"
+    );
+    assert!(
+        !layout.edge_waypoints.contains_key(&bd_key) || layout.edge_waypoints[&bd_key].is_empty(),
+        "B->D cross-boundary edge should not have stale waypoints"
+    );
+}
+
+#[test]
+fn test_render_subgraph_direction_cross_boundary() {
+    // Smoke test: cross-boundary edges with direction overrides should render
+    // without panics and include all nodes.
+    let output = render_fixture("subgraph_direction_cross_boundary.mmd");
+
+    assert!(
+        output.contains("Horizontal Section"),
+        "Should render subgraph title"
+    );
+    assert!(output.contains("A"), "Should render node A");
+    assert!(output.contains("B"), "Should render node B");
+    assert!(output.contains("C"), "Should render node C");
+    assert!(output.contains("D"), "Should render node D");
+}

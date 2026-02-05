@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 154.91 432.00" style="max-width: 154.91px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(0.00,0.00)">
+    <g class="clusters">
+      <rect class="subgraph" x="8.00" y="112.00" width="138.91" height="208.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="77.45" y="116.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Horizontal Section</text>
+    </g>
+    <g class="edgePaths">
+      <path d="M77.45,191.00 L77.45,195.17 C77.45,199.33 77.45,207.67 77.45,215.33 C77.45,223.00 77.45,230.00 77.45,233.50 L77.45,237.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M77.45,62.00 L77.45,66.17 C77.45,70.33 77.45,78.67 77.45,87.00 C77.45,95.33 77.45,103.67 77.45,111.33 C77.45,119.00 77.45,126.00 77.45,129.50 L77.45,133.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M77.45,295.00 L77.45,299.17 C77.45,303.33 77.45,311.67 77.45,320.00 C77.45,328.33 77.45,336.67 77.45,344.33 C77.45,352.00 77.45,359.00 77.45,362.50 L77.45,366.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="43.00" y="137.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.45" y="164.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
+      <rect x="43.00" y="241.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.45" y="268.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="43.00" y="8.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.45" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
+      <rect x="43.00" y="370.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.45" y="397.00" text-anchor="middle" dominant-baseline="middle" fill="#333">D</text>
+    </g>
+  </g>
+</svg>
