@@ -30,9 +30,8 @@ fn compare_outputs(input: &str, ascii: bool) {
     let mut instance = registry.create(diagram_id).expect("New path create failed");
     instance.parse(input).expect("New path parse failed");
 
-    let format = output_format;
     let new_output = instance
-        .render(format, &RenderConfig::default())
+        .render(output_format, &RenderConfig::default())
         .expect("New path render failed");
 
     assert_eq!(

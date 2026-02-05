@@ -1,6 +1,4 @@
-use mmdflux::diagram::{
-    DiagramFamily, DiagramModel, OutputFormat,
-};
+use mmdflux::diagram::{DiagramFamily, DiagramModel, OutputFormat};
 
 #[test]
 fn diagram_family_variants_exist() {

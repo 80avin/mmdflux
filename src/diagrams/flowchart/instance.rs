@@ -2,7 +2,7 @@
 
 use crate::diagram::{OutputFormat, RenderConfig, RenderError};
 use crate::graph::{Diagram, build_diagram};
-use crate::parser::{Flowchart, parse_flowchart};
+use crate::parser::parse_flowchart;
 use crate::registry::DiagramInstance;
 use crate::render::{RenderOptions, render};
 
@@ -11,20 +11,14 @@ use crate::render::{RenderOptions, render};
 /// Wraps the existing flowchart parsing and rendering logic behind
 /// the `DiagramInstance` trait.
 pub struct FlowchartInstance {
-    /// Parsed AST (kept for potential re-rendering with different options)
-    #[allow(dead_code)]
-    flowchart: Option<Flowchart>,
-    /// Built diagram model
+    /// Built diagram model.
     diagram: Option<Diagram>,
 }
 
 impl FlowchartInstance {
     /// Create a new flowchart instance.
     pub fn new() -> Self {
-        Self {
-            flowchart: None,
-            diagram: None,
-        }
+        Self { diagram: None }
     }
 }
 
@@ -37,9 +31,7 @@ impl Default for FlowchartInstance {
 impl DiagramInstance for FlowchartInstance {
     fn parse(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let flowchart = parse_flowchart(input)?;
-        let diagram = build_diagram(&flowchart);
-        self.flowchart = Some(flowchart);
-        self.diagram = Some(diagram);
+        self.diagram = Some(build_diagram(&flowchart));
         Ok(())
     }
 

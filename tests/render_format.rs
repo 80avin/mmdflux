@@ -12,7 +12,7 @@ fn output_format_from_render_module() {
 }
 
 #[test]
-fn output_format_display() {
+fn output_format_debug() {
     assert_eq!(format!("{:?}", OutputFormat::Text), "Text");
     assert_eq!(format!("{:?}", OutputFormat::Svg), "Svg");
 }

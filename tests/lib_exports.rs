@@ -1,18 +1,5 @@
 // Verify all expected items are accessible from crate root
 use mmdflux::{
-    detect_diagram_type,
-    build_diagram,
-    // Core diagram abstractions
-    diagram::{
-        DiagramFamily, OutputFormat, RenderConfig,
-    },
-    // Diagrams
-    diagrams::flowchart,
-    parse_flowchart,
-    // Registry
-    registry::{DiagramInstance, default_registry},
-    // Legacy exports (kept for compatibility)
-    render::{RenderOptions, render},
     Diagram,
     DiagramType,
     Direction,
@@ -20,6 +7,17 @@ use mmdflux::{
     Node,
     ParseError,
     Shape,
+    build_diagram,
+    detect_diagram_type,
+    // Core diagram abstractions
+    diagram::{DiagramFamily, OutputFormat, RenderConfig},
+    // Diagrams
+    diagrams::flowchart,
+    parse_flowchart,
+    // Registry
+    registry::{DiagramInstance, default_registry},
+    // Legacy exports (kept for compatibility)
+    render::{RenderOptions, render},
 };
 
 #[test]

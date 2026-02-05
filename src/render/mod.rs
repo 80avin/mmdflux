@@ -378,10 +378,9 @@ fn set_junction_cell(
 /// - left_label_len is the max label length for left branches (first target in declaration order)
 /// - right_label_len is the max label length for right branches (subsequent targets)
 fn branching_label_info(diagram: &Diagram) -> (bool, usize, usize) {
-    use std::collections::HashMap;
-
     // Group labeled edges by source node, preserving declaration order
-    let mut labeled_edges_per_source: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut labeled_edges_per_source: std::collections::HashMap<&str, Vec<&str>> =
+        std::collections::HashMap::new();
     for edge in &diagram.edges {
         if let Some(ref label) = edge.label {
             labeled_edges_per_source
@@ -393,18 +392,25 @@ fn branching_label_info(diagram: &Diagram) -> (bool, usize, usize) {
 
     // Find sources with 2+ labeled edges
     // First label goes left, rest go right (based on typical layout ordering)
-    labeled_edges_per_source
-        .values()
-        .filter(|labels| labels.len() >= 2)
-        .fold((false, 0, 0), |(_, max_left, max_right), labels| {
-            let left_len = labels[0].chars().count();
-            let right_len = labels[1..]
-                .iter()
-                .map(|l| l.chars().count())
-                .max()
-                .unwrap_or(0);
-            (true, max_left.max(left_len), max_right.max(right_len))
-        })
+    let mut has_branching = false;
+    let mut max_left = 0;
+    let mut max_right = 0;
+
+    for labels in labeled_edges_per_source.values() {
+        if labels.len() >= 2 {
+            has_branching = true;
+            max_left = max_left.max(labels[0].chars().count());
+            max_right = max_right.max(
+                labels[1..]
+                    .iter()
+                    .map(|l| l.chars().count())
+                    .max()
+                    .unwrap_or(0),
+            );
+        }
+    }
+
+    (has_branching, max_left, max_right)
 }
 
 #[cfg(test)]

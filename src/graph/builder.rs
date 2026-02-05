@@ -153,22 +153,22 @@ fn convert_shape(shape_spec: &ShapeSpec) -> Shape {
 fn convert_edge(edge_spec: &EdgeSpec) -> Edge {
     let (stroke, mut arrow_start, mut arrow_end, label) = convert_connector(&edge_spec.connector);
 
-    let mut from = edge_spec.from.id.clone();
-    let mut to = edge_spec.to.id.clone();
-
-    // If only the left arrow is present, treat it as a reversed edge.
-    if arrow_start != Arrow::None && arrow_end == Arrow::None {
-        std::mem::swap(&mut from, &mut to);
+    let (from, to) = if arrow_start != Arrow::None && arrow_end == Arrow::None {
+        // If only the left arrow is present, treat it as a reversed edge.
         std::mem::swap(&mut arrow_start, &mut arrow_end);
-    }
+        (edge_spec.to.id.clone(), edge_spec.from.id.clone())
+    } else {
+        (edge_spec.from.id.clone(), edge_spec.to.id.clone())
+    };
 
     let edge = Edge::new(from, to)
         .with_stroke(stroke)
         .with_arrows(arrow_start, arrow_end);
 
-    match label {
-        Some(lbl) => edge.with_label(lbl),
-        None => edge,
+    if let Some(lbl) = label {
+        edge.with_label(lbl)
+    } else {
+        edge
     }
 }
 
