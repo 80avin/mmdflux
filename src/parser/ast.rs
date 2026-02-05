@@ -193,6 +193,8 @@ pub struct SubgraphSpec {
     pub title: String,
     /// Statements contained within the subgraph.
     pub statements: Vec<Statement>,
+    /// Optional direction override for this subgraph.
+    pub dir: Option<super::flowchart::Direction>,
 }
 
 /// A statement in the flowchart AST.
@@ -216,6 +218,7 @@ mod tests {
             id: "sg1".to_string(),
             title: "My Group".to_string(),
             statements: vec![],
+            dir: None,
         };
         assert_eq!(sg.id, "sg1");
         assert_eq!(sg.title, "My Group");
@@ -231,6 +234,7 @@ mod tests {
                 id: "A".to_string(),
                 shape: None,
             })],
+            dir: None,
         };
         let stmt = Statement::Subgraph(sg);
         match &stmt {

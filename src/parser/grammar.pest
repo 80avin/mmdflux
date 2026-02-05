@@ -164,13 +164,14 @@ class_kw = @{ ^"class" ~ !(ASCII_ALPHANUMERIC | "_") }
 click_kw = @{ ^"click" ~ !(ASCII_ALPHANUMERIC | "_") }
 linkstyle_kw = @{ ^"linkStyle" ~ !(ASCII_ALPHANUMERIC | "_") }
 direction_kw = @{ ^"direction" ~ !(ASCII_ALPHANUMERIC | "_") }
+direction_value = @{ (^"TD" | ^"TB" | ^"BT" | ^"LR" | ^"RL") }
 
 style_stmt = _{ style_kw ~ style_rest }
 classdef_stmt = _{ classdef_kw ~ style_rest }
 class_stmt = _{ class_kw ~ style_rest }
 click_stmt = _{ click_kw ~ style_rest }
 linkstyle_stmt = _{ linkstyle_kw ~ style_rest }
-direction_stmt = _{ direction_kw ~ style_rest }
+direction_stmt = { direction_kw ~ direction_value }
 
 // Statement: subgraph, style passthrough, or vertex statement
 statement = { subgraph_stmt | style_stmt | classdef_stmt | class_stmt | click_stmt | linkstyle_stmt | direction_stmt | vertex_statement }

@@ -45,6 +45,7 @@ fn process_statements(
                         title: sg_spec.title.clone(),
                         nodes: node_ids,
                         parent: parent_subgraph.map(|s| s.to_string()),
+                        dir: sg_spec.dir.map(convert_direction),
                     },
                 );
                 diagram.subgraph_order.push(sg_spec.id.clone());
@@ -452,6 +453,24 @@ mod tests {
 
         let child = find_non_cluster_child(&diagram, "no_such_sg");
         assert!(child.is_none());
+    }
+
+    #[test]
+    fn test_build_diagram_subgraph_dir_propagated() {
+        let input = "graph TD\nsubgraph sg1[Group]\ndirection LR\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert_eq!(diagram.subgraphs["sg1"].dir, Some(Direction::LeftRight));
+    }
+
+    #[test]
+    fn test_build_diagram_subgraph_no_dir() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert_eq!(diagram.subgraphs["sg1"].dir, None);
     }
 
     #[test]

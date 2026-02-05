@@ -114,6 +114,7 @@ fn parse_statement(
             Rule::subgraph_stmt => {
                 vec![Statement::Subgraph(parse_subgraph(inner, subgraph_counter))]
             }
+            Rule::direction_stmt => vec![],
             _ => vec![],
         })
         .collect()
@@ -142,6 +143,7 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>, counter: &mut usize) -> Sub
     let mut title = None;
     let mut has_explicit_id = false;
     let mut body_statements = Vec::new();
+    let mut dir = None;
 
     for inner in pair.into_inner() {
         match inner.as_rule() {
@@ -169,12 +171,29 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>, counter: &mut usize) -> Sub
                 }
             }
             Rule::subgraph_body_line => {
-                body_statements.extend(
-                    inner
-                        .into_inner()
-                        .filter(|b| b.as_rule() == Rule::statement)
-                        .flat_map(|s| parse_statement(s, counter)),
-                );
+                for body_inner in inner.into_inner() {
+                    if body_inner.as_rule() == Rule::statement {
+                        for stmt_inner in body_inner.into_inner() {
+                            match stmt_inner.as_rule() {
+                                Rule::direction_stmt => {
+                                    dir = stmt_inner
+                                        .into_inner()
+                                        .find(|p| p.as_rule() == Rule::direction_value)
+                                        .and_then(|p| Direction::from_str(p.as_str()));
+                                }
+                                Rule::vertex_statement => {
+                                    body_statements.extend(parse_vertex_statement(stmt_inner));
+                                }
+                                Rule::subgraph_stmt => {
+                                    body_statements.push(Statement::Subgraph(parse_subgraph(
+                                        stmt_inner, counter,
+                                    )));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
             }
             _ => {}
         }
@@ -189,6 +208,7 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>, counter: &mut usize) -> Sub
         title: title.unwrap_or_else(|| id.clone()),
         id,
         statements: body_statements,
+        dir,
     }
 }
 
@@ -1278,6 +1298,43 @@ mod tests {
             Statement::Subgraph(sg) => {
                 assert_eq!(sg.id, "myId");
                 assert_eq!(sg.title, "My Title");
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_direction_lr() {
+        let input = "graph TD\nsubgraph sg1[Group]\ndirection LR\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "sg1");
+                assert_eq!(sg.dir, Some(Direction::LeftRight));
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_direction_bt() {
+        let input = "graph TD\nsubgraph sg1[Group]\ndirection BT\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.dir, Some(Direction::BottomTop));
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_no_direction() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.dir, None);
             }
             _ => panic!("Expected subgraph"),
         }

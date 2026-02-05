@@ -2570,6 +2570,7 @@ mod tests {
                 title: "Inner".to_string(),
                 nodes: vec!["A".to_string()],
                 parent: Some("outer".to_string()),
+                dir: None,
             },
         );
         subgraphs.insert(
@@ -2579,6 +2580,7 @@ mod tests {
                 title: "Outer".to_string(),
                 nodes: vec!["A".to_string()],
                 parent: None,
+                dir: None,
             },
         );
         let children_map = build_children_map(&subgraphs);
@@ -2600,9 +2602,9 @@ mod tests {
             Subgraph {
                 id: "sg1".to_string(),
                 title: "Left".to_string(),
-
                 nodes: vec!["A".to_string()],
                 parent: None,
+                dir: None,
             },
         );
         subgraphs.insert(
@@ -2610,9 +2612,9 @@ mod tests {
             Subgraph {
                 id: "sg2".to_string(),
                 title: "Right".to_string(),
-
                 nodes: vec!["B".to_string()],
                 parent: None,
+                dir: None,
             },
         );
 
@@ -2684,9 +2686,9 @@ mod tests {
             Subgraph {
                 id: "sg1".to_string(),
                 title: "G".to_string(),
-
                 nodes: vec!["A".to_string()],
                 parent: None,
+                dir: None,
             },
         );
 
