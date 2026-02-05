@@ -4,6 +4,7 @@
 # Usage:
 #   ./scripts/compare-mermaid.sh              # all fixtures
 #   ./scripts/compare-mermaid.sh double_skip  # single fixture by name
+#   ./scripts/compare-mermaid.sh --open       # all fixtures, open in browser
 #
 # Output goes to /tmp/mmdflux-compare/
 # Each fixture gets:
@@ -14,6 +15,17 @@
 
 set -euo pipefail
 
+auto_open=false
+args=()
+for arg in "$@"; do
+    if [[ "$arg" == "--open" ]]; then
+        auto_open=true
+    else
+        args+=("$arg")
+    fi
+done
+set -- "${args[@]+"${args[@]}"}"
+
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 FIXTURES="$REPO/tests/fixtures"
 OUTDIR="/tmp/mmdflux-compare"
@@ -21,11 +33,37 @@ MMDFLUX="$REPO/target/debug/mmdflux"
 
 mkdir -p "$OUTDIR"
 
-# Build mmdflux if needed
-if [[ ! -x "$MMDFLUX" ]]; then
-    echo "Building mmdflux..."
-    cargo build --quiet --manifest-path "$REPO/Cargo.toml"
+cargo build -q --manifest-path "$REPO/Cargo.toml"
+
+# --- Cache setup ---
+CACHEFILE="$OUTDIR/cache.json"
+CACHE_FLAT=$(mktemp)
+
+# Parse existing cache into flat key=value format for easy lookup
+if [[ -f "$CACHEFILE" ]]; then
+    jq -r '"binary_hash=\(.binary_hash // "")",
+           (.fixtures // {} | to_entries[] | "fixture:\(.key)=\(.value)")' \
+        "$CACHEFILE" > "$CACHE_FLAT" 2>/dev/null || true
 fi
+
+cached_value() {
+    grep "^${1}=" "$CACHE_FLAT" 2>/dev/null | head -1 | cut -d= -f2- || true
+}
+
+# Compute binary hash
+binary_hash=$(shasum -a 256 "$MMDFLUX" | cut -d' ' -f1)
+cached_binary=$(cached_value "binary_hash")
+binary_changed=true
+if [[ -n "$cached_binary" ]] && [[ "$binary_hash" == "$cached_binary" ]]; then
+    binary_changed=false
+fi
+
+# Track fixture hashes for cache update (temp file, one "name=hash" per line)
+NEW_HASHES=$(mktemp)
+cleanup() { rm -f "$CACHE_FLAT" "$NEW_HASHES"; }
+trap cleanup EXIT
+skipped=0
+generated=0
 
 # Collect fixture list
 if [[ $# -gt 0 ]]; then
@@ -45,6 +83,11 @@ fi
 
 echo "Comparing ${#files[@]} fixtures..."
 echo "Output: $OUTDIR"
+if $binary_changed; then
+    echo "Binary: changed"
+else
+    echo "Binary: unchanged"
+fi
 echo ""
 
 # Generate outputs
@@ -52,20 +95,82 @@ for f in "${files[@]}"; do
     name="$(basename "$f" .mmd)"
     echo -n "  $name ... "
 
-    # mmdflux text output (unicode)
-    "$MMDFLUX" "$f" > "$OUTDIR/${name}.txt" 2>/dev/null || true
+    syntax_hash=$(shasum -a 256 "$f" | cut -d' ' -f1)
+    echo "fixture:$name=$syntax_hash" >> "$NEW_HASHES"
+    cached_syntax=$(cached_value "fixture:$name")
 
-    # mmdflux SVG output
-    "$MMDFLUX" --format svg "$f" > "$OUTDIR/${name}.mmdflux.svg" 2>/dev/null || true
+    syntax_changed=true
+    if [[ -n "$cached_syntax" ]] && [[ "$syntax_hash" == "$cached_syntax" ]]; then
+        syntax_changed=false
+    fi
 
-    # Mermaid SVG output
-    mmdc -i "$f" -o "$OUTDIR/${name}.mermaid.svg" -b transparent --quiet 2>/dev/null || {
-        echo "mmdc failed"
+    # Skip mmdflux if both syntax and binary are unchanged and outputs exist
+    skip_mmdflux=false
+    if ! $syntax_changed && ! $binary_changed; then
+        if [[ -f "$OUTDIR/${name}.txt" && -f "$OUTDIR/${name}.mmdflux.svg" ]]; then
+            skip_mmdflux=true
+        fi
+    fi
+
+    # Skip mmdc if syntax is unchanged and output exists
+    skip_mmdc=false
+    if ! $syntax_changed; then
+        if [[ -f "$OUTDIR/${name}.mermaid.svg" ]]; then
+            skip_mmdc=true
+        fi
+    fi
+
+    if $skip_mmdflux && $skip_mmdc; then
+        echo "cached"
+        skipped=$((skipped + 1))
         continue
-    }
+    fi
 
-    echo "done"
+    generated=$((generated + 1))
+    parts=()
+
+    if ! $skip_mmdflux; then
+        # mmdflux text output (unicode)
+        "$MMDFLUX" "$f" > "$OUTDIR/${name}.txt" 2>/dev/null || true
+        # mmdflux SVG output
+        "$MMDFLUX" --format svg "$f" > "$OUTDIR/${name}.mmdflux.svg" 2>/dev/null || true
+    else
+        parts+=("mmdflux cached")
+    fi
+
+    if ! $skip_mmdc; then
+        # Mermaid SVG output
+        mmdc -i "$f" -o "$OUTDIR/${name}.mermaid.svg" -b transparent --quiet 2>/dev/null || {
+            echo "mmdc failed"
+            continue
+        }
+    else
+        parts+=("mmdc cached")
+    fi
+
+    if [[ ${#parts[@]} -gt 0 ]]; then
+        echo "$(IFS=', '; echo "${parts[*]}"), done"
+    else
+        echo "done"
+    fi
 done
+
+# Write updated cache (merge with existing entries for fixtures not in this run)
+new_fixtures=$(jq -Rn \
+    '[inputs | capture("^fixture:(?<k>[^=]+)=(?<v>.+)$") | {key: .k, value: .v}] | from_entries' \
+    "$NEW_HASHES")
+
+if [[ -f "$CACHEFILE" ]]; then
+    jq -S --arg bh "$binary_hash" --argjson nf "$new_fixtures" \
+        '.binary_hash = $bh | .fixtures = ((.fixtures // {}) + $nf)' \
+        "$CACHEFILE" > "$CACHEFILE.tmp" && mv "$CACHEFILE.tmp" "$CACHEFILE"
+else
+    jq -Sn --arg bh "$binary_hash" --argjson nf "$new_fixtures" \
+        '{binary_hash: $bh, fixtures: $nf}' > "$CACHEFILE"
+fi
+
+echo ""
+echo "Generated: $generated, Cached: $skipped"
 
 # Generate HTML comparison page
 cat > "$OUTDIR/index.html" <<'HEADER'
@@ -166,5 +271,10 @@ cat >> "$OUTDIR/index.html" <<'FOOTER'
 FOOTER
 
 echo ""
-echo "Done! Open the comparison page:"
-echo "  open $OUTDIR/index.html"
+if $auto_open; then
+    echo "Done! Opening comparison page..."
+    open "$OUTDIR/index.html"
+else
+    echo "Done! Open the comparison page:"
+    echo "  open $OUTDIR/index.html"
+fi
