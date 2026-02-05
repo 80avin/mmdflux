@@ -6,9 +6,9 @@
   </defs>
   <g transform="translate(8.50,8.50)">
     <g class="edgePaths">
-      <path d="M138.90,48.70 L163.90,48.70 L228.23,139.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M138.90,48.70 L157.30,48.70 Q163.90,48.70 167.72,54.08 L228.23,139.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M138.90,180.10 L163.90,180.10 L188.90,180.10" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M138.90,311.50 L163.90,311.50 L228.23,220.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M138.90,311.50 L157.30,311.50 Q163.90,311.50 167.72,306.12 L228.23,220.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

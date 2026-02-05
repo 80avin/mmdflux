@@ -7,7 +7,7 @@
   <g transform="translate(8.50,8.50)">
     <g class="edgePaths">
       <path d="M84.45,89.40 L84.45,114.40 L84.45,139.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M160.90,139.40 L196.40,139.40 L196.40,220.80 L160.90,220.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M160.90,139.40 L189.80,139.40 Q196.40,139.40 196.40,146.00 L196.40,214.20 Q196.40,220.80 189.80,220.80 L160.90,220.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M84.45,220.80 L84.45,245.80 L84.45,270.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">

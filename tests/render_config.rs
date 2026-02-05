@@ -9,6 +9,8 @@ fn render_config_default() {
     assert!(config.svg_scale.is_none());
     assert!(config.svg_node_padding_x.is_none());
     assert!(config.svg_node_padding_y.is_none());
+    assert!(config.svg_edge_curve.is_none());
+    assert!(config.svg_edge_curve_radius.is_none());
 }
 
 #[test]

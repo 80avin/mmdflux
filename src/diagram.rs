@@ -32,6 +32,13 @@ pub enum OutputFormat {
     Svg,
 }
 
+/// SVG edge curve style.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SvgEdgeCurve {
+    Linear,
+    Rounded,
+}
+
 impl std::fmt::Display for OutputFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -123,6 +130,10 @@ pub struct RenderConfig {
     pub padding: Option<usize>,
     /// SVG-specific: scale factor.
     pub svg_scale: Option<f64>,
+    /// SVG-specific: edge curve style.
+    pub svg_edge_curve: Option<SvgEdgeCurve>,
+    /// SVG-specific: edge curve radius (px) for rounded corners.
+    pub svg_edge_curve_radius: Option<f64>,
     /// SVG-specific: node padding on x-axis (px).
     pub svg_node_padding_x: Option<f64>,
     /// SVG-specific: node padding on y-axis (px).

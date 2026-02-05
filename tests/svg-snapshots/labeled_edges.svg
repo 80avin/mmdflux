@@ -7,10 +7,10 @@
   <g transform="translate(8.50,8.50)">
     <g class="edgePaths">
       <path d="M198.00,89.40 L198.00,134.20 L198.00,179.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M160.10,260.40 L118.38,305.20 L118.38,350.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M97.97,485.30 L84.45,530.10 L84.45,574.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M186.03,484.64 L231.93,530.10 L273.65,574.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M319.45,574.90 L332.00,510.30 L332.00,369.80 L332.00,285.40 L262.35,251.25" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-end="url(#arrowhead)" />
+      <path d="M160.10,260.40 L122.87,300.37 Q118.38,305.20 118.38,311.80 L118.38,350.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M97.97,485.30 L86.36,523.78 Q84.45,530.10 84.45,536.70 L84.45,574.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M186.03,484.64 L227.24,525.46 Q231.93,530.10 236.42,534.93 L273.65,574.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M319.45,574.90 L330.74,516.78 Q332.00,510.30 332.00,503.70 L332.00,369.80 L332.00,292.00 Q332.00,285.40 326.07,282.49 L262.35,251.25" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
       <text x="198.00" y="134.20" text-anchor="middle" dominant-baseline="middle" fill="#333">initialize</text>

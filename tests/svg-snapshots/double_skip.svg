@@ -6,11 +6,11 @@
   </defs>
   <g transform="translate(8.50,8.50)">
     <g class="edgePaths">
-      <path d="M123.85,86.07 L78.40,114.40 L78.40,139.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M78.40,220.80 L78.40,245.80 L98.45,270.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M131.10,352.20 L131.10,377.20 L151.15,402.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M183.80,89.40 L183.80,114.40 L183.80,139.40 L183.80,245.80 L163.75,270.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M222.64,89.40 L246.50,114.40 L246.50,139.40 L246.50,245.80 L246.50,270.80 L246.50,377.20 L222.64,402.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M123.85,86.07 L84.00,110.91 Q78.40,114.40 78.40,121.00 L78.40,139.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M78.40,220.80 L78.40,239.20 Q78.40,245.80 82.53,250.95 L98.45,270.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M131.10,352.20 L131.10,370.60 Q131.10,377.20 135.23,382.35 L151.15,402.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M183.80,89.40 L183.80,114.40 L183.80,139.40 L183.80,239.20 Q183.80,245.80 179.67,250.95 L163.75,270.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M222.64,89.40 L241.94,109.63 Q246.50,114.40 246.50,121.00 L246.50,139.40 L246.50,245.80 L246.50,270.80 L246.50,370.60 Q246.50,377.20 241.94,381.97 L222.64,402.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

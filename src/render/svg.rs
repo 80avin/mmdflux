@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use super::layout::build_dagre_layout;
 use super::svg_metrics::SvgTextMetrics;
-use super::{RenderOptions, layout_config_for_diagram};
+use super::{RenderOptions, SvgEdgeCurve, layout_config_for_diagram};
 use crate::dagre::{LayoutResult, Point, Rect};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 
@@ -57,7 +57,15 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     render_defs(&mut writer, scale);
     writer.start_group_transform(offset_x, offset_y);
     render_subgraphs(&mut writer, diagram, &layout, &metrics, scale);
-    render_edges(&mut writer, diagram, &layout, &self_edge_paths, scale);
+    render_edges(
+        &mut writer,
+        diagram,
+        &layout,
+        &self_edge_paths,
+        svg_options.edge_curve,
+        svg_options.edge_curve_radius,
+        scale,
+    );
     render_edge_labels(
         &mut writer,
         diagram,
@@ -193,6 +201,8 @@ fn render_edges(
     diagram: &Diagram,
     layout: &LayoutResult,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
+    edge_curve: SvgEdgeCurve,
+    edge_curve_radius: f64,
     scale: f64,
 ) {
     let mut edge_paths: Vec<(usize, Vec<Point>)> = layout
@@ -214,7 +224,7 @@ fn render_edges(
         let Some(edge) = diagram.edges.get(index) else {
             continue;
         };
-        let d = path_from_points(&points, scale);
+        let d = path_from_points(&points, scale, edge_curve, edge_curve_radius);
         if d.is_empty() {
             continue;
         }
@@ -921,20 +931,107 @@ fn edge_marker_attrs(edge: &Edge) -> String {
     attrs
 }
 
-fn path_from_points(points: &[Point], scale: f64) -> String {
+fn path_from_points(
+    points: &[Point],
+    scale: f64,
+    curve: SvgEdgeCurve,
+    curve_radius: f64,
+) -> String {
+    if points.is_empty() {
+        return String::new();
+    }
+    let scaled: Vec<(f64, f64)> = points
+        .iter()
+        .map(|point| (point.x * scale, point.y * scale))
+        .collect();
+    match curve {
+        SvgEdgeCurve::Rounded => {
+            path_from_points_rounded(&scaled, curve_radius * scale)
+        }
+        SvgEdgeCurve::Linear => path_from_points_linear(&scaled),
+    }
+}
+
+fn path_from_points_linear(points: &[(f64, f64)]) -> String {
     if points.is_empty() {
         return String::new();
     }
     let mut d = String::new();
-    for (i, point) in points.iter().enumerate() {
-        let x = fmt_f64(point.x * scale);
-        let y = fmt_f64(point.y * scale);
+    for (i, (x, y)) in points.iter().enumerate() {
         if i == 0 {
-            let _ = write!(d, "M{x},{y}");
+            let _ = write!(d, "M{},{}", fmt_f64(*x), fmt_f64(*y));
         } else {
-            let _ = write!(d, " L{x},{y}");
+            let _ = write!(d, " L{},{}", fmt_f64(*x), fmt_f64(*y));
         }
     }
+    d
+}
+
+fn path_from_points_rounded(points: &[(f64, f64)], radius: f64) -> String {
+    if points.is_empty() {
+        return String::new();
+    }
+    if points.len() < 3 || radius <= 0.0 {
+        return path_from_points_linear(points);
+    }
+
+    let mut d = String::new();
+    let (x0, y0) = points[0];
+    let _ = write!(d, "M{},{}", fmt_f64(x0), fmt_f64(y0));
+
+    for i in 1..points.len() - 1 {
+        let (px, py) = points[i - 1];
+        let (cx, cy) = points[i];
+        let (nx, ny) = points[i + 1];
+
+        let v1x = cx - px;
+        let v1y = cy - py;
+        let v2x = nx - cx;
+        let v2y = ny - cy;
+
+        let len1 = (v1x * v1x + v1y * v1y).sqrt();
+        let len2 = (v2x * v2x + v2y * v2y).sqrt();
+        if len1 <= f64::EPSILON || len2 <= f64::EPSILON {
+            let _ = write!(d, " L{},{}", fmt_f64(cx), fmt_f64(cy));
+            continue;
+        }
+
+        let v1nx = v1x / len1;
+        let v1ny = v1y / len1;
+        let v2nx = v2x / len2;
+        let v2ny = v2y / len2;
+
+        let cross = v1nx * v2ny - v1ny * v2nx;
+        let dot = v1nx * v2nx + v1ny * v2ny;
+        if cross.abs() < 1e-3 && dot.abs() > 0.999 {
+            let _ = write!(d, " L{},{}", fmt_f64(cx), fmt_f64(cy));
+            continue;
+        }
+
+        let r = radius.min(len1 / 2.0).min(len2 / 2.0);
+        if r <= f64::EPSILON {
+            let _ = write!(d, " L{},{}", fmt_f64(cx), fmt_f64(cy));
+            continue;
+        }
+
+        let p1x = cx - v1nx * r;
+        let p1y = cy - v1ny * r;
+        let p2x = cx + v2nx * r;
+        let p2y = cy + v2ny * r;
+
+        let _ = write!(d, " L{},{}", fmt_f64(p1x), fmt_f64(p1y));
+        let _ = write!(
+            d,
+            " Q{},{} {},{}",
+            fmt_f64(cx),
+            fmt_f64(cy),
+            fmt_f64(p2x),
+            fmt_f64(p2y)
+        );
+    }
+
+    let (lx, ly) = points[points.len() - 1];
+    let _ = write!(d, " L{},{}", fmt_f64(lx), fmt_f64(ly));
     d
 }
 

@@ -10,8 +10,8 @@
       <text x="109.55" y="-25.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Group</text>
     </g>
     <g class="edgePaths">
-      <path d="M88.33,126.90 L68.78,164.40 L88.33,201.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M130.77,201.90 L150.33,164.40 L130.77,126.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M88.33,126.90 L71.83,158.55 Q68.78,164.40 71.83,170.25 L88.33,201.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M130.77,201.90 L147.27,170.25 Q150.33,164.40 147.27,158.55 L130.77,126.90" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

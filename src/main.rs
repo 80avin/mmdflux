@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use mmdflux::dagre::Ranker;
-use mmdflux::diagram::{LayoutConfig, OutputFormat, RenderConfig};
+use mmdflux::diagram::{LayoutConfig, OutputFormat, RenderConfig, SvgEdgeCurve};
 use mmdflux::registry::default_registry;
 
 #[derive(Parser)]
@@ -65,6 +65,14 @@ struct Cli {
     /// SVG node padding on y-axis (px)
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
+
+    /// SVG edge curve style (linear or rounded)
+    #[arg(long, value_enum)]
+    svg_edge_curve: Option<EdgeCurveArg>,
+
+    /// SVG edge curve radius (px) for rounded corners
+    #[arg(long)]
+    svg_edge_curve_radius: Option<f64>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -102,6 +110,21 @@ impl From<RankerArg> for Ranker {
     }
 }
 
+#[derive(Clone, Copy, ValueEnum, Debug)]
+enum EdgeCurveArg {
+    Linear,
+    Rounded,
+}
+
+impl From<EdgeCurveArg> for SvgEdgeCurve {
+    fn from(arg: EdgeCurveArg) -> Self {
+        match arg {
+            EdgeCurveArg::Linear => SvgEdgeCurve::Linear,
+            EdgeCurveArg::Rounded => SvgEdgeCurve::Rounded,
+        }
+    }
+}
+
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
@@ -132,6 +155,8 @@ fn main() -> io::Result<()> {
         svg_scale: cli.svg_scale,
         svg_node_padding_x: cli.svg_node_padding_x,
         svg_node_padding_y: cli.svg_node_padding_y,
+        svg_edge_curve: cli.svg_edge_curve.map(Into::into),
+        svg_edge_curve_radius: cli.svg_edge_curve_radius,
     };
 
     // Use registry for detection and rendering

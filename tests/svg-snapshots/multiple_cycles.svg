@@ -6,10 +6,10 @@
   </defs>
   <g transform="translate(8.50,8.50)">
     <g class="edgePaths">
-      <path d="M95.83,89.40 L76.20,114.40 L76.20,139.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M70.01,220.80 L66.20,245.80 L85.83,270.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M155.96,270.80 L179.40,245.80 L179.40,139.40 L179.40,114.40 L159.77,89.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M117.80,270.80 L117.80,245.80 L101.97,220.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M95.83,89.40 L80.28,109.21 Q76.20,114.40 76.20,121.00 L76.20,139.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M70.01,220.80 L67.19,239.28 Q66.20,245.80 70.28,250.99 L85.83,270.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M155.96,270.80 L174.89,250.61 Q179.40,245.80 179.40,239.20 L179.40,139.40 L179.40,121.00 Q179.40,114.40 175.32,109.21 L159.77,89.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M117.80,270.80 L117.80,252.40 Q117.80,245.80 114.27,240.22 L101.97,220.80" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

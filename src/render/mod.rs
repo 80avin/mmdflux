@@ -24,7 +24,7 @@ pub use svg::render_svg;
 use svg_metrics::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
 
 pub use crate::diagram::{
-    LayoutConfig as DiagramLayoutConfig, OutputFormat, RenderConfig, RenderError,
+    LayoutConfig as DiagramLayoutConfig, OutputFormat, RenderConfig, RenderError, SvgEdgeCurve,
 };
 use crate::graph::{Diagram, Direction};
 
@@ -39,6 +39,12 @@ impl From<&RenderConfig> for RenderOptions {
         }
         if let Some(padding_y) = config.svg_node_padding_y {
             svg.node_padding_y = padding_y;
+        }
+        if let Some(curve) = config.svg_edge_curve {
+            svg.edge_curve = curve;
+        }
+        if let Some(radius) = config.svg_edge_curve_radius {
+            svg.edge_curve_radius = radius;
         }
 
         RenderOptions {
@@ -63,6 +69,8 @@ pub struct SvgOptions {
     pub font_size: f64,
     pub node_padding_x: f64,
     pub node_padding_y: f64,
+    pub edge_curve: SvgEdgeCurve,
+    pub edge_curve_radius: f64,
 }
 
 impl Default for SvgOptions {
@@ -74,6 +82,8 @@ impl Default for SvgOptions {
             font_size,
             node_padding_x: font_size * 0.8,
             node_padding_y: font_size * 1.25,
+            edge_curve: SvgEdgeCurve::Rounded,
+            edge_curve_radius: font_size * 0.3,
         }
     }
 }

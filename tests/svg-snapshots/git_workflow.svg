@@ -6,10 +6,10 @@
   </defs>
   <g transform="translate(8.50,8.50)">
     <g class="edgePaths">
-      <path d="M198.30,64.90 L269.50,48.70 L340.70,48.70" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M198.30,64.90 L263.06,50.16 Q269.50,48.70 276.10,48.70 L340.70,48.70" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M546.40,48.70 L635.20,48.70 L724.00,48.70" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M914.30,48.70 L991.55,48.70 L1068.80,64.84" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M1068.80,103.40 L939.30,124.40 L724.00,124.40 L618.15,124.40 L340.70,124.40 L223.30,124.40 L198.30,116.52" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M914.30,48.70 L984.95,48.70 Q991.55,48.70 998.01,50.05 L1068.80,64.84" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M1068.80,103.40 L945.81,123.34 Q939.30,124.40 932.70,124.40 L724.00,124.40 L618.15,124.40 L340.70,124.40 L229.90,124.40 Q223.30,124.40 217.00,122.42 L198.30,116.52" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
       <text x="269.50" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">git add</text>

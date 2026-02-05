@@ -10,8 +10,8 @@
       <path d="M341.80,114.40 L366.80,114.40 L391.80,114.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M571.10,114.40 L596.10,114.40 L621.10,114.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M807.00,114.40 L832.00,114.40 L857.00,114.40" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M1009.90,80.38 L1081.10,48.70 L1184.20,48.70" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M1009.90,145.10 L1097.05,180.10 L1184.20,180.10" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M1009.90,80.38 L1075.07,51.38 Q1081.10,48.70 1087.70,48.70 L1184.20,48.70" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M1009.90,145.10 L1090.93,177.64 Q1097.05,180.10 1103.65,180.10 L1184.20,180.10" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
       <text x="1081.10" y="48.70" text-anchor="middle" dominant-baseline="middle" fill="#333">staging</text>
