@@ -328,6 +328,91 @@ fn render_node_shape(writer: &mut SvgWriter, node: &Node, rect: &Rect, scale: f6
             );
             writer.push_line(&line);
         }
+        Shape::Document | Shape::Documents | Shape::TaggedDocument | Shape::Card | Shape::TaggedRect => {
+            // Base rectangle
+            let line = format!(
+                "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"{style} />",
+                x = fmt_f64(rect.x),
+                y = fmt_f64(rect.y),
+                w = fmt_f64(rect.width),
+                h = fmt_f64(rect.height),
+                style = style
+            );
+            writer.push_line(&line);
+
+            // Optional folded corner for card/tagged shapes
+            if matches!(node.shape, Shape::Card | Shape::TaggedRect | Shape::TaggedDocument) {
+                let fold = (rect.width.min(rect.height) * 0.2).max(4.0 * scale);
+                let x1 = rect.x + rect.width - fold;
+                let y1 = rect.y;
+                let x2 = rect.x + rect.width;
+                let y2 = rect.y + fold;
+                let stroke = format!(
+                    " stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" fill=\"none\"",
+                    stroke = STROKE_COLOR,
+                    stroke_width = stroke_width
+                );
+                let fold_path = format!(
+                    "<path d=\"M{x1},{y1} L{x2},{y1} L{x2},{y2}\"{stroke} />",
+                    x1 = fmt_f64(x1),
+                    y1 = fmt_f64(y1),
+                    x2 = fmt_f64(x2),
+                    y2 = fmt_f64(y2),
+                    stroke = stroke
+                );
+                writer.push_line(&fold_path);
+            }
+
+            // Optional wavy bottom for document shapes
+            if matches!(node.shape, Shape::Document | Shape::Documents | Shape::TaggedDocument) {
+                let wave_height = (rect.height * 0.12).max(3.0 * scale);
+                let y = rect.y + rect.height - wave_height;
+                let wave_count = 2;
+                let wave_width = rect.width / wave_count as f64;
+                let mut d = String::new();
+                let _ = write!(d, "M{},{}", fmt_f64(rect.x), fmt_f64(y));
+                for i in 0..wave_count {
+                    let x0 = rect.x + (i as f64) * wave_width;
+                    let x1 = x0 + wave_width / 2.0;
+                    let x2 = x0 + wave_width;
+                    let y1 = if i % 2 == 0 {
+                        rect.y + rect.height
+                    } else {
+                        rect.y + rect.height - wave_height
+                    };
+                    let _ = write!(
+                        d,
+                        " Q{},{} {},{}",
+                        fmt_f64(x1),
+                        fmt_f64(y1),
+                        fmt_f64(x2),
+                        fmt_f64(y)
+                    );
+                }
+                let wave = format!(
+                    "<path d=\"{d}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" />",
+                    d = d,
+                    stroke = STROKE_COLOR,
+                    stroke_width = stroke_width
+                );
+                writer.push_line(&wave);
+            }
+
+            // Optional shadow for stacked documents
+            if matches!(node.shape, Shape::Documents) {
+                let offset = (rect.height * 0.12).max(3.0 * scale);
+                let shadow = format!(
+                    "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" opacity=\"0.4\" />",
+                    x = fmt_f64(rect.x + offset),
+                    y = fmt_f64(rect.y + offset),
+                    w = fmt_f64(rect.width),
+                    h = fmt_f64(rect.height),
+                    stroke = STROKE_COLOR,
+                    stroke_width = stroke_width
+                );
+                writer.push_line(&shadow);
+            }
+        }
         Shape::Diamond => {
             let cx = rect.x + rect.width / 2.0;
             let cy = rect.y + rect.height / 2.0;
@@ -371,6 +456,51 @@ fn render_node_shape(writer: &mut SvgWriter, node: &Node, rect: &Rect, scale: f6
                 (rect.x + rect.width, rect.y + rect.height),
                 (rect.x + indent, rect.y + rect.height),
                 (rect.x, cy),
+            ];
+            let line = format!(
+                "<polygon points=\"{points}\"{style} />",
+                points = polygon_points(&points),
+                style = style
+            );
+            writer.push_line(&line);
+        }
+        Shape::Parallelogram => {
+            let indent = rect.width * 0.2;
+            let points = vec![
+                (rect.x + indent, rect.y),
+                (rect.x + rect.width, rect.y),
+                (rect.x + rect.width - indent, rect.y + rect.height),
+                (rect.x, rect.y + rect.height),
+            ];
+            let line = format!(
+                "<polygon points=\"{points}\"{style} />",
+                points = polygon_points(&points),
+                style = style
+            );
+            writer.push_line(&line);
+        }
+        Shape::InvParallelogram => {
+            let indent = rect.width * 0.2;
+            let points = vec![
+                (rect.x, rect.y),
+                (rect.x + rect.width - indent, rect.y),
+                (rect.x + rect.width, rect.y + rect.height),
+                (rect.x + indent, rect.y + rect.height),
+            ];
+            let line = format!(
+                "<polygon points=\"{points}\"{style} />",
+                points = polygon_points(&points),
+                style = style
+            );
+            writer.push_line(&line);
+        }
+        Shape::ManualInput => {
+            let slant = rect.height * 0.25;
+            let points = vec![
+                (rect.x + slant, rect.y),
+                (rect.x + rect.width, rect.y),
+                (rect.x + rect.width, rect.y + rect.height),
+                (rect.x, rect.y + rect.height),
             ];
             let line = format!(
                 "<polygon points=\"{points}\"{style} />",
@@ -452,6 +582,60 @@ fn render_node_shape(writer: &mut SvgWriter, node: &Node, rect: &Rect, scale: f6
             );
             writer.push_line(&inner);
         }
+        Shape::SmallCircle | Shape::FramedCircle | Shape::CrossedCircle => {
+            let cx = rect.x + rect.width / 2.0;
+            let cy = rect.y + rect.height / 2.0;
+            let radius = rect.width.min(rect.height) * 0.35;
+            let circle = format!(
+                "<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\"{style} />",
+                cx = fmt_f64(cx),
+                cy = fmt_f64(cy),
+                r = fmt_f64(radius),
+                style = style
+            );
+            writer.push_line(&circle);
+
+            if matches!(node.shape, Shape::FramedCircle) {
+                let inner = format!(
+                    "<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\"{style} />",
+                    cx = fmt_f64(cx),
+                    cy = fmt_f64(cy),
+                    r = fmt_f64(radius * 0.65),
+                    style = style
+                );
+                writer.push_line(&inner);
+            }
+
+            if matches!(node.shape, Shape::CrossedCircle) {
+                let stroke = format!(
+                    " stroke=\"{stroke}\" stroke-width=\"{stroke_width}\"",
+                    stroke = STROKE_COLOR,
+                    stroke_width = stroke_width
+                );
+                let x1 = cx - radius * 0.6;
+                let x2 = cx + radius * 0.6;
+                let y1 = cy - radius * 0.6;
+                let y2 = cy + radius * 0.6;
+                let line1 = format!(
+                    "<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\"{stroke} />",
+                    x1 = fmt_f64(x1),
+                    y1 = fmt_f64(y1),
+                    x2 = fmt_f64(x2),
+                    y2 = fmt_f64(y2),
+                    stroke = stroke
+                );
+                let line2 = format!(
+                    "<line x1=\"{x1}\" y1=\"{y2}\" x2=\"{x2}\" y2=\"{y1}\"{stroke} />",
+                    x1 = fmt_f64(x1),
+                    y1 = fmt_f64(y1),
+                    x2 = fmt_f64(x2),
+                    y2 = fmt_f64(y2),
+                    stroke = stroke
+                );
+                writer.push_line(&line1);
+                writer.push_line(&line2);
+            }
+        }
         Shape::Subroutine => {
             let line = format!(
                 "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"{style} />",
@@ -503,6 +687,25 @@ fn render_node_shape(writer: &mut SvgWriter, node: &Node, rect: &Rect, scale: f6
                 bottom = fmt_f64(bottom_y)
             );
             let line = format!("<path d=\"{d}\"{style} />", d = d, style = style);
+            writer.push_line(&line);
+        }
+        Shape::TextBlock => {
+            // Borderless: only text will be drawn.
+        }
+        Shape::ForkJoin => {
+            let y = rect.y + rect.height / 2.0;
+            let stroke = format!(
+                " stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" stroke-linecap=\"square\"",
+                stroke = STROKE_COLOR,
+                stroke_width = fmt_f64((rect.height * 0.3).max(3.0 * scale))
+            );
+            let line = format!(
+                "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\"{stroke} />",
+                x1 = fmt_f64(rect.x),
+                x2 = fmt_f64(rect.x + rect.width),
+                y = fmt_f64(y),
+                stroke = stroke
+            );
             writer.push_line(&line);
         }
     }
