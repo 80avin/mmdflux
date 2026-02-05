@@ -10,6 +10,8 @@ pub enum Stroke {
     Dotted,
     /// Thick/bold line: ==
     Thick,
+    /// Invisible edge (layout-only, not rendered): ~~~
+    Invisible,
 }
 
 /// Type of arrow head.

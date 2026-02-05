@@ -301,6 +301,13 @@ fn parse_connector(pair: pest::iterators::Pair<Rule>) -> ConnectorSpec {
 
     for inner in pair.into_inner() {
         let (link_stroke, length_rule) = match inner.as_rule() {
+            Rule::link_invisible => {
+                stroke = StrokeSpec::Invisible;
+                left = ArrowHead::None;
+                right = ArrowHead::None;
+                length = 1;
+                continue;
+            }
             Rule::link_solid => (StrokeSpec::Solid, Rule::solid_dashes),
             Rule::link_dotted => (StrokeSpec::Dotted, Rule::dotted_dots),
             Rule::link_thick => (StrokeSpec::Thick, Rule::thick_equals),
@@ -667,6 +674,34 @@ mod tests {
         let input = "graph TD\nA --> B\n";
         let result = parse_flowchart(input).unwrap();
         assert_eq!(result.edges().len(), 1);
+    }
+
+    // Invisible edge tests (Task 2.4)
+    #[test]
+    fn test_parse_invisible_edge() {
+        let result = parse_flowchart("graph TD\nA ~~~ B\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].from.id, "A");
+        assert_eq!(edges[0].to.id, "B");
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Invisible);
+    }
+
+    #[test]
+    fn test_parse_invisible_edge_no_spaces() {
+        let result = parse_flowchart("graph TD\nA~~~B\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Invisible);
+    }
+
+    #[test]
+    fn test_parse_invisible_edge_in_chain() {
+        let result = parse_flowchart("graph TD\nA --> B ~~~ C\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 2);
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Solid);
+        assert_eq!(edges[1].connector.stroke, StrokeSpec::Invisible);
     }
 
     // Class annotation tests (Task 2.3)

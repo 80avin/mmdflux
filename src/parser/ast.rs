@@ -131,6 +131,8 @@ pub enum StrokeSpec {
     Dotted,
     /// Thick line: ==
     Thick,
+    /// Invisible edge: ~~~
+    Invisible,
 }
 
 /// Arrow head type on one end of an edge.

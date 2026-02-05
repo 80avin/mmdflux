@@ -118,10 +118,13 @@ link_thick_start = @{ arrow_left? ~ "=" ~ "=" ~ !("=" | ">" | "x" | "o") }
 link_thick_end = { "=" ~ thick_equals ~ arrow_right? }
 link_thick_labeled = { link_thick_start ~ edge_label_inline_text_thick ~ link_thick_end }
 
+// Invisible edges: ~~~ (layout-only, not rendered)
+link_invisible = { "~" ~ "~" ~ "~"+ }
+
 // Edge connector with optional label (label comes after the link)
 edge_connector = {
     (link_dotted_labeled | link_thick_labeled | link_solid_labeled)
-    | (link_dotted | link_thick | link_solid) ~ edge_label?
+    | (link_invisible | link_dotted | link_thick | link_solid) ~ edge_label?
 }
 
 // Edge segment: connector followed by node_group

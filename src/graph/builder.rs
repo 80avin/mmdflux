@@ -177,6 +177,7 @@ fn convert_connector(connector: &ConnectorSpec) -> (Stroke, Arrow, Arrow, Option
         StrokeSpec::Solid => Stroke::Solid,
         StrokeSpec::Dotted => Stroke::Dotted,
         StrokeSpec::Thick => Stroke::Thick,
+        StrokeSpec::Invisible => Stroke::Invisible,
     };
 
     // Map arrow heads to the graph-layer Arrow type.
@@ -349,6 +350,16 @@ mod tests {
         assert_eq!(diagram.edges.len(), 2);
         assert_eq!(diagram.nodes["A"].parent, Some("sg1".to_string()));
         assert_eq!(diagram.nodes["C"].parent, None);
+    }
+
+    #[test]
+    fn test_build_diagram_invisible_edge() {
+        let flowchart = parse_flowchart("graph TD\nA ~~~ B\n").unwrap();
+        let diagram = build_diagram(&flowchart);
+        assert_eq!(diagram.edges.len(), 1);
+        assert_eq!(diagram.edges[0].stroke, Stroke::Invisible);
+        assert_eq!(diagram.edges[0].arrow_start, Arrow::None);
+        assert_eq!(diagram.edges[0].arrow_end, Arrow::None);
     }
 
     #[test]
