@@ -50,7 +50,7 @@ impl DiagramInstance for FlowchartInstance {
     fn supports_format(&self, format: OutputFormat) -> bool {
         matches!(
             format,
-            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg
+            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
         )
     }
 }

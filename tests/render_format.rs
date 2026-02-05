@@ -16,3 +16,8 @@ fn output_format_debug() {
     assert_eq!(format!("{:?}", OutputFormat::Text), "Text");
     assert_eq!(format!("{:?}", OutputFormat::Svg), "Svg");
 }
+
+#[test]
+fn output_format_json_display() {
+    assert_eq!(format!("{}", OutputFormat::Json), "json");
+}

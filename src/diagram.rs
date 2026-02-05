@@ -30,6 +30,8 @@ pub enum OutputFormat {
     Ascii,
     /// SVG vector graphics.
     Svg,
+    /// JSON structured output.
+    Json,
 }
 
 /// SVG edge curve style.
@@ -46,6 +48,7 @@ impl std::fmt::Display for OutputFormat {
             OutputFormat::Text => write!(f, "text"),
             OutputFormat::Ascii => write!(f, "ascii"),
             OutputFormat::Svg => write!(f, "svg"),
+            OutputFormat::Json => write!(f, "json"),
         }
     }
 }

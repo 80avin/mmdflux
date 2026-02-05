@@ -22,7 +22,7 @@ struct Cli {
     #[arg(long)]
     debug: bool,
 
-    /// Output format (text, ascii, or svg)
+    /// Output format (text, ascii, svg, or json)
     #[arg(short = 'f', long, value_enum, default_value_t = FormatArg::Text)]
     format: FormatArg,
 
@@ -87,6 +87,8 @@ enum FormatArg {
     Ascii,
     /// SVG vector graphics
     Svg,
+    /// JSON structured output
+    Json,
 }
 
 impl From<FormatArg> for OutputFormat {
@@ -95,6 +97,7 @@ impl From<FormatArg> for OutputFormat {
             FormatArg::Text => OutputFormat::Text,
             FormatArg::Ascii => OutputFormat::Ascii,
             FormatArg::Svg => OutputFormat::Svg,
+            FormatArg::Json => OutputFormat::Json,
         }
     }
 }
