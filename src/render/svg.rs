@@ -231,6 +231,9 @@ fn render_edges(
         let Some(edge) = diagram.edges.get(index) else {
             continue;
         };
+        if edge.stroke == Stroke::Invisible {
+            continue;
+        }
         let mut points = adjust_edge_points_for_shapes(diagram, layout, edge, &points);
         points = fix_corner_points(&points);
         points = apply_marker_offsets(&points, edge);
@@ -257,6 +260,9 @@ fn render_edge_labels(
     writer.start_group("edgeLabels");
 
     for (index, edge) in diagram.edges.iter().enumerate() {
+        if edge.stroke == Stroke::Invisible {
+            continue;
+        }
         let Some(label) = edge.label.as_ref() else {
             continue;
         };
@@ -853,12 +859,26 @@ fn compute_svg_bounds(
         if edge.index >= edge_count {
             continue;
         }
+        if diagram
+            .edges
+            .get(edge.index)
+            .is_some_and(|edge| edge.stroke == Stroke::Invisible)
+        {
+            continue;
+        }
         for point in &edge.points {
             bounds.update_point(point.x, point.y);
         }
     }
 
     for edge in &layout.self_edges {
+        if diagram
+            .edges
+            .get(edge.edge_index)
+            .is_some_and(|edge| edge.stroke == Stroke::Invisible)
+        {
+            continue;
+        }
         let points = self_edge_paths
             .get(&edge.edge_index)
             .map(Vec::as_slice)
@@ -869,6 +889,9 @@ fn compute_svg_bounds(
     }
 
     for (index, edge) in diagram.edges.iter().enumerate() {
+        if edge.stroke == Stroke::Invisible {
+            continue;
+        }
         let Some(label) = edge.label.as_ref() else {
             continue;
         };
