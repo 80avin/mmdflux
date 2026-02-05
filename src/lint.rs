@@ -109,11 +109,14 @@ pub fn lint(input: &str) -> LintResult {
     }
 
     match parse_flowchart(input) {
-        Ok(_) => LintResult {
-            valid: true,
-            errors: vec![],
-            warnings: vec![],
-        },
+        Ok(_) => {
+            let warnings = collect_unsupported_warnings(input);
+            LintResult {
+                valid: true,
+                errors: vec![],
+                warnings,
+            }
+        }
         Err(parse_error) => {
             let diagnostic = parse_error_to_diagnostic(&parse_error);
             LintResult {
@@ -123,6 +126,53 @@ pub fn lint(input: &str) -> LintResult {
             }
         }
     }
+}
+
+fn collect_unsupported_warnings(input: &str) -> Vec<LintDiagnostic> {
+    let mut warnings = Vec::new();
+
+    for (line_num, line) in input.lines().enumerate() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with("classDef ") {
+            warnings.push(LintDiagnostic {
+                severity: Severity::Warning,
+                line: Some(line_num + 1),
+                column: Some(1),
+                message: "classDef statements are parsed but ignored in rendering".to_string(),
+            });
+        } else if trimmed.starts_with("style ") {
+            warnings.push(LintDiagnostic {
+                severity: Severity::Warning,
+                line: Some(line_num + 1),
+                column: Some(1),
+                message: "style statements are parsed but ignored in rendering".to_string(),
+            });
+        } else if trimmed.starts_with("click ") {
+            warnings.push(LintDiagnostic {
+                severity: Severity::Warning,
+                line: Some(line_num + 1),
+                column: Some(1),
+                message: "click statements are not applicable in text/ASCII output".to_string(),
+            });
+        } else if trimmed.starts_with("linkStyle ") {
+            warnings.push(LintDiagnostic {
+                severity: Severity::Warning,
+                line: Some(line_num + 1),
+                column: Some(1),
+                message: "linkStyle statements are parsed but ignored in rendering".to_string(),
+            });
+        } else if trimmed.starts_with("class ") && !trimmed.starts_with("classDef") {
+            warnings.push(LintDiagnostic {
+                severity: Severity::Warning,
+                line: Some(line_num + 1),
+                column: Some(1),
+                message: "class statements are parsed but ignored in rendering".to_string(),
+            });
+        }
+    }
+
+    warnings
 }
 
 fn parse_error_to_diagnostic(err: &ParseError) -> LintDiagnostic {
@@ -278,5 +328,54 @@ mod tests {
     fn test_lint_valid_complex() {
         let result = lint("graph LR\nA[Start] -->|yes| B(Process)\nB -.-> C{Decision}\n");
         assert!(result.is_valid());
+    }
+
+    #[test]
+    fn test_lint_warns_on_classdef() {
+        let result = lint("graph TD\nA --> B\nclassDef warning fill:#ff0\n");
+        assert!(result.is_valid());
+        assert!(result.has_warnings());
+        let w = &result.warnings[0];
+        assert_eq!(w.severity, Severity::Warning);
+        assert!(w.message.contains("classDef"));
+    }
+
+    #[test]
+    fn test_lint_warns_on_style() {
+        let result = lint("graph TD\nA --> B\nstyle A fill:#f9f\n");
+        assert!(result.is_valid());
+        assert!(result.has_warnings());
+        assert!(result.warnings[0].message.contains("style"));
+    }
+
+    #[test]
+    fn test_lint_warns_on_click() {
+        let result = lint("graph TD\nA --> B\nclick A callback\n");
+        assert!(result.is_valid());
+        assert!(result.has_warnings());
+        assert!(result.warnings[0].message.contains("click"));
+    }
+
+    #[test]
+    fn test_lint_warns_on_linkstyle() {
+        let result = lint("graph TD\nA --> B\nlinkStyle 0 stroke:#ff3\n");
+        assert!(result.is_valid());
+        assert!(result.has_warnings());
+        assert!(result.warnings[0].message.contains("linkStyle"));
+    }
+
+    #[test]
+    fn test_lint_no_warnings_for_clean_input() {
+        let result = lint("graph TD\nA[Start] --> B[End]\n");
+        assert!(result.is_valid());
+        assert!(!result.has_warnings());
+    }
+
+    #[test]
+    fn test_lint_multiple_warnings() {
+        let result =
+            lint("graph TD\nA --> B\nstyle A fill:#f9f\nclassDef x fill:#0f0\nclass A x\n");
+        assert!(result.is_valid());
+        assert!(result.warnings.len() >= 2);
     }
 }
