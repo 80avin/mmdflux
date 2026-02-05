@@ -1285,6 +1285,32 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_subgraph_numeric_starting_id() {
+        let input = "graph TD\nsubgraph 1test[Group]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "1test");
+                assert_eq!(sg.title, "Group");
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_all_numeric_id() {
+        let input = "graph TD\nsubgraph 123[Numbers]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "123");
+                assert_eq!(sg.title, "Numbers");
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
     fn test_parse_subgraph_existing_bracket_syntax_unchanged() {
         let input = "graph TD\nsubgraph sg1[My Group]\nA --> B\nend\n";
         let result = parse_flowchart(input).unwrap();

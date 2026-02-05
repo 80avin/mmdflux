@@ -125,7 +125,7 @@ vertex_statement = { node_group ~ edge_segment* }
 subgraph_keyword = { ^"subgraph" }
 end_keyword = { ^"end" }
 
-subgraph_id = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+subgraph_id = @{ (ASCII_ALPHA | "_" | ASCII_DIGIT) ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
 subgraph_title_text = @{ (!"]" ~ ANY)+ }
 subgraph_title_bracket = { "[" ~ subgraph_title_text ~ "]" }
 
