@@ -1969,3 +1969,38 @@ fn test_external_node_centered_between_targets() {
         tolerance
     );
 }
+
+// === Subgraph-as-node edge resolution tests ===
+
+#[test]
+fn test_render_subgraph_as_node_edge() {
+    let output = render_fixture("subgraph_as_node_edge.mmd");
+
+    assert!(output.contains("Backend"), "Should render subgraph title");
+    assert!(output.contains("Client"), "Should render Client node");
+    assert!(output.contains("Logs"), "Should render Logs node");
+    assert!(
+        output.contains("API Server"),
+        "Should render API Server node"
+    );
+    assert!(output.contains("Database"), "Should render Database node");
+}
+
+#[test]
+fn test_subgraph_as_node_edge_no_sg_node() {
+    let diagram = parse_and_build("subgraph_as_node_edge.mmd");
+
+    // sg1 should not exist as a regular leaf node
+    assert!(
+        !diagram.nodes.contains_key("sg1"),
+        "sg1 should not be a regular node after edge resolution"
+    );
+    // But it should exist as a subgraph
+    assert!(diagram.subgraphs.contains_key("sg1"));
+
+    // Edges should target children of sg1, not sg1 itself
+    for edge in &diagram.edges {
+        assert_ne!(edge.from, "sg1", "Edge source should not be sg1");
+        assert_ne!(edge.to, "sg1", "Edge target should not be sg1");
+    }
+}
