@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 195.00 536.00" style="max-width: 195.00px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(0.00,0.00)">
+    <g class="clusters">
+      <rect class="subgraph" x="8.00" y="112.00" width="179.00" height="312.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="97.50" y="116.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Horizontal Section</text>
+    </g>
+    <g class="edgePaths">
+      <path d="M97.50,191.00 L97.50,195.17 C97.50,199.33 97.50,207.67 97.50,215.33 C97.50,223.00 97.50,230.00 97.50,233.50 L97.50,237.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M97.50,295.00 L97.50,299.17 C97.50,303.33 97.50,311.67 97.50,319.33 C97.50,327.00 97.50,334.00 97.50,337.50 L97.50,341.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M97.50,62.00 L97.50,66.17 C97.50,70.33 97.50,78.67 97.50,87.00 C97.50,95.33 97.50,103.67 97.50,111.33 C97.50,119.00 97.50,126.00 97.50,129.50 L97.50,133.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M97.50,399.00 L97.50,403.17 C97.50,407.33 97.50,415.67 97.50,424.00 C97.50,432.33 97.50,440.67 97.50,448.33 C97.50,456.00 97.50,463.00 97.50,466.50 L97.50,470.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="43.00" y="137.00" width="109.00" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="97.50" y="164.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Step 1</text>
+      <rect x="43.00" y="241.00" width="109.00" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="97.50" y="268.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Step 2</text>
+      <rect x="43.00" y="345.00" width="109.00" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="97.50" y="372.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Step 3</text>
+      <rect x="54.51" y="474.00" width="85.98" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="97.50" y="501.00" text-anchor="middle" dominant-baseline="middle" fill="#333">End</text>
+      <rect x="49.87" y="8.00" width="95.26" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="97.50" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
+    </g>
+  </g>
+</svg>
