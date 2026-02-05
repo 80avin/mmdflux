@@ -2068,3 +2068,39 @@ fn test_nested_subgraph_edge_resolution() {
         assert_ne!(edge.from, "cloud", "Edge source should not be cloud");
     }
 }
+
+// --- 5.2: Multi-word title and numeric ID fixtures ---
+
+#[test]
+fn test_render_multi_word_subgraph_title() {
+    let output = render_fixture("subgraph_multi_word_title.mmd");
+
+    assert!(
+        output.contains("Data Processing Pipeline"),
+        "Should render multi-word title"
+    );
+    assert!(output.contains("Extract"), "Should render Extract");
+    assert!(output.contains("Transform"), "Should render Transform");
+    assert!(output.contains("Load"), "Should render Load");
+    assert!(output.contains("Source"), "Should render Source");
+    assert!(output.contains("Sink"), "Should render Sink");
+}
+
+#[test]
+fn test_render_numeric_subgraph_id() {
+    let output = render_fixture("subgraph_numeric_id.mmd");
+
+    assert!(output.contains("Phase 1"), "Should render Phase 1 title");
+    assert!(output.contains("Phase 2"), "Should render Phase 2 title");
+    assert!(output.contains("A"), "Should render node A");
+    assert!(output.contains("D"), "Should render node D");
+}
+
+#[test]
+fn test_parse_subgraph_id_with_quoted_title() {
+    let output = render_input("graph TD\nsubgraph myId \"My Custom Title\"\nA --> B\nend\n");
+    assert!(
+        output.contains("My Custom Title"),
+        "Should render quoted title"
+    );
+}
