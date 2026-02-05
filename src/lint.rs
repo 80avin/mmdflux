@@ -123,7 +123,8 @@ pub fn lint(input: &str) -> LintResult {
                     column: Some(1),
                     message: format!(
                         "Unsupported diagram type '{}'. Only flowchart/graph diagrams are supported.",
-                        input.lines()
+                        input
+                            .lines()
                             .map(|l| l.trim())
                             .find(|l| !l.is_empty() && !l.starts_with("%%"))
                             .and_then(|l| l.split_whitespace().next())
@@ -398,7 +399,9 @@ mod tests {
         assert!(!result.is_valid());
         assert_eq!(result.errors.len(), 1);
         assert!(
-            result.errors[0].message.contains("Unsupported diagram type"),
+            result.errors[0]
+                .message
+                .contains("Unsupported diagram type"),
             "Expected 'Unsupported diagram type' but got: {}",
             result.errors[0].message
         );

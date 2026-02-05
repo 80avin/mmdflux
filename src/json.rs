@@ -29,12 +29,10 @@ fn build_json_output(diagram: &Diagram, layout: Option<&Layout>) -> JsonOutput {
         .values()
         .map(|node| {
             let position = layout.and_then(|l| {
-                l.node_bounds
-                    .get(&node.id)
-                    .map(|bounds| JsonPosition {
-                        x: bounds.center_x(),
-                        y: bounds.center_y(),
-                    })
+                l.node_bounds.get(&node.id).map(|bounds| JsonPosition {
+                    x: bounds.center_x(),
+                    y: bounds.center_y(),
+                })
             });
             JsonNode {
                 id: node.id.clone(),
