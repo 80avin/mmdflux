@@ -691,9 +691,11 @@ fn shape_from_keyword(keyword: &str, label: String) -> ShapeSpec {
         "hex" | "hexagon" => ShapeSpec::Hexagon(label),
         "trap" | "trapezoid" | "trap-t" | "curv-trap" => ShapeSpec::Trapezoid(label),
         "inv-trap" | "inv-trapezoid" | "trap-b" => ShapeSpec::InvTrapezoid(label),
-        "sl-rect" | "parallelogram" => ShapeSpec::Parallelogram(label),
-        "inv-parallelogram" | "inv-sl-rect" => ShapeSpec::InvParallelogram(label),
-        "manual" | "manual-input" => ShapeSpec::ManualInput(label),
+        "sl-rect" | "manual" | "manual-input" => ShapeSpec::ManualInput(label),
+        "parallelogram" | "lean-r" | "lean-right" | "in-out" => ShapeSpec::Parallelogram(label),
+        "inv-parallelogram" | "inv-sl-rect" | "lean-l" | "lean-left" | "out-in" => {
+            ShapeSpec::InvParallelogram(label)
+        }
         "flag" | "asymmetric" => ShapeSpec::Asymmetric(label),
         "doc" | "document" | "lin-doc" => ShapeSpec::Document(label),
         "docs" => ShapeSpec::Documents(label),
@@ -850,6 +852,34 @@ mod tests {
         let input = "graph TD\nA --> B\n";
         let result = parse_flowchart(input).unwrap();
         assert_eq!(result.edges().len(), 1);
+    }
+
+    // Shape mapping fix tests (Task 4.1)
+    #[test]
+    fn test_sl_rect_maps_to_manual_input() {
+        let result = parse_flowchart("graph TD\nA@{shape: sl-rect, label: \"Test\"}\n").unwrap();
+        assert_eq!(
+            result.vertices()[0].shape,
+            Some(ShapeSpec::ManualInput("Test".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_lean_right_maps_to_parallelogram() {
+        let result = parse_flowchart("graph TD\nA@{shape: lean-r, label: \"Test\"}\n").unwrap();
+        assert_eq!(
+            result.vertices()[0].shape,
+            Some(ShapeSpec::Parallelogram("Test".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_lean_left_maps_to_inv_parallelogram() {
+        let result = parse_flowchart("graph TD\nA@{shape: lean-l, label: \"Test\"}\n").unwrap();
+        assert_eq!(
+            result.vertices()[0].shape,
+            Some(ShapeSpec::InvParallelogram("Test".to_string()))
+        );
     }
 
     // Invisible edge tests (Task 2.4)
