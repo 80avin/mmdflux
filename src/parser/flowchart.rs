@@ -669,6 +669,54 @@ mod tests {
         assert_eq!(result.edges().len(), 1);
     }
 
+    // Expanded identifier tests (Task 2.2)
+    #[test]
+    fn test_parse_numeric_id() {
+        let result = parse_flowchart("graph TD\n123 --> 456\n").unwrap();
+        assert_eq!(result.edges()[0].from.id, "123");
+        assert_eq!(result.edges()[0].to.id, "456");
+    }
+
+    #[test]
+    fn test_parse_hyphenated_id() {
+        let result = parse_flowchart("graph TD\nnode-1 --> node-2\n").unwrap();
+        assert_eq!(result.edges()[0].from.id, "node-1");
+        assert_eq!(result.edges()[0].to.id, "node-2");
+    }
+
+    #[test]
+    fn test_parse_dotted_id() {
+        let result = parse_flowchart("graph TD\nmy.node --> other.node\n").unwrap();
+        assert_eq!(result.edges()[0].from.id, "my.node");
+        assert_eq!(result.edges()[0].to.id, "other.node");
+    }
+
+    #[test]
+    fn test_parse_mixed_id() {
+        let result = parse_flowchart("graph TD\nstep1-process.v2 --> end_node\n").unwrap();
+        assert_eq!(result.edges()[0].from.id, "step1-process.v2");
+    }
+
+    #[test]
+    fn test_parse_numeric_id_with_shape() {
+        let result = parse_flowchart("graph TD\n123[Start] --> 456[End]\n").unwrap();
+        assert_eq!(result.vertices()[0].id, "123");
+        assert_eq!(result.vertices()[1].id, "456");
+    }
+
+    #[test]
+    fn test_hyphen_id_does_not_consume_arrow() {
+        let result = parse_flowchart("graph TD\nA --> B\n").unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_hyphenated_id_with_arrow() {
+        let result = parse_flowchart("graph TD\nnode-1 --> node-2\n").unwrap();
+        assert_eq!(result.edges().len(), 1);
+        assert_eq!(result.edges()[0].from.id, "node-1");
+    }
+
     // Default direction tests (Task 2.1)
     #[test]
     fn test_parse_graph_no_direction() {

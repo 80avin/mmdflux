@@ -24,8 +24,14 @@ header = {
     (graph_keyword | flowchart_keyword) ~ direction?
 }
 
-// Node identifiers: alphanumeric with underscores, must start with letter or underscore
-identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+// Node identifiers: alphanumeric with underscores, hyphens, and dots.
+// Can start with letter, underscore, or digit.
+// Hyphens must not be followed by another hyphen or arrow chars to avoid
+// consuming edge syntax like --> or ---.
+identifier = @{
+    (ASCII_ALPHANUMERIC | "_") ~
+    (ASCII_ALPHANUMERIC | "_" | "." | ("-" ~ !("-" | ">" | ".")))*
+}
 
 // Text content inside shapes (any chars except shape delimiters)
 text_rect = @{ (!"]" ~ ANY)+ }
@@ -125,7 +131,7 @@ vertex_statement = { node_group ~ edge_segment* }
 subgraph_keyword = { ^"subgraph" }
 end_keyword = { ^"end" }
 
-subgraph_id = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+subgraph_id = @{ (ASCII_ALPHANUMERIC | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-" | ".")* }
 subgraph_title_text = @{ (!"]" ~ ANY)+ }
 subgraph_title_bracket = { "[" ~ subgraph_title_text ~ "]" }
 subgraph_spec = { subgraph_id ~ subgraph_title_bracket? }
