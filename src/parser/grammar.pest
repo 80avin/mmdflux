@@ -70,8 +70,12 @@ shape = {
     shape_rect | shape_round | shape_diamond | shape_config
 }
 
-// Node definition: identifier with optional shape
-node = { identifier ~ shape? }
+// Class annotation: :::className (parsed and discarded)
+class_name = @{ (ASCII_ALPHANUMERIC | "_" | "-")+ }
+class_annotation = _{ ":::" ~ class_name }
+
+// Node definition: identifier with optional shape and optional class annotation
+node = { identifier ~ shape? ~ class_annotation? }
 
 // Node group: A & B & C (multiple source/target nodes)
 node_group = { node ~ ("&" ~ node)* }

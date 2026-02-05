@@ -669,6 +669,42 @@ mod tests {
         assert_eq!(result.edges().len(), 1);
     }
 
+    // Class annotation tests (Task 2.3)
+    #[test]
+    fn test_parse_node_with_class_annotation() {
+        let result = parse_flowchart("graph TD\nA:::highlight --> B\n").unwrap();
+        assert_eq!(result.edges().len(), 1);
+        assert_eq!(result.edges()[0].from.id, "A");
+        assert_eq!(result.edges()[0].to.id, "B");
+    }
+
+    #[test]
+    fn test_parse_node_shape_with_class_annotation() {
+        let result = parse_flowchart("graph TD\nA[Start]:::highlight --> B\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].from.id, "A");
+        assert_eq!(
+            edges[0].from.shape,
+            Some(ShapeSpec::Rectangle("Start".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_multiple_class_annotations() {
+        let result = parse_flowchart("graph TD\nA:::cls1 --> B:::cls2\n").unwrap();
+        assert_eq!(result.edges().len(), 1);
+        assert_eq!(result.edges()[0].from.id, "A");
+        assert_eq!(result.edges()[0].to.id, "B");
+    }
+
+    #[test]
+    fn test_parse_class_annotation_standalone_node() {
+        let result = parse_flowchart("graph TD\nA:::highlight\n").unwrap();
+        assert_eq!(result.vertices().len(), 1);
+        assert_eq!(result.vertices()[0].id, "A");
+    }
+
     // Expanded identifier tests (Task 2.2)
     #[test]
     fn test_parse_numeric_id() {
