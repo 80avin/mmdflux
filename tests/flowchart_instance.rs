@@ -171,3 +171,34 @@ fn test_show_ids_false_no_annotation() {
         output
     );
 }
+
+#[test]
+fn test_json_with_show_ids() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA[Start] --> B[End]\n").unwrap();
+
+    let config = RenderConfig {
+        show_ids: true,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Json, &config).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+    let nodes = parsed["nodes"].as_array().unwrap();
+    let node_a = nodes.iter().find(|n| n["id"] == "A").unwrap();
+    assert_eq!(node_a["label"], "A: Start");
+}
+
+#[test]
+fn test_json_without_show_ids() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA[Start] --> B[End]\n").unwrap();
+
+    let config = RenderConfig::default();
+    let output = instance.render(OutputFormat::Json, &config).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+    let nodes = parsed["nodes"].as_array().unwrap();
+    let node_a = nodes.iter().find(|n| n["id"] == "A").unwrap();
+    assert_eq!(node_a["label"], "Start");
+}
