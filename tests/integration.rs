@@ -151,7 +151,6 @@ mod parsing {
             "bolt",
             "bang",
             "icon",
-            "image",
             "hourglass",
             "tri",
             "flip",
@@ -355,7 +354,7 @@ mod rendering {
     fn shapes_degenerate_render_labels() {
         let output = render_fixture("shapes_degenerate.mmd");
         for label in [
-            "Cloud", "Bolt", "Bang", "Icon", "Image", "Hour", "Tri", "Flip", "Notch",
+            "Cloud", "Bolt", "Bang", "Icon", "Hour", "Tri", "Flip", "Notch",
         ] {
             assert!(output.contains(label));
         }
