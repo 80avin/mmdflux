@@ -7,7 +7,7 @@ use std::fmt;
 
 use serde::Serialize;
 
-use crate::parser::{ParseError, detect_diagram_type, parse_flowchart};
+use crate::parser::{DiagramType, ParseError, detect_diagram_type, parse_flowchart};
 
 /// Severity level of a diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -99,18 +99,41 @@ impl LintResult {
 /// This is designed for LLM repair loops: the output provides enough
 /// context for an LLM to fix syntax errors.
 pub fn lint(input: &str) -> LintResult {
-    if detect_diagram_type(input).is_none() {
-        return LintResult {
-            valid: false,
-            errors: vec![LintDiagnostic {
-                severity: Severity::Error,
-                line: Some(1),
-                column: Some(1),
-                message: "Unknown or missing diagram type. Expected 'graph' or 'flowchart' header."
-                    .to_string(),
-            }],
-            warnings: vec![],
-        };
+    match detect_diagram_type(input) {
+        None => {
+            return LintResult {
+                valid: false,
+                errors: vec![LintDiagnostic {
+                    severity: Severity::Error,
+                    line: Some(1),
+                    column: Some(1),
+                    message:
+                        "Unknown or missing diagram type. Expected 'graph' or 'flowchart' header."
+                            .to_string(),
+                }],
+                warnings: vec![],
+            };
+        }
+        Some(dt) if dt != DiagramType::Flowchart => {
+            return LintResult {
+                valid: false,
+                errors: vec![LintDiagnostic {
+                    severity: Severity::Error,
+                    line: Some(1),
+                    column: Some(1),
+                    message: format!(
+                        "Unsupported diagram type '{}'. Only flowchart/graph diagrams are supported.",
+                        input.lines()
+                            .map(|l| l.trim())
+                            .find(|l| !l.is_empty() && !l.starts_with("%%"))
+                            .and_then(|l| l.split_whitespace().next())
+                            .unwrap_or("unknown")
+                    ),
+                }],
+                warnings: vec![],
+            };
+        }
+        Some(_) => {} // Flowchart — proceed to parse
     }
 
     match parse_flowchart(input) {
@@ -367,6 +390,19 @@ mod tests {
         assert!(result.is_valid());
         assert!(result.has_warnings());
         assert!(result.warnings[0].message.contains("linkStyle"));
+    }
+
+    #[test]
+    fn test_lint_non_flowchart_returns_unsupported_error() {
+        let result = lint("pie\n  title Pets\n  \"Dogs\" : 50\n");
+        assert!(!result.is_valid());
+        assert_eq!(result.errors.len(), 1);
+        assert!(
+            result.errors[0].message.contains("Unsupported diagram type"),
+            "Expected 'Unsupported diagram type' but got: {}",
+            result.errors[0].message
+        );
+        assert!(result.errors[0].message.contains("pie"));
     }
 
     #[test]

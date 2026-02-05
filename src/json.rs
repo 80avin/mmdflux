@@ -29,9 +29,12 @@ fn build_json_output(diagram: &Diagram, layout: Option<&Layout>) -> JsonOutput {
         .values()
         .map(|node| {
             let position = layout.and_then(|l| {
-                l.draw_positions
+                l.node_bounds
                     .get(&node.id)
-                    .map(|&(x, y)| JsonPosition { x, y })
+                    .map(|bounds| JsonPosition {
+                        x: bounds.center_x(),
+                        y: bounds.center_y(),
+                    })
             });
             JsonNode {
                 id: node.id.clone(),
@@ -60,11 +63,25 @@ fn build_json_output(diagram: &Diagram, layout: Option<&Layout>) -> JsonOutput {
     let mut subgraphs: Vec<JsonSubgraph> = diagram
         .subgraphs
         .values()
-        .map(|sg| JsonSubgraph {
-            id: sg.id.clone(),
-            title: sg.title.clone(),
-            children: sg.nodes.clone(),
-            parent: sg.parent.clone(),
+        .map(|sg| {
+            let direct_children: Vec<String> = sg
+                .nodes
+                .iter()
+                .filter(|node_id| {
+                    diagram
+                        .nodes
+                        .get(*node_id)
+                        .and_then(|n| n.parent.as_deref())
+                        == Some(&sg.id)
+                })
+                .cloned()
+                .collect();
+            JsonSubgraph {
+                id: sg.id.clone(),
+                title: sg.title.clone(),
+                children: direct_children,
+                parent: sg.parent.clone(),
+            }
         })
         .collect();
     subgraphs.sort_by(|a, b| a.id.cmp(&b.id));
@@ -392,6 +409,37 @@ mod tests {
         assert_eq!(shapes["B"], "round");
         assert_eq!(shapes["C"], "diamond");
         assert_eq!(shapes["D"], "stadium");
+    }
+
+    #[test]
+    fn test_to_json_nested_subgraph_children_are_direct_only() {
+        let input =
+            "graph TD\nsubgraph outer[Outer]\nsubgraph inner[Inner]\nA --> B\nend\nC\nend\n";
+        let fc = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&fc);
+        let json_str = to_json(&diagram, None);
+        let output: JsonOutput = serde_json::from_str(&json_str).unwrap();
+
+        let outer = output.subgraphs.iter().find(|s| s.id == "outer").unwrap();
+        let inner = output.subgraphs.iter().find(|s| s.id == "inner").unwrap();
+
+        // outer's direct children should be C only (A and B belong to inner)
+        assert!(
+            outer.children.contains(&"C".to_string()),
+            "outer should contain direct child C"
+        );
+        assert!(
+            !outer.children.contains(&"A".to_string()),
+            "outer should NOT contain A (belongs to inner)"
+        );
+        assert!(
+            !outer.children.contains(&"B".to_string()),
+            "outer should NOT contain B (belongs to inner)"
+        );
+
+        // inner's direct children should be A and B
+        assert!(inner.children.contains(&"A".to_string()));
+        assert!(inner.children.contains(&"B".to_string()));
     }
 
     #[test]
