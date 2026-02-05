@@ -89,6 +89,7 @@ fn strip_frontmatter(input: &str) -> &str {
                 .take(i + 1)
                 .map(|l| l.len() + 1)
                 .sum();
+            let consumed = consumed.min(after_first_newline.len());
             return &after_first_newline[consumed..];
         }
     }
@@ -109,18 +110,6 @@ fn preprocess(input: &str) -> String {
             continue;
         }
 
-        // Pass through comments
-        if trimmed.starts_with("%%") {
-            push_line(&mut result, line);
-            continue;
-        }
-
-        // Pass through empty/whitespace lines
-        if trimmed.is_empty() {
-            push_line(&mut result, line);
-            continue;
-        }
-
         // Header line
         if !header_seen {
             let first_word = trimmed.split_whitespace().next().unwrap_or("");
@@ -131,7 +120,19 @@ fn preprocess(input: &str) -> String {
                 push_line(&mut result, line);
                 continue;
             }
-            // Strip non-header lines before the header (e.g. accTitle)
+            // Strip non-header lines before the header (e.g. accTitle, comments, blanks)
+            continue;
+        }
+
+        // Pass through comments
+        if trimmed.starts_with("%%") {
+            push_line(&mut result, line);
+            continue;
+        }
+
+        // Pass through empty/whitespace lines
+        if trimmed.is_empty() {
+            push_line(&mut result, line);
             continue;
         }
 
@@ -850,6 +851,35 @@ mod tests {
     #[test]
     fn test_no_frontmatter_still_works() {
         let input = "graph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_strip_frontmatter_no_trailing_newline() {
+        // Closing --- without trailing newline should not panic
+        let input = "---\ntitle: x\n---";
+        let result = strip_frontmatter(input);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_leading_comment_before_header() {
+        let input = "%% this is a comment\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_leading_blank_lines_before_header() {
+        let input = "\n\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_leading_comment_and_blank_before_header() {
+        let input = "\n%% comment\n\ngraph TD\nA --> B\n";
         let result = parse_flowchart(input).unwrap();
         assert_eq!(result.edges().len(), 1);
     }
