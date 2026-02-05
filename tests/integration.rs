@@ -2104,3 +2104,111 @@ fn test_parse_subgraph_id_with_quoted_title() {
         "Should render quoted title"
     );
 }
+
+// --- 5.3: Direction override fixtures ---
+
+#[test]
+fn test_render_subgraph_direction_lr() {
+    let output = render_fixture("subgraph_direction_lr.mmd");
+
+    assert!(
+        output.contains("Horizontal Flow"),
+        "Should render subgraph title"
+    );
+    assert!(output.contains("Step 1"), "Should render Step 1");
+    assert!(output.contains("Step 2"), "Should render Step 2");
+    assert!(output.contains("Step 3"), "Should render Step 3");
+    assert!(output.contains("Start"), "Should render Start");
+    assert!(output.contains("End"), "Should render End");
+}
+
+#[test]
+fn test_subgraph_direction_lr_horizontal_arrangement() {
+    let (diagram, layout) = layout_fixture("subgraph_direction_lr.mmd");
+
+    // A, B, C should be arranged horizontally (increasing x, similar y)
+    let a = layout.get_bounds("A").unwrap();
+    let b = layout.get_bounds("B").unwrap();
+    let c = layout.get_bounds("C").unwrap();
+
+    assert!(
+        a.center_x() < b.center_x(),
+        "Step 1 should be left of Step 2"
+    );
+    assert!(
+        b.center_x() < c.center_x(),
+        "Step 2 should be left of Step 3"
+    );
+
+    let y_tol = 2;
+    assert!(
+        (a.center_y() as isize - b.center_y() as isize).abs() <= y_tol,
+        "Step 1 and Step 2 should be at similar y"
+    );
+
+    // Nodes should have LR effective direction
+    assert_eq!(layout.node_directions.get("A"), Some(&Direction::LeftRight));
+    let _ = diagram; // suppress unused variable
+}
+
+#[test]
+fn test_render_subgraph_direction_nested() {
+    let output = render_fixture("subgraph_direction_nested.mmd");
+
+    assert!(
+        output.contains("Vertical Outer"),
+        "Should render outer title"
+    );
+    assert!(
+        output.contains("Horizontal Inner"),
+        "Should render inner title"
+    );
+    assert!(output.contains("D"), "Should render node D");
+    assert!(output.contains("A"), "Should render node A");
+    assert!(output.contains("C"), "Should render node C");
+}
+
+#[test]
+fn test_render_subgraph_direction_mixed() {
+    let output = render_fixture("subgraph_direction_mixed.mmd");
+
+    assert!(
+        output.contains("Left to Right"),
+        "Should render LR subgraph title"
+    );
+    assert!(
+        output.contains("Bottom to Top"),
+        "Should render BT subgraph title"
+    );
+    assert!(output.contains("A"), "Should render node A");
+    assert!(output.contains("B"), "Should render node B");
+    assert!(output.contains("C"), "Should render node C");
+    assert!(output.contains("D"), "Should render node D");
+}
+
+#[test]
+fn test_subgraph_direction_mixed_layout() {
+    let (_, layout) = layout_fixture("subgraph_direction_mixed.mmd");
+
+    // A, B in LR subgraph: horizontal arrangement
+    let a = layout.get_bounds("A").unwrap();
+    let b = layout.get_bounds("B").unwrap();
+    assert!(
+        a.center_x() < b.center_x(),
+        "A should be left of B in LR subgraph"
+    );
+
+    // C, D in BT subgraph: C below D (BT = source at bottom flows up)
+    let c = layout.get_bounds("C").unwrap();
+    let d = layout.get_bounds("D").unwrap();
+    assert!(
+        c.center_y() > d.center_y(),
+        "C (source) should be below D (target) in BT subgraph: C_cy={} D_cy={}",
+        c.center_y(),
+        d.center_y()
+    );
+
+    // Check effective directions
+    assert_eq!(layout.node_directions.get("A"), Some(&Direction::LeftRight));
+    assert_eq!(layout.node_directions.get("C"), Some(&Direction::BottomTop));
+}
