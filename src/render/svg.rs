@@ -1394,14 +1394,14 @@ impl SvgWriter {
     }
 
     fn start_svg(&mut self, width: f64, height: f64, font_family: &str, font_size: f64) {
-        let width = fmt_f64(width);
-        let height = fmt_f64(height);
-        let view_box = format!("0 0 {width} {height}");
+        let view_width = fmt_f64(width);
+        let view_height = fmt_f64(height);
+        let view_box = format!("0 0 {view_width} {view_height}");
+        let style = format!("max-width: {view_width}px; background-color: transparent;");
         let line = format!(
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"{view_box}\" font-family=\"{font}\" font-size=\"{font_size}\">",
-            width = width,
-            height = height,
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100%\" viewBox=\"{view_box}\" style=\"{style}\" font-family=\"{font}\" font-size=\"{font_size}\">",
             view_box = view_box,
+            style = style,
             font = escape_text(font_family),
             font_size = fmt_f64(font_size)
         );
