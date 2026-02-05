@@ -50,6 +50,10 @@ struct Cli {
     #[arg(long)]
     cluster_ranksep: Option<f64>,
 
+    /// Validate input and report diagnostics (no rendering)
+    #[arg(long)]
+    lint: bool,
+
     /// ASCII padding around the diagram
     #[arg(long)]
     padding: Option<usize>,
@@ -145,6 +149,20 @@ fn main() -> io::Result<()> {
             buffer
         }
     };
+
+    // Lint mode: validate and exit
+    if cli.lint {
+        let result = mmdflux::lint::lint(&input);
+
+        for diag in &result.errors {
+            eprintln!("{}", diag);
+        }
+        for diag in &result.warnings {
+            eprintln!("{}", diag);
+        }
+
+        std::process::exit(result.exit_code());
+    }
 
     let format: OutputFormat = cli.format.into();
 
