@@ -82,6 +82,17 @@ fn add_vertex_to_diagram(diagram: &mut Diagram, vertex: &Vertex, parent: Option<
     }
 }
 
+/// Find a non-compound child node within a subgraph.
+///
+/// Walks the subgraph's children, returning the first leaf node that is not
+/// itself a subgraph. Returns `None` for empty subgraphs or nonexistent IDs.
+///
+/// This is the Rust equivalent of Mermaid's `findNonClusterChild()`.
+pub fn find_non_cluster_child(diagram: &Diagram, subgraph_id: &str) -> Option<String> {
+    let sg = diagram.subgraphs.get(subgraph_id)?;
+    sg.nodes.iter().find(|id| !diagram.is_subgraph(id)).cloned()
+}
+
 fn collect_node_ids(statements: &[Statement]) -> Vec<String> {
     let mut seen = HashSet::new();
     statements
@@ -349,6 +360,50 @@ mod tests {
         assert_eq!(diagram.edges.len(), 2);
         assert_eq!(diagram.nodes["A"].parent, Some("sg1".to_string()));
         assert_eq!(diagram.nodes["C"].parent, None);
+    }
+
+    #[test]
+    fn test_find_non_cluster_child_simple() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let child = find_non_cluster_child(&diagram, "sg1");
+        assert!(child.is_some());
+        let child_id = child.unwrap();
+        assert!(child_id == "A" || child_id == "B");
+    }
+
+    #[test]
+    fn test_find_non_cluster_child_nested() {
+        let input = "graph TD\nsubgraph outer[Outer]\nsubgraph inner[Inner]\nA --> B\nend\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let child = find_non_cluster_child(&diagram, "outer");
+        assert!(child.is_some());
+        let child_id = child.unwrap();
+        assert!(child_id == "A" || child_id == "B");
+    }
+
+    #[test]
+    fn test_find_non_cluster_child_empty_subgraph() {
+        let input = "graph TD\nsubgraph sg1[Empty]\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let child = find_non_cluster_child(&diagram, "sg1");
+        assert!(child.is_none());
+    }
+
+    #[test]
+    fn test_find_non_cluster_child_nonexistent() {
+        let input = "graph TD\nA --> B\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let child = find_non_cluster_child(&diagram, "no_such_sg");
+        assert!(child.is_none());
     }
 
     #[test]

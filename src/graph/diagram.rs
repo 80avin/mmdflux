@@ -84,6 +84,11 @@ impl Diagram {
         !self.subgraphs.is_empty()
     }
 
+    /// Check if an ID corresponds to a subgraph (compound node).
+    pub fn is_subgraph(&self, id: &str) -> bool {
+        self.subgraphs.contains_key(id)
+    }
+
     /// Return the IDs of subgraphs whose parent is `parent_id`.
     pub fn subgraph_children(&self, parent_id: &str) -> Vec<&String> {
         self.subgraphs
