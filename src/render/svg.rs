@@ -452,6 +452,20 @@ fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node, direction: Directi
             let size = w + h;
             (size, size)
         }
+        Shape::Stadium => {
+            // Stadium ends are semicircles that eat into the content area.
+            // Add extra width so the text has room between the rounded ends.
+            let h = label_h + metrics.node_padding_y * 2.0;
+            let radius = h / 2.0;
+            (label_w + metrics.node_padding_x * 2.0 + radius, h)
+        }
+        Shape::Cylinder => {
+            // Cylinder needs extra height for the top and bottom ellipse caps.
+            let w = label_w + metrics.node_padding_x * 2.0;
+            let rx = w / 2.0;
+            let ry = rx / (2.5 + w / 50.0);
+            (w, label_h + metrics.node_padding_y * 2.0 + ry)
+        }
         _ => (
             label_w + metrics.node_padding_x * 2.0,
             label_h + metrics.node_padding_y * 2.0,
@@ -908,7 +922,7 @@ fn render_node_shape(
             writer.push_line(&line);
         }
         Shape::Round => {
-            let radius = (rect.height.min(rect.width) * 0.2).max(4.0 * scale);
+            let radius = 5.0 * scale;
             let line = format!(
                 "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" rx=\"{rx}\" ry=\"{ry}\"{style} />",
                 x = fmt_f64(rect.x),
@@ -1264,7 +1278,7 @@ fn render_node_shape(
             );
             writer.push_line(&line);
 
-            let inset = (rect.width * 0.1).max(4.0 * scale).min(rect.width / 3.0);
+            let inset = 8.0 * scale;
             let x1 = rect.x + inset;
             let x2 = rect.x + rect.width - inset;
             let stroke = format!(
@@ -1290,21 +1304,43 @@ fn render_node_shape(
             writer.push_line(&right_line);
         }
         Shape::Cylinder => {
+            // 3D cylinder: full ellipse at top, straight sides, half-ellipse at bottom.
             let rx = rect.width / 2.0;
-            let ry = rect.height * 0.2;
-            let top_y = rect.y + ry;
-            let bottom_y = rect.y + rect.height - ry;
+            let ry = rx / (2.5 + rect.width / 50.0);
+            let x0 = rect.x;
+            let x1 = rect.x + rect.width;
+            let top = rect.y + ry;
+            let bot = rect.y + rect.height - ry;
+
+            // Outer path: top ellipse (back + front arcs), sides, bottom arc
             let d = format!(
-                "M{x},{top} A{rx},{ry} 0 0 1 {x2},{top} L{x2},{bottom} A{rx},{ry} 0 0 1 {x},{bottom} Z",
-                x = fmt_f64(rect.x),
-                top = fmt_f64(top_y),
+                "M{x0},{top} A{rx},{ry} 0 0,0 {x1},{top} A{rx},{ry} 0 0,0 {x0},{top} L{x0},{bot} A{rx},{ry} 0 0,0 {x1},{bot} L{x1},{top}",
+                x0 = fmt_f64(x0),
+                x1 = fmt_f64(x1),
+                top = fmt_f64(top),
+                bot = fmt_f64(bot),
                 rx = fmt_f64(rx),
                 ry = fmt_f64(ry),
-                x2 = fmt_f64(rect.x + rect.width),
-                bottom = fmt_f64(bottom_y)
             );
-            let line = format!("<path d=\"{d}\"{style} />", d = d, style = style);
-            writer.push_line(&line);
+            let body = format!("<path d=\"{d}\"{style} />", d = d, style = style);
+            writer.push_line(&body);
+
+            // Inner line: front edge of top ellipse (creates the 3D rim)
+            let inner_d = format!(
+                "M{x0},{top} A{rx},{ry} 0 0,1 {x1},{top}",
+                x0 = fmt_f64(x0),
+                x1 = fmt_f64(x1),
+                top = fmt_f64(top),
+                rx = fmt_f64(rx),
+                ry = fmt_f64(ry),
+            );
+            let inner_style = format!(
+                " fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{sw}\"",
+                stroke = STROKE_COLOR,
+                sw = stroke_width,
+            );
+            let inner = format!("<path d=\"{inner_d}\"{inner_style} />");
+            writer.push_line(&inner);
         }
         Shape::TextBlock => {
             // Borderless: only text will be drawn.
