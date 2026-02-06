@@ -4,6 +4,7 @@
 //! This is the original and most feature-complete diagram type in mmdflux.
 
 mod instance;
+pub(crate) mod render;
 
 pub use instance::FlowchartInstance;
 

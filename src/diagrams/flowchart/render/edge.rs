@@ -2,10 +2,10 @@
 
 use std::collections::HashMap;
 
-use super::canvas::{Canvas, Connections};
-use super::chars::CharSet;
 use super::router::{AttachDirection, Point, RoutedEdge, Segment};
 use crate::graph::{Arrow, Direction, Stroke};
+use crate::render::canvas::{Canvas, Connections};
+use crate::render::chars::CharSet;
 
 /// Calculate the label position at the midpoint of a routed path.
 ///

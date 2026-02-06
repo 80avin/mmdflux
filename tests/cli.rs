@@ -1,5 +1,7 @@
 //! CLI integration tests for mmdflux binary.
 
+use std::path::Path;
+
 use assert_cmd::Command;
 use assert_cmd::cargo::cargo_bin_cmd;
 use predicates::prelude::*;
@@ -167,4 +169,70 @@ fn cli_packet_renders_with_header() {
         .success()
         .stdout(predicate::str::contains("[Packet Diagram]"))
         .stdout(predicate::str::contains("Header"));
+}
+
+// =============================================================================
+// All-Fixtures Smoke Test
+// =============================================================================
+
+/// Discover all flowchart fixture files from tests/fixtures/.
+fn discover_flowchart_fixtures() -> Vec<std::path::PathBuf> {
+    let fixtures_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures");
+    let mut fixtures: Vec<_> = std::fs::read_dir(&fixtures_dir)
+        .expect("fixtures directory should exist")
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "mmd") {
+                Some(path)
+            } else {
+                None
+            }
+        })
+        .collect();
+    fixtures.sort();
+    fixtures
+}
+
+#[test]
+fn cli_renders_all_flowchart_fixtures_successfully() {
+    let fixtures = discover_flowchart_fixtures();
+    assert!(
+        !fixtures.is_empty(),
+        "should discover at least one fixture file"
+    );
+
+    let snapshots_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("snapshots");
+
+    for fixture_path in &fixtures {
+        let fixture_name = fixture_path.file_stem().unwrap().to_str().unwrap();
+        let input = std::fs::read_to_string(fixture_path)
+            .unwrap_or_else(|e| panic!("failed to read {}: {e}", fixture_path.display()));
+
+        // Fixture must render successfully with non-empty output
+        let assert = mmdflux().write_stdin(input.as_str()).assert().success();
+        let output = assert.get_output();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            !stdout.trim().is_empty(),
+            "fixture {fixture_name} produced empty output"
+        );
+
+        // If a snapshot exists, CLI output must match it exactly
+        let snapshot_path = snapshots_dir.join(format!("{fixture_name}.txt"));
+        if snapshot_path.exists() {
+            let expected = std::fs::read_to_string(&snapshot_path).unwrap_or_else(|e| {
+                panic!("failed to read snapshot {}: {e}", snapshot_path.display())
+            });
+            assert_eq!(
+                stdout.as_ref(),
+                expected.as_str(),
+                "CLI output for fixture {fixture_name} differs from snapshot"
+            );
+        }
+    }
 }

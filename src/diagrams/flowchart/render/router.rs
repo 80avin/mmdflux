@@ -4,12 +4,12 @@
 
 use std::collections::HashMap;
 
-use super::intersect::{
-    NodeFace, calculate_attachment_points, classify_face, spread_points_on_face,
-};
 use super::layout::{Layout, SelfEdgeDrawData, SubgraphBounds};
 use super::shape::NodeBounds;
 use crate::graph::{Direction, Edge, Shape, Stroke};
+use crate::render::intersect::{
+    NodeFace, calculate_attachment_points, classify_face, spread_points_on_face,
+};
 
 /// Map from (node_id, face) to the edges attached at that face.
 /// Each entry is `(edge_index, is_source_side, approach_cross_axis)`.
