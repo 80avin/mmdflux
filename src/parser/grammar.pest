@@ -21,11 +21,17 @@ direction = {
 
 // Graph header: "graph TD" or "flowchart LR"
 header = {
-    (graph_keyword | flowchart_keyword) ~ direction
+    (graph_keyword | flowchart_keyword) ~ direction?
 }
 
-// Node identifiers: alphanumeric with underscores, must start with letter or underscore
-identifier = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+// Node identifiers: alphanumeric with underscores, hyphens, and dots.
+// Can start with letter, underscore, or digit.
+// Hyphens must not be followed by another hyphen or arrow chars to avoid
+// consuming edge syntax like --> or ---.
+identifier = @{
+    (ASCII_ALPHANUMERIC | "_") ~
+    (ASCII_ALPHANUMERIC | "_" | "." | ("-" ~ !("-" | ">" | ".")))*
+}
 
 // Text content inside shapes (any chars except shape delimiters)
 text_rect = @{ (!"]" ~ ANY)+ }
@@ -64,8 +70,12 @@ shape = {
     shape_rect | shape_round | shape_diamond | shape_config
 }
 
-// Node definition: identifier with optional shape
-node = { identifier ~ shape? }
+// Class annotation: :::className (parsed and discarded)
+class_name = @{ (ASCII_ALPHANUMERIC | "_" | "-")+ }
+class_annotation = _{ ":::" ~ class_name }
+
+// Node definition: identifier with optional shape and optional class annotation
+node = { identifier ~ shape? ~ class_annotation? }
 
 // Node group: A & B & C (multiple source/target nodes)
 node_group = { node ~ ("&" ~ node)* }
@@ -108,10 +118,13 @@ link_thick_start = @{ arrow_left? ~ "=" ~ "=" ~ !("=" | ">" | "x" | "o") }
 link_thick_end = { "=" ~ thick_equals ~ arrow_right? }
 link_thick_labeled = { link_thick_start ~ edge_label_inline_text_thick ~ link_thick_end }
 
+// Invisible edges: ~~~ (layout-only, not rendered)
+link_invisible = { "~" ~ "~" ~ "~"+ }
+
 // Edge connector with optional label (label comes after the link)
 edge_connector = {
     (link_dotted_labeled | link_thick_labeled | link_solid_labeled)
-    | (link_dotted | link_thick | link_solid) ~ edge_label?
+    | (link_invisible | link_dotted | link_thick | link_solid) ~ edge_label?
 }
 
 // Edge segment: connector followed by node_group
@@ -125,7 +138,7 @@ vertex_statement = { node_group ~ edge_segment* }
 subgraph_keyword = { ^"subgraph" }
 end_keyword = { ^"end" }
 
-subgraph_id = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+subgraph_id = @{ (ASCII_ALPHANUMERIC | "_") ~ (ASCII_ALPHANUMERIC | "_" | "-" | ".")* }
 subgraph_title_text = @{ (!"]" ~ ANY)+ }
 subgraph_title_bracket = { "[" ~ subgraph_title_text ~ "]" }
 subgraph_spec = { subgraph_id ~ subgraph_title_bracket? }

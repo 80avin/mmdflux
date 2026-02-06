@@ -71,10 +71,155 @@ impl Flowchart {
     }
 }
 
-/// Parse a flowchart string.
+/// Strip YAML frontmatter delimited by `---` at the start of input.
+fn strip_frontmatter(input: &str) -> &str {
+    let trimmed = input.trim_start();
+    if !trimmed.starts_with("---") {
+        return input;
+    }
+    let after_open = &trimmed[3..];
+    let after_first_newline = match after_open.find('\n') {
+        Some(pos) => &after_open[pos + 1..],
+        None => return input,
+    };
+    for (i, line) in after_first_newline.lines().enumerate() {
+        if line.trim() == "---" {
+            // Sum byte lengths of lines up to and including the closing ---.
+            // The +1 accounts for the newline delimiter stripped by .lines().
+            // Clamp to input length in case the final line has no trailing newline.
+            let consumed: usize = after_first_newline
+                .lines()
+                .take(i + 1)
+                .map(|l| l.len() + 1)
+                .sum();
+            let consumed = consumed.min(after_first_newline.len());
+            return &after_first_newline[consumed..];
+        }
+    }
+    input
+}
+
+/// Pre-process input to strip frontmatter, directives, and unrecognized lines.
+fn preprocess(input: &str) -> String {
+    let input = strip_frontmatter(input);
+    let mut result = String::with_capacity(input.len());
+    let mut header_seen = false;
+
+    for line in input.lines() {
+        let trimmed = line.trim();
+
+        // Always strip directives
+        if trimmed.starts_with("%%{") && trimmed.ends_with("}%%") {
+            continue;
+        }
+
+        // Header line
+        if !header_seen {
+            let first_word = trimmed.split_whitespace().next().unwrap_or("");
+            if first_word.eq_ignore_ascii_case("graph")
+                || first_word.eq_ignore_ascii_case("flowchart")
+            {
+                header_seen = true;
+                push_line(&mut result, line);
+                continue;
+            }
+            // Strip non-header lines before the header (e.g. accTitle, comments, blanks)
+            continue;
+        }
+
+        // Pass through comments
+        if trimmed.starts_with("%%") {
+            push_line(&mut result, line);
+            continue;
+        }
+
+        // Pass through empty/whitespace lines
+        if trimmed.is_empty() {
+            push_line(&mut result, line);
+            continue;
+        }
+
+        // Known passthrough keywords
+        if is_known_passthrough(trimmed) {
+            push_line(&mut result, line);
+            continue;
+        }
+
+        // A flowchart statement starts with an identifier-like char
+        if looks_like_flowchart_statement(trimmed) {
+            push_line(&mut result, line);
+            continue;
+        }
+
+        // Unknown line -- strip it
+    }
+
+    if input.ends_with('\n') && !result.ends_with('\n') {
+        result.push('\n');
+    }
+    result
+}
+
+fn push_line(result: &mut String, line: &str) {
+    if !result.is_empty() {
+        result.push('\n');
+    }
+    result.push_str(line);
+}
+
+fn is_known_passthrough(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    lower.starts_with("style ")
+        || lower.starts_with("classdef ")
+        || lower.starts_with("class ")
+        || lower.starts_with("click ")
+        || lower.starts_with("linkstyle ")
+        || lower.starts_with("direction ")
+        || lower.starts_with("subgraph ")
+        || lower == "subgraph"
+        || lower == "end"
+        || lower.starts_with("end ")
+        || lower.starts_with("end;")
+}
+
+fn is_known_strip(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    lower.starts_with("acctitle") || lower.starts_with("accdescr")
+}
+
+fn looks_like_flowchart_statement(line: &str) -> bool {
+    if is_known_strip(line) {
+        return false;
+    }
+    let first_char = line.chars().next().unwrap_or(' ');
+    first_char.is_ascii_alphanumeric() || first_char == '_' || first_char == ';'
+}
+
+/// Options for the flowchart parser.
+#[derive(Debug, Clone, Default)]
+pub struct ParseOptions {
+    /// When true, the parser rejects any syntax it doesn't understand.
+    /// When false (default), unrecognized syntax is silently stripped.
+    pub strict: bool,
+}
+
+/// Parse a flowchart string (permissive mode, the default).
 pub fn parse_flowchart(input: &str) -> Result<Flowchart, ParseError> {
+    parse_flowchart_with_options(input, &ParseOptions::default())
+}
+
+/// Parse a flowchart string with options.
+pub fn parse_flowchart_with_options(
+    input: &str,
+    options: &ParseOptions,
+) -> Result<Flowchart, ParseError> {
+    let input = if options.strict {
+        input.to_string()
+    } else {
+        preprocess(input)
+    };
     let pairs =
-        FlowchartParser::parse(Rule::flowchart, input).map_err(ParseError::from_pest_error)?;
+        FlowchartParser::parse(Rule::flowchart, &input).map_err(ParseError::from_pest_error)?;
 
     let mut direction = Direction::TopDown;
     let mut statements = Vec::new();
@@ -259,6 +404,13 @@ fn parse_connector(pair: pest::iterators::Pair<Rule>) -> ConnectorSpec {
 
     for inner in pair.into_inner() {
         let (link_stroke, length_rule) = match inner.as_rule() {
+            Rule::link_invisible => {
+                stroke = StrokeSpec::Invisible;
+                left = ArrowHead::None;
+                right = ArrowHead::None;
+                length = 1;
+                continue;
+            }
             Rule::link_solid => (StrokeSpec::Solid, Rule::solid_dashes),
             Rule::link_dotted => (StrokeSpec::Dotted, Rule::dotted_dots),
             Rule::link_thick => (StrokeSpec::Thick, Rule::thick_equals),
@@ -543,9 +695,11 @@ fn shape_from_keyword(keyword: &str, label: String) -> ShapeSpec {
         "hex" | "hexagon" => ShapeSpec::Hexagon(label),
         "trap" | "trapezoid" | "trap-t" | "curv-trap" => ShapeSpec::Trapezoid(label),
         "inv-trap" | "inv-trapezoid" | "trap-b" => ShapeSpec::InvTrapezoid(label),
-        "sl-rect" | "parallelogram" => ShapeSpec::Parallelogram(label),
-        "inv-parallelogram" | "inv-sl-rect" => ShapeSpec::InvParallelogram(label),
-        "manual" | "manual-input" => ShapeSpec::ManualInput(label),
+        "sl-rect" | "manual" | "manual-input" => ShapeSpec::ManualInput(label),
+        "parallelogram" | "lean-r" | "lean-right" | "in-out" => ShapeSpec::Parallelogram(label),
+        "inv-parallelogram" | "inv-sl-rect" | "lean-l" | "lean-left" | "out-in" => {
+            ShapeSpec::InvParallelogram(label)
+        }
         "flag" | "asymmetric" => ShapeSpec::Asymmetric(label),
         "doc" | "document" | "lin-doc" => ShapeSpec::Document(label),
         "docs" => ShapeSpec::Documents(label),
@@ -568,6 +722,325 @@ fn shape_from_keyword(keyword: &str, label: String) -> ShapeSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Strict mode tests (Task 3.2)
+    #[test]
+    fn test_strict_mode_rejects_directive() {
+        let input = "%%{init: {}}%%\ngraph TD\nA --> B\n";
+        let opts = ParseOptions { strict: true };
+        let result = parse_flowchart_with_options(input, &opts);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_permissive_mode_accepts_directive() {
+        let input = "%%{init: {}}%%\ngraph TD\nA --> B\n";
+        let opts = ParseOptions { strict: false };
+        let result = parse_flowchart_with_options(input, &opts);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_default_is_permissive() {
+        let input = "%%{init: {}}%%\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input);
+        assert!(result.is_ok());
+    }
+
+    // Permissive preprocessing tests (Task 3.1)
+    #[test]
+    fn test_permissive_strips_acc_title() {
+        let input = "graph TD\naccTitle: My Diagram\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_permissive_strips_acc_descr() {
+        let input = "graph TD\naccDescr: Description here\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_permissive_strips_unknown_line() {
+        let input = "graph TD\n@startuml\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_permissive_preserves_all_known_syntax() {
+        let input = concat!(
+            "graph TD\n",
+            "A[Start] --> B{Decision}\n",
+            "B -->|yes| C(Process)\n",
+            "B -->|no| D\n",
+            "style A fill:#f9f\n",
+            "classDef warning fill:#ff0\n",
+            "class B warning\n",
+            "%% comment\n",
+            "subgraph sg1[Group]\n",
+            "E --> F\n",
+            "end\n",
+        );
+        let result = parse_flowchart(input).unwrap();
+        let edge_count = count_edges_recursive(&result.statements);
+        assert_eq!(edge_count, 4);
+    }
+
+    fn count_edges_recursive(stmts: &[Statement]) -> usize {
+        stmts
+            .iter()
+            .map(|s| match s {
+                Statement::Edge(_) => 1,
+                Statement::Subgraph(sg) => count_edges_recursive(&sg.statements),
+                _ => 0,
+            })
+            .sum()
+    }
+
+    // Directive stripping tests (Task 1.1)
+    #[test]
+    fn test_strip_single_line_directive() {
+        let input = "%%{init: {\"theme\": \"dark\"}}%%\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_strip_directive_with_spaces() {
+        let input = "  %%{ init: { 'theme': 'forest' } }%%  \ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_strip_multiple_directives() {
+        let input = "%%{init: {}}%%\n%%{init: {\"flowchart\": {}}}%%\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_regular_comments_preserved() {
+        let input = "graph TD\n%% This is a comment\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    // Frontmatter stripping tests (Task 1.2)
+    #[test]
+    fn test_strip_yaml_frontmatter() {
+        let input = "---\nconfig:\n  theme: dark\n---\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_strip_empty_frontmatter() {
+        let input = "---\n---\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_strip_frontmatter_with_directive() {
+        let input = "---\nconfig:\n  theme: dark\n---\n%%{init: {}}%%\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_no_frontmatter_still_works() {
+        let input = "graph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_strip_frontmatter_no_trailing_newline() {
+        // Closing --- without trailing newline should not panic
+        let input = "---\ntitle: x\n---";
+        let result = strip_frontmatter(input);
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_leading_comment_before_header() {
+        let input = "%% this is a comment\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_leading_blank_lines_before_header() {
+        let input = "\n\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_leading_comment_and_blank_before_header() {
+        let input = "\n%% comment\n\ngraph TD\nA --> B\n";
+        let result = parse_flowchart(input).unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    // Shape mapping fix tests (Task 4.1)
+    #[test]
+    fn test_sl_rect_maps_to_manual_input() {
+        let result = parse_flowchart("graph TD\nA@{shape: sl-rect, label: \"Test\"}\n").unwrap();
+        assert_eq!(
+            result.vertices()[0].shape,
+            Some(ShapeSpec::ManualInput("Test".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_lean_right_maps_to_parallelogram() {
+        let result = parse_flowchart("graph TD\nA@{shape: lean-r, label: \"Test\"}\n").unwrap();
+        assert_eq!(
+            result.vertices()[0].shape,
+            Some(ShapeSpec::Parallelogram("Test".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_lean_left_maps_to_inv_parallelogram() {
+        let result = parse_flowchart("graph TD\nA@{shape: lean-l, label: \"Test\"}\n").unwrap();
+        assert_eq!(
+            result.vertices()[0].shape,
+            Some(ShapeSpec::InvParallelogram("Test".to_string()))
+        );
+    }
+
+    // Invisible edge tests (Task 2.4)
+    #[test]
+    fn test_parse_invisible_edge() {
+        let result = parse_flowchart("graph TD\nA ~~~ B\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].from.id, "A");
+        assert_eq!(edges[0].to.id, "B");
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Invisible);
+    }
+
+    #[test]
+    fn test_parse_invisible_edge_no_spaces() {
+        let result = parse_flowchart("graph TD\nA~~~B\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Invisible);
+    }
+
+    #[test]
+    fn test_parse_invisible_edge_in_chain() {
+        let result = parse_flowchart("graph TD\nA --> B ~~~ C\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 2);
+        assert_eq!(edges[0].connector.stroke, StrokeSpec::Solid);
+        assert_eq!(edges[1].connector.stroke, StrokeSpec::Invisible);
+    }
+
+    // Class annotation tests (Task 2.3)
+    #[test]
+    fn test_parse_node_with_class_annotation() {
+        let result = parse_flowchart("graph TD\nA:::highlight --> B\n").unwrap();
+        assert_eq!(result.edges().len(), 1);
+        assert_eq!(result.edges()[0].from.id, "A");
+        assert_eq!(result.edges()[0].to.id, "B");
+    }
+
+    #[test]
+    fn test_parse_node_shape_with_class_annotation() {
+        let result = parse_flowchart("graph TD\nA[Start]:::highlight --> B\n").unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].from.id, "A");
+        assert_eq!(
+            edges[0].from.shape,
+            Some(ShapeSpec::Rectangle("Start".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_parse_multiple_class_annotations() {
+        let result = parse_flowchart("graph TD\nA:::cls1 --> B:::cls2\n").unwrap();
+        assert_eq!(result.edges().len(), 1);
+        assert_eq!(result.edges()[0].from.id, "A");
+        assert_eq!(result.edges()[0].to.id, "B");
+    }
+
+    #[test]
+    fn test_parse_class_annotation_standalone_node() {
+        let result = parse_flowchart("graph TD\nA:::highlight\n").unwrap();
+        assert_eq!(result.vertices().len(), 1);
+        assert_eq!(result.vertices()[0].id, "A");
+    }
+
+    // Expanded identifier tests (Task 2.2)
+    #[test]
+    fn test_parse_numeric_id() {
+        let result = parse_flowchart("graph TD\n123 --> 456\n").unwrap();
+        assert_eq!(result.edges()[0].from.id, "123");
+        assert_eq!(result.edges()[0].to.id, "456");
+    }
+
+    #[test]
+    fn test_parse_hyphenated_id() {
+        let result = parse_flowchart("graph TD\nnode-1 --> node-2\n").unwrap();
+        assert_eq!(result.edges()[0].from.id, "node-1");
+        assert_eq!(result.edges()[0].to.id, "node-2");
+    }
+
+    #[test]
+    fn test_parse_dotted_id() {
+        let result = parse_flowchart("graph TD\nmy.node --> other.node\n").unwrap();
+        assert_eq!(result.edges()[0].from.id, "my.node");
+        assert_eq!(result.edges()[0].to.id, "other.node");
+    }
+
+    #[test]
+    fn test_parse_mixed_id() {
+        let result = parse_flowchart("graph TD\nstep1-process.v2 --> end_node\n").unwrap();
+        assert_eq!(result.edges()[0].from.id, "step1-process.v2");
+    }
+
+    #[test]
+    fn test_parse_numeric_id_with_shape() {
+        let result = parse_flowchart("graph TD\n123[Start] --> 456[End]\n").unwrap();
+        assert_eq!(result.vertices()[0].id, "123");
+        assert_eq!(result.vertices()[1].id, "456");
+    }
+
+    #[test]
+    fn test_hyphen_id_does_not_consume_arrow() {
+        let result = parse_flowchart("graph TD\nA --> B\n").unwrap();
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_hyphenated_id_with_arrow() {
+        let result = parse_flowchart("graph TD\nnode-1 --> node-2\n").unwrap();
+        assert_eq!(result.edges().len(), 1);
+        assert_eq!(result.edges()[0].from.id, "node-1");
+    }
+
+    // Default direction tests (Task 2.1)
+    #[test]
+    fn test_parse_graph_no_direction() {
+        let result = parse_flowchart("graph\nA --> B\n").unwrap();
+        assert_eq!(result.direction, Direction::TopDown);
+        assert_eq!(result.edges().len(), 1);
+    }
+
+    #[test]
+    fn test_parse_flowchart_no_direction() {
+        let result = parse_flowchart("flowchart\nA --> B\n").unwrap();
+        assert_eq!(result.direction, Direction::TopDown);
+        assert_eq!(result.edges().len(), 1);
+    }
 
     // Phase 1: Header tests
     #[test]

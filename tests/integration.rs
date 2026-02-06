@@ -1969,3 +1969,79 @@ fn test_external_node_centered_between_targets() {
         tolerance
     );
 }
+
+// =============================================================================
+// Parse Compatibility Tests
+// =============================================================================
+
+mod compat {
+    use super::*;
+
+    #[test]
+    fn directive_stripped() {
+        let output = render_fixture("compat_directive.mmd");
+        assert!(output.contains("Start"));
+        assert!(output.contains("Decision"));
+    }
+
+    #[test]
+    fn frontmatter_stripped() {
+        let output = render_fixture("compat_frontmatter.mmd");
+        assert!(output.contains("A"));
+        assert!(output.contains("B"));
+        assert!(output.contains("C"));
+    }
+
+    #[test]
+    fn no_direction_defaults_to_td() {
+        let diagram = parse_and_build("compat_no_direction.mmd");
+        assert_eq!(diagram.direction, Direction::TopDown);
+        let output = render_fixture("compat_no_direction.mmd");
+        assert!(output.contains("Start"));
+        assert!(output.contains("End"));
+    }
+
+    #[test]
+    fn numeric_ids() {
+        let output = render_fixture("compat_numeric_ids.mmd");
+        assert!(output.contains("First"));
+        assert!(output.contains("Second"));
+        assert!(output.contains("Third"));
+    }
+
+    #[test]
+    fn hyphenated_ids() {
+        let output = render_fixture("compat_hyphenated_ids.mmd");
+        assert!(output.contains("Start"));
+        assert!(output.contains("Process A"));
+        assert!(output.contains("Check"));
+        assert!(output.contains("Done"));
+    }
+
+    #[test]
+    fn class_annotation_ignored() {
+        let output = render_fixture("compat_class_annotation.mmd");
+        assert!(output.contains("Start"));
+        assert!(output.contains("Decision"));
+        // classDef lines should not cause parse failures
+    }
+
+    #[test]
+    fn invisible_edge_not_rendered() {
+        let output = render_fixture("compat_invisible_edge.mmd");
+        assert!(output.contains("A"));
+        assert!(output.contains("B"));
+        assert!(output.contains("C"));
+        // Invisible edge should not appear in output
+        assert!(!output.contains("~~~"));
+    }
+
+    #[test]
+    fn kitchen_sink() {
+        let output = render_fixture("compat_kitchen_sink.mmd");
+        assert!(output.contains("Start"));
+        assert!(output.contains("Check Input"));
+        assert!(output.contains("Done"));
+        assert!(output.contains("Error"));
+    }
+}

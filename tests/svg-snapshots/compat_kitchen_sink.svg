@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 295.88 498.06" style="max-width: 295.88px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(0.00,0.00)">
+    <g class="edgePaths">
+      <path d="M157.77,62.00 L157.77,66.17 C157.77,70.33 157.77,78.67 157.77,86.33 C157.77,94.00 157.77,101.00 157.77,104.50 L157.77,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M126.49,226.77 L117.96,238.15 C109.43,249.53 92.37,272.30 83.84,289.18 C75.31,306.06 75.31,317.06 75.31,322.56 L75.31,328.06" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M189.06,226.77 L197.59,238.15 C206.12,249.53 223.18,272.30 231.71,289.18 C240.24,306.06 240.24,317.06 240.24,322.56 L240.24,328.06" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M75.31,386.06 L75.31,389.39 C75.31,392.72 75.31,399.39 75.67,403.20 C76.03,407.00 76.75,407.94 77.46,409.22 C78.16,410.50 78.85,412.11 84.53,416.28 C90.21,420.46 100.89,427.19 106.23,430.56 L111.57,433.92" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M240.24,386.06 L240.24,389.39 C240.24,392.72 240.24,399.39 239.88,403.20 C239.52,407.00 238.80,407.94 238.09,409.22 C237.39,410.50 236.70,412.11 231.02,416.28 C225.34,420.46 214.66,427.19 209.32,430.56 L203.98,433.92" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+      <text x="75.31" y="295.06" text-anchor="middle" dominant-baseline="middle" fill="#333">valid</text>
+      <text x="240.24" y="295.06" text-anchor="middle" dominant-baseline="middle" fill="#333">invalid</text>
+    </g>
+    <g class="nodes">
+      <polygon points="157.77,112.00 230.80,185.03 157.77,258.06 84.75,185.03" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="157.77" y="185.03" text-anchor="middle" dominant-baseline="middle" fill="#333">Check Input</text>
+      <rect x="110.51" y="436.06" width="94.52" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="157.77" y="463.06" text-anchor="middle" dominant-baseline="middle" fill="#333">Done</text>
+      <rect x="192.61" y="332.06" width="95.26" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="240.24" y="359.06" text-anchor="middle" dominant-baseline="middle" fill="#333">Error</text>
+      <rect x="8.00" y="332.06" width="134.61" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="75.31" y="359.06" text-anchor="middle" dominant-baseline="middle" fill="#333">process-A</text>
+      <rect x="110.14" y="8.00" width="95.26" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="157.77" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
+    </g>
+  </g>
+</svg>

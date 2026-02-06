@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 119.91 278.00" style="max-width: 119.91px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(0.00,0.00)">
+    <g class="edgePaths">
+      <path d="M59.15,62.00 L56.37,66.17 C53.58,70.33 48.02,78.67 45.24,86.33 C42.45,94.00 42.45,101.00 42.45,104.50 L42.45,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M95.21,62.00 L98.00,66.17 C100.78,70.33 106.34,78.67 109.13,87.00 C111.91,95.33 111.91,103.67 111.91,120.17 C111.91,136.67 111.91,161.33 111.55,174.14 C111.18,186.94 110.46,187.89 110.00,189.41 C109.54,190.94 109.33,193.05 107.28,197.02 C105.23,201.00 101.33,206.84 99.38,209.75 L97.43,212.67" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="42.73" y="8.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.18" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
+      <rect x="8.00" y="112.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="42.45" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="42.73" y="216.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.18" y="243.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
+    </g>
+  </g>
+</svg>

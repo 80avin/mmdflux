@@ -54,6 +54,10 @@ pub fn render_edge(
     charset: &CharSet,
     diagram_direction: Direction,
 ) {
+    if routed.edge.stroke == Stroke::Invisible {
+        return;
+    }
+
     let stroke = routed.edge.stroke;
 
     // Draw each segment
@@ -725,6 +729,9 @@ pub fn render_all_edges_with_labels(
 ) {
     // First pass: draw all segments and arrows
     for routed in routed_edges {
+        if routed.edge.stroke == Stroke::Invisible {
+            continue;
+        }
         for segment in &routed.segments {
             draw_segment(canvas, segment, routed.edge.stroke, charset);
         }
