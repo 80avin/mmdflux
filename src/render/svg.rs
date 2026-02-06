@@ -88,6 +88,16 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     // This must happen after reconciliation moves nodes but before padding,
     // so routes use the reconciled node positions.
     let node_directions = svg_router::build_node_directions_svg(diagram);
+
+    // Push cross-boundary edge endpoints apart before rerouting so that the
+    // fresh orthogonal paths have enough room for a visible edge stem.
+    svg_router::ensure_cross_boundary_edge_spacing(
+        diagram,
+        &mut layout,
+        &node_directions,
+        config.dagre_rank_sep,
+    );
+
     let (_stats, rerouted_edges) =
         svg_router::reroute_override_edges(diagram, &mut layout, &node_directions);
 

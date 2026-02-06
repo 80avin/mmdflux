@@ -13,8 +13,8 @@
     </g>
     <g class="edgePaths">
       <path d="M174.14,321.50 L174.14,317.33 C174.14,313.17 174.14,304.83 171.26,300.67 C168.39,296.50 162.65,296.50 159.78,293.00 C156.91,289.50 156.91,282.50 156.91,279.00 L156.91,275.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M-21.45,315.50 L-21.45,316.00 C-21.45,316.50 -21.45,317.50 5.40,317.67 C32.26,317.83 85.97,317.17 112.83,317.00 C139.68,316.83 139.68,317.17 139.68,317.33 L139.68,317.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M97.45,62.00 L97.45,78.62 C97.45,95.25 97.45,128.50 77.64,145.12 C57.82,161.75 18.18,161.75 -1.64,177.71 C-21.45,193.67 -21.45,225.58 -21.45,241.54 L-21.45,257.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M-21.45,271.50 L-21.45,275.67 C-21.45,279.83 -21.45,288.17 5.40,292.33 C32.26,296.50 85.97,296.50 112.83,300.00 C139.68,303.50 139.68,310.50 139.68,314.00 L139.68,317.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M97.45,62.00 L97.45,74.96 C97.45,87.92 97.45,113.83 77.64,126.79 C57.82,139.75 18.18,139.75 -1.64,152.04 C-21.45,164.33 -21.45,188.92 -21.45,201.21 L-21.45,213.50" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
@@ -23,8 +23,8 @@
       <text x="156.91" y="348.50" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
       <rect x="122.45" y="217.50" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="156.91" y="244.50" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
-      <rect x="-55.91" y="261.50" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="-21.45" y="288.50" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
+      <rect x="-55.91" y="217.50" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="-21.45" y="244.50" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
       <rect x="63.00" y="8.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="97.45" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">D</text>
     </g>

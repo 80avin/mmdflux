@@ -139,9 +139,36 @@ impl Layout {
         let src_dir = self.node_directions.get(from).copied().unwrap_or(fallback);
         let tgt_dir = self.node_directions.get(to).copied().unwrap_or(fallback);
         if src_dir == tgt_dir {
-            src_dir
-        } else {
-            fallback
+            return src_dir;
+        }
+        // If either endpoint uses the root direction, the edge crosses from an
+        // override subgraph to the root part of the diagram — use the root direction.
+        if src_dir == fallback || tgt_dir == fallback {
+            return fallback;
+        }
+        // Both endpoints have non-root direction overrides (e.g., LR and BT in
+        // nested subgraphs).  Infer direction from geometry.
+        match (self.node_bounds.get(from), self.node_bounds.get(to)) {
+            (Some(fb), Some(tb)) => {
+                let dx = (fb.center_x() as isize - tb.center_x() as isize).unsigned_abs();
+                let dy = (fb.center_y() as isize - tb.center_y() as isize).unsigned_abs();
+                if dx > dy {
+                    if fb.center_x() <= tb.center_x() {
+                        Direction::LeftRight
+                    } else {
+                        Direction::RightLeft
+                    }
+                } else if dy > 0 {
+                    if fb.center_y() <= tb.center_y() {
+                        Direction::TopDown
+                    } else {
+                        Direction::BottomTop
+                    }
+                } else {
+                    fallback
+                }
+            }
+            _ => fallback,
         }
     }
 }
@@ -672,6 +699,149 @@ fn resolve_sibling_overlaps_draw(
                     }
                 }
             }
+        }
+    }
+}
+
+/// After sublayout reconciliation and overlap resolution, align direct sibling
+/// nodes with their cross-boundary edge targets on the cross-axis of the parent
+/// direction.  Without this, a node like C in an LR subgraph may stay vertically
+/// aligned with B (top of a BT child subgraph) instead of A (its actual target at
+/// the bottom), forcing the C→A edge to route diagonally through B's area.
+fn align_cross_boundary_siblings_draw(
+    diagram: &Diagram,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+) {
+    let mut affected_parents: HashSet<String> = HashSet::new();
+
+    for (sg_id, sg) in &diagram.subgraphs {
+        let Some(sub_dir) = sg.dir else { continue };
+        let is_horizontal = matches!(sub_dir, Direction::LeftRight | Direction::RightLeft);
+
+        // Collect nodes that belong to any child subgraph of this parent.
+        let child_sg_nodes: HashSet<&str> = diagram
+            .subgraphs
+            .iter()
+            .filter(|(_, child)| child.parent.as_deref() == Some(sg_id.as_str()))
+            .flat_map(|(_, child)| child.nodes.iter().map(|s| s.as_str()))
+            .collect();
+
+        if child_sg_nodes.is_empty() {
+            continue;
+        }
+
+        // Direct member nodes: in this subgraph but not inside any child subgraph.
+        let direct_nodes: Vec<&str> = sg
+            .nodes
+            .iter()
+            .filter(|n| !diagram.is_subgraph(n) && !child_sg_nodes.contains(n.as_str()))
+            .map(|s| s.as_str())
+            .collect();
+
+        for node_id in &direct_nodes {
+            // Collect cross-boundary edge targets inside child subgraphs.
+            let mut target_cross_positions: Vec<usize> = Vec::new();
+            for edge in &diagram.edges {
+                let target = if edge.from == *node_id && child_sg_nodes.contains(edge.to.as_str()) {
+                    Some(edge.to.as_str())
+                } else if edge.to == *node_id && child_sg_nodes.contains(edge.from.as_str()) {
+                    Some(edge.from.as_str())
+                } else {
+                    None
+                };
+
+                if let Some(target_id) = target {
+                    if let Some(tb) = node_bounds.get(target_id) {
+                        if is_horizontal {
+                            target_cross_positions.push(tb.y + tb.height / 2);
+                        } else {
+                            target_cross_positions.push(tb.x + tb.width / 2);
+                        }
+                    }
+                }
+            }
+
+            if target_cross_positions.is_empty() {
+                continue;
+            }
+
+            let avg_target =
+                target_cross_positions.iter().sum::<usize>() / target_cross_positions.len();
+            let Some(nb) = node_bounds.get(*node_id).cloned() else {
+                continue;
+            };
+
+            if is_horizontal {
+                let node_cy = nb.y + nb.height / 2;
+                if avg_target == node_cy {
+                    continue;
+                }
+                let new_y = avg_target.saturating_sub(nb.height / 2);
+                if let Some(pos) = draw_positions.get_mut(*node_id) {
+                    pos.1 = new_y;
+                }
+                if let Some(b) = node_bounds.get_mut(*node_id) {
+                    b.y = new_y;
+                    b.dagre_center_y = Some(new_y + nb.height / 2);
+                }
+            } else {
+                let node_cx = nb.x + nb.width / 2;
+                if avg_target == node_cx {
+                    continue;
+                }
+                let new_x = avg_target.saturating_sub(nb.width / 2);
+                if let Some(pos) = draw_positions.get_mut(*node_id) {
+                    pos.0 = new_x;
+                }
+                if let Some(b) = node_bounds.get_mut(*node_id) {
+                    b.x = new_x;
+                    b.dagre_center_x = Some(new_x + nb.width / 2);
+                }
+            }
+            affected_parents.insert(sg_id.clone());
+        }
+    }
+
+    if affected_parents.is_empty() {
+        return;
+    }
+
+    // Re-expand bounds only for parent subgraphs where nodes were moved.
+    for sg_id in &affected_parents {
+        let Some(sg) = diagram.subgraphs.get(sg_id.as_str()) else {
+            continue;
+        };
+        let Some(sb) = subgraph_bounds.get_mut(sg_id.as_str()) else {
+            continue;
+        };
+        let pad = 2usize; // border + spacing
+        for node_id in &sg.nodes {
+            if diagram.is_subgraph(node_id) {
+                continue;
+            }
+            let Some(nb) = node_bounds.get(node_id.as_str()) else {
+                continue;
+            };
+            let need_left = nb.x.saturating_sub(pad);
+            let need_top = nb.y.saturating_sub(pad);
+            let need_right = nb.x + nb.width + pad;
+            let need_bottom = nb.y + nb.height + pad;
+
+            let title_rows = if !sg.title.trim().is_empty() { 1 } else { 0 };
+            let need_top_with_title = need_top.saturating_sub(title_rows);
+
+            let cur_right = sb.x + sb.width;
+            let cur_bottom = sb.y + sb.height;
+            let new_left = sb.x.min(need_left);
+            let new_top = sb.y.min(need_top_with_title);
+            let new_right = cur_right.max(need_right);
+            let new_bottom = cur_bottom.max(need_bottom);
+            sb.x = new_left;
+            sb.y = new_top;
+            sb.width = new_right.saturating_sub(new_left);
+            sb.height = new_bottom.saturating_sub(new_top);
         }
     }
 }
@@ -2045,6 +2215,18 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             &mut draw_positions,
             &mut subgraph_bounds,
         );
+
+        // Align sibling nodes with their cross-boundary edge targets so
+        // edges don't have to route diagonally through child subgraph contents.
+        align_cross_boundary_siblings_draw(
+            diagram,
+            &mut node_bounds,
+            &mut draw_positions,
+            &mut subgraph_bounds,
+        );
+
+        // Re-expand parent bounds after alignment may have moved nodes.
+        expand_parent_subgraph_bounds(&diagram.subgraphs, &mut subgraph_bounds);
 
         // Invalidate or adjust waypoints and label positions for edges touching
         // direction-override subgraphs. The main layout computed these for

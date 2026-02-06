@@ -442,6 +442,104 @@ pub fn reroute_override_edges(
     (stats, rerouted_indices)
 }
 
+/// Ensure adequate spacing for cross-boundary edges in direction-override subgraphs.
+///
+/// When nodes are placed by different sublayouts (e.g., one in an LR subgraph,
+/// another in a nested BT subgraph), their gap along the effective edge direction
+/// can be very small because the sublayouts optimise for different axes.  This
+/// function pushes the shallower (less-constrained) node away to create at least
+/// `min_gap` pixels of space.
+///
+/// Must run **before** `reroute_override_edges` so that rerouted paths use the
+/// corrected node positions.
+pub fn ensure_cross_boundary_edge_spacing(
+    diagram: &Diagram,
+    layout: &mut LayoutResult,
+    node_directions: &HashMap<String, Direction>,
+    min_gap: f64,
+) {
+    let has_overrides = diagram.subgraphs.values().any(|sg| sg.dir.is_some());
+    if !has_overrides {
+        return;
+    }
+
+    let override_nodes = build_override_node_map_internal(diagram);
+
+    for edge in &diagram.edges {
+        if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
+            continue; // subgraph-as-node edges handled separately
+        }
+
+        let from_sg = override_nodes.get(&edge.from);
+        let to_sg = override_nodes.get(&edge.to);
+
+        // Only cross-boundary edges (different override subgraphs, or one
+        // inside an override and the other outside).
+        let is_cross = match (from_sg, to_sg) {
+            (Some(a), Some(b)) => a != b,
+            (Some(_), None) | (None, Some(_)) => true,
+            (None, None) => false,
+        };
+        if !is_cross {
+            continue;
+        }
+
+        let direction =
+            effective_edge_direction_svg(node_directions, &edge.from, &edge.to, diagram.direction);
+
+        let from_key = NodeId(edge.from.clone());
+        let to_key = NodeId(edge.to.clone());
+
+        let from_rect = match layout.nodes.get(&from_key) {
+            Some(r) => *r,
+            None => continue,
+        };
+        let to_rect = match layout.nodes.get(&to_key) {
+            Some(r) => *r,
+            None => continue,
+        };
+
+        // Gap along the flow direction (source trailing edge → target leading edge).
+        let gap = match direction {
+            Direction::TopDown => to_rect.y - (from_rect.y + from_rect.height),
+            Direction::BottomTop => from_rect.y - (to_rect.y + to_rect.height),
+            Direction::LeftRight => to_rect.x - (from_rect.x + from_rect.width),
+            Direction::RightLeft => from_rect.x - (to_rect.x + to_rect.width),
+        };
+
+        // Only adjust when nodes are in the correct order but too close.
+        // Negative gap means backward order — let the edge router handle that.
+        if gap < 0.0 || gap >= min_gap {
+            continue;
+        }
+
+        let shift = min_gap - gap;
+
+        // Push the node in the shallower (less-constrained) subgraph.
+        let from_depth = from_sg.map(|sg| diagram.subgraph_depth(sg)).unwrap_or(0);
+        let to_depth = to_sg.map(|sg| diagram.subgraph_depth(sg)).unwrap_or(0);
+        let push_source = from_depth <= to_depth;
+
+        if push_source {
+            let r = layout.nodes.get_mut(&from_key).unwrap();
+            match direction {
+                Direction::TopDown => r.y -= shift,
+                Direction::BottomTop => r.y += shift,
+                Direction::LeftRight => r.x -= shift,
+                Direction::RightLeft => r.x += shift,
+            }
+        } else {
+            let r = layout.nodes.get_mut(&to_key).unwrap();
+            match direction {
+                Direction::TopDown => r.y += shift,
+                Direction::BottomTop => r.y -= shift,
+                Direction::LeftRight => r.x += shift,
+                Direction::RightLeft => r.x -= shift,
+            }
+        }
+    }
+}
+
 /// Reroute edges where one or both endpoints target a subgraph (subgraph-as-node).
 ///
 /// Dagre routes these through resolved child nodes inside the subgraph, creating
