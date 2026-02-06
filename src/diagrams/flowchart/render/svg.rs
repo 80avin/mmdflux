@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
+use super::super::geometry::{self, GraphGeometry};
 use super::layout::{
     build_dagre_layout, center_override_subgraphs, compute_sublayouts, dagre_config_for_layout,
     expand_parent_bounds_dagre, reconcile_sublayouts_dagre, resolve_sublayout_overlaps,
@@ -129,10 +130,14 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 
     let override_nodes = svg_router::build_override_node_map(diagram);
 
-    let self_edge_paths = compute_self_edge_paths(diagram, &layout, &metrics);
-    let bounds = compute_svg_bounds(diagram, &layout, &metrics, &self_edge_paths);
+    // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
+    // From this point on, rendering reads from `geom` instead of `layout`.
+    let geom = geometry::from_dagre_layout(&layout, diagram);
+
+    let self_edge_paths = compute_self_edge_paths(diagram, &geom, &metrics);
+    let bounds = compute_svg_bounds(diagram, &geom, &metrics, &self_edge_paths);
     let padding = svg_options.diagram_padding;
-    let (min_x, min_y, max_x, max_y) = bounds.finalize(layout.width, layout.height);
+    let (min_x, min_y, max_x, max_y) = bounds.finalize(geom.bounds.width, geom.bounds.height);
     let width = (max_x - min_x + padding * 2.0) * scale;
     let height = (max_y - min_y + padding * 2.0) * scale;
     let offset_x = (-min_x + padding) * scale;
@@ -148,11 +153,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 
     render_defs(&mut writer, scale);
     writer.start_group_transform(offset_x, offset_y);
-    render_subgraphs(&mut writer, diagram, &layout, &metrics, scale);
+    render_subgraphs(&mut writer, diagram, &geom, &metrics, scale);
     render_edges(
         &mut writer,
         diagram,
-        &layout,
+        &geom,
         &self_edge_paths,
         &rerouted_edges,
         svg_options.edge_curve,
@@ -162,13 +167,13 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     render_edge_labels(
         &mut writer,
         diagram,
-        &layout,
+        &geom,
         &self_edge_paths,
         &override_nodes,
         &metrics,
         scale,
     );
-    render_nodes(&mut writer, diagram, &layout, &metrics, scale);
+    render_nodes(&mut writer, diagram, &geom, &metrics, scale);
     writer.end_group();
 
     writer.end_svg();
@@ -577,30 +582,25 @@ fn render_defs(writer: &mut SvgWriter, scale: f64) {
 fn render_subgraphs(
     writer: &mut SvgWriter,
     diagram: &Diagram,
-    layout: &LayoutResult,
+    geom: &GraphGeometry,
     metrics: &SvgTextMetrics,
     scale: f64,
 ) {
-    if layout.subgraph_bounds.is_empty() {
+    if geom.subgraphs.is_empty() {
         return;
     }
 
-    let mut subgraphs: Vec<_> = layout
-        .subgraph_bounds
+    let mut subgraphs: Vec<_> = geom
+        .subgraphs
         .iter()
-        .filter_map(|(id, rect)| {
-            diagram.subgraphs.get(id).map(|sg| {
-                let depth = diagram.subgraph_depth(id);
-                (id, rect, &sg.title, depth)
-            })
-        })
+        .filter_map(|(id, sg_geom)| diagram.subgraphs.get(id).map(|_| (id, sg_geom)))
         .collect();
 
-    subgraphs.sort_by(|a, b| a.3.cmp(&b.3).then_with(|| a.0.cmp(b.0)));
+    subgraphs.sort_by(|a, b| a.1.depth.cmp(&b.1.depth).then_with(|| a.0.cmp(b.0)));
 
     writer.start_group("clusters");
-    for (_id, rect, title, _depth) in subgraphs {
-        let rect = scale_rect(rect, scale);
+    for (_id, sg_geom) in subgraphs {
+        let rect = scale_rect(&sg_geom.rect.into(), scale);
         let stroke_width = fmt_f64(1.0 * scale);
         let rect_line = format!(
             "<rect class=\"subgraph\" x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" />",
@@ -613,7 +613,7 @@ fn render_subgraphs(
         );
         writer.push_line(&rect_line);
 
-        if !title.trim().is_empty() {
+        if !sg_geom.title.trim().is_empty() {
             let title_x = rect.x + rect.width / 2.0;
             let title_y = rect.y + metrics.font_size * 0.25;
             let text = format!(
@@ -621,7 +621,7 @@ fn render_subgraphs(
                 x = fmt_f64(title_x),
                 y = fmt_f64(title_y),
                 color = TEXT_COLOR,
-                label = escape_text(title)
+                label = escape_text(&sg_geom.title)
             );
             writer.push_line(&text);
         }
@@ -633,24 +633,31 @@ fn render_subgraphs(
 fn render_edges(
     writer: &mut SvgWriter,
     diagram: &Diagram,
-    layout: &LayoutResult,
+    geom: &GraphGeometry,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     rerouted_edges: &std::collections::HashSet<usize>,
     edge_curve: SvgEdgeCurve,
     edge_curve_radius: f64,
     scale: f64,
 ) {
-    let mut edge_paths: Vec<(usize, Vec<Point>)> = layout
+    let mut edge_paths: Vec<(usize, Vec<Point>)> = geom
         .edges
         .iter()
-        .map(|edge| (edge.index, edge.points.clone()))
+        .map(|edge| {
+            let points = edge
+                .layout_path_hint
+                .as_ref()
+                .map(|ps| ps.iter().map(|p| (*p).into()).collect())
+                .unwrap_or_default();
+            (edge.index, points)
+        })
         .collect();
-    edge_paths.extend(layout.self_edges.iter().map(|edge| {
+    edge_paths.extend(geom.self_edges.iter().map(|se| {
         let points = self_edge_paths
-            .get(&edge.edge_index)
+            .get(&se.edge_index)
             .cloned()
-            .unwrap_or_else(|| edge.points.clone());
-        (edge.edge_index, points)
+            .unwrap_or_else(|| se.points.iter().map(|p| (*p).into()).collect());
+        (se.edge_index, points)
     }));
     edge_paths.sort_by_key(|(index, _)| *index);
 
@@ -667,14 +674,14 @@ fn render_edges(
         // edges whose endpoints already land on the subgraph border).
         if !rerouted_edges.contains(&index) {
             if let Some(sg_id) = edge.from_subgraph.as_ref()
-                && let Some(rect) = layout.subgraph_bounds.get(sg_id)
+                && let Some(sg_geom) = geom.subgraphs.get(sg_id)
             {
-                points = clip_points_to_rect_start(&points, rect);
+                points = clip_points_to_rect_start(&points, &sg_geom.rect.into());
             }
             if let Some(sg_id) = edge.to_subgraph.as_ref()
-                && let Some(rect) = layout.subgraph_bounds.get(sg_id)
+                && let Some(sg_geom) = geom.subgraphs.get(sg_id)
             {
-                points = clip_points_to_rect_end(&points, rect);
+                points = clip_points_to_rect_end(&points, &sg_geom.rect.into());
             }
         }
 
@@ -684,7 +691,7 @@ fn render_edges(
         let mut points = if rerouted_edges.contains(&index) {
             points
         } else {
-            adjust_edge_points_for_shapes(diagram, layout, edge, &points)
+            adjust_edge_points_for_shapes(diagram, geom, edge, &points)
         };
         points = fix_corner_points(&points);
         points = apply_marker_offsets(&points, edge);
@@ -818,12 +825,19 @@ fn clip_points_to_rect_end(points: &[Point], rect: &Rect) -> Vec<Point> {
 fn render_edge_labels(
     writer: &mut SvgWriter,
     diagram: &Diagram,
-    layout: &LayoutResult,
+    geom: &GraphGeometry,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     override_nodes: &HashMap<String, String>,
     metrics: &SvgTextMetrics,
     scale: f64,
 ) {
+    // Pre-build label position lookup from GraphGeometry edges.
+    let label_positions: HashMap<usize, Point> = geom
+        .edges
+        .iter()
+        .filter_map(|e| e.label_position.map(|p| (e.index, p.into())))
+        .collect();
+
     writer.start_group("edgeLabels");
 
     for edge in diagram.edges.iter() {
@@ -850,11 +864,11 @@ fn render_edge_labels(
         let use_precomputed =
             edge.from_subgraph.is_none() && edge.to_subgraph.is_none() && !cross_boundary;
         let position = if use_precomputed {
-            layout.label_positions.get(&edge_idx).map(|pos| pos.point)
+            label_positions.get(&edge_idx).copied()
         } else {
             None
         }
-        .or_else(|| fallback_label_position(layout, edge_idx, self_edge_paths));
+        .or_else(|| fallback_label_position(geom, edge_idx, self_edge_paths));
         let Some(point) = position else {
             continue;
         };
@@ -874,7 +888,7 @@ fn render_edge_labels(
 fn render_nodes(
     writer: &mut SvgWriter,
     diagram: &Diagram,
-    layout: &LayoutResult,
+    geom: &GraphGeometry,
     metrics: &SvgTextMetrics,
     scale: f64,
 ) {
@@ -885,10 +899,11 @@ fn render_nodes(
 
     for node_id in node_ids {
         let node = &diagram.nodes[node_id];
-        let Some(rect) = layout.nodes.get(&crate::dagre::NodeId(node_id.clone())) else {
+        let Some(pos_node) = geom.nodes.get(node_id) else {
             continue;
         };
-        render_node_shape(writer, node, rect, scale, diagram.direction);
+        let rect: Rect = pos_node.rect.into();
+        render_node_shape(writer, node, &rect, scale, diagram.direction);
 
         let center = rect.center();
         let mut text_x = center.x;
@@ -1541,18 +1556,18 @@ impl SvgBounds {
 
 fn compute_svg_bounds(
     diagram: &Diagram,
-    layout: &LayoutResult,
+    geom: &GraphGeometry,
     metrics: &SvgTextMetrics,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
 ) -> SvgBounds {
     let mut bounds = SvgBounds::new();
 
-    for rect in layout.nodes.values() {
-        bounds.update_rect(rect);
+    for pos_node in geom.nodes.values() {
+        bounds.update_rect(&pos_node.rect.into());
     }
 
-    for rect in layout.subgraph_bounds.values() {
-        bounds.update_rect(rect);
+    for sg_geom in geom.subgraphs.values() {
+        bounds.update_rect(&sg_geom.rect.into());
     }
 
     let is_invisible = |index: usize| -> bool {
@@ -1562,27 +1577,38 @@ fn compute_svg_bounds(
             .is_some_and(|e| e.stroke == Stroke::Invisible)
     };
 
-    for edge in &layout.edges {
-        if edge.index >= diagram.edges.len() || is_invisible(edge.index) {
+    for layout_edge in &geom.edges {
+        if layout_edge.index >= diagram.edges.len() || is_invisible(layout_edge.index) {
             continue;
         }
-        for point in &edge.points {
-            bounds.update_point(point.x, point.y);
+        if let Some(path) = &layout_edge.layout_path_hint {
+            for point in path {
+                bounds.update_point(point.x, point.y);
+            }
         }
     }
 
-    for edge in &layout.self_edges {
-        if is_invisible(edge.edge_index) {
+    for se in &geom.self_edges {
+        if is_invisible(se.edge_index) {
             continue;
         }
-        let points = self_edge_paths
-            .get(&edge.edge_index)
-            .map(Vec::as_slice)
-            .unwrap_or_else(|| edge.points.as_slice());
-        for point in points {
-            bounds.update_point(point.x, point.y);
+        if let Some(computed) = self_edge_paths.get(&se.edge_index) {
+            for point in computed {
+                bounds.update_point(point.x, point.y);
+            }
+        } else {
+            for point in &se.points {
+                bounds.update_point(point.x, point.y);
+            }
         }
     }
+
+    // Pre-build label position lookup from GraphGeometry edges.
+    let label_positions: HashMap<usize, Point> = geom
+        .edges
+        .iter()
+        .filter_map(|e| e.label_position.map(|p| (e.index, p.into())))
+        .collect();
 
     for edge in diagram.edges.iter() {
         if edge.stroke == Stroke::Invisible {
@@ -1594,11 +1620,11 @@ fn compute_svg_bounds(
         let edge_idx = edge.index;
         let use_precomputed = edge.from_subgraph.is_none() && edge.to_subgraph.is_none();
         let position = if use_precomputed {
-            layout.label_positions.get(&edge_idx).map(|pos| pos.point)
+            label_positions.get(&edge_idx).copied()
         } else {
             None
         }
-        .or_else(|| fallback_label_position(layout, edge_idx, self_edge_paths));
+        .or_else(|| fallback_label_position(geom, edge_idx, self_edge_paths));
         let Some(point) = position else {
             continue;
         };
@@ -1672,7 +1698,7 @@ fn path_from_points(
 
 fn adjust_edge_points_for_shapes(
     diagram: &Diagram,
-    layout: &LayoutResult,
+    geom: &GraphGeometry,
     edge: &Edge,
     points: &[Point],
 ) -> Vec<Point> {
@@ -1680,34 +1706,34 @@ fn adjust_edge_points_for_shapes(
         return points.to_vec();
     }
 
-    let (from_rect, from_shape) = if let Some(sg_id) = edge.from_subgraph.as_ref() {
-        match layout.subgraph_bounds.get(sg_id) {
-            Some(rect) => (rect, Shape::Rectangle),
+    let (from_rect, from_shape): (Rect, Shape) = if let Some(sg_id) = edge.from_subgraph.as_ref() {
+        match geom.subgraphs.get(sg_id) {
+            Some(sg_geom) => (sg_geom.rect.into(), Shape::Rectangle),
             None => return points.to_vec(),
         }
     } else {
-        let Some(rect) = layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())) else {
+        let Some(pos_node) = geom.nodes.get(&edge.from) else {
             return points.to_vec();
         };
         let Some(node) = diagram.nodes.get(&edge.from) else {
             return points.to_vec();
         };
-        (rect, node.shape)
+        (pos_node.rect.into(), node.shape)
     };
 
-    let (to_rect, to_shape) = if let Some(sg_id) = edge.to_subgraph.as_ref() {
-        match layout.subgraph_bounds.get(sg_id) {
-            Some(rect) => (rect, Shape::Rectangle),
+    let (to_rect, to_shape): (Rect, Shape) = if let Some(sg_id) = edge.to_subgraph.as_ref() {
+        match geom.subgraphs.get(sg_id) {
+            Some(sg_geom) => (sg_geom.rect.into(), Shape::Rectangle),
             None => return points.to_vec(),
         }
     } else {
-        let Some(rect) = layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())) else {
+        let Some(pos_node) = geom.nodes.get(&edge.to) else {
             return points.to_vec();
         };
         let Some(node) = diagram.nodes.get(&edge.to) else {
             return points.to_vec();
         };
-        (rect, node.shape)
+        (pos_node.rect.into(), node.shape)
     };
 
     let mut adjusted = points.to_vec();
@@ -1722,9 +1748,9 @@ fn adjust_edge_points_for_shapes(
         to_rect.center()
     };
 
-    adjusted[0] = intersect_svg_node(from_rect, from_target, from_shape);
+    adjusted[0] = intersect_svg_node(&from_rect, from_target, from_shape);
     let last = adjusted.len() - 1;
-    adjusted[last] = intersect_svg_node(to_rect, to_target, to_shape);
+    adjusted[last] = intersect_svg_node(&to_rect, to_target, to_shape);
 
     adjusted
 }
@@ -2223,21 +2249,23 @@ fn scale_rect(rect: &Rect, scale: f64) -> Rect {
 
 fn compute_self_edge_paths(
     diagram: &Diagram,
-    layout: &LayoutResult,
+    geom: &GraphGeometry,
     metrics: &SvgTextMetrics,
 ) -> HashMap<usize, Vec<Point>> {
     let pad = metrics.node_padding_x.max(metrics.node_padding_y).max(4.0);
     let mut paths = HashMap::new();
 
-    for edge in &layout.self_edges {
-        let Some(rect) = layout.nodes.get(&edge.node) else {
+    for se in &geom.self_edges {
+        let Some(pos_node) = geom.nodes.get(&se.node_id) else {
             continue;
         };
-        if edge.points.is_empty() {
+        if se.points.is_empty() {
             continue;
         }
-        let adjusted = adjust_self_edge_points(rect, &edge.points, diagram.direction, pad);
-        paths.insert(edge.edge_index, adjusted);
+        let dagre_rect: Rect = pos_node.rect.into();
+        let dagre_points: Vec<Point> = se.points.iter().map(|p| (*p).into()).collect();
+        let adjusted = adjust_self_edge_points(&dagre_rect, &dagre_points, diagram.direction, pad);
+        paths.insert(se.edge_index, adjusted);
     }
 
     paths
@@ -2339,7 +2367,7 @@ fn adjust_self_edge_points(
 }
 
 fn fallback_label_position(
-    layout: &LayoutResult,
+    geom: &GraphGeometry,
     edge_index: usize,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
 ) -> Option<Point> {
@@ -2347,20 +2375,19 @@ fn fallback_label_position(
         return points.get(points.len() / 2).copied();
     }
 
-    let points = layout
-        .edges
-        .iter()
-        .find(|edge| edge.index == edge_index)
-        .map(|edge| edge.points.as_slice())
-        .or_else(|| {
-            layout
-                .self_edges
-                .iter()
-                .find(|edge| edge.edge_index == edge_index)
-                .map(|edge| edge.points.as_slice())
-        })?;
+    // Try regular edges via layout_path_hint
+    if let Some(layout_edge) = geom.edges.iter().find(|e| e.index == edge_index)
+        && let Some(path) = &layout_edge.layout_path_hint
+    {
+        return path.get(path.len() / 2).map(|p| (*p).into());
+    }
 
-    points.get(points.len() / 2).copied()
+    // Try self-edges
+    if let Some(se) = geom.self_edges.iter().find(|e| e.edge_index == edge_index) {
+        return se.points.get(se.points.len() / 2).map(|p| (*p).into());
+    }
+
+    None
 }
 
 fn fmt_f64(value: f64) -> String {

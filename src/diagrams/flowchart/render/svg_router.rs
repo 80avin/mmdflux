@@ -7,65 +7,14 @@
 
 use std::collections::{HashMap, HashSet};
 
+// Re-export shared routing policy functions under their SVG-specific names
+// for backward compatibility with callers in svg.rs.
+pub use super::route_policy::build_node_directions as build_node_directions_svg;
+pub use super::route_policy::{
+    build_override_node_map, effective_edge_direction as effective_edge_direction_svg,
+};
 use crate::dagre::{LayoutResult, NodeId, Point, Rect};
 use crate::graph::{Diagram, Direction};
-
-/// Build a per-node direction map for SVG rendering.
-///
-/// Nodes inside a direction-override subgraph get the subgraph's direction;
-/// all other nodes get the diagram's root direction.
-///
-/// Processes subgraphs in depth order (shallowest first) so the deepest
-/// override deterministically wins for nested subgraphs.
-pub fn build_node_directions_svg(diagram: &Diagram) -> HashMap<String, Direction> {
-    let mut node_directions: HashMap<String, Direction> = HashMap::new();
-    for node_id in diagram.nodes.keys() {
-        node_directions.insert(node_id.clone(), diagram.direction);
-    }
-
-    let mut dir_sg_ids: Vec<&String> = diagram
-        .subgraphs
-        .iter()
-        .filter(|(_, sg)| sg.dir.is_some())
-        .map(|(id, _)| id)
-        .collect();
-    dir_sg_ids.sort_by(|a, b| {
-        diagram
-            .subgraph_depth(a)
-            .cmp(&diagram.subgraph_depth(b))
-            .then_with(|| a.cmp(b))
-    });
-    for sg_id in dir_sg_ids {
-        let sg = &diagram.subgraphs[sg_id];
-        let override_dir = sg.dir.unwrap();
-        for node_id in &sg.nodes {
-            if !diagram.is_subgraph(node_id) {
-                node_directions.insert(node_id.clone(), override_dir);
-            }
-        }
-    }
-
-    node_directions
-}
-
-/// Determine the effective direction for an edge in SVG rendering.
-///
-/// If both endpoints share the same direction override, returns that direction.
-/// Otherwise returns the fallback (diagram root direction).
-pub fn effective_edge_direction_svg(
-    node_directions: &HashMap<String, Direction>,
-    from: &str,
-    to: &str,
-    fallback: Direction,
-) -> Direction {
-    let src_dir = node_directions.get(from).copied().unwrap_or(fallback);
-    let tgt_dir = node_directions.get(to).copied().unwrap_or(fallback);
-    if src_dir == tgt_dir {
-        src_dir
-    } else {
-        fallback
-    }
-}
 
 /// Which side of a rectangle an edge attaches to.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
@@ -691,34 +640,6 @@ fn get_rect<'a>(layout: &'a LayoutResult, id: &str) -> Option<&'a Rect> {
         .subgraph_bounds
         .get(id)
         .or_else(|| layout.nodes.get(&NodeId(id.to_string())))
-}
-
-/// Build the override node map: node_id -> subgraph_id.
-///
-/// Processes subgraphs in depth order so the deepest override wins.
-pub(super) fn build_override_node_map(diagram: &Diagram) -> HashMap<String, String> {
-    let mut override_nodes = HashMap::new();
-    let mut sg_ids: Vec<&String> = diagram
-        .subgraphs
-        .iter()
-        .filter(|(_, sg)| sg.dir.is_some())
-        .map(|(id, _)| id)
-        .collect();
-    sg_ids.sort_by(|a, b| {
-        diagram
-            .subgraph_depth(a)
-            .cmp(&diagram.subgraph_depth(b))
-            .then_with(|| a.cmp(b))
-    });
-    for sg_id in sg_ids {
-        let sg = &diagram.subgraphs[sg_id];
-        for node_id in &sg.nodes {
-            if !diagram.is_subgraph(node_id) {
-                override_nodes.insert(node_id.clone(), sg_id.clone());
-            }
-        }
-    }
-    override_nodes
 }
 
 /// Check whether `ancestor` is a (transitive) ancestor of `descendant` in the
