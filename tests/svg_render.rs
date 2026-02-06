@@ -228,3 +228,29 @@ fn render_svg_all_direction_override_fixtures_valid() {
         );
     }
 }
+
+#[test]
+fn render_svg_direction_override_backward_edge() {
+    // Backward edge (B -> Start) crossing subgraph boundary
+    let input = r#"graph TD
+    Start --> A
+    subgraph sg1[Loop Section]
+        direction LR
+        A --> B
+    end
+    B --> Start
+"#;
+    let flowchart = parse_flowchart(input).unwrap();
+    let diagram = build_diagram(&flowchart);
+    let svg = render_svg(&diagram, &RenderOptions::default_svg());
+
+    let positions = extract_node_x_positions(&svg);
+
+    // LR nodes A and B should be horizontal
+    let x_a = positions.get("A").expect("A not found");
+    let x_b = positions.get("B").expect("B not found");
+    assert!(x_a < x_b, "LR: A ({x_a}) should be left of B ({x_b})");
+
+    assert!(!svg.contains("NaN"), "SVG should not contain NaN");
+    assert!(svg.contains("<path"), "SVG should have edge paths");
+}
