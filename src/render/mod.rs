@@ -2,31 +2,32 @@
 //!
 //! Supports text (Unicode/ASCII) and SVG output formats.
 
-mod canvas;
-mod chars;
-mod edge;
+// Shared rendering infrastructure
+pub(crate) mod canvas;
+pub(crate) mod chars;
 pub mod intersect;
-mod layout;
-mod router;
-mod shape;
-mod subgraph;
-mod svg;
-mod svg_metrics;
-pub(crate) mod svg_router;
 
+// Re-export flowchart render modules through canonical paths
 pub use canvas::Canvas;
 use canvas::{Cell, Connections};
 pub use chars::CharSet;
-pub use edge::{render_all_edges, render_all_edges_with_labels, render_edge};
-pub use layout::{Layout, LayoutConfig, SubgraphBounds, compute_layout_direct};
-pub use router::{Point, RoutedEdge, Segment, route_all_edges, route_edge};
-pub use shape::{NodeBounds, node_dimensions, render_node};
-pub use svg::render_svg;
-use svg_metrics::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
 
 pub use crate::diagram::{
     LayoutConfig as DiagramLayoutConfig, OutputFormat, RenderConfig, RenderError, SvgEdgeCurve,
 };
+pub use crate::diagrams::flowchart::render::edge::{
+    render_all_edges, render_all_edges_with_labels, render_edge,
+};
+pub use crate::diagrams::flowchart::render::layout::{
+    Layout, LayoutConfig, SubgraphBounds, compute_layout_direct,
+};
+pub use crate::diagrams::flowchart::render::router::{
+    Point, RoutedEdge, Segment, route_all_edges, route_edge,
+};
+pub use crate::diagrams::flowchart::render::shape::{NodeBounds, node_dimensions, render_node};
+use crate::diagrams::flowchart::render::subgraph;
+pub use crate::diagrams::flowchart::render::svg::render_svg;
+use crate::diagrams::flowchart::render::svg_metrics::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
 use crate::graph::{Diagram, Direction};
 
 impl From<&RenderConfig> for RenderOptions {

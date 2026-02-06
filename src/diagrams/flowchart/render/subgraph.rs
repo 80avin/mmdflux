@@ -2,9 +2,9 @@
 
 use std::collections::HashMap;
 
-use super::canvas::Canvas;
-use super::chars::CharSet;
 use super::layout::SubgraphBounds;
+use crate::render::canvas::Canvas;
+use crate::render::chars::CharSet;
 
 /// Render subgraph border rectangles on the canvas.
 ///

@@ -8,7 +8,7 @@
 //! This is a key part of the dagre/Sugiyama framework that enables edges to
 //! fan out naturally from nodes rather than overlapping at the center.
 
-use super::shape::NodeBounds;
+use crate::diagrams::flowchart::render::shape::NodeBounds;
 use crate::graph::Shape;
 
 /// Minimum gap between adjacent attachment points on a face.

@@ -2056,7 +2056,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         for edge in &diagram.edges {
             if let (Some(from_b), Some(to_b)) =
                 (node_bounds.get(&edge.from), node_bounds.get(&edge.to))
-                && crate::render::router::is_backward_edge(from_b, to_b, diagram.direction)
+                && super::router::is_backward_edge(from_b, to_b, diagram.direction)
                 && edge_waypoints_final
                     .get(&edge.index)
                     .is_some_and(|wps| wps.len() >= BACKWARD_WAYPOINT_STRIP_THRESHOLD)

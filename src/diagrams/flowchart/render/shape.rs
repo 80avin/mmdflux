@@ -1,9 +1,9 @@
 //! Node shape rendering.
 
-use super::canvas::Canvas;
-use super::chars::CharSet;
-use super::intersect::NodeFace;
 use crate::graph::{Direction, Node, Shape};
+use crate::render::canvas::Canvas;
+use crate::render::chars::CharSet;
+use crate::render::intersect::NodeFace;
 
 /// Bounding box for a rendered node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
