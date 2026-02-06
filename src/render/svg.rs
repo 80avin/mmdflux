@@ -5,7 +5,7 @@ use std::fmt::Write;
 
 use super::layout::{
     build_dagre_layout, center_override_subgraphs, compute_sublayouts, dagre_config_for_layout,
-    reconcile_sublayouts_dagre, resolve_sublayout_overlaps,
+    expand_parent_bounds_dagre, reconcile_sublayouts_dagre, resolve_sublayout_overlaps,
 };
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
@@ -71,6 +71,9 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     // the subgraph center.  Must happen after reconciliation (sublayout positions
     // finalized) but before overlap resolution and edge rerouting.
     center_override_subgraphs(diagram, &mut layout);
+
+    // Expand parent subgraph bounds to encompass repositioned children.
+    expand_parent_bounds_dagre(diagram, &mut layout);
 
     // Push external nodes that now overlap with reconciled subgraph bounds.
     // The gap must account for subgraph padding (added later) plus breathing room.

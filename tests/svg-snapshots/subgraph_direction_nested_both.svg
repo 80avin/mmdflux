@@ -6,8 +6,8 @@
   </defs>
   <g transform="translate(78.91,0.00)">
     <g class="clusters">
-      <rect class="subgraph" x="-70.91" y="225.70" width="336.73" height="109.60" fill="none" stroke="#888" stroke-width="1.00" />
-      <text x="97.45" y="229.70" text-anchor="middle" dominant-baseline="hanging" fill="#333">Outer LR</text>
+      <rect class="subgraph" x="-70.91" y="181.70" width="336.73" height="213.60" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="97.45" y="185.70" text-anchor="middle" dominant-baseline="hanging" fill="#333">Outer LR</text>
       <rect class="subgraph" x="107.45" y="181.70" width="98.91" height="213.60" fill="none" stroke="#888" stroke-width="1.00" />
       <text x="156.91" y="185.70" text-anchor="middle" dominant-baseline="hanging" fill="#333">Inner BT</text>
     </g>

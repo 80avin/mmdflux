@@ -972,6 +972,71 @@ pub(crate) fn center_override_subgraphs(
     }
 }
 
+/// Expand parent subgraph bounds to encompass all member nodes and child
+/// subgraph bounds.
+///
+/// After sublayout reconciliation and centering, child subgraphs may have been
+/// repositioned (e.g., an LR inner subgraph is wider than dagre predicted).
+/// This walks subgraphs inner-first and expands each parent's bounds to be the
+/// union of its current bounds and all member content.
+pub(crate) fn expand_parent_bounds_dagre(
+    diagram: &Diagram,
+    layout: &mut dagre::LayoutResult,
+) {
+    // Process inner-first so child bounds are finalized before parents.
+    let order: Vec<&String> = if !diagram.subgraph_order.is_empty() {
+        diagram.subgraph_order.iter().collect()
+    } else {
+        let mut keys: Vec<&String> = diagram.subgraphs.keys().collect();
+        keys.sort();
+        keys
+    };
+
+    for sg_id in &order {
+        let sg = match diagram.subgraphs.get(*sg_id) {
+            Some(sg) => sg,
+            None => continue,
+        };
+        let Some(current) = layout.subgraph_bounds.get(*sg_id).copied() else {
+            continue;
+        };
+
+        let mut min_x = current.x;
+        let mut min_y = current.y;
+        let mut max_x = current.x + current.width;
+        let mut max_y = current.y + current.height;
+
+        // Check member nodes.
+        for member_id in &sg.nodes {
+            if let Some(rect) = layout.nodes.get(&dagre::NodeId(member_id.clone())) {
+                min_x = min_x.min(rect.x);
+                min_y = min_y.min(rect.y);
+                max_x = max_x.max(rect.x + rect.width);
+                max_y = max_y.max(rect.y + rect.height);
+            }
+        }
+
+        // Check child subgraph bounds (subgraphs whose parent is this subgraph).
+        for (child_sg_id, child_sg) in &diagram.subgraphs {
+            if child_sg.parent.as_deref() == Some(sg_id.as_str()) {
+                if let Some(child_bounds) = layout.subgraph_bounds.get(child_sg_id) {
+                    min_x = min_x.min(child_bounds.x);
+                    min_y = min_y.min(child_bounds.y);
+                    max_x = max_x.max(child_bounds.x + child_bounds.width);
+                    max_y = max_y.max(child_bounds.y + child_bounds.height);
+                }
+            }
+        }
+
+        if let Some(bounds) = layout.subgraph_bounds.get_mut(*sg_id) {
+            bounds.x = min_x;
+            bounds.y = min_y;
+            bounds.width = max_x - min_x;
+            bounds.height = max_y - min_y;
+        }
+    }
+}
+
 /// Push external nodes that overlap with reconciled subgraph bounds downward.
 ///
 /// After sublayout reconciliation, the subgraph may now occupy space where dagre
@@ -1212,6 +1277,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Shift external predecessors of direction-override subgraphs to align
     // with the subgraph center, before coordinate transformation.
     center_override_subgraphs(diagram, &mut result);
+    expand_parent_bounds_dagre(diagram, &mut result);
 
     // --- Phase B: Group nodes into layers ---
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
@@ -1772,6 +1838,9 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             &mut width,
             &mut height,
         );
+
+        // Re-expand parent bounds after reconciliation repositioned children.
+        expand_parent_subgraph_bounds(&diagram.subgraphs, &mut subgraph_bounds);
 
         // Invalidate or adjust waypoints and label positions for edges touching
         // direction-override subgraphs. The main layout computed these for
