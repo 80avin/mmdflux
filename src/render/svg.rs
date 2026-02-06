@@ -1,6 +1,6 @@
 //! SVG rendering for flowchart diagrams.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use super::layout::{
@@ -45,7 +45,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     );
 
     let dagre_config = dagre_config_for_layout(diagram, &config);
-    let sublayouts = compute_sublayouts(
+    let mut sublayouts = compute_sublayouts(
         diagram,
         &dagre_config,
         |node| svg_node_dimensions(&metrics, node),
@@ -55,6 +55,10 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
                 .map(|label| metrics.edge_label_dimensions(label))
         },
     );
+    let external_override_sgs = subgraphs_with_external_edges(diagram);
+    if !external_override_sgs.is_empty() {
+        sublayouts.retain(|id, _| !external_override_sgs.contains(id));
+    }
     let title_pad_y = metrics.font_size;
     let content_pad_y = metrics.font_size * 0.3;
     reconcile_sublayouts_dagre(
@@ -70,7 +74,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let subgraph_pad_x = metrics.node_padding_x;
     apply_subgraph_svg_padding(diagram, &mut layout, subgraph_pad_x, 0.0);
 
-    let override_nodes = build_override_node_map(diagram);
+    let override_nodes = build_override_node_map(diagram, &external_override_sgs);
 
     let self_edge_paths = compute_self_edge_paths(diagram, &layout, &metrics);
     let bounds = compute_svg_bounds(diagram, &layout, &metrics, &self_edge_paths);
@@ -149,7 +153,29 @@ fn apply_subgraph_svg_padding(
     }
 }
 
-fn build_override_node_map(diagram: &Diagram) -> HashMap<String, String> {
+fn subgraphs_with_external_edges(diagram: &Diagram) -> HashSet<String> {
+    let mut external = HashSet::new();
+    for (sg_id, sg) in &diagram.subgraphs {
+        if sg.dir.is_none() {
+            continue;
+        }
+        let node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+        for edge in &diagram.edges {
+            let from_in = node_set.contains(edge.from.as_str());
+            let to_in = node_set.contains(edge.to.as_str());
+            if from_in ^ to_in {
+                external.insert(sg_id.clone());
+                break;
+            }
+        }
+    }
+    external
+}
+
+fn build_override_node_map(
+    diagram: &Diagram,
+    skip_subgraphs: &HashSet<String>,
+) -> HashMap<String, String> {
     let mut override_nodes = HashMap::new();
     let mut sg_ids: Vec<&String> = diagram
         .subgraphs
@@ -164,6 +190,9 @@ fn build_override_node_map(diagram: &Diagram) -> HashMap<String, String> {
             .then_with(|| a.cmp(b))
     });
     for sg_id in sg_ids {
+        if skip_subgraphs.contains(sg_id) {
+            continue;
+        }
         let sg = &diagram.subgraphs[sg_id];
         for node_id in &sg.nodes {
             if !diagram.is_subgraph(node_id) {
