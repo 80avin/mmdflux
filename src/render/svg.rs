@@ -55,7 +55,15 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
                 .map(|label| metrics.edge_label_dimensions(label))
         },
     );
-    reconcile_sublayouts_dagre(diagram, &mut layout, &sublayouts);
+    let title_pad_y = metrics.font_size;
+    let content_pad_y = metrics.font_size * 0.3;
+    reconcile_sublayouts_dagre(
+        diagram,
+        &mut layout,
+        &sublayouts,
+        title_pad_y,
+        content_pad_y,
+    );
 
     // Add horizontal padding to subgraph bounds so SVG renders with breathing
     // room on left/right edges.

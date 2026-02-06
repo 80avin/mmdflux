@@ -520,6 +520,8 @@ pub(crate) fn reconcile_sublayouts_dagre(
     diagram: &Diagram,
     layout: &mut dagre::LayoutResult,
     sublayouts: &HashMap<String, SubLayoutResult>,
+    title_pad_y: f64,
+    content_pad_y: f64,
 ) {
     if sublayouts.is_empty() {
         return;
@@ -561,14 +563,20 @@ pub(crate) fn reconcile_sublayouts_dagre(
 
         let sg_cx = parent_bounds.x + parent_bounds.width / 2.0;
         let sg_cy = parent_bounds.y + parent_bounds.height / 2.0;
-        let final_w = parent_bounds.width.max(sub_w);
-        let final_h = parent_bounds.height.max(sub_h);
+        let has_title = diagram
+            .subgraphs
+            .get(sg_id)
+            .is_some_and(|sg| !sg.title.trim().is_empty());
+        let title_pad = if has_title { title_pad_y } else { 0.0 };
+
+        let final_w = sub_w;
+        let final_h = sub_h + title_pad + content_pad_y * 2.0;
 
         let new_sg_x = sg_cx - final_w / 2.0;
         let new_sg_y = sg_cy - final_h / 2.0;
 
         let offset_x = new_sg_x + (final_w - sub_w) / 2.0 - min_x;
-        let offset_y = new_sg_y + (final_h - sub_h) / 2.0 - min_y;
+        let offset_y = new_sg_y + content_pad_y + title_pad - min_y;
 
         // Update node positions for sublayout nodes.
         for (node_id, rect) in &sublayout.result.nodes {
