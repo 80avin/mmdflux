@@ -170,3 +170,64 @@ fn test_json_without_show_ids() {
     let node_a = nodes.iter().find(|n| n["id"] == "A").unwrap();
     assert_eq!(node_a["label"], "Start");
 }
+
+// --- Engine selection tests (Task 2.2) ---
+
+#[test]
+fn engine_selection_none_uses_default_dagre() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig::default(); // layout_engine: None
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(output.contains('A'));
+    assert!(output.contains('B'));
+}
+
+#[test]
+fn engine_selection_explicit_dagre_matches_default() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let default_output = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+
+    let dagre_config = RenderConfig {
+        layout_engine: Some("dagre".to_string()),
+        ..Default::default()
+    };
+    let dagre_output = instance.render(OutputFormat::Text, &dagre_config).unwrap();
+
+    assert_eq!(default_output, dagre_output);
+}
+
+#[test]
+fn engine_selection_unknown_engine_errors() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some("elk".to_string()),
+        ..Default::default()
+    };
+    let result = instance.render(OutputFormat::Text, &config);
+    assert!(result.is_err());
+    assert!(
+        result.unwrap_err().message.contains("unsupported"),
+        "error should mention unsupported engine"
+    );
+}
+
+#[test]
+fn engine_selection_unknown_engine_svg_errors() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some("does-not-exist".to_string()),
+        ..Default::default()
+    };
+    let result = instance.render(OutputFormat::Svg, &config);
+    assert!(result.is_err());
+}

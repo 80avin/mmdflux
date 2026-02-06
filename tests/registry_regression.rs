@@ -102,6 +102,41 @@ fn regression_self_edge() {
     compare_outputs("graph TD\nA-->A", false);
 }
 
+// Engine selection via registry path
+#[test]
+fn regression_engine_selection_via_registry() {
+    let registry = default_registry();
+    let input = "graph TD\nA-->B";
+
+    let mut instance = registry.create("flowchart").unwrap();
+    instance.parse(input).unwrap();
+
+    // Default (None) and explicit "dagre" should produce identical output
+    let default_out = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+    let dagre_out = instance
+        .render(
+            OutputFormat::Text,
+            &RenderConfig {
+                layout_engine: Some("dagre".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(default_out, dagre_out);
+
+    // Unknown engine should error
+    let err = instance.render(
+        OutputFormat::Text,
+        &RenderConfig {
+            layout_engine: Some("elk".to_string()),
+            ..Default::default()
+        },
+    );
+    assert!(err.is_err());
+}
+
 // Test all existing fixtures
 #[test]
 fn regression_all_fixtures() {

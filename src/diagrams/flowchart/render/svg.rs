@@ -11,8 +11,9 @@ use super::layout::{
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use crate::dagre::{LayoutResult, Point, Rect};
+use crate::diagram::SvgEdgeCurve;
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
-use crate::render::{RenderOptions, SvgEdgeCurve, layout_config_for_diagram};
+use crate::render::{RenderOptions, layout_config_for_diagram};
 
 const STROKE_COLOR: &str = "#333";
 const SUBGRAPH_STROKE: &str = "#888";

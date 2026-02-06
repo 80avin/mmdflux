@@ -3,6 +3,7 @@
 //! Flowcharts are node-edge graphs rendered using the Dagre layout engine.
 //! This is the original and most feature-complete diagram type in mmdflux.
 
+pub mod engine;
 pub(crate) mod geometry;
 mod instance;
 pub(crate) mod render;

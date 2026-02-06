@@ -1,4 +1,4 @@
-use mmdflux::render::OutputFormat;
+use mmdflux::diagram::OutputFormat;
 
 #[test]
 fn output_format_from_render_module() {

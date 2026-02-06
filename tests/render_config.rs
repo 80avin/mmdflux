@@ -1,5 +1,4 @@
-use mmdflux::diagram::OutputFormat;
-use mmdflux::render::{DiagramLayoutConfig, RenderConfig, RenderError};
+use mmdflux::diagram::{OutputFormat, RenderConfig, RenderError};
 
 #[test]
 fn render_config_default() {
@@ -30,6 +29,6 @@ fn render_config_to_render_options_conversion() {
 }
 
 #[test]
-fn diagram_layout_config_accessible_from_render() {
-    let _ = DiagramLayoutConfig::default();
+fn diagram_layout_config_accessible_from_diagram_module() {
+    let _ = mmdflux::diagram::LayoutConfig::default();
 }
