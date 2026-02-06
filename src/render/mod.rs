@@ -12,9 +12,7 @@ pub use canvas::Canvas;
 use canvas::{Cell, Connections};
 pub use chars::CharSet;
 
-pub use crate::diagram::{
-    LayoutConfig as DiagramLayoutConfig, OutputFormat, RenderConfig, RenderError, SvgEdgeCurve,
-};
+use crate::diagram::{OutputFormat, RenderConfig, SvgEdgeCurve};
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
 };

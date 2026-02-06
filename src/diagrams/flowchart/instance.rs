@@ -37,6 +37,15 @@ impl DiagramInstance for FlowchartInstance {
     }
 
     fn render(&self, format: OutputFormat, config: &RenderConfig) -> Result<String, RenderError> {
+        // Validate engine selection: None and "dagre" are accepted; anything else is an error.
+        if let Some(ref engine) = config.layout_engine
+            && engine != "dagre"
+        {
+            return Err(RenderError {
+                message: format!("unsupported layout engine: {engine:?}"),
+            });
+        }
+
         let diagram = self.diagram.as_ref().ok_or_else(|| RenderError {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;

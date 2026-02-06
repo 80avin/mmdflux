@@ -103,31 +103,79 @@ pub trait DiagramRenderer: Send + Sync {
     fn supports_format(&self, format: OutputFormat) -> bool;
 }
 
-/// Layout engine abstraction for graph-based diagrams.
-///
-/// Different diagram types may use different layout algorithms
-/// (e.g., Dagre, ELK, timeline-based).
-pub trait LayoutEngine: Send + Sync {
-    /// Input type for layout computation.
-    type Input;
-    /// Output type containing positioned elements.
-    type Output;
-
-    /// Compute layout positions for the input.
-    fn compute(&self, input: &Self::Input, config: &LayoutConfig) -> Self::Output;
-}
-
 /// Configuration for layout computation.
 ///
 /// This is a re-export of `dagre::types::LayoutConfig` to provide a single
 /// canonical layout configuration type across the crate.
 pub type LayoutConfig = crate::dagre::types::LayoutConfig;
 
+/// Engine-specific configuration envelope.
+///
+/// Wraps engine-specific layout parameters. Phase 2 supports Dagre only;
+/// future engines (ELK, COSE) will add variants here.
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum EngineConfig {
+    /// Dagre (Sugiyama) layout engine configuration.
+    Dagre(crate::dagre::types::LayoutConfig),
+}
+
+impl From<LayoutConfig> for EngineConfig {
+    fn from(config: LayoutConfig) -> Self {
+        EngineConfig::Dagre(config)
+    }
+}
+
+/// Capabilities advertised by a layout engine.
+///
+/// The runtime uses these to decide what post-processing is needed
+/// after layout (e.g., whether edge routing is already done).
+#[derive(Debug, Clone, Default)]
+pub struct EngineCapabilities {
+    /// Whether the engine handles edge routing (vs. leaving it to the renderer).
+    pub routes_edges: bool,
+    /// Whether the engine supports subgraph (cluster) layout.
+    pub supports_subgraphs: bool,
+    /// Whether the engine supports direction overrides per subgraph.
+    pub supports_direction_overrides: bool,
+}
+
+/// Synchronous graph layout engine trait.
+///
+/// Layout engines position nodes and edges in a graph. Each engine
+/// can advertise its capabilities so the runtime knows what
+/// post-processing is needed.
+pub trait GraphLayoutEngine: Send + Sync {
+    /// Input graph type for this engine.
+    type Input;
+    /// Positioned output type.
+    type Output;
+
+    /// Engine name (e.g., "dagre", "elk").
+    fn name(&self) -> &str;
+
+    /// Capabilities this engine provides.
+    fn capabilities(&self) -> EngineCapabilities;
+
+    /// Compute layout positions for the input graph.
+    fn layout(
+        &self,
+        input: &Self::Input,
+        config: &EngineConfig,
+    ) -> Result<Self::Output, RenderError>;
+}
+
 /// Configuration for rendering.
 #[derive(Debug, Clone, Default)]
 pub struct RenderConfig {
     /// Layout configuration.
     pub layout: LayoutConfig,
+    /// Layout engine selection.
+    ///
+    /// - `None` => default (dagre)
+    /// - `Some("dagre")` => explicit dagre
+    /// - Any other value => unsupported engine error
+    pub layout_engine: Option<String>,
     /// Cluster (subgraph) rank separation override.
     pub cluster_ranksep: Option<f64>,
     /// Padding around content.

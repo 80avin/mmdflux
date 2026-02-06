@@ -184,6 +184,7 @@ fn main() -> io::Result<()> {
             ranker: cli.ranker.into(),
             ..LayoutConfig::default()
         },
+        layout_engine: None,
         cluster_ranksep: cli.cluster_ranksep,
         padding: cli.padding,
         svg_scale: cli.svg_scale,
