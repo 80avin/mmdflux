@@ -202,30 +202,28 @@ fn route_svg_edge_ported(
 
     if aligned {
         vec![start, end]
+    } else if is_vertical {
+        let mid_y = (start.y + end.y) / 2.0;
+        vec![
+            start,
+            Point {
+                x: start.x,
+                y: mid_y,
+            },
+            Point { x: end.x, y: mid_y },
+            end,
+        ]
     } else {
-        if is_vertical {
-            let mid_y = (start.y + end.y) / 2.0;
-            vec![
-                start,
-                Point {
-                    x: start.x,
-                    y: mid_y,
-                },
-                Point { x: end.x, y: mid_y },
-                end,
-            ]
-        } else {
-            let mid_x = (start.x + end.x) / 2.0;
-            vec![
-                start,
-                Point {
-                    x: mid_x,
-                    y: start.y,
-                },
-                Point { x: mid_x, y: end.y },
-                end,
-            ]
-        }
+        let mid_x = (start.x + end.x) / 2.0;
+        vec![
+            start,
+            Point {
+                x: mid_x,
+                y: start.y,
+            },
+            Point { x: mid_x, y: end.y },
+            end,
+        ]
     }
 }
 

@@ -78,7 +78,7 @@ fn subgraph_bounds_as_node(bounds: &SubgraphBounds) -> NodeBounds {
     }
 }
 
-fn resolve_edge_bounds<'a>(layout: &'a Layout, edge: &Edge) -> Option<(NodeBounds, NodeBounds)> {
+fn resolve_edge_bounds(layout: &Layout, edge: &Edge) -> Option<(NodeBounds, NodeBounds)> {
     let from_bounds = if let Some(sg_id) = edge.from_subgraph.as_ref() {
         layout
             .subgraph_bounds
@@ -655,9 +655,9 @@ fn route_edge_direct(
     // For subgraph edges that attach on left/right faces, route horizontally
     // to avoid running straight through vertical stacks.
     let mut path_direction = direction;
-    if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
-        if matches!(src_face, NodeFace::Left | NodeFace::Right)
-            || matches!(tgt_face, NodeFace::Left | NodeFace::Right)
+    if (edge.from_subgraph.is_some() || edge.to_subgraph.is_some())
+        && (matches!(src_face, NodeFace::Left | NodeFace::Right)
+            || matches!(tgt_face, NodeFace::Left | NodeFace::Right))
         {
             path_direction = if start.x <= end.x {
                 Direction::LeftRight
@@ -665,7 +665,6 @@ fn route_edge_direct(
                 Direction::RightLeft
             };
         }
-    }
     segments.extend(build_orthogonal_path_for_direction(
         start,
         end,

@@ -566,7 +566,7 @@ fn resolve_sibling_overlaps_draw(
                     && !child_sgs.iter().any(|cs| {
                         child_sg_nodes
                             .get(cs)
-                            .map_or(false, |set| set.contains(n.as_str()))
+                            .is_some_and(|set| set.contains(n.as_str()))
                     })
             })
             .map(|s| s.as_str())
@@ -691,12 +691,11 @@ fn resolve_sibling_overlaps_draw(
                 }
                 // Shift grandchild subgraph bounds too.
                 for (gc_id, gc_sg) in &diagram.subgraphs {
-                    if gc_sg.parent.as_deref() == Some(*child_sg_id) {
-                        if let Some(b) = subgraph_bounds.get_mut(gc_id) {
+                    if gc_sg.parent.as_deref() == Some(*child_sg_id)
+                        && let Some(b) = subgraph_bounds.get_mut(gc_id) {
                             b.x += shift_x;
                             b.y += shift_y;
                         }
-                    }
                 }
             }
         }
@@ -752,15 +751,14 @@ fn align_cross_boundary_siblings_draw(
                     None
                 };
 
-                if let Some(target_id) = target {
-                    if let Some(tb) = node_bounds.get(target_id) {
+                if let Some(target_id) = target
+                    && let Some(tb) = node_bounds.get(target_id) {
                         if is_horizontal {
                             target_cross_positions.push(tb.y + tb.height / 2);
                         } else {
                             target_cross_positions.push(tb.x + tb.width / 2);
                         }
                     }
-                }
             }
 
             if target_cross_positions.is_empty() {
@@ -1123,11 +1121,9 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
                 && edge.from != *sg_id
                 && !sg_node_set.contains(edge.from.as_str())
                 && !all_sg_members.contains(edge.from.as_str())
-            {
-                if !predecessors.contains(&edge.from) {
+                && !predecessors.contains(&edge.from) {
                     predecessors.push(edge.from.clone());
                 }
-            }
         }
 
         // Collect external successors: edges leaving the subgraph.
@@ -1142,11 +1138,9 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
                 && edge.to != *sg_id
                 && !sg_node_set.contains(edge.to.as_str())
                 && !all_sg_members.contains(edge.to.as_str())
-            {
-                if !successors.contains(&edge.to) {
+                && !successors.contains(&edge.to) {
                     successors.push(edge.to.clone());
                 }
-            }
         }
 
         if predecessors.is_empty() && successors.is_empty() {
@@ -1400,14 +1394,13 @@ pub(crate) fn expand_parent_bounds_dagre(
         let has_title = !sg.title.trim().is_empty();
         let top_margin = child_margin + if has_title { title_margin } else { 0.0 };
         for (child_sg_id, child_sg) in &diagram.subgraphs {
-            if child_sg.parent.as_deref() == Some(sg_id.as_str()) {
-                if let Some(child_bounds) = layout.subgraph_bounds.get(child_sg_id) {
+            if child_sg.parent.as_deref() == Some(sg_id.as_str())
+                && let Some(child_bounds) = layout.subgraph_bounds.get(child_sg_id) {
                     min_x = min_x.min(child_bounds.x - child_margin);
                     min_y = min_y.min(child_bounds.y - top_margin);
                     max_x = max_x.max(child_bounds.x + child_bounds.width + child_margin);
                     max_y = max_y.max(child_bounds.y + child_bounds.height + child_margin);
                 }
-            }
         }
 
         if let Some(bounds) = layout.subgraph_bounds.get_mut(*sg_id) {
@@ -2275,12 +2268,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                 let key = edge.index;
                 if from_in && to_in {
                     edge_waypoints_final.remove(&key);
-                } else if let Some(bounds) = subgraph_bounds.get(&sg.id) {
-                    if let Some(wps) = edge_waypoints_final.get(&key).cloned() {
+                } else if let Some(bounds) = subgraph_bounds.get(&sg.id)
+                    && let Some(wps) = edge_waypoints_final.get(&key).cloned() {
                         let clipped = clip_waypoints_to_subgraph(&wps, bounds, from_in, to_in);
                         edge_waypoints_final.insert(key, clipped);
                     }
-                }
                 edge_label_positions_converted.remove(&key);
             }
         }

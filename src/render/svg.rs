@@ -218,8 +218,8 @@ fn ensure_subgraph_edge_spacing(diagram: &Diagram, layout: &mut LayoutResult, mi
         }
 
         // external node → subgraph
-        if let Some(sg_id) = &edge.to_subgraph {
-            if edge.from_subgraph.is_none() {
+        if let Some(sg_id) = &edge.to_subgraph
+            && edge.from_subgraph.is_none() {
                 push_node_from_subgraph(
                     layout,
                     &edge.from,
@@ -229,14 +229,12 @@ fn ensure_subgraph_edge_spacing(diagram: &Diagram, layout: &mut LayoutResult, mi
                     true,
                 );
             }
-        }
 
         // subgraph → external node
-        if let Some(sg_id) = &edge.from_subgraph {
-            if edge.to_subgraph.is_none() {
+        if let Some(sg_id) = &edge.from_subgraph
+            && edge.to_subgraph.is_none() {
                 push_node_from_subgraph(layout, &edge.to, sg_id, diagram.direction, min_gap, false);
             }
-        }
 
         // subgraph → subgraph
         if let (Some(from_sg), Some(to_sg)) = (&edge.from_subgraph, &edge.to_subgraph) {
