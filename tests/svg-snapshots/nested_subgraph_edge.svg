@@ -6,14 +6,14 @@
   </defs>
   <g transform="translate(15.00,0.00)">
     <g class="clusters">
-      <rect class="subgraph" x="-7.00" y="112.00" width="419.88" height="154.00" fill="none" stroke="#888" stroke-width="1.00" />
-      <text x="202.94" y="116.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Cloud</text>
-      <rect class="subgraph" x="13.00" y="137.00" width="379.88" height="104.00" fill="none" stroke="#888" stroke-width="1.00" />
-      <text x="202.94" y="141.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">US East</text>
+      <rect class="subgraph" x="-7.00" y="97.00" width="419.88" height="184.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="202.94" y="101.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Cloud</text>
+      <rect class="subgraph" x="13.00" y="122.00" width="379.88" height="134.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="202.94" y="126.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">US East</text>
     </g>
     <g class="edgePaths">
-      <path d="M120.47,62.00 L120.47,66.17 C120.47,70.33 120.47,78.67 120.47,87.00 C120.47,95.33 120.47,103.67 120.47,107.83 C120.47,112.00 120.47,112.00 120.47,112.00 L120.47,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M120.47,266.00 L120.47,266.00 C120.47,266.00 120.47,266.00 120.47,270.17 C120.47,274.33 120.47,282.67 120.47,290.33 C120.47,298.00 120.47,305.00 120.47,308.50 L120.47,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M120.47,62.00 L120.47,65.33 C120.47,68.67 120.47,75.33 120.47,79.50 C120.47,83.67 120.47,85.33 120.99,86.81 C121.52,88.30 122.56,89.59 123.49,90.74 C124.42,91.89 125.23,92.89 125.63,93.39 L126.04,93.89" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M128.55,281.00 L127.21,282.67 C125.86,284.33 123.16,287.67 121.82,292.83 C120.47,298.00 120.47,305.00 120.47,308.50 L120.47,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
