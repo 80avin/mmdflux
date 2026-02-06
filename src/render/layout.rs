@@ -489,6 +489,191 @@ fn reconcile_sublayouts_draw(
     }
 }
 
+/// After draw-coordinate reconciliation, sibling nodes and child subgraphs
+/// within a direction-override parent may overlap.  This happens because the
+/// parent's sublayout positions its member nodes individually without knowing
+/// the final dimensions of child subgraphs (which are reconciled separately).
+///
+/// For each direction-override parent, detect nodes that overlap with sibling
+/// child subgraph bounds and shift the subgraph (and all its contents) away
+/// to create separation.
+fn resolve_sibling_overlaps_draw(
+    diagram: &Diagram,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+) {
+    // Build set of nodes that belong to each child subgraph, so we can
+    // identify "direct" children of the parent (nodes not in any grandchild).
+    let child_sg_nodes: HashMap<&str, HashSet<&str>> = diagram
+        .subgraphs
+        .iter()
+        .map(|(id, sg)| (id.as_str(), sg.nodes.iter().map(|s| s.as_str()).collect()))
+        .collect();
+
+    for (sg_id, sg) in &diagram.subgraphs {
+        if sg.dir.is_none() {
+            continue;
+        }
+        let sub_dir = sg.dir.unwrap();
+
+        // Find child subgraphs (subgraphs whose parent is this one).
+        let child_sgs: Vec<&str> = diagram
+            .subgraphs
+            .iter()
+            .filter(|(_, child)| child.parent.as_deref() == Some(sg_id.as_str()))
+            .map(|(id, _)| id.as_str())
+            .collect();
+
+        if child_sgs.is_empty() {
+            continue;
+        }
+
+        // Find direct member nodes (in this subgraph but not inside any child subgraph).
+        let direct_nodes: Vec<&str> = sg
+            .nodes
+            .iter()
+            .filter(|n| {
+                !diagram.is_subgraph(n)
+                    && !child_sgs
+                        .iter()
+                        .any(|cs| child_sg_nodes.get(cs).map_or(false, |set| set.contains(n.as_str())))
+            })
+            .map(|s| s.as_str())
+            .collect();
+
+        // For each child subgraph, check if any direct node overlaps.
+        for child_sg_id in &child_sgs {
+            let Some(sg_b) = subgraph_bounds.get(*child_sg_id).cloned() else {
+                continue;
+            };
+
+            for node_id in &direct_nodes {
+                let Some(nb) = node_bounds.get(*node_id) else {
+                    continue;
+                };
+
+                // Check overlap based on the parent's direction.
+                // For LR/RL, the primary axis is x; check if node and subgraph
+                // share y-range (cross axis) and overlap on x (primary axis).
+                let (shift_x, shift_y) = match sub_dir {
+                    Direction::LeftRight | Direction::RightLeft => {
+                        // Check y-range overlap (cross axis).
+                        let y_overlap = nb.y < sg_b.y + sg_b.height && nb.y + nb.height > sg_b.y;
+                        if !y_overlap {
+                            continue;
+                        }
+                        // Check x overlap.
+                        let node_right = nb.x + nb.width;
+                        if node_right <= sg_b.x {
+                            continue; // no overlap
+                        }
+                        let node_left = nb.x;
+                        if node_left >= sg_b.x + sg_b.width {
+                            continue; // no overlap
+                        }
+                        // Node overlaps with subgraph on x.  Determine which
+                        // side the node is on and push the subgraph away.
+                        let node_cx = nb.x + nb.width / 2;
+                        let sg_cx = sg_b.x + sg_b.width / 2;
+                        if node_cx < sg_cx {
+                            // Node is to the left — push subgraph right.
+                            let shift = node_right + 1 - sg_b.x;
+                            (shift, 0)
+                        } else {
+                            // Node is to the right — push subgraph left (shift node right).
+                            let shift = sg_b.x + sg_b.width + 1 - nb.x;
+                            // Shift the node instead.
+                            if let Some(pos) = draw_positions.get_mut(*node_id) {
+                                pos.0 += shift;
+                            }
+                            if let Some(b) = node_bounds.get_mut(*node_id) {
+                                b.x += shift;
+                                if let Some(ref mut cx) = b.dagre_center_x {
+                                    *cx += shift;
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                    Direction::TopDown | Direction::BottomTop => {
+                        // Check x-range overlap (cross axis).
+                        let x_overlap =
+                            nb.x < sg_b.x + sg_b.width && nb.x + nb.width > sg_b.x;
+                        if !x_overlap {
+                            continue;
+                        }
+                        // Check y overlap.
+                        let node_bottom = nb.y + nb.height;
+                        if node_bottom <= sg_b.y {
+                            continue;
+                        }
+                        let node_top = nb.y;
+                        if node_top >= sg_b.y + sg_b.height {
+                            continue;
+                        }
+                        let node_cy = nb.y + nb.height / 2;
+                        let sg_cy = sg_b.y + sg_b.height / 2;
+                        if node_cy < sg_cy {
+                            let shift = node_bottom + 1 - sg_b.y;
+                            (0, shift)
+                        } else {
+                            let shift = sg_b.y + sg_b.height + 1 - nb.y;
+                            if let Some(pos) = draw_positions.get_mut(*node_id) {
+                                pos.1 += shift;
+                            }
+                            if let Some(b) = node_bounds.get_mut(*node_id) {
+                                b.y += shift;
+                                if let Some(ref mut cy) = b.dagre_center_y {
+                                    *cy += shift;
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                };
+
+                if shift_x == 0 && shift_y == 0 {
+                    continue;
+                }
+
+                // Shift the child subgraph and all its contents.
+                if let Some(b) = subgraph_bounds.get_mut(*child_sg_id) {
+                    b.x += shift_x;
+                    b.y += shift_y;
+                }
+                // Shift nodes inside the child subgraph.
+                let child_sg = &diagram.subgraphs[*child_sg_id];
+                for member_id in &child_sg.nodes {
+                    if let Some(pos) = draw_positions.get_mut(member_id) {
+                        pos.0 += shift_x;
+                        pos.1 += shift_y;
+                    }
+                    if let Some(b) = node_bounds.get_mut(member_id) {
+                        b.x += shift_x;
+                        b.y += shift_y;
+                        if let Some(ref mut cx) = b.dagre_center_x {
+                            *cx += shift_x;
+                        }
+                        if let Some(ref mut cy) = b.dagre_center_y {
+                            *cy += shift_y;
+                        }
+                    }
+                }
+                // Shift grandchild subgraph bounds too.
+                for (gc_id, gc_sg) in &diagram.subgraphs {
+                    if gc_sg.parent.as_deref() == Some(*child_sg_id) {
+                        if let Some(b) = subgraph_bounds.get_mut(gc_id) {
+                            b.x += shift_x;
+                            b.y += shift_y;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 pub(crate) fn dagre_config_for_layout(diagram: &Diagram, config: &LayoutConfig) -> DagreConfig {
     let dagre_direction = to_dagre_direction(diagram.direction);
 
@@ -983,10 +1168,14 @@ pub(crate) fn center_override_subgraphs(
 /// `child_margin` adds space between parent and child subgraph borders.
 /// In SVG this should match the subgraph padding so borders don't overlap;
 /// in the text pipeline pass 0.0 (draw-coordinate expansion handles padding).
+///
+/// `title_margin` adds extra top space when the parent has a visible title,
+/// so the child border doesn't overlap the parent's title text.
 pub(crate) fn expand_parent_bounds_dagre(
     diagram: &Diagram,
     layout: &mut dagre::LayoutResult,
     child_margin: f64,
+    title_margin: f64,
 ) {
     // Process inner-first so child bounds are finalized before parents.
     let order: Vec<&String> = if !diagram.subgraph_order.is_empty() {
@@ -1023,11 +1212,15 @@ pub(crate) fn expand_parent_bounds_dagre(
 
         // Check child subgraph bounds (subgraphs whose parent is this subgraph).
         // Add child_margin so the parent border sits outside the child border.
+        // Add title_margin at the top when the parent has a visible title, so the
+        // child border clears the parent's title text.
+        let has_title = !sg.title.trim().is_empty();
+        let top_margin = child_margin + if has_title { title_margin } else { 0.0 };
         for (child_sg_id, child_sg) in &diagram.subgraphs {
             if child_sg.parent.as_deref() == Some(sg_id.as_str()) {
                 if let Some(child_bounds) = layout.subgraph_bounds.get(child_sg_id) {
                     min_x = min_x.min(child_bounds.x - child_margin);
-                    min_y = min_y.min(child_bounds.y - child_margin);
+                    min_y = min_y.min(child_bounds.y - top_margin);
                     max_x = max_x.max(child_bounds.x + child_bounds.width + child_margin);
                     max_y = max_y.max(child_bounds.y + child_bounds.height + child_margin);
                 }
@@ -1283,7 +1476,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Shift external predecessors of direction-override subgraphs to align
     // with the subgraph center, before coordinate transformation.
     center_override_subgraphs(diagram, &mut result);
-    expand_parent_bounds_dagre(diagram, &mut result, 0.0);
+    expand_parent_bounds_dagre(diagram, &mut result, 0.0, 0.0);
 
     // --- Phase B: Group nodes into layers ---
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
@@ -1847,6 +2040,14 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
 
         // Re-expand parent bounds after reconciliation repositioned children.
         expand_parent_subgraph_bounds(&diagram.subgraphs, &mut subgraph_bounds);
+
+        // Push sibling nodes and child subgraphs apart when they overlap.
+        resolve_sibling_overlaps_draw(
+            diagram,
+            &mut node_bounds,
+            &mut draw_positions,
+            &mut subgraph_bounds,
+        );
 
         // Invalidate or adjust waypoints and label positions for edges touching
         // direction-override subgraphs. The main layout computed these for
