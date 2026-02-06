@@ -12,7 +12,7 @@
       <text x="202.94" y="141.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">US East</text>
     </g>
     <g class="edgePaths">
-      <path d="M120.47,62.00 L120.47,66.17 C120.47,70.33 120.47,78.67 120.47,87.00 C120.47,95.33 120.47,103.67 120.47,108.50 C120.47,113.33 120.47,114.67 120.47,115.33 L120.47,116.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M120.47,62.00 L120.47,66.17 C120.47,70.33 120.47,78.67 120.47,87.00 C120.47,95.33 120.47,103.67 120.47,107.83 C120.47,112.00 120.47,112.00 120.47,112.00 L120.47,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M120.47,266.00 L120.47,266.00 C120.47,266.00 120.47,266.00 120.47,270.17 C120.47,274.33 120.47,282.67 120.47,290.33 C120.47,298.00 120.47,305.00 120.47,308.50 L120.47,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">

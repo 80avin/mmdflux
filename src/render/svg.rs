@@ -1446,12 +1446,12 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
         return points.to_vec();
     }
 
-    let start_offset = if edge.arrow_start == Arrow::Normal {
+    let start_offset = if edge.arrow_start == Arrow::Normal && edge.from_subgraph.is_none() {
         4.0
     } else {
         0.0
     };
-    let end_offset = if edge.arrow_end == Arrow::Normal {
+    let end_offset = if edge.arrow_end == Arrow::Normal && edge.to_subgraph.is_none() {
         4.0
     } else {
         0.0
