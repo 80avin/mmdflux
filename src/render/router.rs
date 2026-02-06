@@ -23,23 +23,48 @@ struct EdgeEndpoints {
     to_shape: Shape,
 }
 
-fn face_for_subgraph(bounds: &NodeBounds, other: (usize, usize)) -> NodeFace {
-    let other_x = other.0;
-    let other_y = other.1;
-    let max_x = bounds.x + bounds.width.saturating_sub(1);
-    let max_y = bounds.y + bounds.height.saturating_sub(1);
+fn subgraph_edge_face(bounds: &NodeBounds, other: &NodeBounds, direction: Direction) -> NodeFace {
+    let bounds_right = bounds.x + bounds.width.saturating_sub(1);
+    let bounds_bottom = bounds.y + bounds.height.saturating_sub(1);
+    let other_right = other.x + other.width.saturating_sub(1);
+    let other_bottom = other.y + other.height.saturating_sub(1);
 
-    if other_x < bounds.x {
-        NodeFace::Left
-    } else if other_x > max_x {
-        NodeFace::Right
-    } else if other_y < bounds.y {
-        NodeFace::Top
-    } else if other_y > max_y {
-        NodeFace::Bottom
-    } else {
-        classify_face(bounds, other, Shape::Rectangle)
+    match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            if other_bottom < bounds.y {
+                return NodeFace::Top;
+            }
+            if other.y > bounds_bottom {
+                return NodeFace::Bottom;
+            }
+            if other_right < bounds.x {
+                return NodeFace::Left;
+            }
+            if other.x > bounds_right {
+                return NodeFace::Right;
+            }
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            if other_right < bounds.x {
+                return NodeFace::Left;
+            }
+            if other.x > bounds_right {
+                return NodeFace::Right;
+            }
+            if other_bottom < bounds.y {
+                return NodeFace::Top;
+            }
+            if other.y > bounds_bottom {
+                return NodeFace::Bottom;
+            }
+        }
     }
+
+    classify_face(
+        bounds,
+        (other.center_x(), other.center_y()),
+        Shape::Rectangle,
+    )
 }
 
 fn subgraph_bounds_as_node(bounds: &SubgraphBounds) -> NodeBounds {
@@ -566,13 +591,33 @@ fn route_edge_direct(
 ) -> Option<RoutedEdge> {
     // For direct routing, use the other node's center as the "approach point"
     let empty_waypoints: &[(usize, usize)] = &[];
-    let (src_attach_raw, tgt_attach_raw) = resolve_attachment_points(
+    let (mut src_attach_raw, mut tgt_attach_raw) = resolve_attachment_points(
         src_attach_override,
         tgt_attach_override,
         ep,
         empty_waypoints,
         direction,
     );
+    let mut src_face_override = None;
+    let mut tgt_face_override = None;
+    if edge.from_subgraph.is_some() && src_attach_override.is_none() {
+        let face = subgraph_edge_face(&ep.from_bounds, &ep.to_bounds, direction);
+        src_face_override = Some(face);
+        src_attach_raw = clamp_to_face(
+            &ep.from_bounds,
+            face,
+            (ep.to_bounds.center_x(), ep.to_bounds.center_y()),
+        );
+    }
+    if edge.to_subgraph.is_some() && tgt_attach_override.is_none() {
+        let face = subgraph_edge_face(&ep.to_bounds, &ep.from_bounds, direction);
+        tgt_face_override = Some(face);
+        tgt_attach_raw = clamp_to_face(
+            &ep.to_bounds,
+            face,
+            (ep.from_bounds.center_x(), ep.from_bounds.center_y()),
+        );
+    }
 
     // Clamp attachment points to actual node boundaries
     let src_attach_point = clamp_to_boundary(src_attach_raw, &ep.from_bounds);
@@ -584,8 +629,10 @@ fn route_edge_direct(
     let is_backward = is_backward_edge(&ep.from_bounds, &ep.to_bounds, direction);
     let (src_face, tgt_face) = if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
         (
-            classify_face(&ep.from_bounds, src_attach, ep.from_shape),
-            classify_face(&ep.to_bounds, tgt_attach, ep.to_shape),
+            src_face_override
+                .unwrap_or_else(|| classify_face(&ep.from_bounds, src_attach, ep.from_shape)),
+            tgt_face_override
+                .unwrap_or_else(|| classify_face(&ep.to_bounds, tgt_attach, ep.to_shape)),
         )
     } else {
         edge_faces(direction, is_backward)
@@ -1332,10 +1379,10 @@ pub fn compute_attachment_plan(
         };
 
         if edge.from_subgraph.is_some() {
-            src_face = face_for_subgraph(&src_bounds, tgt_approach);
+            src_face = subgraph_edge_face(&src_bounds, &tgt_bounds, edge_dir);
         }
         if edge.to_subgraph.is_some() {
-            tgt_face = face_for_subgraph(&tgt_bounds, src_approach);
+            tgt_face = subgraph_edge_face(&tgt_bounds, &src_bounds, edge_dir);
         }
 
         // Extract cross-axis coordinate from approach point for sorting
