@@ -1183,6 +1183,28 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
             }
         }
 
+        // Compute tight member-node bounds on the primary axis.  Dagre's
+        // compound subgraph bounds span all ranks reachable from border nodes,
+        // which can be much larger than the actual member nodes.  Use member
+        // bounds for the inside_primary check so external nodes at distant
+        // ranks are correctly identified as outside.
+        let (member_primary_min, member_primary_max) = {
+            let mut lo = f64::INFINITY;
+            let mut hi = f64::NEG_INFINITY;
+            for nid in &sg_node_set {
+                if let Some(r) = layout.nodes.get(&dagre::NodeId(nid.to_string())) {
+                    if horizontal {
+                        lo = lo.min(r.y);
+                        hi = hi.max(r.y + r.height);
+                    } else {
+                        lo = lo.min(r.x);
+                        hi = hi.max(r.x + r.width);
+                    }
+                }
+            }
+            (lo, hi)
+        };
+
         // Shift both predecessors and successors toward the subgraph center,
         // but only if the node is outside the subgraph bounds on the primary
         // axis.  Nodes at the same rank as internal nodes (e.g. Logs beside
@@ -1192,9 +1214,9 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
                 let node_cy = rect.y + rect.height / 2.0;
                 let node_cx = rect.x + rect.width / 2.0;
                 let inside_primary = if horizontal {
-                    node_cy >= sg_bounds.y && node_cy <= sg_bounds.y + sg_bounds.height
+                    node_cy >= member_primary_min && node_cy <= member_primary_max
                 } else {
-                    node_cx >= sg_bounds.x && node_cx <= sg_bounds.x + sg_bounds.width
+                    node_cx >= member_primary_min && node_cx <= member_primary_max
                 };
                 if inside_primary {
                     continue;
