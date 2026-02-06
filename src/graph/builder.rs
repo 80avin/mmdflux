@@ -101,7 +101,7 @@ fn resolve_subgraph_edges(diagram: &mut Diagram) {
         };
 
         let from = if diagram.is_subgraph(&edge.from) {
-            match find_non_cluster_child(diagram, &edge.from) {
+            match find_subgraph_sink(diagram, &edge.from) {
                 Some(child) => child,
                 None => continue,
             }
@@ -153,6 +153,32 @@ fn resolve_subgraph_edges(diagram: &mut Diagram) {
 pub fn find_non_cluster_child(diagram: &Diagram, subgraph_id: &str) -> Option<String> {
     let sg = diagram.subgraphs.get(subgraph_id)?;
     sg.nodes.iter().find(|id| !diagram.is_subgraph(id)).cloned()
+}
+
+/// Find a sink node in a subgraph — a non-cluster child that has no successors
+/// within the subgraph.  Used when the subgraph is the **source** of an edge
+/// so the target ends up ranked after the entire subgraph, not beside internal
+/// nodes.  Falls back to `find_non_cluster_child` if every node has a successor.
+fn find_subgraph_sink(diagram: &Diagram, subgraph_id: &str) -> Option<String> {
+    let sg = diagram.subgraphs.get(subgraph_id)?;
+    let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+    let non_cluster: Vec<&str> = sg
+        .nodes
+        .iter()
+        .filter(|id| !diagram.is_subgraph(id))
+        .map(|s| s.as_str())
+        .collect();
+
+    // A sink has no outgoing edges to other nodes within the subgraph.
+    let sink = non_cluster.iter().find(|&&node| {
+        !diagram
+            .edges
+            .iter()
+            .any(|e| e.from == node && sg_node_set.contains(e.to.as_str()) && e.to != node)
+    });
+
+    sink.map(|s| s.to_string())
+        .or_else(|| find_non_cluster_child(diagram, subgraph_id))
 }
 
 fn collect_node_ids(statements: &[Statement]) -> Vec<String> {
