@@ -1582,12 +1582,14 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
     }
 
     let start_offset = match edge.arrow_start {
-        Arrow::Normal | Arrow::Cross | Arrow::Circle => 4.0,
-        Arrow::None => 0.0,
+        Arrow::Normal => 4.0,
+        // Cross and circle markers have refX past the visible shape,
+        // so the marker already sits before the endpoint — no pullback needed.
+        Arrow::Cross | Arrow::Circle | Arrow::None => 0.0,
     };
     let end_offset = match edge.arrow_end {
-        Arrow::Normal | Arrow::Cross | Arrow::Circle => 4.0,
-        Arrow::None => 0.0,
+        Arrow::Normal => 4.0,
+        Arrow::Cross | Arrow::Circle | Arrow::None => 0.0,
     };
 
     let start = points[0];
