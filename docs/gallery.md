@@ -1,6 +1,6 @@
 # mmdflux gallery
 
-_Generated from commit `c3c82b2` — 46 fixtures_
+_Generated from commit `0768e15` — 70 fixtures_
 
 This gallery is generated from test fixtures in `tests/fixtures`,
 text snapshots in `tests/snapshots`, and SVG snapshots in `tests/svg-snapshots`.
@@ -78,6 +78,100 @@ subgraph sg1[Group]
 A[Node] --> B[Node2]
 B --> A
 end
+
+```
+
+</details>
+
+## bidirectional_arrows
+
+`tests/fixtures/bidirectional_arrows.mmd`
+
+**Text**
+
+```text
+┌───┐
+│ A │
+└───┘
+  ▲
+  │
+  ▼
+┌───┐
+│ B │
+└───┘
+  ▲
+  ┆
+  ▼
+┌───┐
+│ C │
+└───┘
+  ▲
+  ┃
+  ▼
+┌───┐
+│ D │
+└───┘
+```
+
+**SVG**
+
+![bidirectional_arrows svg](../tests/svg-snapshots/bidirectional_arrows.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    A <--> B
+    B <-.-> C
+    C <==> D
+
+```
+
+</details>
+
+## bidirectional
+
+`tests/fixtures/bidirectional.mmd`
+
+**Text**
+
+```text
+┌───┐
+│ A │
+└───┘
+  ▲
+  │
+  ▼
+┌───┐
+│ B │
+└───┘
+  ▲
+  ┆
+  ▼
+┌───┐
+│ C │
+└───┘
+  ▲
+  ┃
+  ▼
+┌───┐
+│ D │
+└───┘
+```
+
+**SVG**
+
+![bidirectional svg](../tests/svg-snapshots/bidirectional.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    A <--> B
+    B <-.-> C
+    C <==> D
 
 ```
 
@@ -206,6 +300,355 @@ graph LR
 
 </details>
 
+## compat_class_annotation
+
+`tests/fixtures/compat_class_annotation.mmd`
+
+**Text**
+
+```text
+     ┌───────┐
+     │ Start │
+     └───────┘
+         │
+         │
+         │
+         │
+         ▼
+   ┌──────────┐
+   < Decision >
+   └──────────┘
+  ┌─┘        └──┐
+  │             │
+ Yes           No
+  │             │
+  ▼             ▼
+┌───┐         ┌───┐
+│ C │         │ D │
+└───┘         └───┘
+```
+
+**SVG**
+
+![compat_class_annotation svg](../tests/svg-snapshots/compat_class_annotation.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    A[Start]:::highlight --> B{Decision}
+    B -->|Yes| C:::success
+    B -->|No| D:::error
+    classDef highlight fill:#ff0
+    classDef success fill:#0f0
+    classDef error fill:#f00
+
+```
+
+</details>
+
+## compat_directive
+
+`tests/fixtures/compat_directive.mmd`
+
+**Text**
+
+```text
+         ┌───────┐
+         │ Start │
+         └───────┘
+             │
+             │
+             │
+             │
+             ▼
+       ┌──────────┐
+       < Decision >
+       └──────────┘
+     ┌──┘        └───┐
+     │               │
+    Yes             No
+     │               │
+     ▼               ▼
+┌─────────┐       ┌─────┐
+│ Process │       │ End │
+└─────────┘       └─────┘
+```
+
+**SVG**
+
+![compat_directive svg](../tests/svg-snapshots/compat_directive.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+%%{init: {"theme": "dark", "flowchart": {"curve": "basis"}}}%%
+graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Process]
+    B -->|No| D[End]
+
+```
+
+</details>
+
+## compat_frontmatter
+
+`tests/fixtures/compat_frontmatter.mmd`
+
+**Text**
+
+```text
+┌───┐
+│ A │
+└───┘
+  │
+  │
+  ▼
+┌───┐
+│ B │
+└───┘
+  │
+  │
+  ▼
+┌───┐
+│ C │
+└───┘
+```
+
+**SVG**
+
+![compat_frontmatter svg](../tests/svg-snapshots/compat_frontmatter.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: dark
+---
+graph TD
+    A --> B --> C
+
+```
+
+</details>
+
+## compat_hyphenated_ids
+
+`tests/fixtures/compat_hyphenated_ids.mmd`
+
+**Text**
+
+```text
+  ┌───────┐
+  │ Start │
+  └───────┘
+      │
+      │
+      ▼
+┌───────────┐
+│ Process A │
+└───────────┘
+      │
+      │
+      ▼
+  ┌───────┐
+  < Check >
+  └───────┘
+      │
+     ok
+      ▼
+  ┌──────┐
+  │ Done │
+  └──────┘
+```
+
+**SVG**
+
+![compat_hyphenated_ids svg](../tests/svg-snapshots/compat_hyphenated_ids.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    start-node[Start] --> process-1[Process A]
+    process-1 --> decision-point{Check}
+    decision-point -->|ok| end-node[Done]
+
+```
+
+</details>
+
+## compat_invisible_edge
+
+`tests/fixtures/compat_invisible_edge.mmd`
+
+**Text**
+
+```text
+   ┌───┐
+   │ A │
+   └───┘
+  ┌─┘ └─┐
+  │     │
+  ▼     │
+┌───┐   │
+│ B │   │
+└───┘   │
+        │
+      ┌─┘
+      ▼
+   ┌───┐
+   │ C │
+   └───┘
+```
+
+**SVG**
+
+![compat_invisible_edge svg](../tests/svg-snapshots/compat_invisible_edge.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    A --> B
+    A --> C
+    B ~~~ C
+
+```
+
+</details>
+
+## compat_kitchen_sink
+
+`tests/fixtures/compat_kitchen_sink.mmd`
+
+**Text**
+
+```text
+             ┌───────┐
+             │ Start │
+             └───────┘
+                 │
+                 │
+                 │
+                 │
+                 ▼
+          ┌─────────────┐
+          < Check Input >
+          └─────────────┘
+      ┌────┘           └────┐
+      │                     │
+    valid                invalid
+      │                     │
+      ▼                     ▼
+┌───────────┐           ┌───────┐
+│ process-A │           │ Error │
+└───────────┘           └───────┘
+      │                     │
+      │                     │
+      │                     │
+      └───────┐    ┌────────┘
+              ▼    ▼
+             ┌──────┐
+             │ Done │
+             └──────┘
+```
+
+**SVG**
+
+![compat_kitchen_sink svg](../tests/svg-snapshots/compat_kitchen_sink.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+---
+config:
+  theme: default
+---
+%%{init: {"flowchart": {"curve": "basis"}}}%%
+graph TD
+    start-node[Start] --> check-1{Check Input}
+    check-1 -->|valid| process-A:::success
+    check-1 -->|invalid| error-1[Error]:::error
+    process-A --> end-node[Done]
+    error-1 --> end-node
+    style start-node fill:#f9f
+    classDef success fill:#0f0
+    classDef error fill:#f00
+
+```
+
+</details>
+
+## compat_no_direction
+
+`tests/fixtures/compat_no_direction.mmd`
+
+**Text**
+
+```text
+┌───────┐
+│ Start │
+└───────┘
+    │
+    │
+    ▼
+ ┌─────┐
+ │ End │
+ └─────┘
+```
+
+**SVG**
+
+![compat_no_direction svg](../tests/svg-snapshots/compat_no_direction.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph
+    A[Start] --> B[End]
+
+```
+
+</details>
+
+## compat_numeric_ids
+
+`tests/fixtures/compat_numeric_ids.mmd`
+
+**Text**
+
+```text
+┌───────┐    ┌────────┐     ┌───────┐
+│ First │───►│ Second │────►│ Third │
+└───────┘    └────────┘     └───────┘
+```
+
+**SVG**
+
+![compat_numeric_ids svg](../tests/svg-snapshots/compat_numeric_ids.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph LR
+    1[First] --> 2[Second]
+    2 --> 3[Third]
+
+```
+
+</details>
+
 ## complex
 
 `tests/fixtures/complex.mmd`
@@ -278,6 +721,60 @@ graph TD
     D ==> H[Notify Admin]
     G & H --> I[Cleanup]
     I --> F
+
+```
+
+</details>
+
+## cross_circle_arrows
+
+`tests/fixtures/cross_circle_arrows.mmd`
+
+**Text**
+
+```text
+┌───┐
+│ A │
+└───┘
+  │
+  │
+  x
+┌───┐
+│ B │
+└───┘
+  │
+  │
+  o
+┌───┐
+│ C │
+└───┘
+  x
+  │
+  x
+┌───┐
+│ D │
+└───┘
+  o
+  │
+  o
+┌───┐
+│ E │
+└───┘
+```
+
+**SVG**
+
+![cross_circle_arrows svg](../tests/svg-snapshots/cross_circle_arrows.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    A --x B
+    B --o C
+    C x--x D
+    D o--o E
 
 ```
 
@@ -366,6 +863,68 @@ graph TD
     A --> C[Right]
     B --> D[End]
     C --> D
+
+```
+
+</details>
+
+## direction_override
+
+`tests/fixtures/direction_override.mmd`
+
+**Text**
+
+```text
+      ┌───────┐
+      │ Start │
+      └───────┘
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+┌──────── Horizontal Section ────────┐
+│         │                          │
+│         ▼                          │
+│ ┌────────┐┌────────┐    ┌────────┐ │
+│ │ Step 1 ││ Step 2 │───►│ Step 3 │ │
+│ └────────┘└────────┘    └────────┘ │
+│         ┌────────────────┘         │
+└─────────┼──────────────────────────┘
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+          ▼
+       ┌─────┐
+       │ End │
+       └─────┘
+```
+
+**SVG**
+
+![direction_override svg](../tests/svg-snapshots/direction_override.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    subgraph sg1[Horizontal Section]
+        direction LR
+        A[Step 1] --> B[Step 2] --> C[Step 3]
+    end
+    Start --> A
+    C --> End
 
 ```
 
@@ -1097,6 +1656,85 @@ graph LR
 
 </details>
 
+## multi_edge_labeled
+
+`tests/fixtures/multi_edge_labeled.mmd`
+
+**Text**
+
+```text
+  ┌───┐
+  │ A │
+  └───┘
+   │ └──┐
+   │ path 2
+path 1  │
+   │ ┌──┘
+   ▼ ▼
+  ┌───┐
+  │ B │
+  └───┘
+    │
+    │
+    │
+    │
+    ▼
+  ┌───┐
+  │ C │
+  └───┘
+```
+
+**SVG**
+
+![multi_edge_labeled svg](../tests/svg-snapshots/multi_edge_labeled.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    A -->|path 1| B
+    A -->|path 2| B
+    B --> C
+
+```
+
+</details>
+
+## multi_edge
+
+`tests/fixtures/multi_edge.mmd`
+
+**Text**
+
+```text
+┌───┐
+│ A │
+└───┘
+ └┐│
+ ┌┘├─
+ ▼ ▼
+┌───┐
+│ B │
+└───┘
+```
+
+**SVG**
+
+![multi_edge svg](../tests/svg-snapshots/multi_edge.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    A --> B
+    A --> B
+
+```
+
+</details>
+
 ## multi_subgraph
 
 `tests/fixtures/multi_subgraph.mmd`
@@ -1206,6 +1844,64 @@ graph TD
     A[A] --> D[X]
     B[B] --> D
     C[C] --> D
+
+```
+
+</details>
+
+## nested_subgraph_edge
+
+`tests/fixtures/nested_subgraph_edge.mmd`
+
+**Text**
+
+```text
+                 ┌────────┐
+                 │ Client │
+                 └────────┘
+                      │
+                      │
+                      │
+                      │
+                      ▼
+┌────────────────── Cloud ──────────────────┐
+│                                           │
+│    ┌──────────── US East ────────────┐    │
+│    │                                 │    │
+│    │   ┌─────────┐     ┌─────────┐   │    │
+│    │   │ Server1 │     │ Server2 │   │    │
+│    │   └─────────┘     └─────────┘   │    │
+│    └─────────────────────────────────┘    │
+│                                           │
+│                                           │
+└─────────────────────┼─────────────────────┘
+                      │
+                      │
+                      │
+                      │
+                      ▼
+               ┌────────────┐
+               │ Monitoring │
+               └────────────┘
+```
+
+**SVG**
+
+![nested_subgraph_edge svg](../tests/svg-snapshots/nested_subgraph_edge.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    subgraph cloud[Cloud]
+        subgraph region[US East]
+            Server1
+            Server2
+        end
+    end
+    Client --> cloud
+    cloud --> Monitoring
 
 ```
 
@@ -1593,12 +2289,6 @@ graph TD
     │
     │
     ▼
-┌───────┐
-│ Image │
-└───────┘
-    │
-    │
-    ▼
 ┌──────┐
 │ Hour │
 └──────┘
@@ -1635,12 +2325,11 @@ graph TD
     bolt@{shape: bolt, label: "Bolt"}
     bang@{shape: bang, label: "Bang"}
     icon@{shape: icon, label: "Icon"}
-    image@{shape: image, label: "Image"}
     hourglass@{shape: hourglass, label: "Hour"}
     tri@{shape: tri, label: "Tri"}
     flip@{shape: flip-tri, label: "Flip"}
     notch@{shape: notch-pent, label: "Notch"}
-    cloud --> bolt --> bang --> icon --> image --> hourglass --> tri --> flip --> notch
+    cloud --> bolt --> bang --> icon --> hourglass --> tri --> flip --> notch
 
 ```
 
@@ -2008,6 +2697,385 @@ graph TD
 
 </details>
 
+## subgraph_as_node_edge
+
+`tests/fixtures/subgraph_as_node_edge.mmd`
+
+**Text**
+
+```text
+     ┌────────┐
+     │ Client │
+     └────────┘
+          │
+          │
+          │
+          ▼
+┌──── Backend ─────┐
+│                  │
+│  ┌────────────┐  │
+│  │ API Server │  │
+│  └────────────┘  │
+│         │        │
+│         │        │
+│         ▼        │
+│   ┌──────────┐   │
+│   │ Database │   │
+│   └──────────┘   │
+└─────────┼────────┘
+          │
+          │
+          │
+          │
+          ▼
+      ┌──────┐
+      │ Logs │
+      └──────┘
+```
+
+**SVG**
+
+![subgraph_as_node_edge svg](../tests/svg-snapshots/subgraph_as_node_edge.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    subgraph sg1[Backend]
+        API[API Server]
+        DB[Database]
+        API --> DB
+    end
+    Client --> sg1
+    sg1 --> Logs
+
+```
+
+</details>
+
+## subgraph_direction_cross_boundary
+
+`tests/fixtures/subgraph_direction_cross_boundary.mmd`
+
+**Text**
+
+```text
+              ┌───┐
+              │ C │
+              └───┘
+             ┌─┘ └───────────┐
+             │               │
+             │               ▼
+             │             ┌───┐
+             │             │ X │
+             │             └───┘
+             │               │
+             │               │
+             │               ▼
+             │             ┌───┐
+             │             │ Y │
+             │             └───┘
+             │               │
+             │               │
+             │               ▼
+             │             ┌───┐
+             │             │ Z │
+             │             └───┘
+             │    ┌─────────┘
+             │    │
+             │    │
+    ┌─ Horizontal Section ─┐
+    │      │ │             │
+    │      ▼ ▼             │
+    │     ┌───┐  ┌───┐     │
+   ┌┼─────│ A │─►│ B │     │
+   ▼│     └───┘  └───┘     │
+┌───┐            ┌┘        │
+│ E │────────────┼─────────┘
+└───┘            │
+  │              │
+  │              │
+  │              │
+  │              │
+  │              │
+  ▼              │
+┌───┐            │
+│ F │            │
+└───┘            │
+  │              │
+  └────────────┐ │
+               ▼ ▼
+              ┌───┐
+              │ D │
+              └───┘
+```
+
+**SVG**
+
+![subgraph_direction_cross_boundary svg](../tests/svg-snapshots/subgraph_direction_cross_boundary.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    subgraph s1[Horizontal Section]
+        direction LR
+        A --> B
+    end
+    C --> A
+    C --> X --> Y --> Z --> A
+    A --> E --> F --> D
+    B --> D
+
+```
+
+</details>
+
+## subgraph_direction_lr
+
+`tests/fixtures/subgraph_direction_lr.mmd`
+
+**Text**
+
+```text
+      ┌───────┐
+      │ Start │
+      └───────┘
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+┌─────────┼Horizontal Flow ──────────┐
+│         │                          │
+│         ▼                          │
+│ ┌────────┐┌────────┐    ┌────────┐ │
+│ │ Step 1 ││ Step 2 │───►│ Step 3 │ │
+│ └────────┘└────────┘    └────────┘ │
+│         ┌────────────────┘         │
+└─────────┼──────────────────────────┘
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+          │
+          ▼
+       ┌─────┐
+       │ End │
+       └─────┘
+```
+
+**SVG**
+
+![subgraph_direction_lr svg](../tests/svg-snapshots/subgraph_direction_lr.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    Start --> A
+    subgraph sg1[Horizontal Flow]
+        direction LR
+        A[Step 1] --> B[Step 2] --> C[Step 3]
+    end
+    C --> End
+
+```
+
+</details>
+
+## subgraph_direction_mixed
+
+`tests/fixtures/subgraph_direction_mixed.mmd`
+
+**Text**
+
+```text
+┌─ Left to Right ─┐
+│                 │
+│                 │
+│  ┌───┐  ┌───┐   │
+│  │ A │─►│ B │   │
+│  └───┘  └───┘   │
+│       ┌──┘      │
+└───────┼─────────┘
+        │
+        │
+        │
+        │
+        │
+        │
+        │
+        │
+┌─ Bottom to Top ─┐
+│       │         │
+│       │         │
+│      ┌───┐      │
+│      │ D │      │
+│      └───┘      │
+│       │▲        │
+│       ▼└┐       │
+│      ┌───┐      │
+│      │ C │      │
+│      └───┘      │
+│                 │
+└─────────────────┘
+```
+
+**SVG**
+
+![subgraph_direction_mixed svg](../tests/svg-snapshots/subgraph_direction_mixed.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    subgraph lr_group[Left to Right]
+        direction LR
+        A --> B
+    end
+    subgraph bt_group[Bottom to Top]
+        direction BT
+        C --> D
+    end
+    B --> C
+
+```
+
+</details>
+
+## subgraph_direction_nested_both
+
+`tests/fixtures/subgraph_direction_nested_both.mmd`
+
+**Text**
+
+```text
+          ┌───┐
+          │ D │
+          └───┘
+            │
+            │
+            │
+            │
+            │
+            │
+            │
+            │
+            │
+            │
+            │
+┌────── Outer LR ───────┐
+│    ┌──────┘           │
+│    │  ┌─ Inner BT ─┐  │
+│    │  │            │  │
+│    │  │            │  │
+│    │  │   ┌───┐    │  │
+│    │  │   │ B │    │  │
+│    │  │   └───┘    │  │
+│    │  │     ▲      │  │
+│    ▼  │     │      │  │
+│ ┌───┐ │   ┌───┐    │  │
+│ │ C │─┼──►│ A │    │  │
+│ └───┘ │   └───┘    │  │
+│       │            │  │
+│       └────────────┘  │
+└───────────────────────┘
+```
+
+**SVG**
+
+![subgraph_direction_nested_both svg](../tests/svg-snapshots/subgraph_direction_nested_both.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    subgraph outer[Outer LR]
+        direction LR
+        subgraph inner[Inner BT]
+            direction BT
+            A --> B
+        end
+        C --> A
+    end
+    D --> C
+
+```
+
+</details>
+
+## subgraph_direction_nested
+
+`tests/fixtures/subgraph_direction_nested.mmd`
+
+**Text**
+
+```text
+┌──── Vertical Outer ─────┐
+│                         │
+│          ┌───┐          │
+│          │ D │          │
+│          └───┘          │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│     ┌──────┘            │
+│     │                   │
+│┌── Horizontal Inner ───┐│
+││    │                  ││
+││    ▼                  ││
+││ ┌───┐  ┌───┐    ┌───┐ ││
+││ │ A │─►│ B │───►│ C │ ││
+││ └───┘  └───┘    └───┘ ││
+││                       ││
+│└───────────────────────┘│
+│                         │
+│                         │
+│                         │
+│                         │
+│                         │
+└─────────────────────────┘
+```
+
+**SVG**
+
+![subgraph_direction_nested svg](../tests/svg-snapshots/subgraph_direction_nested.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    subgraph outer[Vertical Outer]
+        subgraph inner[Horizontal Inner]
+            direction LR
+            A --> B --> C
+        end
+        D --> A
+    end
+
+```
+
+</details>
+
 ## subgraph_edges_bottom_top
 
 `tests/fixtures/subgraph_edges_bottom_top.mmd`
@@ -2103,6 +3171,189 @@ D[Log]
 end
 A --> C
 B --> D
+
+```
+
+</details>
+
+## subgraph_multi_word_title
+
+`tests/fixtures/subgraph_multi_word_title.mmd`
+
+**Text**
+
+```text
+      ┌────────┐
+      │ Source │
+      └────────┘
+           │
+           │
+           │
+           │
+┌─ Data Processing Pipeline ─┐
+│          ▼                 │
+│     ┌─────────┐            │
+│     │ Extract │            │
+│     └─────────┘            │
+│          │                 │
+│          │                 │
+│          ▼                 │
+│    ┌───────────┐           │
+│    │ Transform │           │
+│    └───────────┘           │
+│          │                 │
+│          │                 │
+│          ▼                 │
+│      ┌──────┐              │
+│      │ Load │              │
+│      └──────┘              │
+└──────────┼─────────────────┘
+           │
+           │
+           │
+           │
+           ▼
+       ┌──────┐
+       │ Sink │
+       └──────┘
+```
+
+**SVG**
+
+![subgraph_multi_word_title svg](../tests/svg-snapshots/subgraph_multi_word_title.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    subgraph "Data Processing Pipeline"
+        Extract[Extract] --> Transform[Transform] --> Load[Load]
+    end
+    Source --> Extract
+    Load --> Sink
+
+```
+
+</details>
+
+## subgraph_numeric_id
+
+`tests/fixtures/subgraph_numeric_id.mmd`
+
+**Text**
+
+```text
+┌─ Phase 1 ─┐
+│    ┌───┐  │
+│    │ A │  │
+│    └───┘  │
+│      │    │
+│      │    │
+│      ▼    │
+│    ┌───┐  │
+│    │ B │  │
+│    └───┘  │
+└──────┼────┘
+       │
+       │
+       │
+       │
+       │
+       │
+┌─ Phase 2 ─┐
+│      ▼    │
+│    ┌───┐  │
+│    │ C │  │
+│    └───┘  │
+│      │    │
+│      │    │
+│      ▼    │
+│    ┌───┐  │
+│    │ D │  │
+│    └───┘  │
+└───────────┘
+```
+
+**SVG**
+
+![subgraph_numeric_id svg](../tests/svg-snapshots/subgraph_numeric_id.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    subgraph 1phase[Phase 1]
+        A --> B
+    end
+    subgraph 2phase[Phase 2]
+        C --> D
+    end
+    B --> C
+
+```
+
+</details>
+
+## subgraph_to_subgraph_edge
+
+`tests/fixtures/subgraph_to_subgraph_edge.mmd`
+
+**Text**
+
+```text
+┌─────── Frontend ───────┐
+│   ┌────────────────┐   │
+│   │ User Interface │   │
+│   └────────────────┘   │
+│            │           │
+│            │           │
+│            ▼           │
+│    ┌───────────────┐   │
+│    │ State Manager │   │
+│    └───────────────┘   │
+└────────────┼───────────┘
+             │
+             │
+             │
+             │
+             │
+             ▼
+ ┌────── Backend ───────┐
+ │                      │
+ │    ┌────────────┐    │
+ │    │ API Server │    │
+ │    └────────────┘    │
+ │           │          │
+ │           │          │
+ │           ▼          │
+ │     ┌──────────┐     │
+ │     │ Database │     │
+ │     └──────────┘     │
+ └──────────────────────┘
+```
+
+**SVG**
+
+![subgraph_to_subgraph_edge svg](../tests/svg-snapshots/subgraph_to_subgraph_edge.svg)
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+graph TD
+    subgraph frontend[Frontend]
+        UI[User Interface]
+        State[State Manager]
+        UI --> State
+    end
+    subgraph backend[Backend]
+        API[API Server]
+        DB[Database]
+        API --> DB
+    end
+    frontend --> backend
 
 ```
 
