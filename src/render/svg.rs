@@ -84,6 +84,12 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let overlap_gap = metrics.node_padding_y + metrics.font_size;
     resolve_sublayout_overlaps(diagram, &mut layout, overlap_gap);
 
+    // Align sibling nodes with their cross-boundary edge targets on the
+    // cross-axis of the parent direction.  Must run after reconciliation
+    // and overlap resolution but before edge rerouting.
+    svg_router::align_cross_boundary_siblings_dagre(diagram, &mut layout);
+    expand_parent_bounds_dagre(diagram, &mut layout, child_margin, title_margin);
+
     // Reroute edges affected by direction-override subgraphs.
     // This must happen after reconciliation moves nodes but before padding,
     // so routes use the reconciled node positions.

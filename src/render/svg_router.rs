@@ -335,11 +335,27 @@ pub fn reroute_override_edges(
                         (&edge.to, &edge.from, false)
                     };
 
-                // When both endpoints are in different override subgraphs,
-                // neither is truly "outside" — use the diagram's root direction
-                // so edges connect along the parent coordinate system.
-                let outside_dir = if from_sg.is_some() && to_sg.is_some() {
-                    diagram.direction
+                // Determine the routing direction for cross-boundary edges.
+                let outside_dir = if let (Some(sg_a), Some(sg_b)) = (from_sg, to_sg) {
+                    // Both endpoints in different override subgraphs.
+                    // If one is an ancestor of the other, use the ancestor's
+                    // direction (the edge is "internal" from its perspective).
+                    if is_ancestor_sg(diagram, sg_a, sg_b) {
+                        diagram
+                            .subgraphs
+                            .get(sg_a.as_str())
+                            .and_then(|sg| sg.dir)
+                            .unwrap_or(diagram.direction)
+                    } else if is_ancestor_sg(diagram, sg_b, sg_a) {
+                        diagram
+                            .subgraphs
+                            .get(sg_b.as_str())
+                            .and_then(|sg| sg.dir)
+                            .unwrap_or(diagram.direction)
+                    } else {
+                        // Different branches — use the diagram's root direction.
+                        diagram.direction
+                    }
                 } else {
                     node_directions
                         .get(outside_node)
@@ -705,6 +721,103 @@ fn build_override_node_map_internal(diagram: &Diagram) -> HashMap<String, String
         }
     }
     override_nodes
+}
+
+/// Check whether `ancestor` is a (transitive) ancestor of `descendant` in the
+/// subgraph hierarchy by walking up the parent chain from `descendant`.
+fn is_ancestor_sg(diagram: &Diagram, ancestor: &str, descendant: &str) -> bool {
+    let mut current = descendant;
+    while let Some(parent) = diagram
+        .subgraphs
+        .get(current)
+        .and_then(|sg| sg.parent.as_deref())
+    {
+        if parent == ancestor {
+            return true;
+        }
+        current = parent;
+    }
+    false
+}
+
+/// After sublayout reconciliation and overlap resolution, align direct sibling
+/// nodes with their cross-boundary edge targets on the cross-axis of the parent
+/// direction in dagre float coordinates.  This is the SVG-pipeline equivalent of
+/// `align_cross_boundary_siblings_draw` in the text pipeline.
+pub fn align_cross_boundary_siblings_dagre(diagram: &Diagram, layout: &mut LayoutResult) {
+    for (sg_id, sg) in &diagram.subgraphs {
+        let Some(sub_dir) = sg.dir else { continue };
+        let is_horizontal = matches!(sub_dir, Direction::LeftRight | Direction::RightLeft);
+
+        // Collect nodes that belong to any child subgraph of this parent.
+        let child_sg_nodes: HashSet<&str> = diagram
+            .subgraphs
+            .iter()
+            .filter(|(_, child)| child.parent.as_deref() == Some(sg_id.as_str()))
+            .flat_map(|(_, child)| child.nodes.iter().map(|s| s.as_str()))
+            .collect();
+
+        if child_sg_nodes.is_empty() {
+            continue;
+        }
+
+        // Direct member nodes: in this subgraph but not inside any child subgraph.
+        let direct_nodes: Vec<&str> = sg
+            .nodes
+            .iter()
+            .filter(|n| !diagram.is_subgraph(n) && !child_sg_nodes.contains(n.as_str()))
+            .map(|s| s.as_str())
+            .collect();
+
+        for node_id in &direct_nodes {
+            // Collect cross-boundary edge target centers on the cross-axis.
+            let mut target_cross: Vec<f64> = Vec::new();
+            for edge in &diagram.edges {
+                let target = if edge.from == *node_id && child_sg_nodes.contains(edge.to.as_str()) {
+                    Some(edge.to.as_str())
+                } else if edge.to == *node_id && child_sg_nodes.contains(edge.from.as_str()) {
+                    Some(edge.from.as_str())
+                } else {
+                    None
+                };
+                if let Some(tid) = target {
+                    let nid = NodeId(tid.to_string());
+                    if let Some(r) = layout.nodes.get(&nid) {
+                        let center = if is_horizontal {
+                            r.y + r.height / 2.0
+                        } else {
+                            r.x + r.width / 2.0
+                        };
+                        target_cross.push(center);
+                    }
+                }
+            }
+
+            if target_cross.is_empty() {
+                continue;
+            }
+
+            let avg: f64 = target_cross.iter().sum::<f64>() / target_cross.len() as f64;
+            let nid = NodeId(node_id.to_string());
+            let Some(rect) = layout.nodes.get_mut(&nid) else {
+                continue;
+            };
+
+            if is_horizontal {
+                let cy = rect.y + rect.height / 2.0;
+                if (avg - cy).abs() < 0.5 {
+                    continue;
+                }
+                rect.y = avg - rect.height / 2.0;
+            } else {
+                let cx = rect.x + rect.width / 2.0;
+                if (avg - cx).abs() < 0.5 {
+                    continue;
+                }
+                rect.x = avg - rect.width / 2.0;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
