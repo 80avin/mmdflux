@@ -236,6 +236,18 @@ fn ensure_subgraph_edge_spacing(diagram: &Diagram, layout: &mut LayoutResult, mi
                 push_node_from_subgraph(layout, &edge.to, sg_id, diagram.direction, min_gap, false);
             }
         }
+
+        // subgraph → subgraph
+        if let (Some(from_sg), Some(to_sg)) = (&edge.from_subgraph, &edge.to_subgraph) {
+            push_subgraph_from_subgraph(
+                diagram,
+                layout,
+                from_sg,
+                to_sg,
+                diagram.direction,
+                min_gap,
+            );
+        }
     }
 }
 
@@ -303,6 +315,99 @@ fn push_node_from_subgraph(
             Direction::BottomTop => node_rect.y -= shift,
             Direction::LeftRight => node_rect.x += shift,
             Direction::RightLeft => node_rect.x -= shift,
+        }
+    }
+}
+
+/// Push the downstream subgraph (and all its member nodes) away from the
+/// upstream subgraph so the visible gap between their borders is at least
+/// `min_gap`.
+fn push_subgraph_from_subgraph(
+    diagram: &Diagram,
+    layout: &mut LayoutResult,
+    from_sg: &str,
+    to_sg: &str,
+    direction: Direction,
+    min_gap: f64,
+) {
+    let from_rect = match layout.subgraph_bounds.get(from_sg) {
+        Some(r) => *r,
+        None => return,
+    };
+    let to_rect = match layout.subgraph_bounds.get(to_sg) {
+        Some(r) => *r,
+        None => return,
+    };
+
+    let gap = match direction {
+        Direction::TopDown => to_rect.y - (from_rect.y + from_rect.height),
+        Direction::BottomTop => from_rect.y - (to_rect.y + to_rect.height),
+        Direction::LeftRight => to_rect.x - (from_rect.x + from_rect.width),
+        Direction::RightLeft => from_rect.x - (to_rect.x + to_rect.width),
+    };
+
+    if gap >= min_gap {
+        return;
+    }
+
+    let shift = min_gap - gap;
+
+    // Collect all node IDs in the downstream subgraph (including nested).
+    let mut member_nodes = Vec::new();
+    let mut sg_stack = vec![to_sg.to_string()];
+    while let Some(sg_id) = sg_stack.pop() {
+        if let Some(sg) = diagram.subgraphs.get(&sg_id) {
+            for node_id in &sg.nodes {
+                if diagram.is_subgraph(node_id) {
+                    sg_stack.push(node_id.clone());
+                } else {
+                    member_nodes.push(node_id.clone());
+                }
+            }
+        }
+    }
+
+    // Shift each member node.
+    for node_id in &member_nodes {
+        let key = crate::dagre::NodeId(node_id.clone());
+        if let Some(rect) = layout.nodes.get_mut(&key) {
+            match direction {
+                Direction::TopDown => rect.y += shift,
+                Direction::BottomTop => rect.y -= shift,
+                Direction::LeftRight => rect.x += shift,
+                Direction::RightLeft => rect.x -= shift,
+            }
+        }
+    }
+
+    // Shift the downstream subgraph bounds (and any nested subgraph bounds).
+    let mut bounds_to_shift = vec![to_sg.to_string()];
+    let mut i = 0;
+    while i < bounds_to_shift.len() {
+        let children = diagram.subgraph_children(&bounds_to_shift[i]);
+        for child in children {
+            bounds_to_shift.push(child.clone());
+        }
+        i += 1;
+    }
+    for sg_id in &bounds_to_shift {
+        if let Some(rect) = layout.subgraph_bounds.get_mut(sg_id.as_str()) {
+            match direction {
+                Direction::TopDown => rect.y += shift,
+                Direction::BottomTop => rect.y -= shift,
+                Direction::LeftRight => rect.x += shift,
+                Direction::RightLeft => rect.x -= shift,
+            }
+        }
+        // Also update the nodes map entry for the subgraph.
+        let key = crate::dagre::NodeId(sg_id.clone());
+        if let Some(rect) = layout.nodes.get_mut(&key) {
+            match direction {
+                Direction::TopDown => rect.y += shift,
+                Direction::BottomTop => rect.y -= shift,
+                Direction::LeftRight => rect.x += shift,
+                Direction::RightLeft => rect.x -= shift,
+            }
         }
     }
 }
