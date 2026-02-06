@@ -687,18 +687,19 @@ pub(crate) fn reconcile_sublayouts_dagre(
     }
 }
 
-/// Shift external predecessor nodes of direction-override subgraphs on the
+/// Shift external predecessor and successor nodes of subgraphs on the
 /// cross-axis so they align with the subgraph center.
 ///
-/// Dagre's BK coordinate assignment positions external nodes based on all their
-/// connections — for example, a node C connected to both a subgraph entry node
-/// A and an external chain X→Y→Z gets pulled toward X/Y/Z.  This moves C so
-/// it sits above/beside the subgraph center, keeping the C→A edge from cutting
-/// through the X→Y→Z chain.
+/// Applies to two kinds of subgraphs:
+/// 1. **Direction overrides** (`dir.is_some()`): internal layout is computed
+///    separately, so external nodes should align with the subgraph as a whole.
+/// 2. **Subgraph-as-node targets**: edges like `Client --> sg1` conceptually
+///    connect to the subgraph, not a specific child — centering the external
+///    node over the subgraph is the natural position.
 ///
-/// Only the earliest-rank (topmost for TD, leftmost for LR, etc.) predecessors
-/// are shifted — intermediate chain nodes like Z are left in place so their
-/// internal chain edges remain intact.
+/// Only the earliest-rank predecessors and latest-rank successors are shifted —
+/// intermediate chain nodes are left in place so their internal edges remain
+/// intact.
 ///
 /// Edge points connected to shifted nodes are interpolated: full shift at the
 /// shifted endpoint, tapering to zero at the unshifted endpoint.
@@ -709,13 +710,30 @@ pub(crate) fn center_override_subgraphs(
     // Cross-axis: x for TD/BT, y for LR/RL.
     let horizontal = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
 
+    // Subgraphs referenced as edge endpoints (subgraph-as-node).
+    let sg_as_node_ids: HashSet<&str> = diagram
+        .edges
+        .iter()
+        .filter_map(|e| e.to_subgraph.as_deref())
+        .chain(
+            diagram
+                .edges
+                .iter()
+                .filter_map(|e| e.from_subgraph.as_deref()),
+        )
+        .collect();
+
     // Collect all shifts to apply: node_id → delta on cross-axis.
     let mut node_shifts: HashMap<String, f64> = HashMap::new();
 
     for (sg_id, sg) in &diagram.subgraphs {
-        if sg.dir.is_none() {
+        let is_dir_override = sg.dir.is_some();
+        let is_sg_as_node = sg_as_node_ids.contains(sg_id.as_str());
+
+        if !is_dir_override && !is_sg_as_node {
             continue;
         }
+
         let Some(sg_bounds) = layout.subgraph_bounds.get(sg_id).copied() else {
             continue;
         };
@@ -728,70 +746,104 @@ pub(crate) fn center_override_subgraphs(
             sg_bounds.y + sg_bounds.height / 2.0
         };
 
-        // Find external predecessor node IDs: edges where `to` is inside, `from` is outside.
+        // Collect external predecessors: edges entering the subgraph.
+        // Two sources:
+        // 1. Edges where `to` is a direct member and `from` is outside (direction overrides)
+        // 2. Edges where `to_subgraph` references this subgraph (subgraph-as-node)
         let mut predecessors: Vec<String> = Vec::new();
         for edge in &diagram.edges {
-            if sg_node_set.contains(edge.to.as_str())
-                && !sg_node_set.contains(edge.from.as_str())
-                && edge.from != *sg_id
-            {
+            let is_incoming = (is_dir_override
+                && sg_node_set.contains(edge.to.as_str())
+                && !sg_node_set.contains(edge.from.as_str()))
+                || (is_sg_as_node
+                    && edge.to_subgraph.as_deref() == Some(sg_id.as_str()));
+
+            if is_incoming && edge.from != *sg_id && !sg_node_set.contains(edge.from.as_str()) {
                 if !predecessors.contains(&edge.from) {
                     predecessors.push(edge.from.clone());
                 }
             }
         }
 
-        // Fall back to successors if no predecessors.
-        if predecessors.is_empty() {
-            for edge in &diagram.edges {
-                if sg_node_set.contains(edge.from.as_str())
-                    && !sg_node_set.contains(edge.to.as_str())
-                    && edge.to != *sg_id
-                {
-                    if !predecessors.contains(&edge.to) {
-                        predecessors.push(edge.to.clone());
-                    }
+        // Collect external successors: edges leaving the subgraph.
+        let mut successors: Vec<String> = Vec::new();
+        for edge in &diagram.edges {
+            let is_outgoing = (is_dir_override
+                && sg_node_set.contains(edge.from.as_str())
+                && !sg_node_set.contains(edge.to.as_str()))
+                || (is_sg_as_node
+                    && edge.from_subgraph.as_deref() == Some(sg_id.as_str()));
+
+            if is_outgoing && edge.to != *sg_id && !sg_node_set.contains(edge.to.as_str()) {
+                if !successors.contains(&edge.to) {
+                    successors.push(edge.to.clone());
                 }
             }
         }
 
-        if predecessors.is_empty() {
+        if predecessors.is_empty() && successors.is_empty() {
             continue;
         }
 
-        // Filter to earliest-rank predecessors only.  This avoids shifting
+        // Filter predecessors to earliest-rank only.  This avoids shifting
         // intermediate chain nodes (e.g. Z in C→X→Y→Z→A) which would break
         // the chain's internal edges.
-        let min_rank = predecessors
-            .iter()
-            .filter_map(|id| {
-                layout
-                    .node_ranks
-                    .get(&dagre::NodeId(id.clone()))
-                    .copied()
-            })
-            .min();
+        if predecessors.len() > 1 {
+            let min_rank = predecessors
+                .iter()
+                .filter_map(|id| {
+                    layout
+                        .node_ranks
+                        .get(&dagre::NodeId(id.clone()))
+                        .copied()
+                })
+                .min();
 
-        if let Some(min_rank) = min_rank {
-            predecessors.retain(|id| {
-                layout
-                    .node_ranks
-                    .get(&dagre::NodeId(id.clone()))
-                    .copied()
-                    == Some(min_rank)
-            });
+            if let Some(min_rank) = min_rank {
+                predecessors.retain(|id| {
+                    layout
+                        .node_ranks
+                        .get(&dagre::NodeId(id.clone()))
+                        .copied()
+                        == Some(min_rank)
+                });
+            }
         }
 
-        for pred_id in &predecessors {
-            if let Some(rect) = layout.nodes.get(&dagre::NodeId(pred_id.clone())) {
-                let pred_center = if horizontal {
+        // Filter successors to latest-rank only (symmetric with predecessors).
+        if successors.len() > 1 {
+            let max_rank = successors
+                .iter()
+                .filter_map(|id| {
+                    layout
+                        .node_ranks
+                        .get(&dagre::NodeId(id.clone()))
+                        .copied()
+                })
+                .max();
+
+            if let Some(max_rank) = max_rank {
+                successors.retain(|id| {
+                    layout
+                        .node_ranks
+                        .get(&dagre::NodeId(id.clone()))
+                        .copied()
+                        == Some(max_rank)
+                });
+            }
+        }
+
+        // Shift both predecessors and successors toward the subgraph center.
+        for node_id in predecessors.iter().chain(successors.iter()) {
+            if let Some(rect) = layout.nodes.get(&dagre::NodeId(node_id.clone())) {
+                let node_center = if horizontal {
                     rect.x + rect.width / 2.0
                 } else {
                     rect.y + rect.height / 2.0
                 };
-                let delta = sg_center - pred_center;
+                let delta = sg_center - node_center;
                 if delta.abs() >= 1.0 {
-                    node_shifts.insert(pred_id.clone(), delta);
+                    node_shifts.insert(node_id.clone(), delta);
                 }
             }
         }

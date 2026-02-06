@@ -12,16 +12,16 @@
       <text x="202.94" y="126.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">US East</text>
     </g>
     <g class="edgePaths">
-      <path d="M120.47,62.00 L120.47,65.33 C120.47,68.67 120.47,75.33 120.47,79.50 C120.47,83.67 120.47,85.33 120.99,86.81 C121.52,88.30 122.56,89.59 123.49,90.74 C124.42,91.89 125.23,92.89 125.63,93.39 L126.04,93.89" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M128.55,281.00 L127.21,282.67 C125.86,284.33 123.16,287.67 121.82,292.83 C120.47,298.00 120.47,305.00 120.47,308.50 L120.47,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M192.23,62.00 L190.58,66.17 C188.93,70.33 185.62,78.67 184.18,83.85 C182.73,89.03 183.14,91.05 183.34,92.07 L183.55,93.08" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M184.34,281.00 L184.00,282.67 C183.67,284.33 182.99,287.67 184.06,292.88 C185.13,298.09 187.95,305.19 189.35,308.73 L190.76,312.28" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
-      <rect x="69.87" y="8.00" width="101.20" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="120.47" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Client</text>
-      <rect x="52.05" y="316.00" width="136.84" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="120.47" y="343.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Monitoring</text>
+      <rect x="152.34" y="8.00" width="101.20" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="202.94" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Client</text>
+      <rect x="134.52" y="316.00" width="136.84" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="202.94" y="343.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Monitoring</text>
       <rect x="63.00" y="162.00" width="114.94" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="120.47" y="189.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Server1</text>
       <rect x="227.94" y="162.00" width="114.94" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
