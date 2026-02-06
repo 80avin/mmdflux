@@ -35,8 +35,14 @@ EOF
 # Write to a file
 mmdflux diagram.mmd -o output.txt
 
-# Debug mode: show parsed AST and graph structure
+# Debug mode: show detected diagram type
 mmdflux --debug diagram.mmd
+
+# Lint mode: validate input and report diagnostics
+mmdflux --lint diagram.mmd
+
+# Show node IDs alongside labels
+mmdflux --show-ids diagram.mmd
 
 # ASCII output
 mmdflux --format ascii diagram.mmd
@@ -144,25 +150,25 @@ graph TD
 
 Output:
 ```
-┌─── Process ───┐
-│    ┌───────┐  │
-│    │ Start │  │
-│    └───────┘  │
-│        │      │
-│        │      │
-│        ▼      │
-│   ┌────────┐  │
-│   │ Middle │  │
-│   └────────┘  │
-└────────┼──────┘
-         │
-         │
-         │
-         │
-         ▼
-      ┌─────┐
-      │ End │
-      └─────┘
+┌── Process ───┐
+│   ┌───────┐  │
+│   │ Start │  │
+│   └───────┘  │
+│       │      │
+│       │      │
+│       ▼      │
+│  ┌────────┐  │
+│  │ Middle │  │
+│  └────────┘  │
+└───────┼──────┘
+        │
+        │
+        │
+        │
+        ▼
+     ┌─────┐
+     │ End │
+     └─────┘
 ```
 
 ### Nested Subgraphs (LR)
@@ -183,17 +189,17 @@ graph LR
 
 Output:
 ```
-┌────────────────────── Outer ──────────────────────┐
-│                                                   │
-│   ┌───── Left ─────┐         ┌──── Right ─────┐   │
-│   │                │         │                │   │
-│   │  ┌───┐    ┌───┐│         │ ┌───┐    ┌───┐ │   │
-│   │  │ A │───►│ B │┼─────────┼►│ C │───►│ D │ │   │
-│   │  └───┘    └───┘│         │ └───┘    └───┘ │   │
-│   │                │         │                │   │
-│   └────────────────┘         └────────────────┘   │
-│                                                   │
-└───────────────────────────────────────────────────┘
+┌───────────────────── Outer ──────────────────────┐
+│                                                  │
+│    ┌──── Left ────┐         ┌──── Right ─────┐   │
+│    │              │         │                │   │
+│    │┌───┐    ┌───┐│         │ ┌───┐    ┌───┐ │   │
+│    ││ A │───►│ B │┼─────────┼►│ C │───►│ D │ │   │
+│    │└───┘    └───┘│         │ └───┘    └───┘ │   │
+│    │              │         │                │   │
+│    └──────────────┘         └────────────────┘   │
+│                                                  │
+└──────────────────────────────────────────────────┘
 ```
 
 ### HTTP Request Flow
@@ -252,36 +258,16 @@ Output:
 
 ### ASCII Mode
 
-Use `--ascii` for ASCII-only output (no Unicode box-drawing):
+Use `--format ascii` for ASCII-only output (no Unicode box-drawing):
 
 ```bash
-echo 'graph LR\nA-->B-->C' | mmdflux --ascii
+echo 'graph LR\nA-->B-->C' | mmdflux --format ascii
 ```
 
 ```
 +---+    +---+    +---+
 | A |--->| B |--->| C |
 +---+    +---+    +---+
-```
-
-### Debug Mode
-
-Debug output (`--debug`):
-
-```
-Direction: TopDown
-Nodes (5):
-  A [label="Start", shape=Rectangle]
-  C [label="Do something", shape=Rectangle]
-  E [label="End", shape=Rectangle]
-  D [label="Do something else", shape=Rectangle]
-  B [label="Decision", shape=Diamond]
-Edges (5):
-  A ----> B [Solid, Normal]
-  B --|Yes|--> C [Solid, Normal]
-  B --|No|--> D [Solid, Normal]
-  C ----> E [Solid, Normal]
-  D ----> E [Solid, Normal]
 ```
 
 ## Supported Syntax
@@ -295,22 +281,36 @@ Edges (5):
 
 ### Node Shapes
 
-| Syntax    | Shape                |
-| --------- | -------------------- |
-| `A`       | Rectangle (default)  |
-| `A[text]` | Rectangle with label |
-| `A(text)` | Rounded rectangle    |
-| `A{text}` | Diamond              |
+| Syntax          | Shape                   |
+| --------------- | ----------------------- |
+| `A`             | Rectangle (default)     |
+| `A[text]`       | Rectangle with label    |
+| `A(text)`       | Rounded rectangle       |
+| `A([text])`     | Stadium                 |
+| `A[[text]]`     | Subroutine              |
+| `A[(text)]`     | Cylinder                |
+| `A{text}`       | Diamond                 |
+| `A{{text}}`     | Hexagon                 |
+| `A((text))`     | Circle                  |
+| `A(((text)))`   | Double circle            |
+| `A>text]`       | Asymmetric (flag)       |
+| `A[/text\]`     | Trapezoid               |
+| `A[\text/]`     | Inverse trapezoid       |
+| `@{shape: ...}` | Extended shape notation |
 
 ### Edge Types
 
-| Syntax         | Description            |
-| -------------- | ---------------------- |
-| `-->`          | Solid arrow            |
-| `-->\|label\|` | Solid arrow with label |
-| `---`          | Open line (no arrow)   |
-| `-.->`         | Dotted arrow           |
-| `==>`          | Thick arrow            |
+| Syntax         | Description              |
+| -------------- | ------------------------ |
+| `-->`          | Solid arrow              |
+| `-->\|label\|` | Solid arrow with label   |
+| `---`          | Open line (no arrow)     |
+| `-.->`         | Dotted arrow             |
+| `==>`          | Thick arrow              |
+| `~~~`          | Invisible (layout only)  |
+| `--x`          | Cross arrow              |
+| `--o`          | Circle arrow             |
+| `<-->`         | Bidirectional arrow      |
 
 ### Chains and Groups
 
@@ -328,12 +328,14 @@ graph LR
 ```
 graph TD
     subgraph id[Title]
+        direction LR
         A --> B
     end
 ```
 
 Subgraphs group nodes inside a bordered box with an optional title.
-Multiple subgraphs and cross-boundary edges are supported.
+Nested subgraphs, cross-boundary edges, direction overrides, and
+edges to/from subgraph IDs are supported.
 
 ### Comments
 
@@ -378,16 +380,17 @@ use mmdflux::{Diagram, Direction, Node, Shape, Edge};
 use mmdflux::graph::{Stroke, Arrow};
 
 // Direction: TopDown, BottomTop, LeftRight, RightLeft
-// Shape: Rectangle, Round, Diamond
-// Stroke: Solid, Dotted, Thick
-// Arrow: Normal, None
+// Shape: Rectangle, Round, Stadium, Subroutine, Cylinder, Diamond, Hexagon, ...
+// Stroke: Solid, Dotted, Thick, Invisible
+// Arrow: Normal, None, Cross, Circle
 ```
 
 ## Roadmap
 
 - [x] Flowchart parsing (`graph` / `flowchart`)
-- [x] ASCII rendering (TD, BT, LR, RL layouts)
-- [x] Subgraph support (`subgraph` / `end`)
+- [x] Text rendering (Unicode and ASCII, TD/BT/LR/RL layouts)
+- [x] SVG rendering
+- [x] Subgraph support (nesting, direction overrides, edges to subgraph IDs)
 - [ ] Sequence diagrams
 - [ ] Class diagrams
 - [ ] State diagrams
