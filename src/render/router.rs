@@ -658,13 +658,13 @@ fn route_edge_direct(
     if (edge.from_subgraph.is_some() || edge.to_subgraph.is_some())
         && (matches!(src_face, NodeFace::Left | NodeFace::Right)
             || matches!(tgt_face, NodeFace::Left | NodeFace::Right))
-        {
-            path_direction = if start.x <= end.x {
-                Direction::LeftRight
-            } else {
-                Direction::RightLeft
-            };
-        }
+    {
+        path_direction = if start.x <= end.x {
+            Direction::LeftRight
+        } else {
+            Direction::RightLeft
+        };
+    }
     segments.extend(build_orthogonal_path_for_direction(
         start,
         end,
@@ -1115,11 +1115,8 @@ fn build_orthogonal_path_with_waypoints(
 
     // Start → first waypoint
     let first_wp = Point::new(waypoint_slice[0].0, waypoint_slice[0].1);
-    let first_vertical = if start_vertical_override {
-        true
-    } else {
-        !vertical_first
-    };
+    let first_vertical = start_vertical_override || !vertical_first;
+
     segments.extend(orthogonalize_segment(start, first_wp, first_vertical));
 
     // Through all intermediate waypoints

@@ -103,9 +103,7 @@ pub fn add_segments(lg: &mut LayoutGraph) {
             let left_idx = lg.add_nesting_node(left_id);
             lg.ranks[left_idx] = rank;
             lg.border_type.insert(left_idx, BorderType::Left);
-            if left_idx < lg.parents.len() {
-                lg.parents[left_idx] = Some(compound_idx);
-            }
+            lg.parents[left_idx] = Some(compound_idx);
             left_nodes.push(left_idx);
 
             // Right border node
@@ -113,9 +111,7 @@ pub fn add_segments(lg: &mut LayoutGraph) {
             let right_idx = lg.add_nesting_node(right_id);
             lg.ranks[right_idx] = rank;
             lg.border_type.insert(right_idx, BorderType::Right);
-            if right_idx < lg.parents.len() {
-                lg.parents[right_idx] = Some(compound_idx);
-            }
+            lg.parents[right_idx] = Some(compound_idx);
             right_nodes.push(right_idx);
         }
 

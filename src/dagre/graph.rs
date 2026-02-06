@@ -446,7 +446,6 @@ impl LayoutGraph {
         self.dimensions.push((0.0, 0.0));
         self.original_has_predecessor.push(false);
         self.parents.push(None);
-        self.position_excluded_nodes.remove(&idx);
         idx
     }
 

@@ -8,21 +8,17 @@ fn list_fixtures() -> Vec<String> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures");
-    let mut fixtures = Vec::new();
-    for entry in fs::read_dir(&dir).unwrap_or_else(|e| panic!("Failed to read fixtures dir: {e}")) {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) == Some("mmd") {
-            let name = path
-                .file_name()
-                .and_then(|os| os.to_str())
-                .unwrap_or_default()
-                .to_string();
-            if !name.is_empty() {
-                fixtures.push(name);
+    let mut fixtures: Vec<String> = fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("Failed to read fixtures dir: {e}"))
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            if path.extension().is_some_and(|e| e == "mmd") {
+                Some(path.file_name()?.to_str()?.to_string())
+            } else {
+                None
             }
-        }
-    }
+        })
+        .collect();
     fixtures.sort();
     fixtures
 }

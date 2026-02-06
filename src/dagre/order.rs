@@ -611,28 +611,6 @@ fn debug_dump_order(graph: &LayoutGraph, label: &str) {
     }
 }
 
-fn effective_edges_filtered(graph: &LayoutGraph) -> Vec<(usize, usize)> {
-    graph
-        .edges
-        .iter()
-        .enumerate()
-        .filter_map(|(idx, &(from, to, _))| {
-            if graph.excluded_edges.contains(&idx) {
-                return None;
-            }
-            let (from, to) = if graph.reversed_edges.contains(&idx) {
-                (to, from)
-            } else {
-                (from, to)
-            };
-            if !graph.is_position_node(from) || !graph.is_position_node(to) {
-                return None;
-            }
-            Some((from, to))
-        })
-        .collect()
-}
-
 fn effective_edges_weighted_filtered(graph: &LayoutGraph) -> Vec<(usize, usize, f64)> {
     graph
         .edges
@@ -664,12 +642,12 @@ fn effective_edges_weighted_filtered(graph: &LayoutGraph) -> Vec<(usize, usize, 
 ///
 /// Reference: Gansner et al., "A Technique for Drawing Directed Graphs"
 fn init_order(graph: &mut LayoutGraph, layers: &[Vec<usize>]) {
-    let edges = effective_edges_filtered(graph);
+    let edges = effective_edges_weighted_filtered(graph);
     let n = graph.node_ids.len();
 
     // Build successor adjacency list
     let mut successors: Vec<Vec<usize>> = vec![Vec::new(); n];
-    for &(from, to) in &edges {
+    for &(from, to, _) in &edges {
         successors[from].push(to);
     }
 

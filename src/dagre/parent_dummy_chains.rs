@@ -287,7 +287,7 @@ mod tests {
         // Run pipeline up through parent_dummy_chains (matching layout_with_labels)
         dagre::extract_self_edges(&mut lg);
         crate::dagre::acyclic::run(&mut lg);
-        dagre::make_space_for_edge_labels(&mut lg, &HashMap::new());
+        dagre::make_space_for_edge_labels(&mut lg);
         crate::dagre::nesting::run(&mut lg);
         rank::run(&mut lg, &LayoutConfig::default());
         rank::remove_empty_ranks(&mut lg);
@@ -419,7 +419,7 @@ mod tests {
 
         dagre::extract_self_edges(&mut lg);
         crate::dagre::acyclic::run(&mut lg);
-        dagre::make_space_for_edge_labels(&mut lg, &HashMap::new());
+        dagre::make_space_for_edge_labels(&mut lg);
         crate::dagre::nesting::run(&mut lg);
         rank::run(&mut lg, &config);
         rank::remove_empty_ranks(&mut lg);

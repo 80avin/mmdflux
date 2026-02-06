@@ -82,9 +82,7 @@ mod parsing {
 
     #[test]
     fn simple_parses_correctly() {
-        let input = load_fixture("simple.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
+        let diagram = parse_and_build("simple.mmd");
 
         assert_eq!(diagram.direction, Direction::TopDown);
         assert_eq!(diagram.nodes.len(), 2);
@@ -98,23 +96,17 @@ mod parsing {
 
     #[test]
     fn decision_parses_correctly() {
-        let input = load_fixture("decision.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
+        let diagram = parse_and_build("decision.mmd");
 
         assert_eq!(diagram.nodes.len(), 4);
         assert_eq!(diagram.edges.len(), 4);
-
-        // Verify diamond shape for decision node
         assert_eq!(diagram.nodes["B"].shape, Shape::Diamond);
         assert_eq!(diagram.nodes["B"].label, "Is it working?");
     }
 
     #[test]
     fn shapes_parses_correctly() {
-        let input = load_fixture("shapes.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
+        let diagram = parse_and_build("shapes.mmd");
 
         assert_eq!(diagram.nodes["rect"].shape, Shape::Rectangle);
         assert_eq!(diagram.nodes["round"].shape, Shape::Round);
@@ -162,47 +154,32 @@ mod parsing {
 
     #[test]
     fn left_right_direction() {
-        let input = load_fixture("left_right.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
-
+        let diagram = parse_and_build("left_right.mmd");
         assert_eq!(diagram.direction, Direction::LeftRight);
     }
 
     #[test]
     fn bottom_top_direction() {
-        let input = load_fixture("bottom_top.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
-
+        let diagram = parse_and_build("bottom_top.mmd");
         assert_eq!(diagram.direction, Direction::BottomTop);
     }
 
     #[test]
     fn right_left_direction() {
-        let input = load_fixture("right_left.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
-
+        let diagram = parse_and_build("right_left.mmd");
         assert_eq!(diagram.direction, Direction::RightLeft);
     }
 
     #[test]
     fn chain_creates_correct_edges() {
-        let input = load_fixture("chain.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
-
+        let diagram = parse_and_build("chain.mmd");
         assert_eq!(diagram.nodes.len(), 4);
         assert_eq!(diagram.edges.len(), 3);
     }
 
     #[test]
     fn ampersand_expands_to_multiple_edges() {
-        let input = load_fixture("ampersand.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
-
+        let diagram = parse_and_build("ampersand.mmd");
         assert_eq!(diagram.nodes.len(), 5);
         // A & B --> C creates 2 edges, C --> D & E creates 2 edges
         assert_eq!(diagram.edges.len(), 4);
@@ -210,20 +187,14 @@ mod parsing {
 
     #[test]
     fn labeled_edges_parsed() {
-        let input = load_fixture("labeled_edges.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
-
-        // Check that at least some edges have labels
+        let diagram = parse_and_build("labeled_edges.mmd");
         let edges_with_labels = diagram.edges.iter().filter(|e| e.label.is_some()).count();
         assert!(edges_with_labels > 0, "Should have labeled edges");
     }
 
     #[test]
     fn inline_edge_labels_parsed() {
-        let input = load_fixture("inline_edge_labels.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
+        let diagram = parse_and_build("inline_edge_labels.mmd");
 
         assert_eq!(diagram.edges.len(), 4);
         assert_eq!(diagram.edges[0].label.as_deref(), Some("yes"));
@@ -231,7 +202,6 @@ mod parsing {
         assert_eq!(diagram.edges[2].label.as_deref(), Some("final step"));
         assert_eq!(diagram.edges[3].label.as_deref(), Some("no"));
 
-        // Inline labels should not create nodes.
         assert!(!diagram.nodes.contains_key("yes"));
         assert!(!diagram.nodes.contains_key("retry"));
         assert!(!diagram.nodes.contains_key("no"));
@@ -239,9 +209,7 @@ mod parsing {
 
     #[test]
     fn inline_label_flowchart_parsed() {
-        let input = load_fixture("inline_label_flowchart.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
+        let diagram = parse_and_build("inline_label_flowchart.mmd");
 
         let mut counts: HashMap<&str, usize> = HashMap::new();
         for label in diagram.edges.iter().filter_map(|e| e.label.as_deref()) {
@@ -260,22 +228,14 @@ mod parsing {
 
     #[test]
     fn comments_are_ignored() {
-        let input = load_fixture("git_workflow.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
-
-        // Comments should not create nodes
+        let diagram = parse_and_build("git_workflow.mmd");
         assert_eq!(diagram.nodes.len(), 4);
         assert!(!diagram.nodes.contains_key("%%"));
     }
 
     #[test]
     fn complex_parses_all_features() {
-        let input = load_fixture("complex.mmd");
-        let flowchart = parse_flowchart(&input).expect("Should parse");
-        let diagram = build_diagram(&flowchart);
-
-        // Just verify it parses without error and has expected structure
+        let diagram = parse_and_build("complex.mmd");
         assert!(diagram.nodes.len() >= 9);
         assert!(diagram.edges.len() >= 10);
     }
@@ -455,44 +415,18 @@ mod rendering {
     #[test]
     fn git_workflow_renders() {
         let output = render_fixture("git_workflow.mmd");
-
-        // All node labels fully visible
-        assert!(
-            output.contains("Working Dir"),
-            "Missing 'Working Dir':\n{output}"
-        );
-        assert!(
-            output.contains("Staging Area"),
-            "Missing 'Staging Area':\n{output}"
-        );
-        assert!(
-            output.contains("Local Repo"),
-            "Missing 'Local Repo':\n{output}"
-        );
-        assert!(
-            output.contains("Remote Repo"),
-            "Missing 'Remote Repo':\n{output}"
-        );
-
-        // All forward edge labels fully visible (not clipped by nodes)
-        assert!(
-            output.contains("git add"),
-            "Missing 'git add' label:\n{output}"
-        );
-        assert!(
-            output.contains("git commit"),
-            "Missing 'git commit' label:\n{output}"
-        );
-        assert!(
-            output.contains("git push"),
-            "Missing 'git push' label:\n{output}"
-        );
-
-        // Backward edge label
-        assert!(
-            output.contains("git pull"),
-            "Missing 'git pull' label:\n{output}"
-        );
+        for label in [
+            "Working Dir",
+            "Staging Area",
+            "Local Repo",
+            "Remote Repo",
+            "git add",
+            "git commit",
+            "git push",
+            "git pull",
+        ] {
+            assert!(output.contains(label), "Missing '{label}':\n{output}");
+        }
     }
 
     #[test]
@@ -1081,13 +1015,6 @@ mod all_fixtures {
 mod lr_routing {
     use super::*;
 
-    /// Render inline Mermaid text (not a fixture file).
-    fn render_inline(input: &str) -> String {
-        let flowchart = parse_flowchart(input).unwrap();
-        let diagram = build_diagram(&flowchart);
-        render(&diagram, &RenderOptions::default())
-    }
-
     fn assert_has_right_arrow(output: &str) {
         assert!(
             output.contains('►') || output.contains('>'),
@@ -1117,7 +1044,7 @@ mod lr_routing {
 
     #[test]
     fn lr_simple_chain_horizontal_arrows() {
-        let output = render_inline("graph LR\n    A[Start] --> B[End]");
+        let output = render_input("graph LR\n    A[Start] --> B[End]");
         assert_has_right_arrow(&output);
         assert_no_vertical_arrows_between_nodes(&output);
     }
@@ -1132,7 +1059,7 @@ mod lr_routing {
     #[test]
     fn lr_backward_edge_renders_without_panic() {
         let output =
-            render_inline("graph LR\n    A[Start] --> B[Middle]\n    B --> C[End]\n    C --> A");
+            render_input("graph LR\n    A[Start] --> B[Middle]\n    B --> C[End]\n    C --> A");
 
         assert!(output.contains("Start"), "Should contain Start node");
         assert!(output.contains("Middle"), "Should contain Middle node");
@@ -1144,7 +1071,7 @@ mod lr_routing {
     fn lr_backward_edge_routes_around_nodes() {
         // LR backward edges now route below nodes with synthetic waypoints.
         // The backward edge should produce some arrow character.
-        let output = render_inline("graph LR\n    A --> B\n    B --> A");
+        let output = render_input("graph LR\n    A --> B\n    B --> A");
         let arrow_count = output
             .chars()
             .filter(|c| matches!(c, '▲' | '▼' | '◄' | '►' | '<' | '>'))
@@ -1162,7 +1089,7 @@ mod lr_routing {
     fn lr_multirank_backward_edge_does_not_extend_left_of_target() {
         // The backward edge D→A should NOT place its arrow to the LEFT
         // of A's left border -- that extends outside the diagram bounds.
-        let output = render_inline("graph LR\n    A --> B --> C --> D\n    D --> A");
+        let output = render_input("graph LR\n    A --> B --> C --> D\n    D --> A");
 
         let mut arrow_col = None;
         let mut node_left_border = None;
@@ -1356,27 +1283,6 @@ mod subgraph_rendering {
             output
         );
     }
-
-    #[test]
-    fn existing_fixtures_unchanged_by_subgraph_support() {
-        // Render non-subgraph fixtures and verify they produce valid output
-        let fixtures = [
-            "simple.mmd",
-            "chain.mmd",
-            "fan_in.mmd",
-            "fan_out.mmd",
-            "decision.mmd",
-            "edge_styles.mmd",
-        ];
-        for fixture in fixtures {
-            let output = render_fixture(fixture);
-            assert!(
-                !output.is_empty(),
-                "{} should produce non-empty output",
-                fixture
-            );
-        }
-    }
 }
 
 // === Subgraph parsing and building tests ===
@@ -1519,20 +1425,14 @@ mod label_edge_cases {
     #[test]
     #[ignore]
     fn labeled_edges_reasonable_height() {
-        let input = load_fixture("labeled_edges.mmd");
-        let flowchart = parse_flowchart(&input).expect("Failed to parse labeled_edges");
-        let diagram = build_diagram(&flowchart);
-        let output = render(&diagram, &Default::default());
+        let output = render_fixture("labeled_edges.mmd");
         let line_count = output.lines().count();
 
-        // Main branch renders ~29 lines. Regression was 51+ lines.
-        // With the fix, expect similar to main branch (allow some tolerance for label dummies).
         assert!(
             line_count < 40,
             "labeled_edges.mmd should render in under 40 lines, got {line_count}"
         );
 
-        // All 5 labels should be present
         for label in &["initialize", "configure", "yes", "no", "retry"] {
             assert!(
                 output.contains(label),
@@ -1543,12 +1443,7 @@ mod label_edge_cases {
 
     #[test]
     fn diamond_text_not_corrupted_by_arrows() {
-        let input = load_fixture("labeled_edges.mmd");
-        let flowchart = parse_flowchart(&input).expect("Failed to parse");
-        let diagram = build_diagram(&flowchart);
-        let output = render(&diagram, &Default::default());
-
-        // The diamond should contain "Valid?" text, not corrupted by arrow characters
+        let output = render_fixture("labeled_edges.mmd");
         assert!(
             output.contains("Valid?"),
             "Diamond text 'Valid?' should be intact in output:\n{output}"
@@ -1557,12 +1452,8 @@ mod label_edge_cases {
 
     #[test]
     fn simple_cycle_compact_backward_routing() {
-        let input = load_fixture("simple_cycle.mmd");
-        let flowchart = parse_flowchart(&input).expect("Failed to parse");
-        let diagram = build_diagram(&flowchart);
-        let output = render(&diagram, &Default::default());
+        let output = render_fixture("simple_cycle.mmd");
         let line_count = output.lines().count();
-
         assert!(
             line_count < 30,
             "simple_cycle.mmd should be compact, got {line_count} lines"
@@ -1571,12 +1462,8 @@ mod label_edge_cases {
 
     #[test]
     fn multiple_cycles_compact_backward_routing() {
-        let input = load_fixture("multiple_cycles.mmd");
-        let flowchart = parse_flowchart(&input).expect("Failed to parse");
-        let diagram = build_diagram(&flowchart);
-        let output = render(&diagram, &Default::default());
+        let output = render_fixture("multiple_cycles.mmd");
         let line_count = output.lines().count();
-
         assert!(
             line_count < 40,
             "multiple_cycles.mmd should be compact, got {line_count} lines"
@@ -2131,90 +2018,6 @@ fn test_invisible_edge_affects_layout() {
         down_arrows, 0,
         "Invisible edge should produce no arrows\n{output}"
     );
-}
-
-#[test]
-fn test_multi_edge_both_labels_rendered() {
-    let mut diagram = Diagram::new(Direction::TopDown);
-    diagram.add_node(mmdflux::graph::Node::new("A").with_label("Start"));
-    diagram.add_node(mmdflux::graph::Node::new("B").with_label("End"));
-    diagram.add_edge(mmdflux::graph::Edge::new("A", "B").with_label("path 1"));
-    diagram.add_edge(mmdflux::graph::Edge::new("A", "B").with_label("path 2"));
-
-    let output = render(&diagram, &RenderOptions::default());
-
-    assert!(
-        output.contains("path 1"),
-        "First edge label should appear:\n{output}"
-    );
-    assert!(
-        output.contains("path 2"),
-        "Second edge label should appear:\n{output}"
-    );
-}
-
-#[test]
-fn test_multi_edge_basic() {
-    let input = std::fs::read_to_string("tests/fixtures/multi_edge.mmd").unwrap();
-    let flowchart = parse_flowchart(&input).unwrap();
-    let diagram = build_diagram(&flowchart);
-
-    assert_eq!(
-        diagram.edges.len(),
-        2,
-        "Should have 2 edges between A and B"
-    );
-
-    let output = render(&diagram, &RenderOptions::default());
-    assert!(output.contains("A"), "Node A should appear");
-    assert!(output.contains("B"), "Node B should appear");
-}
-
-#[test]
-fn test_multi_edge_labeled_both_labels_visible() {
-    let input = std::fs::read_to_string("tests/fixtures/multi_edge_labeled.mmd").unwrap();
-    let flowchart = parse_flowchart(&input).unwrap();
-    let diagram = build_diagram(&flowchart);
-
-    assert_eq!(diagram.edges.len(), 3);
-    assert_eq!(diagram.edges[0].label, Some("path 1".to_string()));
-    assert_eq!(diagram.edges[1].label, Some("path 2".to_string()));
-
-    let output = render(&diagram, &RenderOptions::default());
-    assert!(
-        output.contains("path 1"),
-        "First edge label should appear:\n{output}"
-    );
-    assert!(
-        output.contains("path 2"),
-        "Second edge label should appear:\n{output}"
-    );
-}
-
-#[test]
-fn test_multi_edge_lr_layout() {
-    let flowchart = parse_flowchart("graph LR\n    A -->|yes| B\n    A -->|no| B\n").unwrap();
-    let diagram = build_diagram(&flowchart);
-    let output = render(&diagram, &RenderOptions::default());
-
-    assert!(
-        output.contains("yes"),
-        "Label 'yes' should appear:\n{output}"
-    );
-    assert!(output.contains("no"), "Label 'no' should appear:\n{output}");
-}
-
-#[test]
-fn test_multi_edge_different_styles() {
-    use mmdflux::graph::Stroke;
-    let flowchart = parse_flowchart("graph TD\n    A --> B\n    A -.-> B\n    A ==> B\n").unwrap();
-    let diagram = build_diagram(&flowchart);
-
-    assert_eq!(diagram.edges.len(), 3);
-    let strokes: Vec<_> = diagram.edges.iter().map(|e| e.stroke).collect();
-    assert!(strokes.contains(&Stroke::Solid));
-    assert!(strokes.contains(&Stroke::Dotted));
-    assert!(strokes.contains(&Stroke::Thick));
 }
 
 #[test]

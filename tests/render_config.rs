@@ -12,6 +12,7 @@ fn render_config_default() {
     assert!(config.svg_edge_curve.is_none());
     assert!(config.svg_edge_curve_radius.is_none());
     assert!(config.svg_diagram_padding.is_none());
+    assert!(!config.show_ids);
 }
 
 #[test]
@@ -23,7 +24,6 @@ fn render_error_from_string() {
 
 #[test]
 fn render_config_to_render_options_conversion() {
-    // Verify we can convert RenderConfig to existing RenderOptions
     let config = RenderConfig::default();
     let options: mmdflux::render::RenderOptions = (&config).into();
     assert!(matches!(options.output_format, OutputFormat::Text));
@@ -31,6 +31,5 @@ fn render_config_to_render_options_conversion() {
 
 #[test]
 fn diagram_layout_config_accessible_from_render() {
-    // DiagramLayoutConfig (from diagram module) should be re-exported from render module
     let _ = DiagramLayoutConfig::default();
 }

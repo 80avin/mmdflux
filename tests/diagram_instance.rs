@@ -1,7 +1,6 @@
 use mmdflux::diagram::{DiagramFamily, OutputFormat, RenderConfig, RenderError};
 use mmdflux::registry::{DiagramDefinition, DiagramInstance, DiagramRegistry};
 
-// Mock implementation for testing
 struct MockDiagram {
     parsed: Option<String>,
 }
@@ -35,20 +34,17 @@ impl DiagramInstance for MockDiagram {
 #[test]
 fn diagram_instance_parse_and_render() {
     let mut diagram = MockDiagram::new();
-
-    // Parse
     diagram.parse("test input").unwrap();
 
-    // Render
-    let config = RenderConfig::default();
-    let output = diagram.render(OutputFormat::Text, &config).unwrap();
+    let output = diagram
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
     assert_eq!(output, "[TEXT] test input");
 }
 
 #[test]
 fn diagram_instance_supports_format() {
     let diagram = MockDiagram::new();
-
     assert!(diagram.supports_format(OutputFormat::Text));
     assert!(diagram.supports_format(OutputFormat::Ascii));
     assert!(!diagram.supports_format(OutputFormat::Svg));
@@ -58,9 +54,7 @@ fn diagram_instance_supports_format() {
 fn diagram_instance_unsupported_format_errors() {
     let mut diagram = MockDiagram::new();
     diagram.parse("test").unwrap();
-
-    let config = RenderConfig::default();
-    let result = diagram.render(OutputFormat::Svg, &config);
+    let result = diagram.render(OutputFormat::Svg, &RenderConfig::default());
     assert!(result.is_err());
 }
 
@@ -76,10 +70,7 @@ fn registry_create_returns_instance() {
         supported_formats: &[OutputFormat::Text, OutputFormat::Ascii],
     });
 
-    // Create instance via registry
     let mut instance = registry.create("mock").expect("should create instance");
-
-    // Parse and render
     instance.parse("hello").unwrap();
     let output = instance
         .render(OutputFormat::Text, &RenderConfig::default())

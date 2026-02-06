@@ -126,7 +126,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let mut rerouted_edges = rerouted_edges;
     rerouted_edges.extend(sg_node_rerouted);
 
-    let override_nodes = build_override_node_map(diagram);
+    let override_nodes = svg_router::build_override_node_map(diagram);
 
     let self_edge_paths = compute_self_edge_paths(diagram, &layout, &metrics);
     let bounds = compute_svg_bounds(diagram, &layout, &metrics, &self_edge_paths);
@@ -219,22 +219,17 @@ fn ensure_subgraph_edge_spacing(diagram: &Diagram, layout: &mut LayoutResult, mi
 
         // external node → subgraph
         if let Some(sg_id) = &edge.to_subgraph
-            && edge.from_subgraph.is_none() {
-                push_node_from_subgraph(
-                    layout,
-                    &edge.from,
-                    sg_id,
-                    diagram.direction,
-                    min_gap,
-                    true,
-                );
-            }
+            && edge.from_subgraph.is_none()
+        {
+            push_node_from_subgraph(layout, &edge.from, sg_id, diagram.direction, min_gap, true);
+        }
 
         // subgraph → external node
         if let Some(sg_id) = &edge.from_subgraph
-            && edge.to_subgraph.is_none() {
-                push_node_from_subgraph(layout, &edge.to, sg_id, diagram.direction, min_gap, false);
-            }
+            && edge.to_subgraph.is_none()
+        {
+            push_node_from_subgraph(layout, &edge.to, sg_id, diagram.direction, min_gap, false);
+        }
 
         // subgraph → subgraph
         if let (Some(from_sg), Some(to_sg)) = (&edge.from_subgraph, &edge.to_subgraph) {
@@ -409,31 +404,6 @@ fn push_subgraph_from_subgraph(
             }
         }
     }
-}
-
-fn build_override_node_map(diagram: &Diagram) -> HashMap<String, String> {
-    let mut override_nodes = HashMap::new();
-    let mut sg_ids: Vec<&String> = diagram
-        .subgraphs
-        .iter()
-        .filter(|(_, sg)| sg.dir.is_some())
-        .map(|(id, _)| id)
-        .collect();
-    sg_ids.sort_by(|a, b| {
-        diagram
-            .subgraph_depth(a)
-            .cmp(&diagram.subgraph_depth(b))
-            .then_with(|| a.cmp(b))
-    });
-    for sg_id in sg_ids {
-        let sg = &diagram.subgraphs[sg_id];
-        for node_id in &sg.nodes {
-            if !diagram.is_subgraph(node_id) {
-                override_nodes.insert(node_id.clone(), sg_id.clone());
-            }
-        }
-    }
-    override_nodes
 }
 
 fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node, direction: Direction) -> (f64, f64) {

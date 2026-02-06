@@ -86,22 +86,10 @@ impl BlockAlignment {
 }
 
 /// Result of horizontal compaction for one alignment.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CompactionResult {
     /// X coordinate for each node.
     pub x: HashMap<NodeIndex, f64>,
-}
-
-impl CompactionResult {
-    pub fn new() -> Self {
-        Self { x: HashMap::new() }
-    }
-}
-
-impl Default for CompactionResult {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 /// The four alignment directions used by Brandes-Köpf.
@@ -300,7 +288,7 @@ pub fn get_successors(graph: &LayoutGraph, node: NodeIndex) -> Vec<NodeIndex> {
 /// - Upward sweep (DL, DR): use successors (lower neighbors)
 ///
 /// Returns neighbors sorted by position in their layer.
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn get_neighbors(graph: &LayoutGraph, node: NodeIndex, downward: bool) -> Vec<NodeIndex> {
     if downward {
         get_predecessors(graph, node)
@@ -311,13 +299,14 @@ pub fn get_neighbors(graph: &LayoutGraph, node: NodeIndex, downward: bool) -> Ve
 
 /// Get the position (order) of a node within its layer.
 #[inline]
+#[cfg(test)]
 pub fn get_position(graph: &LayoutGraph, node: NodeIndex) -> usize {
     graph.order[node]
 }
 
 /// Get the layer (rank) of a node.
 #[inline]
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn get_layer(graph: &LayoutGraph, node: NodeIndex) -> usize {
     graph.ranks[node] as usize
 }
@@ -347,7 +336,7 @@ pub fn get_width(graph: &LayoutGraph, node: NodeIndex, direction: Direction) -> 
 ///
 /// Two segments cross if one starts left and ends right of the other, or vice versa.
 #[inline]
-#[allow(dead_code)]
+#[cfg(test)]
 fn segments_cross(u1: usize, l1: usize, u2: usize, l2: usize) -> bool {
     (u1 < u2 && l1 > l2) || (u1 > u2 && l1 < l2)
 }
@@ -356,7 +345,7 @@ fn segments_cross(u1: usize, l1: usize, u2: usize, l2: usize) -> bool {
 ///
 /// Inner segments are part of long edges that span multiple layers.
 #[inline]
-#[allow(dead_code)]
+#[cfg(test)]
 fn is_inner_segment(graph: &LayoutGraph, from: NodeIndex, to: NodeIndex) -> bool {
     is_dummy_like(graph, from) && is_dummy_like(graph, to)
 }
@@ -364,7 +353,7 @@ fn is_inner_segment(graph: &LayoutGraph, from: NodeIndex, to: NodeIndex) -> bool
 /// Find all inner segments (edges between dummy/border nodes) between two adjacent layers.
 ///
 /// Returns a vector of (upper_position, lower_position) tuples.
-#[allow(dead_code)]
+#[cfg(test)]
 fn find_inner_segments(
     graph: &LayoutGraph,
     upper_layer: usize,
@@ -393,7 +382,7 @@ fn find_inner_segments(
     segments
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn effective_edges_for_position(graph: &LayoutGraph) -> Vec<(usize, usize)> {
     graph
         .edges
@@ -849,7 +838,7 @@ fn horizontal_compaction_with_direction(
     layers: &[Vec<NodeIndex>],
     direction: Option<AlignmentDirection>,
 ) -> CompactionResult {
-    let mut result = CompactionResult::new();
+    let mut result = CompactionResult::default();
     let num_nodes = graph.node_ids.len();
 
     // Build block graph with separation constraints
@@ -2070,19 +2059,19 @@ mod tests {
         // Create mock results with known values
         let mut results: HashMap<AlignmentDirection, CompactionResult> = HashMap::new();
 
-        let mut ul = CompactionResult::new();
+        let mut ul = CompactionResult::default();
         ul.x.insert(0, 10.0);
         results.insert(AlignmentDirection::UL, ul);
 
-        let mut ur = CompactionResult::new();
+        let mut ur = CompactionResult::default();
         ur.x.insert(0, 20.0);
         results.insert(AlignmentDirection::UR, ur);
 
-        let mut dl = CompactionResult::new();
+        let mut dl = CompactionResult::default();
         dl.x.insert(0, 30.0);
         results.insert(AlignmentDirection::DL, dl);
 
-        let mut dr = CompactionResult::new();
+        let mut dr = CompactionResult::default();
         dr.x.insert(0, 40.0);
         results.insert(AlignmentDirection::DR, dr);
 
@@ -2167,7 +2156,7 @@ mod tests {
 
     #[test]
     fn test_find_bounds() {
-        let mut result = CompactionResult::new();
+        let mut result = CompactionResult::default();
         result.x.insert(0, 50.0); // center at 50, width 100 -> bounds [0, 100]
         result.x.insert(1, 200.0); // center at 200, width 100 -> bounds [150, 250]
 

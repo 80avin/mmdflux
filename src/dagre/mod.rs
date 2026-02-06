@@ -60,10 +60,7 @@ pub use types::{
 /// minlens (and later compensates via ranksep scaling). The uniform grid ensures
 /// downstream Sugiyama phases (normalization, ordering, positioning) see consistent
 /// rank spacing, even when no labels are present.
-pub(crate) fn make_space_for_edge_labels(
-    lg: &mut LayoutGraph,
-    _edge_labels: &HashMap<usize, normalize::EdgeLabelInfo>,
-) {
+pub(crate) fn make_space_for_edge_labels(lg: &mut LayoutGraph) {
     for minlen in &mut lg.edge_minlens {
         *minlen *= 2;
     }
@@ -716,7 +713,7 @@ where
     // spans at least 2 ranks, so halved ranksep preserves the user-facing spacing
     // while intermediate (0-height) ranks add only half the gap.
     // Must be before nesting::run so nesting minlen multiplication applies to these too.
-    make_space_for_edge_labels(&mut lg, edge_labels);
+    make_space_for_edge_labels(&mut lg);
     let mut config = config.clone();
     config.rank_sep /= 2.0;
 
@@ -815,9 +812,6 @@ where
             label_positions.insert(chain.edge_index, pos);
         }
     }
-
-    // Build result (width/height set by translate_layout_result below)
-    let reversed_edges = reversed_orig_edges;
 
     // Only include real nodes (not dummies) in the output
     let mut nodes: HashMap<NodeId, Rect> = lg
@@ -946,7 +940,7 @@ where
     // internally, reversed edges are laid out in the flipped direction;
     // this restores original source->target orientation.
     for edge in &mut edges {
-        if reversed_edges.contains(&edge.index) {
+        if reversed_orig_edges.contains(&edge.index) {
             edge.points.reverse();
             if let Some((orig_from, orig_to)) = graph.edges().get(edge.index) {
                 edge.from = orig_from.clone();
@@ -1000,7 +994,7 @@ where
     let mut result = LayoutResult {
         nodes,
         edges,
-        reversed_edges,
+        reversed_edges: reversed_orig_edges,
         width: 0.0,
         height: 0.0,
         edge_waypoints,
@@ -1173,10 +1167,7 @@ mod tests {
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
 
-        let mut edge_labels = HashMap::new();
-        edge_labels.insert(0, normalize::EdgeLabelInfo::new(5.0, 1.0));
-
-        make_space_for_edge_labels(&mut lg, &edge_labels);
+        make_space_for_edge_labels(&mut lg);
 
         // ALL edges should be doubled, not just the labeled one
         assert_eq!(lg.edge_minlens[0], 2); // labeled edge: 1 * 2 = 2
@@ -1191,9 +1182,7 @@ mod tests {
         graph.add_edge("A", "B");
 
         let mut lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
-        let edge_labels = HashMap::new(); // empty
-
-        make_space_for_edge_labels(&mut lg, &edge_labels);
+        make_space_for_edge_labels(&mut lg);
 
         assert_eq!(lg.edge_minlens[0], 2); // doubled even without labels
     }

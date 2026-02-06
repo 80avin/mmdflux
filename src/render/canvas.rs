@@ -56,23 +56,7 @@ impl Cell {
     pub fn empty() -> Self {
         Self {
             ch: ' ',
-            connections: Connections::none(),
-            is_node: false,
-            is_edge: false,
-            is_subgraph_border: false,
-            is_subgraph_title: false,
-        }
-    }
-
-    /// Create a cell with a character.
-    pub fn with_char(ch: char) -> Self {
-        Self {
-            ch,
-            connections: Connections::none(),
-            is_node: false,
-            is_edge: false,
-            is_subgraph_border: false,
-            is_subgraph_title: false,
+            ..Self::default()
         }
     }
 }

@@ -51,9 +51,7 @@ impl Flowchart {
                     result.push(&e.from);
                     result.push(&e.to);
                 }
-                Statement::Subgraph(_) => {
-                    // Subgraph vertices handled in task 1.5
-                }
+                Statement::Subgraph(_) => {}
             }
         }
         result
@@ -167,28 +165,33 @@ fn push_line(result: &mut String, line: &str) {
     result.push_str(line);
 }
 
-fn is_known_passthrough(line: &str) -> bool {
-    let lower = line.to_lowercase();
-    lower.starts_with("style ")
-        || lower.starts_with("classdef ")
-        || lower.starts_with("class ")
-        || lower.starts_with("click ")
-        || lower.starts_with("linkstyle ")
-        || lower.starts_with("direction ")
-        || lower.starts_with("subgraph ")
-        || lower == "subgraph"
-        || lower == "end"
-        || lower.starts_with("end ")
-        || lower.starts_with("end;")
+/// Check if `line` starts with `prefix` using ASCII case-insensitive comparison.
+fn starts_with_ignore_ascii_case(line: &str, prefix: &str) -> bool {
+    line.len() >= prefix.len()
+        && line.as_bytes()[..prefix.len()]
+            .iter()
+            .zip(prefix.as_bytes())
+            .all(|(a, b)| a.eq_ignore_ascii_case(b))
 }
 
-fn is_known_strip(line: &str) -> bool {
-    let lower = line.to_lowercase();
-    lower.starts_with("acctitle") || lower.starts_with("accdescr")
+fn is_known_passthrough(line: &str) -> bool {
+    starts_with_ignore_ascii_case(line, "style ")
+        || starts_with_ignore_ascii_case(line, "classdef ")
+        || starts_with_ignore_ascii_case(line, "class ")
+        || starts_with_ignore_ascii_case(line, "click ")
+        || starts_with_ignore_ascii_case(line, "linkstyle ")
+        || starts_with_ignore_ascii_case(line, "direction ")
+        || starts_with_ignore_ascii_case(line, "subgraph ")
+        || line.eq_ignore_ascii_case("subgraph")
+        || line.eq_ignore_ascii_case("end")
+        || starts_with_ignore_ascii_case(line, "end ")
+        || starts_with_ignore_ascii_case(line, "end;")
 }
 
 fn looks_like_flowchart_statement(line: &str) -> bool {
-    if is_known_strip(line) {
+    if starts_with_ignore_ascii_case(line, "acctitle")
+        || starts_with_ignore_ascii_case(line, "accdescr")
+    {
         return false;
     }
     let first_char = line.chars().next().unwrap_or(' ');
@@ -380,9 +383,7 @@ fn parse_vertex_statement(pair: pest::iterators::Pair<Rule>) -> Vec<Statement> {
 
     if segments.is_empty() {
         // No edges, just standalone node(s)
-        for node in current_nodes {
-            statements.push(Statement::Vertex(node));
-        }
+        statements.extend(current_nodes.into_iter().map(Statement::Vertex));
     } else {
         // Process chain of edges
         let mut source_nodes = current_nodes;
@@ -465,9 +466,7 @@ fn parse_connector(pair: pest::iterators::Pair<Rule>) -> ConnectorSpec {
                 left = l;
                 right = r;
                 length = len;
-                if lbl.is_some() {
-                    label = lbl;
-                }
+                label = lbl.or(label);
                 continue;
             }
             Rule::link_dotted_labeled => {
@@ -480,9 +479,7 @@ fn parse_connector(pair: pest::iterators::Pair<Rule>) -> ConnectorSpec {
                 left = l;
                 right = r;
                 length = len;
-                if lbl.is_some() {
-                    label = lbl;
-                }
+                label = lbl.or(label);
                 continue;
             }
             Rule::link_thick_labeled => {
@@ -495,9 +492,7 @@ fn parse_connector(pair: pest::iterators::Pair<Rule>) -> ConnectorSpec {
                 left = l;
                 right = r;
                 length = len;
-                if lbl.is_some() {
-                    label = lbl;
-                }
+                label = lbl.or(label);
                 continue;
             }
             Rule::edge_label => {

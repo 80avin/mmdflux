@@ -89,33 +89,22 @@ fn resolve_subgraph_edges(diagram: &mut Diagram) {
     let mut resolved_edges = Vec::new();
 
     for edge in &diagram.edges {
-        let from_subgraph = if diagram.is_subgraph(&edge.from) {
-            Some(edge.from.clone())
-        } else {
-            None
-        };
-        let to_subgraph = if diagram.is_subgraph(&edge.to) {
-            Some(edge.to.clone())
-        } else {
-            None
-        };
-
-        let from = if diagram.is_subgraph(&edge.from) {
+        let (from, from_subgraph) = if diagram.is_subgraph(&edge.from) {
             match find_subgraph_sink(diagram, &edge.from) {
-                Some(child) => child,
+                Some(child) => (child, Some(edge.from.clone())),
                 None => continue,
             }
         } else {
-            edge.from.clone()
+            (edge.from.clone(), None)
         };
 
-        let to = if diagram.is_subgraph(&edge.to) {
+        let (to, to_subgraph) = if diagram.is_subgraph(&edge.to) {
             match find_non_cluster_child(diagram, &edge.to) {
-                Some(child) => child,
+                Some(child) => (child, Some(edge.to.clone())),
                 None => continue,
             }
         } else {
-            edge.to.clone()
+            (edge.to.clone(), None)
         };
 
         resolved_edges.push(Edge {
@@ -184,16 +173,37 @@ fn find_subgraph_sink(diagram: &Diagram, subgraph_id: &str) -> Option<String> {
 }
 
 fn collect_node_ids(statements: &[Statement]) -> Vec<String> {
+    let mut result = Vec::new();
     let mut seen = HashSet::new();
-    statements
-        .iter()
-        .flat_map(|stmt| match stmt {
-            Statement::Vertex(v) => vec![v.id.clone()],
-            Statement::Edge(e) => vec![e.from.id.clone(), e.to.id.clone()],
-            Statement::Subgraph(sg) => collect_node_ids(&sg.statements),
-        })
-        .filter(|id| seen.insert(id.clone()))
-        .collect()
+    collect_node_ids_inner(statements, &mut result, &mut seen);
+    result
+}
+
+fn collect_node_ids_inner(
+    statements: &[Statement],
+    result: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+) {
+    for stmt in statements {
+        match stmt {
+            Statement::Vertex(v) => {
+                if seen.insert(v.id.clone()) {
+                    result.push(v.id.clone());
+                }
+            }
+            Statement::Edge(e) => {
+                if seen.insert(e.from.id.clone()) {
+                    result.push(e.from.id.clone());
+                }
+                if seen.insert(e.to.id.clone()) {
+                    result.push(e.to.id.clone());
+                }
+            }
+            Statement::Subgraph(sg) => {
+                collect_node_ids_inner(&sg.statements, result, seen);
+            }
+        }
+    }
 }
 
 fn convert_vertex(vertex: &Vertex) -> Node {
@@ -262,15 +272,11 @@ fn convert_edge(edge_spec: &EdgeSpec) -> Edge {
         (edge_spec.from.id.clone(), edge_spec.to.id.clone())
     };
 
-    let edge = Edge::new(from, to)
+    let mut edge = Edge::new(from, to)
         .with_stroke(stroke)
         .with_arrows(arrow_start, arrow_end);
-
-    if let Some(lbl) = label {
-        edge.with_label(lbl)
-    } else {
-        edge
-    }
+    edge.label = label;
+    edge
 }
 
 fn convert_connector(connector: &ConnectorSpec) -> (Stroke, Arrow, Arrow, Option<String>) {

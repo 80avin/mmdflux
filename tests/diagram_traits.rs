@@ -13,7 +13,6 @@ fn output_format_default_is_text() {
     assert_eq!(OutputFormat::default(), OutputFormat::Text);
 }
 
-// Compile-time verification that traits exist with expected associated types
 struct DummyModel;
 impl DiagramModel for DummyModel {
     fn clear(&mut self) {}

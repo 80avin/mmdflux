@@ -274,7 +274,7 @@ pub fn reroute_override_edges(
     }
 
     // Build override node map: node_id -> subgraph_id (deepest wins)
-    let override_nodes = build_override_node_map_internal(diagram);
+    let override_nodes = build_override_node_map(diagram);
 
     let mut stats = RerouteStats::default();
     let mut rerouted_indices = HashSet::new();
@@ -477,7 +477,7 @@ pub fn ensure_cross_boundary_edge_spacing(
         return;
     }
 
-    let override_nodes = build_override_node_map_internal(diagram);
+    let override_nodes = build_override_node_map(diagram);
 
     for edge in &diagram.edges {
         if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
@@ -696,7 +696,7 @@ fn get_rect<'a>(layout: &'a LayoutResult, id: &str) -> Option<&'a Rect> {
 /// Build the override node map: node_id -> subgraph_id.
 ///
 /// Processes subgraphs in depth order so the deepest override wins.
-fn build_override_node_map_internal(diagram: &Diagram) -> HashMap<String, String> {
+pub(super) fn build_override_node_map(diagram: &Diagram) -> HashMap<String, String> {
     let mut override_nodes = HashMap::new();
     let mut sg_ids: Vec<&String> = diagram
         .subgraphs

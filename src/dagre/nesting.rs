@@ -68,16 +68,12 @@ pub fn run(lg: &mut LayoutGraph) {
         let top_id = NodeId(format!("_bt_{}", compound_id));
         let top_idx = lg.add_nesting_node(top_id);
         lg.border_top.insert(compound_idx, top_idx);
-        if top_idx < lg.parents.len() {
-            lg.parents[top_idx] = Some(compound_idx);
-        }
+        lg.parents[top_idx] = Some(compound_idx);
 
         let bot_id = NodeId(format!("_bb_{}", compound_id));
         let bot_idx = lg.add_nesting_node(bot_id);
         lg.border_bottom.insert(compound_idx, bot_idx);
-        if bot_idx < lg.parents.len() {
-            lg.parents[bot_idx] = Some(compound_idx);
-        }
+        lg.parents[bot_idx] = Some(compound_idx);
     }
 
     // For each compound node, add nesting edges using child border nodes when available
@@ -189,10 +185,9 @@ pub fn insert_title_nodes(lg: &mut LayoutGraph) {
 
         // Add edge title → border_top so the title participates in
         // ordering and positioning (without an edge it would float freely)
-        let edge_idx = lg.add_nesting_edge(title_idx, bt_idx, 0.0);
-        // Don't mark as nesting edge — it should survive cleanup and be
+        // Don't mark as nesting edge -- it should survive cleanup and be
         // visible to normalization, ordering, and positioning
-        let _ = edge_idx;
+        lg.add_nesting_edge(title_idx, bt_idx, 0.0);
     }
 }
 

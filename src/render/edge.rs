@@ -561,26 +561,8 @@ fn select_label_segment_horizontal(segments: &[Segment]) -> Option<&Segment> {
     }
 }
 
-/// Calculate the length of a segment.
-#[cfg(test)]
-fn segment_length(segment: &Segment) -> usize {
-    match segment {
-        Segment::Vertical { y_start, y_end, .. } => y_start.abs_diff(*y_end),
-        Segment::Horizontal { x_start, x_end, .. } => x_start.abs_diff(*x_end),
-    }
-}
-
-/// Calculate the midpoint of a segment.
-#[cfg(test)]
-fn segment_midpoint(segment: &Segment) -> (usize, usize) {
-    match segment {
-        Segment::Vertical { x, y_start, y_end } => (*x, (*y_start + *y_end) / 2),
-        Segment::Horizontal { y, x_start, x_end } => ((*x_start + *x_end) / 2, *y),
-    }
-}
-
 /// Draw a single segment on the canvas, honoring stroke style.
-fn draw_segment(canvas: &mut Canvas, segment: &Segment, _stroke: Stroke, charset: &CharSet) {
+fn draw_segment(canvas: &mut Canvas, segment: &Segment, stroke: Stroke, charset: &CharSet) {
     match segment {
         Segment::Vertical { x, y_start, y_end } => {
             let (y_min, y_max) = if y_start < y_end {
@@ -596,7 +578,7 @@ fn draw_segment(canvas: &mut Canvas, segment: &Segment, _stroke: Stroke, charset
                     left: false,
                     right: false,
                 };
-                canvas.set_with_connection(*x, y, connections, charset, _stroke);
+                canvas.set_with_connection(*x, y, connections, charset, stroke);
             }
         }
         Segment::Horizontal { y, x_start, x_end } => {
@@ -613,7 +595,7 @@ fn draw_segment(canvas: &mut Canvas, segment: &Segment, _stroke: Stroke, charset
                     left: x > x_min,
                     right: x < x_max,
                 };
-                canvas.set_with_connection(x, *y, connections, charset, _stroke);
+                canvas.set_with_connection(x, *y, connections, charset, stroke);
             }
         }
     }
@@ -1169,31 +1151,14 @@ mod tests {
             y_start: 10,
             y_end: 20,
         };
-        assert_eq!(segment_length(&vertical), 10);
+        assert_eq!(vertical.length(), 10);
 
         let horizontal = Segment::Horizontal {
             y: 5,
             x_start: 20,
             x_end: 10,
         };
-        assert_eq!(segment_length(&horizontal), 10);
-    }
-
-    #[test]
-    fn test_segment_midpoint() {
-        let vertical = Segment::Vertical {
-            x: 5,
-            y_start: 10,
-            y_end: 20,
-        };
-        assert_eq!(segment_midpoint(&vertical), (5, 15));
-
-        let horizontal = Segment::Horizontal {
-            y: 5,
-            x_start: 10,
-            x_end: 20,
-        };
-        assert_eq!(segment_midpoint(&horizontal), (15, 5));
+        assert_eq!(horizontal.length(), 10);
     }
 
     #[test]

@@ -2,7 +2,6 @@ use mmdflux::diagram::{OutputFormat, RenderConfig};
 use mmdflux::diagrams::{info, packet, pie};
 use mmdflux::registry::DiagramInstance;
 
-// Pie tests
 #[test]
 fn pie_definition_exists() {
     let def = pie::definition();
@@ -29,7 +28,6 @@ fn pie_detector_case_insensitive() {
 
 #[test]
 fn pie_detector_first_word_only() {
-    // "piechart" should NOT match "pie" - must be exact first word
     assert!(!pie::detect("piechart\n\"A\": 50"));
 }
 
@@ -37,15 +35,12 @@ fn pie_detector_first_word_only() {
 fn pie_instance_renders() {
     let mut instance = pie::PieInstance::new();
     instance.parse("pie\n\"A\": 50\n\"B\": 50").unwrap();
-
-    let config = RenderConfig::default();
-    let output = instance.render(OutputFormat::Text, &config).unwrap();
-
-    // Pie currently renders as simple text
+    let output = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
     assert!(!output.is_empty());
 }
 
-// Info tests
 #[test]
 fn info_definition_exists() {
     let def = info::definition();
@@ -71,7 +66,6 @@ fn info_detector_case_insensitive() {
 
 #[test]
 fn info_detector_first_word_only() {
-    // "infographic" should NOT match "info"
     assert!(!info::detect("infographic"));
 }
 
@@ -79,15 +73,12 @@ fn info_detector_first_word_only() {
 fn info_instance_renders() {
     let mut instance = info::InfoInstance::new();
     instance.parse("info").unwrap();
-
-    let config = RenderConfig::default();
-    let output = instance.render(OutputFormat::Text, &config).unwrap();
-
-    // Info renders mmdflux version info
+    let output = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
     assert!(output.contains("mmdflux"));
 }
 
-// Packet tests
 #[test]
 fn packet_definition_exists() {
     let def = packet::definition();
@@ -96,7 +87,6 @@ fn packet_definition_exists() {
 
 #[test]
 fn packet_detector_works() {
-    // Both "packet" and "packet-beta" should be detected
     assert!(packet::detect("packet-beta"));
     assert!(packet::detect("packet"));
     assert!(!packet::detect("graph TD"));
@@ -119,14 +109,12 @@ fn packet_detector_case_insensitive() {
 fn packet_instance_renders() {
     let mut instance = packet::PacketInstance::new();
     instance.parse("packet-beta\n0-15: \"Header\"").unwrap();
-
-    let config = RenderConfig::default();
-    let output = instance.render(OutputFormat::Text, &config).unwrap();
-
+    let output = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
     assert!(!output.is_empty());
 }
 
-// SVG not supported for simple diagrams
 #[test]
 fn simple_diagrams_dont_support_svg() {
     let pie_inst = pie::PieInstance::new();
