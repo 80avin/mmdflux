@@ -180,8 +180,6 @@ fn convert_connector(connector: &ConnectorSpec) -> (Stroke, Arrow, Arrow, Option
         StrokeSpec::Invisible => Stroke::Invisible,
     };
 
-    // Map arrow heads to the graph-layer Arrow type.
-    // Cross and Circle are not yet rendered differently, so map to Normal.
     let arrow_start = map_arrow_head(connector.left);
     let arrow_end = map_arrow_head(connector.right);
 
@@ -191,7 +189,9 @@ fn convert_connector(connector: &ConnectorSpec) -> (Stroke, Arrow, Arrow, Option
 fn map_arrow_head(head: ArrowHead) -> Arrow {
     match head {
         ArrowHead::None => Arrow::None,
-        ArrowHead::Normal | ArrowHead::Cross | ArrowHead::Circle => Arrow::Normal,
+        ArrowHead::Normal => Arrow::Normal,
+        ArrowHead::Cross => Arrow::Cross,
+        ArrowHead::Circle => Arrow::Circle,
     }
 }
 
@@ -360,6 +360,43 @@ mod tests {
         assert_eq!(diagram.edges[0].stroke, Stroke::Invisible);
         assert_eq!(diagram.edges[0].arrow_start, Arrow::None);
         assert_eq!(diagram.edges[0].arrow_end, Arrow::None);
+    }
+
+    #[test]
+    fn test_cross_arrow_preserved() {
+        let fc = parse_flowchart("graph TD\nA --x B\n").unwrap();
+        let diagram = build_diagram(&fc);
+        assert_eq!(diagram.edges[0].arrow_end, Arrow::Cross);
+    }
+
+    #[test]
+    fn test_circle_arrow_preserved() {
+        let fc = parse_flowchart("graph TD\nA --o B\n").unwrap();
+        let diagram = build_diagram(&fc);
+        assert_eq!(diagram.edges[0].arrow_end, Arrow::Circle);
+    }
+
+    #[test]
+    fn test_bidirectional_cross_arrows() {
+        let fc = parse_flowchart("graph TD\nA x--x B\n").unwrap();
+        let diagram = build_diagram(&fc);
+        assert_eq!(diagram.edges[0].arrow_start, Arrow::Cross);
+        assert_eq!(diagram.edges[0].arrow_end, Arrow::Cross);
+    }
+
+    #[test]
+    fn test_build_diagram_multi_edges() {
+        let flowchart = parse_flowchart("graph TD\nA -->|first| B\nA -->|second| B\n").unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert_eq!(diagram.nodes.len(), 2);
+        assert_eq!(
+            diagram.edges.len(),
+            2,
+            "Both edges between A and B preserved"
+        );
+        assert_eq!(diagram.edges[0].label, Some("first".to_string()));
+        assert_eq!(diagram.edges[1].label, Some("second".to_string()));
     }
 
     #[test]

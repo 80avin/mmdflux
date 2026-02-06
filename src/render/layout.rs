@@ -10,7 +10,7 @@ use super::shape::{NodeBounds, node_dimensions};
 use crate::dagre::Point;
 use crate::dagre::normalize::WaypointWithRank;
 use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Rect};
-use crate::graph::{Diagram, Direction, Edge, Node, Shape};
+use crate::graph::{Diagram, Direction, Edge, Node, Shape, Stroke};
 
 /// Bounding box for a subgraph border in draw coordinates.
 #[derive(Debug, Clone)]
@@ -97,14 +97,14 @@ pub struct Layout {
 
     // --- Edge routing data from normalization ---
     /// Waypoints for each edge, derived from dummy node positions.
-    /// Key: (from_id, to_id), Value: list of waypoint coordinates.
+    /// Key: edge index in `Diagram::edges`, Value: list of waypoint coordinates.
     /// Empty for short edges (span 1 rank), populated for long edges.
-    pub edge_waypoints: HashMap<(String, String), Vec<(usize, usize)>>,
+    pub edge_waypoints: HashMap<usize, Vec<(usize, usize)>>,
 
     /// Pre-computed label positions for edges with labels.
-    /// Key: (from_id, to_id), Value: (x, y) position for the label center.
+    /// Key: edge index in `Diagram::edges`, Value: (x, y) position for the label center.
     /// Only populated for edges that have labels.
-    pub edge_label_positions: HashMap<(String, String), (usize, usize)>,
+    pub edge_label_positions: HashMap<usize, (usize, usize)>,
 
     /// Node shapes for intersection calculation.
     /// Maps node ID to its shape for computing dynamic attachment points.
@@ -274,7 +274,12 @@ where
 
     let mut edge_labels: HashMap<usize, dagre::normalize::EdgeLabelInfo> = HashMap::new();
     for (edge_idx, edge) in diagram.edges.iter().enumerate() {
-        dgraph.add_edge(edge.from.as_str(), edge.to.as_str());
+        let weight = if edge.stroke == Stroke::Invisible {
+            0.0
+        } else {
+            1.0
+        };
+        dgraph.add_edge_full(edge.from.as_str(), edge.to.as_str(), weight, edge.minlen);
         if let Some((label_width, label_height)) = edge_label_dims(edge) {
             edge_labels.insert(
                 edge_idx,
@@ -699,8 +704,10 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     );
 
     if std::env::var("MMDFLUX_DEBUG_WAYPOINTS").is_ok_and(|v| v == "1") {
-        for (key, waypoints) in &edge_waypoints_converted {
-            eprintln!("[waypoints] {} -> {}: {:?}", key.0, key.1, waypoints);
+        for (edge_idx, waypoints) in &edge_waypoints_converted {
+            if let Some(edge) = diagram.edges.get(*edge_idx) {
+                eprintln!("[waypoints] {} -> {}: {:?}", edge.from, edge.to, waypoints);
+            }
         }
     }
 
@@ -723,15 +730,14 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     const BACKWARD_WAYPOINT_STRIP_THRESHOLD: usize = 6;
     if ranks_doubled_for_layers && is_vertical {
         for edge in &diagram.edges {
-            let key = (edge.from.clone(), edge.to.clone());
             if let (Some(from_b), Some(to_b)) =
                 (node_bounds.get(&edge.from), node_bounds.get(&edge.to))
                 && crate::render::router::is_backward_edge(from_b, to_b, diagram.direction)
                 && edge_waypoints_final
-                    .get(&key)
+                    .get(&edge.index)
                     .is_some_and(|wps| wps.len() >= BACKWARD_WAYPOINT_STRIP_THRESHOLD)
             {
-                edge_waypoints_final.remove(&key);
+                edge_waypoints_final.remove(&edge.index);
             }
         }
     }
@@ -1658,7 +1664,7 @@ fn expand_parent_subgraph_bounds(
 /// cross-axis (X for vertical layouts, Y for horizontal). The waypoint is then
 /// clamped to stay within canvas bounds.
 fn nudge_colliding_waypoints(
-    edge_waypoints: &mut HashMap<(String, String), Vec<(usize, usize)>>,
+    edge_waypoints: &mut HashMap<usize, Vec<(usize, usize)>>,
     node_bounds: &HashMap<String, NodeBounds>,
     is_vertical: bool,
     canvas_width: usize,
@@ -1738,13 +1744,11 @@ fn transform_waypoints_direct(
     is_vertical: bool,
     canvas_width: usize,
     canvas_height: usize,
-) -> HashMap<(String, String), Vec<(usize, usize)>> {
+) -> HashMap<usize, Vec<(usize, usize)>> {
     let mut converted = HashMap::new();
 
     for (edge_idx, waypoints) in edge_waypoints {
-        if let Some(edge) = edges.get(*edge_idx) {
-            let key = (edge.from.clone(), edge.to.clone());
-
+        if edges.get(*edge_idx).is_some() {
             let wps: Vec<(usize, usize)> = waypoints
                 .iter()
                 .map(|wp| {
@@ -1760,7 +1764,7 @@ fn transform_waypoints_direct(
                 })
                 .collect();
 
-            converted.insert(key, wps);
+            converted.insert(*edge_idx, wps);
         }
     }
 
@@ -1780,12 +1784,11 @@ fn transform_label_positions_direct(
     is_vertical: bool,
     canvas_width: usize,
     canvas_height: usize,
-) -> HashMap<(String, String), (usize, usize)> {
+) -> HashMap<usize, (usize, usize)> {
     let mut converted = HashMap::new();
 
     for (edge_idx, wp) in label_positions {
-        if let Some(edge) = edges.get(*edge_idx) {
-            let key = (edge.from.clone(), edge.to.clone());
+        if edges.get(*edge_idx).is_some() {
             let rank_idx = wp.rank as usize;
             let layer_pos = layer_starts.get(rank_idx).copied().unwrap_or(0);
             let (scaled_x, scaled_y) = ctx.to_ascii(wp.point.x, wp.point.y);
@@ -1795,7 +1798,7 @@ fn transform_label_positions_direct(
             } else {
                 (layer_pos, scaled_y.min(canvas_height.saturating_sub(1)))
             };
-            converted.insert(key, pos);
+            converted.insert(*edge_idx, pos);
         }
     }
 
@@ -2045,6 +2048,8 @@ mod tests {
             stroke: Stroke::Solid,
             arrow_start: Arrow::None,
             arrow_end: Arrow::Normal,
+            minlen: 1,
+            index: 0,
         }];
 
         let mut waypoints = HashMap::new();
@@ -2070,9 +2075,11 @@ mod tests {
         let result =
             transform_waypoints_direct(&waypoints, &edges, &ctx, &layer_starts, true, 80, 20);
 
-        let key = ("A".to_string(), "C".to_string());
-        assert!(result.contains_key(&key), "should have waypoints for A→C");
-        let wps = &result[&key];
+        assert!(
+            result.contains_key(&0),
+            "should have waypoints for edge 0 (A→C)"
+        );
+        let wps = &result[&0];
         assert_eq!(wps.len(), 1);
         assert_eq!(wps[0].1, 5, "y should be layer_starts[1]");
         assert_eq!(wps[0].0, 12, "x should be scaled dagre x + padding");
@@ -2088,6 +2095,8 @@ mod tests {
             stroke: Stroke::Solid,
             arrow_start: Arrow::None,
             arrow_end: Arrow::Normal,
+            minlen: 1,
+            index: 0,
         }];
 
         let mut waypoints = HashMap::new();
@@ -2113,8 +2122,7 @@ mod tests {
         let result =
             transform_waypoints_direct(&waypoints, &edges, &ctx, &layer_starts, false, 40, 80);
 
-        let key = ("A".to_string(), "C".to_string());
-        let wps = &result[&key];
+        let wps = &result[&0];
         assert_eq!(wps[0].0, 8, "x should be layer_starts[1]");
         assert_eq!(wps[0].1, 35, "y should be scaled dagre y + padding");
     }
@@ -2129,6 +2137,8 @@ mod tests {
             stroke: Stroke::Solid,
             arrow_start: Arrow::None,
             arrow_end: Arrow::Normal,
+            minlen: 1,
+            index: 0,
         }];
 
         let mut waypoints = HashMap::new();
@@ -2154,8 +2164,7 @@ mod tests {
         let result =
             transform_waypoints_direct(&waypoints, &edges, &ctx, &layer_starts, true, 30, 20);
 
-        let key = ("A".to_string(), "B".to_string());
-        let wps = &result[&key];
+        let wps = &result[&0];
         assert!(wps[0].0 <= 29, "x clamped to canvas_width - 1");
     }
 
@@ -2191,6 +2200,8 @@ mod tests {
             stroke: Stroke::Solid,
             arrow_start: Arrow::None,
             arrow_end: Arrow::Normal,
+            minlen: 1,
+            index: 0,
         }];
 
         let mut labels = HashMap::new();
@@ -2217,11 +2228,10 @@ mod tests {
         let result =
             transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
 
-        let key = ("A".to_string(), "B".to_string());
-        assert!(result.contains_key(&key));
+        assert!(result.contains_key(&0));
         // x uses uniform scale: (150-50)*0.22 + 1 = 23
         // y = layer_starts[rank=1] = 8
-        assert_eq!(result[&key], (23, 8));
+        assert_eq!(result[&0], (23, 8));
     }
 
     #[test]
@@ -2234,6 +2244,8 @@ mod tests {
             stroke: Stroke::Solid,
             arrow_start: Arrow::None,
             arrow_end: Arrow::Normal,
+            minlen: 1,
+            index: 0,
         }];
 
         let mut labels = HashMap::new();
@@ -2259,9 +2271,8 @@ mod tests {
         let result =
             transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
 
-        let key = ("A".to_string(), "B".to_string());
         // x = 23 + 3 (left_label_margin) = 26
-        assert_eq!(result[&key].0, 26);
+        assert_eq!(result[&0].0, 26);
     }
 
     #[test]
@@ -2405,15 +2416,20 @@ mod tests {
         let diagram = build_diagram(&flowchart);
         let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
 
-        // Label position should exist
-        let key = ("A".to_string(), "B".to_string());
+        // Label position should exist — edge A→B is at index 0
+        let edge_idx = diagram
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "B")
+            .unwrap()
+            .index;
         assert!(
-            layout.edge_label_positions.contains_key(&key),
+            layout.edge_label_positions.contains_key(&edge_idx),
             "Should have precomputed label position for A->B, got keys: {:?}",
             layout.edge_label_positions.keys().collect::<Vec<_>>()
         );
 
-        let (lx, ly) = layout.edge_label_positions[&key];
+        let (lx, ly) = layout.edge_label_positions[&edge_idx];
         // Should be within canvas bounds
         assert!(
             lx < layout.width && ly < layout.height,
@@ -2435,6 +2451,8 @@ mod tests {
             stroke: Stroke::Solid,
             arrow_start: Arrow::None,
             arrow_end: Arrow::Normal,
+            minlen: 1,
+            index: 0,
         }];
 
         let mut labels = HashMap::new();

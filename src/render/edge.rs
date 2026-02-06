@@ -67,13 +67,25 @@ pub fn render_edge(
 
     // Draw arrow at the end point using entry direction
     if routed.edge.arrow_end != Arrow::None {
-        draw_arrow_with_entry(canvas, &routed.end, routed.entry_direction, charset);
+        draw_arrow_with_entry(
+            canvas,
+            &routed.end,
+            routed.entry_direction,
+            charset,
+            routed.edge.arrow_end,
+        );
     }
 
     // Draw arrow at the start point using exit direction (if not a self-edge)
     if routed.edge.arrow_start != Arrow::None && !routed.is_self_edge {
         let exit_direction = exit_direction_from_segments(&routed.segments);
-        draw_arrow_with_entry(canvas, &routed.start, exit_direction, charset);
+        draw_arrow_with_entry(
+            canvas,
+            &routed.start,
+            exit_direction,
+            charset,
+            routed.edge.arrow_start,
+        );
     }
 
     // Draw label if present
@@ -615,6 +627,7 @@ fn draw_arrow_with_entry(
     point: &Point,
     entry_direction: AttachDirection,
     charset: &CharSet,
+    arrow_type: Arrow,
 ) {
     // Protect node content from being overwritten by arrows
     if canvas
@@ -624,14 +637,21 @@ fn draw_arrow_with_entry(
         return;
     }
 
-    // Arrow points in the direction the edge enters FROM
-    // Entry from Top means edge is going down, so arrow points down
-    // Entry from Right means edge is going left, so arrow points left
-    let arrow_char = match entry_direction {
-        AttachDirection::Top => charset.arrow_down,
-        AttachDirection::Bottom => charset.arrow_up,
-        AttachDirection::Left => charset.arrow_right,
-        AttachDirection::Right => charset.arrow_left,
+    // Select arrow character based on type and direction
+    let arrow_char = match (arrow_type, entry_direction) {
+        (Arrow::Normal, AttachDirection::Top) => charset.arrow_down,
+        (Arrow::Normal, AttachDirection::Bottom) => charset.arrow_up,
+        (Arrow::Normal, AttachDirection::Left) => charset.arrow_right,
+        (Arrow::Normal, AttachDirection::Right) => charset.arrow_left,
+        (Arrow::Cross, AttachDirection::Top) => charset.arrow_cross_down,
+        (Arrow::Cross, AttachDirection::Bottom) => charset.arrow_cross_up,
+        (Arrow::Cross, AttachDirection::Left) => charset.arrow_cross_right,
+        (Arrow::Cross, AttachDirection::Right) => charset.arrow_cross_left,
+        (Arrow::Circle, AttachDirection::Top) => charset.arrow_circle_down,
+        (Arrow::Circle, AttachDirection::Bottom) => charset.arrow_circle_up,
+        (Arrow::Circle, AttachDirection::Left) => charset.arrow_circle_right,
+        (Arrow::Circle, AttachDirection::Right) => charset.arrow_circle_left,
+        (Arrow::None, _) => return,
     };
 
     // If the arrow position is a subgraph title or border cell, nudge it one cell inward
@@ -725,7 +745,7 @@ pub fn render_all_edges_with_labels(
     routed_edges: &[RoutedEdge],
     charset: &CharSet,
     diagram_direction: Direction,
-    label_positions: &HashMap<(String, String), (usize, usize)>,
+    label_positions: &HashMap<usize, (usize, usize)>,
 ) {
     // First pass: draw all segments and arrows
     for routed in routed_edges {
@@ -736,11 +756,23 @@ pub fn render_all_edges_with_labels(
             draw_segment(canvas, segment, routed.edge.stroke, charset);
         }
         if routed.edge.arrow_end != Arrow::None {
-            draw_arrow_with_entry(canvas, &routed.end, routed.entry_direction, charset);
+            draw_arrow_with_entry(
+                canvas,
+                &routed.end,
+                routed.entry_direction,
+                charset,
+                routed.edge.arrow_end,
+            );
         }
         if routed.edge.arrow_start != Arrow::None && !routed.is_self_edge {
             let exit_direction = exit_direction_from_segments(&routed.segments);
-            draw_arrow_with_entry(canvas, &routed.start, exit_direction, charset);
+            draw_arrow_with_entry(
+                canvas,
+                &routed.start,
+                exit_direction,
+                charset,
+                routed.edge.arrow_start,
+            );
         }
     }
 
@@ -750,16 +782,17 @@ pub fn render_all_edges_with_labels(
     for routed in routed_edges {
         if let Some(label) = &routed.edge.label {
             // Check for pre-computed label position from normalization
-            let edge_key = (routed.edge.from.clone(), routed.edge.to.clone());
             let label_len = label.chars().count();
 
             // Use precomputed position if available and within canvas bounds,
             // otherwise fall back to heuristic placement.
-            let precomputed = label_positions.get(&edge_key).filter(|&&(px, py)| {
-                px < canvas.width()
-                    && py < canvas.height()
-                    && px.saturating_add(label_len) <= canvas.width()
-            });
+            let precomputed = label_positions
+                .get(&routed.edge.index)
+                .filter(|&&(px, py)| {
+                    px < canvas.width()
+                        && py < canvas.height()
+                        && px.saturating_add(label_len) <= canvas.width()
+                });
 
             let placed = if routed.is_self_edge || routed.is_backward {
                 // For backward edges, compute label position from actual routed path
@@ -1111,9 +1144,14 @@ mod tests {
         let layout = compute_layout_direct(&diagram, &config);
 
         // The A->B edge should have waypoints from the label dummy
-        let edge_key = ("A".to_string(), "B".to_string());
+        let ab_edge_idx = diagram
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "B")
+            .expect("Should have an A→B edge")
+            .index;
         assert!(
-            layout.edge_waypoints.contains_key(&edge_key),
+            layout.edge_waypoints.contains_key(&ab_edge_idx),
             "Labeled short edge should have waypoints from label dummy"
         );
     }
@@ -1350,7 +1388,13 @@ mod tests {
 
         // Try to draw an arrow at the same position
         let point = Point { x: 5, y: 5 };
-        draw_arrow_with_entry(&mut canvas, &point, AttachDirection::Top, &charset);
+        draw_arrow_with_entry(
+            &mut canvas,
+            &point,
+            AttachDirection::Top,
+            &charset,
+            Arrow::Normal,
+        );
 
         // The cell should still contain 'X', not an arrow
         let cell = canvas.get(5, 5).unwrap();
@@ -1365,13 +1409,177 @@ mod tests {
 
         // Draw an arrow on an empty cell (no node)
         let point = Point { x: 5, y: 5 };
-        draw_arrow_with_entry(&mut canvas, &point, AttachDirection::Top, &charset);
+        draw_arrow_with_entry(
+            &mut canvas,
+            &point,
+            AttachDirection::Top,
+            &charset,
+            Arrow::Normal,
+        );
 
         // Should succeed — arrow should be drawn
         let cell = canvas.get(5, 5).unwrap();
         assert_eq!(
             cell.ch, charset.arrow_down,
             "Arrow should be drawn on empty cell"
+        );
+    }
+
+    #[test]
+    fn test_cross_arrow_renders_x_character() {
+        let charset = CharSet::unicode();
+        let mut canvas = Canvas::new(10, 10);
+        let point = Point { x: 5, y: 5 };
+        draw_arrow_with_entry(
+            &mut canvas,
+            &point,
+            AttachDirection::Top,
+            &charset,
+            Arrow::Cross,
+        );
+        let cell = canvas.get(5, 5).unwrap();
+        assert_eq!(cell.ch, 'x', "Cross arrow should render as 'x'");
+    }
+
+    #[test]
+    fn test_circle_arrow_renders_o_character() {
+        let charset = CharSet::unicode();
+        let mut canvas = Canvas::new(10, 10);
+        let point = Point { x: 5, y: 5 };
+        draw_arrow_with_entry(
+            &mut canvas,
+            &point,
+            AttachDirection::Top,
+            &charset,
+            Arrow::Circle,
+        );
+        let cell = canvas.get(5, 5).unwrap();
+        assert_eq!(cell.ch, 'o', "Circle arrow should render as 'o'");
+    }
+
+    #[test]
+    fn test_cross_arrow_all_directions() {
+        let charset = CharSet::unicode();
+
+        let mut canvas = Canvas::new(10, 10);
+        draw_arrow_with_entry(
+            &mut canvas,
+            &Point::new(5, 5),
+            AttachDirection::Top,
+            &charset,
+            Arrow::Cross,
+        );
+        assert_eq!(canvas.get(5, 5).unwrap().ch, charset.arrow_cross_down);
+
+        let mut canvas = Canvas::new(10, 10);
+        draw_arrow_with_entry(
+            &mut canvas,
+            &Point::new(5, 5),
+            AttachDirection::Bottom,
+            &charset,
+            Arrow::Cross,
+        );
+        assert_eq!(canvas.get(5, 5).unwrap().ch, charset.arrow_cross_up);
+
+        let mut canvas = Canvas::new(10, 10);
+        draw_arrow_with_entry(
+            &mut canvas,
+            &Point::new(5, 5),
+            AttachDirection::Left,
+            &charset,
+            Arrow::Cross,
+        );
+        assert_eq!(canvas.get(5, 5).unwrap().ch, charset.arrow_cross_right);
+
+        let mut canvas = Canvas::new(10, 10);
+        draw_arrow_with_entry(
+            &mut canvas,
+            &Point::new(5, 5),
+            AttachDirection::Right,
+            &charset,
+            Arrow::Cross,
+        );
+        assert_eq!(canvas.get(5, 5).unwrap().ch, charset.arrow_cross_left);
+    }
+
+    #[test]
+    fn test_circle_arrow_all_directions() {
+        let charset = CharSet::unicode();
+
+        let mut canvas = Canvas::new(10, 10);
+        draw_arrow_with_entry(
+            &mut canvas,
+            &Point::new(5, 5),
+            AttachDirection::Top,
+            &charset,
+            Arrow::Circle,
+        );
+        assert_eq!(canvas.get(5, 5).unwrap().ch, charset.arrow_circle_down);
+
+        let mut canvas = Canvas::new(10, 10);
+        draw_arrow_with_entry(
+            &mut canvas,
+            &Point::new(5, 5),
+            AttachDirection::Bottom,
+            &charset,
+            Arrow::Circle,
+        );
+        assert_eq!(canvas.get(5, 5).unwrap().ch, charset.arrow_circle_up);
+
+        let mut canvas = Canvas::new(10, 10);
+        draw_arrow_with_entry(
+            &mut canvas,
+            &Point::new(5, 5),
+            AttachDirection::Left,
+            &charset,
+            Arrow::Circle,
+        );
+        assert_eq!(canvas.get(5, 5).unwrap().ch, charset.arrow_circle_right);
+
+        let mut canvas = Canvas::new(10, 10);
+        draw_arrow_with_entry(
+            &mut canvas,
+            &Point::new(5, 5),
+            AttachDirection::Right,
+            &charset,
+            Arrow::Circle,
+        );
+        assert_eq!(canvas.get(5, 5).unwrap().ch, charset.arrow_circle_left);
+    }
+
+    #[test]
+    fn test_cross_arrow_end_to_end() {
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("A"));
+        diagram.add_node(Node::new("B").with_label("B"));
+        diagram.add_edge(Edge::new("A", "B").with_arrows(Arrow::None, Arrow::Cross));
+
+        let output = crate::render::render(&diagram, &crate::render::RenderOptions::default());
+        assert!(
+            output.contains('x'),
+            "Output should contain 'x' for cross arrow:\n{output}"
+        );
+        assert!(
+            !output.contains('\u{25BC}'),
+            "Output should NOT contain normal down arrow for cross edge"
+        );
+    }
+
+    #[test]
+    fn test_circle_arrow_end_to_end() {
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("A"));
+        diagram.add_node(Node::new("B").with_label("B"));
+        diagram.add_edge(Edge::new("A", "B").with_arrows(Arrow::None, Arrow::Circle));
+
+        let output = crate::render::render(&diagram, &crate::render::RenderOptions::default());
+        assert!(
+            output.contains('o'),
+            "Output should contain 'o' for circle arrow:\n{output}"
+        );
+        assert!(
+            !output.contains('\u{25BC}'),
+            "Output should NOT contain normal down arrow for circle edge"
         );
     }
 

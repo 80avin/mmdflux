@@ -1966,4 +1966,52 @@ mod tests {
         assert!((p_last.x - 5.0).abs() < 0.001);
         assert!((p_last.y - 30.0).abs() < 0.001);
     }
+
+    #[test]
+    fn test_layout_multi_edge_produces_two_edge_layouts() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (40.0, 20.0));
+        graph.add_node("B", (40.0, 20.0));
+        graph.add_edge("A", "B");
+        graph.add_edge("A", "B");
+
+        let config = LayoutConfig::default();
+        let result = layout(&graph, &config, |_, dims| *dims);
+
+        assert_eq!(
+            result.edges.len(),
+            2,
+            "Should have 2 edge layouts for 2 edges between A and B"
+        );
+        assert_ne!(
+            result.edges[0].index, result.edges[1].index,
+            "Edge indices should differ"
+        );
+    }
+
+    #[test]
+    fn test_layout_multi_edge_with_labels() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (40.0, 20.0));
+        graph.add_node("B", (40.0, 20.0));
+        graph.add_edge("A", "B");
+        graph.add_edge("A", "B");
+
+        let mut edge_labels = HashMap::new();
+        edge_labels.insert(0, normalize::EdgeLabelInfo::new(30.0, 10.0));
+        edge_labels.insert(1, normalize::EdgeLabelInfo::new(30.0, 10.0));
+
+        let config = LayoutConfig::default();
+        let result = layout_with_labels(&graph, &config, |_, dims| *dims, &edge_labels);
+
+        assert_eq!(result.edges.len(), 2);
+        assert!(
+            result.label_positions.contains_key(&0),
+            "Edge 0 should have a label position"
+        );
+        assert!(
+            result.label_positions.contains_key(&1),
+            "Edge 1 should have a label position"
+        );
+    }
 }

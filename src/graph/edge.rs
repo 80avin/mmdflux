@@ -26,6 +26,10 @@ pub enum Arrow {
     Normal,
     /// No arrow head (open line): -
     None,
+    /// Cross arrow: x
+    Cross,
+    /// Circle arrow: o
+    Circle,
 }
 
 /// An edge connecting two nodes.
@@ -43,6 +47,11 @@ pub struct Edge {
     pub arrow_start: Arrow,
     /// Arrow head at the end (target-side) of the edge.
     pub arrow_end: Arrow,
+    /// Minimum rank separation between source and target. Default 1.
+    pub minlen: i32,
+    /// Index of this edge in the diagram's edge list.
+    /// Assigned automatically by `Diagram::add_edge()`.
+    pub index: usize,
 }
 
 impl Edge {
@@ -55,6 +64,8 @@ impl Edge {
             stroke: Stroke::default(),
             arrow_start: Arrow::None,
             arrow_end: Arrow::default(),
+            minlen: 1,
+            index: 0,
         }
     }
 
@@ -81,5 +92,38 @@ impl Edge {
         self.arrow_start = start;
         self.arrow_end = end;
         self
+    }
+
+    /// Set minimum rank separation (default 1). Use 0 for same-rank placement.
+    pub fn with_minlen(mut self, minlen: i32) -> Self {
+        self.minlen = minlen;
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_invisible_stroke_variant() {
+        let edge = Edge::new("A", "B").with_stroke(Stroke::Invisible);
+        assert_eq!(edge.stroke, Stroke::Invisible);
+    }
+
+    #[test]
+    fn test_arrow_cross_and_circle_variants() {
+        let edge = Edge::new("A", "B").with_arrows(Arrow::Cross, Arrow::Circle);
+        assert_eq!(edge.arrow_start, Arrow::Cross);
+        assert_eq!(edge.arrow_end, Arrow::Circle);
+    }
+
+    #[test]
+    fn test_minlen_default_and_builder() {
+        let edge = Edge::new("A", "B");
+        assert_eq!(edge.minlen, 1);
+
+        let edge = Edge::new("A", "B").with_minlen(0);
+        assert_eq!(edge.minlen, 0);
     }
 }

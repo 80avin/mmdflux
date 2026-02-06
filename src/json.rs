@@ -145,6 +145,8 @@ fn arrow_str(arrow: Arrow) -> &'static str {
     match arrow {
         Arrow::Normal => "normal",
         Arrow::None => "none",
+        Arrow::Cross => "cross",
+        Arrow::Circle => "circle",
     }
 }
 

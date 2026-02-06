@@ -758,13 +758,17 @@ mod skip_edge_separation {
     /// Both fixtures have an A→B→...→D chain plus an A→D skip edge whose waypoints
     /// must clear intermediate node B (either to the left or right).
     fn assert_skip_edge_clears_node_b(fixture_name: &str) {
-        let (_, layout) = layout_fixture(fixture_name);
+        let (diagram, layout) = layout_fixture(fixture_name);
 
         let b_bounds = &layout.node_bounds["B"];
-        let key = ("A".to_string(), "D".to_string());
+        let ad_edge = diagram
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == "D")
+            .expect("Should have an A→D edge");
         let waypoints = layout
             .edge_waypoints
-            .get(&key)
+            .get(&ad_edge.index)
             .expect("A→D should have waypoints");
 
         assert!(
@@ -2043,5 +2047,437 @@ mod compat {
         assert!(output.contains("Check Input"));
         assert!(output.contains("Done"));
         assert!(output.contains("Error"));
+    }
+}
+
+#[test]
+fn test_bidirectional_arrows_both_ends() {
+    let output = render_fixture("bidirectional.mmd");
+
+    // For TD layout, down arrows (▼) appear at the target end,
+    // up arrows (▲) appear at the source end of bidirectional edges.
+    let down_arrows = output.chars().filter(|&c| c == '\u{25BC}').count();
+    let up_arrows = output.chars().filter(|&c| c == '\u{25B2}').count();
+
+    // Each bidirectional edge has an arrow at each end.
+    // We have 3 bidirectional edges, so expect at least 3 down + 3 up arrows.
+    assert!(
+        down_arrows >= 3,
+        "Should have at least 3 down arrows for 3 bidir edges, got {down_arrows}\n{output}"
+    );
+    assert!(
+        up_arrows >= 3,
+        "Should have at least 3 up arrows for 3 bidir edges, got {up_arrows}\n{output}"
+    );
+}
+
+#[test]
+fn test_invisible_edge_not_rendered() {
+    use mmdflux::graph::Stroke;
+
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(mmdflux::graph::Node::new("A").with_label("A"));
+    diagram.add_node(mmdflux::graph::Node::new("B").with_label("B"));
+    diagram.add_node(mmdflux::graph::Node::new("C").with_label("C"));
+    diagram.add_edge(mmdflux::graph::Edge::new("A", "B")); // visible
+    diagram.add_edge(mmdflux::graph::Edge::new("A", "C").with_stroke(Stroke::Invisible)); // invisible
+
+    let output = render(&diagram, &RenderOptions::default());
+
+    // All nodes should appear
+    assert!(output.contains("A"), "Node A should appear");
+    assert!(output.contains("B"), "Node B should appear");
+    assert!(output.contains("C"), "Node C should appear");
+
+    // There should be exactly 1 arrow (for A→B), not 2
+    let down_arrows = output.chars().filter(|&c| c == '▼').count();
+    assert_eq!(
+        down_arrows, 1,
+        "Should have exactly 1 visible arrow (A→B only), got {down_arrows}\n{output}"
+    );
+}
+
+#[test]
+fn test_invisible_edge_affects_layout() {
+    use mmdflux::graph::Stroke;
+
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(mmdflux::graph::Node::new("A").with_label("A"));
+    diagram.add_node(mmdflux::graph::Node::new("B").with_label("B"));
+    diagram.add_edge(mmdflux::graph::Edge::new("A", "B").with_stroke(Stroke::Invisible));
+
+    let output = render(&diagram, &RenderOptions::default());
+
+    // Both nodes should appear
+    assert!(output.contains("A"), "Node A should appear");
+    assert!(output.contains("B"), "Node B should appear");
+
+    // A should be above B (invisible edge enforces rank ordering)
+    let lines: Vec<&str> = output.lines().collect();
+    let a_line = lines.iter().position(|l| l.contains('A')).unwrap();
+    let b_line = lines.iter().position(|l| l.contains('B')).unwrap();
+    assert!(
+        a_line < b_line,
+        "A should be above B due to invisible edge rank constraint\n{output}"
+    );
+
+    // No visible edge characters (no arrows, no lines)
+    let down_arrows = output.chars().filter(|&c| c == '▼').count();
+    assert_eq!(
+        down_arrows, 0,
+        "Invisible edge should produce no arrows\n{output}"
+    );
+}
+
+#[test]
+fn test_multi_edge_both_labels_rendered() {
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(mmdflux::graph::Node::new("A").with_label("Start"));
+    diagram.add_node(mmdflux::graph::Node::new("B").with_label("End"));
+    diagram.add_edge(mmdflux::graph::Edge::new("A", "B").with_label("path 1"));
+    diagram.add_edge(mmdflux::graph::Edge::new("A", "B").with_label("path 2"));
+
+    let output = render(&diagram, &RenderOptions::default());
+
+    assert!(
+        output.contains("path 1"),
+        "First edge label should appear:\n{output}"
+    );
+    assert!(
+        output.contains("path 2"),
+        "Second edge label should appear:\n{output}"
+    );
+}
+
+#[test]
+fn test_multi_edge_basic() {
+    let input = std::fs::read_to_string("tests/fixtures/multi_edge.mmd").unwrap();
+    let flowchart = parse_flowchart(&input).unwrap();
+    let diagram = build_diagram(&flowchart);
+
+    assert_eq!(
+        diagram.edges.len(),
+        2,
+        "Should have 2 edges between A and B"
+    );
+
+    let output = render(&diagram, &RenderOptions::default());
+    assert!(output.contains("A"), "Node A should appear");
+    assert!(output.contains("B"), "Node B should appear");
+}
+
+#[test]
+fn test_multi_edge_labeled_both_labels_visible() {
+    let input = std::fs::read_to_string("tests/fixtures/multi_edge_labeled.mmd").unwrap();
+    let flowchart = parse_flowchart(&input).unwrap();
+    let diagram = build_diagram(&flowchart);
+
+    assert_eq!(diagram.edges.len(), 3);
+    assert_eq!(diagram.edges[0].label, Some("path 1".to_string()));
+    assert_eq!(diagram.edges[1].label, Some("path 2".to_string()));
+
+    let output = render(&diagram, &RenderOptions::default());
+    assert!(
+        output.contains("path 1"),
+        "First edge label should appear:\n{output}"
+    );
+    assert!(
+        output.contains("path 2"),
+        "Second edge label should appear:\n{output}"
+    );
+}
+
+#[test]
+fn test_multi_edge_lr_layout() {
+    let flowchart = parse_flowchart("graph LR\n    A -->|yes| B\n    A -->|no| B\n").unwrap();
+    let diagram = build_diagram(&flowchart);
+    let output = render(&diagram, &RenderOptions::default());
+
+    assert!(
+        output.contains("yes"),
+        "Label 'yes' should appear:\n{output}"
+    );
+    assert!(output.contains("no"), "Label 'no' should appear:\n{output}");
+}
+
+#[test]
+fn test_multi_edge_different_styles() {
+    use mmdflux::graph::Stroke;
+    let flowchart = parse_flowchart("graph TD\n    A --> B\n    A -.-> B\n    A ==> B\n").unwrap();
+    let diagram = build_diagram(&flowchart);
+
+    assert_eq!(diagram.edges.len(), 3);
+    let strokes: Vec<_> = diagram.edges.iter().map(|e| e.stroke).collect();
+    assert!(strokes.contains(&Stroke::Solid));
+    assert!(strokes.contains(&Stroke::Dotted));
+    assert!(strokes.contains(&Stroke::Thick));
+}
+
+#[test]
+fn test_same_rank_constraint_horizontal_alignment() {
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(mmdflux::graph::Node::new("A").with_label("A"));
+    diagram.add_node(mmdflux::graph::Node::new("B").with_label("B"));
+    diagram.add_node(mmdflux::graph::Node::new("C").with_label("C"));
+    diagram.add_edge(mmdflux::graph::Edge::new("A", "C"));
+    diagram.add_same_rank_constraint("A", "B");
+
+    let output = render(&diagram, &RenderOptions::default());
+
+    let lines: Vec<&str> = output.lines().collect();
+    let a_line = lines.iter().position(|l| l.contains('A')).unwrap();
+    let b_line = lines.iter().position(|l| l.contains('B')).unwrap();
+    let c_line = lines.iter().rposition(|l| l.contains('C')).unwrap();
+
+    assert_eq!(a_line, b_line, "A and B should be on same line:\n{output}");
+    assert!(c_line > a_line, "C should be below A:\n{output}");
+}
+
+#[test]
+fn test_same_rank_no_visible_edge() {
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(mmdflux::graph::Node::new("X").with_label("X"));
+    diagram.add_node(mmdflux::graph::Node::new("Y").with_label("Y"));
+    diagram.add_same_rank_constraint("X", "Y");
+
+    let output = render(&diagram, &RenderOptions::default());
+
+    assert!(output.contains("X"));
+    assert!(output.contains("Y"));
+
+    let has_arrows = output
+        .chars()
+        .any(|c| c == '\u{25BC}' || c == '\u{25B2}' || c == '\u{25BA}' || c == '\u{25C4}');
+    assert!(
+        !has_arrows,
+        "Same-rank constraint should not render arrows:\n{output}"
+    );
+}
+
+#[test]
+fn test_same_rank_lr_layout() {
+    let mut diagram = Diagram::new(Direction::LeftRight);
+    diagram.add_node(mmdflux::graph::Node::new("A").with_label("A"));
+    diagram.add_node(mmdflux::graph::Node::new("B").with_label("B"));
+    diagram.add_node(mmdflux::graph::Node::new("C").with_label("C"));
+    diagram.add_edge(mmdflux::graph::Edge::new("A", "C"));
+    diagram.add_same_rank_constraint("A", "B");
+
+    let output = render(&diagram, &RenderOptions::default());
+
+    assert!(output.contains("A"));
+    assert!(output.contains("B"));
+    assert!(output.contains("C"));
+}
+
+#[test]
+fn test_minlen_2_forces_rank_gap() {
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(mmdflux::graph::Node::new("A").with_label("A"));
+    diagram.add_node(mmdflux::graph::Node::new("B").with_label("B"));
+    diagram.add_edge(mmdflux::graph::Edge::new("A", "B").with_minlen(2));
+
+    let output = render(&diagram, &RenderOptions::default());
+
+    let lines: Vec<&str> = output.lines().collect();
+    let a_line = lines.iter().position(|l| l.contains('A')).unwrap();
+    let b_line = lines.iter().rposition(|l| l.contains('B')).unwrap();
+    let gap = b_line - a_line;
+
+    assert!(
+        gap > 3,
+        "Gap between A and B should be significant with minlen=2, got {gap}:\n{output}"
+    );
+}
+
+mod arrow_types {
+    use super::*;
+
+    #[test]
+    fn test_bidirectional_td_both_arrows_visible() {
+        let output = render_input("graph TD\n    A <--> B");
+        let lines: Vec<&str> = output.lines().collect();
+        let a_line = lines.iter().position(|l| l.contains('A')).unwrap();
+        let b_line = lines.iter().rposition(|l| l.contains('B')).unwrap();
+        assert!(b_line > a_line, "B should be below A:\n{output}");
+    }
+
+    #[test]
+    fn test_bidirectional_lr_both_arrows_visible() {
+        let output = render_input("graph LR\n    A <--> B");
+        assert!(output.contains('A'), "Node A should appear:\n{output}");
+        assert!(output.contains('B'), "Node B should appear:\n{output}");
+    }
+
+    #[test]
+    fn test_cross_arrow_renders_x() {
+        let output = render_input("graph TD\n    A --x B");
+        assert!(output.contains('A'));
+        assert!(output.contains('B'));
+        assert!(
+            output.contains('x') || output.contains('X'),
+            "Cross arrow should render x/X character:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_circle_arrow_renders_o() {
+        let output = render_input("graph TD\n    A --o B");
+        assert!(output.contains('A'));
+        assert!(output.contains('B'));
+        assert!(
+            output.contains('o') || output.contains('O'),
+            "Circle arrow should render o/O character:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_cross_both_ends() {
+        let output = render_input("graph TD\n    A x--x B");
+        assert!(output.contains('A'));
+        assert!(output.contains('B'));
+        let x_count = output.chars().filter(|&c| c == 'x' || c == 'X').count();
+        assert!(
+            x_count >= 2,
+            "x--x should render x on both ends, found {x_count}:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_circle_both_ends() {
+        let output = render_input("graph TD\n    A o--o B");
+        assert!(output.contains('A'));
+        assert!(output.contains('B'));
+    }
+
+    #[test]
+    fn test_bidirectional_fixture_all_styles() {
+        let output = render_fixture("bidirectional_arrows.mmd");
+        assert!(output.contains('A'));
+        assert!(output.contains('B'));
+        assert!(output.contains('C'));
+        assert!(output.contains('D'));
+    }
+
+    #[test]
+    fn test_cross_circle_fixture() {
+        let output = render_fixture("cross_circle_arrows.mmd");
+        assert!(output.contains('A'));
+        assert!(output.contains('B'));
+        assert!(output.contains('C'));
+        assert!(output.contains('D'));
+        assert!(output.contains('E'));
+    }
+
+    #[test]
+    fn test_mixed_arrow_types_in_chain() {
+        let output = render_input("graph TD\n    A --> B\n    B --x C\n    C --o D\n    D <--> E");
+        assert!(output.contains('A'));
+        assert!(output.contains('E'));
+    }
+}
+
+mod multigraph {
+    use super::*;
+
+    #[test]
+    fn test_multi_edge_parse_preserves_both() {
+        let input = load_fixture("multi_edge.mmd");
+        let flowchart = parse_flowchart(&input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        assert_eq!(
+            diagram.edges.len(),
+            2,
+            "Should preserve both edges between A and B"
+        );
+    }
+
+    #[test]
+    fn test_multi_edge_renders_without_panic() {
+        let output = render_fixture("multi_edge.mmd");
+        assert!(output.contains('A'), "Node A should appear:\n{output}");
+        assert!(output.contains('B'), "Node B should appear:\n{output}");
+    }
+
+    #[test]
+    fn test_multi_edge_labeled_both_labels_visible() {
+        let output = render_fixture("multi_edge_labeled.mmd");
+        assert!(
+            output.contains("path 1"),
+            "First edge label should appear:\n{output}"
+        );
+        assert!(
+            output.contains("path 2"),
+            "Second edge label should appear:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_multi_edge_lr_layout() {
+        let output = render_input("graph LR\n    A -->|yes| B\n    A -->|no| B");
+        assert!(
+            output.contains("yes"),
+            "Label 'yes' should appear:\n{output}"
+        );
+        assert!(output.contains("no"), "Label 'no' should appear:\n{output}");
+    }
+
+    #[test]
+    fn test_multi_edge_different_styles() {
+        let input = "graph TD\n    A --> B\n    A -.-> B\n    A ==> B";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert_eq!(
+            diagram.edges.len(),
+            3,
+            "Should have 3 edges between A and B"
+        );
+
+        let output = render(&diagram, &RenderOptions::default());
+        assert!(output.contains('A'), "Node A should appear:\n{output}");
+        assert!(output.contains('B'), "Node B should appear:\n{output}");
+    }
+
+    #[test]
+    fn test_multi_edge_with_downstream_node() {
+        let output = render_fixture("multi_edge_labeled.mmd");
+        assert!(output.contains('A'));
+        assert!(output.contains('B'));
+        assert!(output.contains('C'));
+        let lines: Vec<&str> = output.lines().collect();
+        let b_line = lines.iter().position(|l| l.contains('B')).unwrap();
+        let c_line = lines.iter().rposition(|l| l.contains('C')).unwrap();
+        assert!(c_line > b_line, "C should be below B:\n{output}");
+    }
+
+    #[test]
+    fn test_multi_edge_three_edges_same_pair() {
+        let output =
+            render_input("graph TD\n    A -->|one| B\n    A -->|two| B\n    A -->|three| B");
+        assert!(
+            output.contains("one"),
+            "Label 'one' should appear:\n{output}"
+        );
+        assert!(
+            output.contains("two"),
+            "Label 'two' should appear:\n{output}"
+        );
+        assert!(
+            output.contains("three"),
+            "Label 'three' should appear:\n{output}"
+        );
+    }
+
+    #[test]
+    fn test_multi_edge_mixed_with_other_edges() {
+        let output =
+            render_input("graph TD\n    A -->|x| B\n    A -->|y| B\n    A --> C\n    B --> D");
+        assert!(output.contains('A'));
+        assert!(output.contains('B'));
+        assert!(output.contains('C'));
+        assert!(output.contains('D'));
+        assert!(output.contains('x'), "Label 'x' should appear:\n{output}");
+        assert!(output.contains('y'), "Label 'y' should appear:\n{output}");
     }
 }

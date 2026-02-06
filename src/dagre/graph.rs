@@ -14,6 +14,8 @@ use super::types::{NodeId, Point, SelfEdge};
 pub struct DiGraph<N> {
     nodes: Vec<(NodeId, N)>,
     edges: Vec<(NodeId, NodeId)>,
+    edge_weights: Vec<f64>,
+    edge_minlens: Vec<i32>,
     node_index: HashMap<NodeId, usize>,
     parents: HashMap<NodeId, NodeId>,
     /// Node IDs of compounds with non-empty titles.
@@ -31,6 +33,8 @@ impl<N> DiGraph<N> {
         Self {
             nodes: Vec::new(),
             edges: Vec::new(),
+            edge_weights: Vec::new(),
+            edge_minlens: Vec::new(),
             node_index: HashMap::new(),
             parents: HashMap::new(),
             nodes_with_title: BTreeSet::new(),
@@ -48,9 +52,28 @@ impl<N> DiGraph<N> {
     }
 
     pub fn add_edge(&mut self, from: impl Into<NodeId>, to: impl Into<NodeId>) {
-        let from = from.into();
-        let to = to.into();
-        self.edges.push((from, to));
+        self.add_edge_full(from, to, 1.0, 1);
+    }
+
+    pub fn add_edge_with_weight(
+        &mut self,
+        from: impl Into<NodeId>,
+        to: impl Into<NodeId>,
+        weight: f64,
+    ) {
+        self.add_edge_full(from, to, weight, 1);
+    }
+
+    pub fn add_edge_full(
+        &mut self,
+        from: impl Into<NodeId>,
+        to: impl Into<NodeId>,
+        weight: f64,
+        minlen: i32,
+    ) {
+        self.edges.push((from.into(), to.into()));
+        self.edge_weights.push(weight);
+        self.edge_minlens.push(minlen);
     }
 
     pub fn node_ids(&self) -> impl Iterator<Item = &NodeId> {
@@ -288,7 +311,14 @@ impl LayoutGraph {
             }
         }
 
-        let edge_weights = vec![1.0; edge_count];
+        let edge_weights: Vec<f64> = edges
+            .iter()
+            .map(|&(_, _, orig_idx)| graph.edge_weights.get(orig_idx).copied().unwrap_or(1.0))
+            .collect();
+        let edge_minlens: Vec<i32> = edges
+            .iter()
+            .map(|&(_, _, orig_idx)| graph.edge_minlens.get(orig_idx).copied().unwrap_or(1))
+            .collect();
         let mut original_has_predecessor = vec![false; n];
         for &(_, to_idx, _) in &edges {
             original_has_predecessor[to_idx] = true;
@@ -343,7 +373,7 @@ impl LayoutGraph {
             position_excluded_nodes: BTreeSet::new(),
             compound_nodes,
             compound_titles,
-            edge_minlens: vec![1; edge_count],
+            edge_minlens,
             self_edges: Vec::new(),
             node_rank_factor: None,
         }
@@ -518,6 +548,32 @@ mod tests {
     }
 
     #[test]
+    fn test_digraph_allows_multiple_edges_same_pair() {
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_edge("A", "B");
+        graph.add_edge("A", "B");
+        assert_eq!(
+            graph.edge_count(),
+            2,
+            "Should allow 2 edges between A and B"
+        );
+    }
+
+    #[test]
+    fn test_digraph_multi_edge_weights() {
+        let mut graph: DiGraph<()> = DiGraph::new();
+        graph.add_node("A", ());
+        graph.add_node("B", ());
+        graph.add_edge("A", "B");
+        graph.add_edge_with_weight("A", "B", 0.5);
+        assert_eq!(graph.edge_count(), 2);
+        assert_eq!(graph.edge_weights[0], 1.0);
+        assert_eq!(graph.edge_weights[1], 0.5);
+    }
+
+    #[test]
     fn test_layout_graph_from_digraph() {
         let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
         graph.add_node("A", (100.0, 50.0));
@@ -529,6 +585,21 @@ mod tests {
         assert_eq!(lg.node_ids.len(), 2);
         assert_eq!(lg.edges.len(), 1);
         assert_eq!(lg.dimensions[0], (100.0, 50.0));
+    }
+
+    #[test]
+    fn test_layout_graph_from_digraph_multi_edges() {
+        let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
+        graph.add_node("A", (100.0, 50.0));
+        graph.add_node("B", (100.0, 50.0));
+        graph.add_edge("A", "B");
+        graph.add_edge_with_weight("A", "B", 0.5);
+
+        let lg = LayoutGraph::from_digraph(&graph, |_, dims| *dims);
+
+        assert_eq!(lg.edges.len(), 2, "Both edges should be preserved");
+        assert_eq!(lg.edge_weights[0], 1.0);
+        assert_eq!(lg.edge_weights[1], 0.5);
     }
 
     #[test]

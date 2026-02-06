@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use super::edge::Edge;
+use super::edge::{Edge, Stroke};
 use super::node::Node;
 
 /// Direction of the diagram layout.
@@ -67,8 +67,9 @@ impl Diagram {
         self.nodes.insert(node.id.clone(), node);
     }
 
-    /// Add an edge to the diagram.
-    pub fn add_edge(&mut self, edge: Edge) {
+    /// Add an edge to the diagram, auto-assigning its index.
+    pub fn add_edge(&mut self, mut edge: Edge) {
+        edge.index = self.edges.len();
         self.edges.push(edge);
     }
 
@@ -94,6 +95,16 @@ impl Diagram {
             .filter(|sg| sg.parent.as_deref() == Some(parent_id))
             .map(|sg| &sg.id)
             .collect()
+    }
+
+    /// Add a same-rank constraint between two nodes.
+    /// Creates an invisible edge with minlen=0.
+    pub fn add_same_rank_constraint(&mut self, a: &str, b: &str) {
+        self.add_edge(
+            Edge::new(a, b)
+                .with_stroke(Stroke::Invisible)
+                .with_minlen(0),
+        );
     }
 
     /// Return the nesting depth of a subgraph (0 = top-level).

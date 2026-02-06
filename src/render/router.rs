@@ -9,7 +9,7 @@ use super::intersect::{
 };
 use super::layout::{Layout, SelfEdgeDrawData};
 use super::shape::NodeBounds;
-use crate::graph::{Direction, Edge, Shape};
+use crate::graph::{Direction, Edge, Shape, Stroke};
 
 /// Map from (node_id, face) to the edges attached at that face.
 /// Each entry is `(edge_index, is_source_side, approach_cross_axis)`.
@@ -257,8 +257,7 @@ pub fn route_edge(
     };
 
     // Check for waypoints from normalization — works for both forward and backward long edges
-    let edge_key = (edge.from.clone(), edge.to.clone());
-    if let Some(wps) = layout.edge_waypoints.get(&edge_key)
+    if let Some(wps) = layout.edge_waypoints.get(&edge.index)
         && !wps.is_empty()
     {
         let is_backward = is_backward_edge(from_bounds, to_bounds, diagram_direction);
@@ -1164,6 +1163,10 @@ pub fn compute_attachment_plan(
         if edge.from == edge.to {
             continue;
         }
+        // Skip invisible edges — they affect layout but are not rendered
+        if edge.stroke == Stroke::Invisible {
+            continue;
+        }
         let src_bounds = match layout.get_bounds(&edge.from) {
             Some(b) => b,
             None => continue,
@@ -1185,8 +1188,7 @@ pub fn compute_attachment_plan(
             .unwrap_or(Shape::Rectangle);
 
         // Determine approach points using waypoints if available
-        let edge_key = (edge.from.clone(), edge.to.clone());
-        let waypoints = layout.edge_waypoints.get(&edge_key);
+        let waypoints = layout.edge_waypoints.get(&edge.index);
 
         // For source: approach point is first waypoint or target center
         let src_approach = waypoints
@@ -1398,6 +1400,10 @@ pub fn route_all_edges(
         .filter_map(|(i, edge)| {
             // Skip self-edges in normal routing
             if edge.from == edge.to {
+                return None;
+            }
+            // Skip invisible edges — they affect layout but are not rendered
+            if edge.stroke == Stroke::Invisible {
                 return None;
             }
             let (src_override, tgt_override, src_first_vertical) = plan

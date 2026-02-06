@@ -40,6 +40,18 @@ pub struct CharSet {
     pub arrow_left: char,
     pub arrow_right: char,
 
+    // Cross arrows (x-shaped terminal)
+    pub arrow_cross_up: char,
+    pub arrow_cross_down: char,
+    pub arrow_cross_left: char,
+    pub arrow_cross_right: char,
+
+    // Circle arrows (o-shaped terminal)
+    pub arrow_circle_up: char,
+    pub arrow_circle_down: char,
+    pub arrow_circle_left: char,
+    pub arrow_circle_right: char,
+
     // Dotted lines
     pub dotted_horizontal: char,
     pub dotted_vertical: char,
@@ -92,6 +104,14 @@ impl CharSet {
             arrow_down: '▼',
             arrow_left: '◄',
             arrow_right: '►',
+            arrow_cross_up: 'x',
+            arrow_cross_down: 'x',
+            arrow_cross_left: 'x',
+            arrow_cross_right: 'x',
+            arrow_circle_up: 'o',
+            arrow_circle_down: 'o',
+            arrow_circle_left: 'o',
+            arrow_circle_right: 'o',
             dotted_horizontal: '┄',
             dotted_vertical: '┆',
             heavy_horizontal: '━',
@@ -139,6 +159,14 @@ impl CharSet {
             arrow_down: 'v',
             arrow_left: '<',
             arrow_right: '>',
+            arrow_cross_up: 'x',
+            arrow_cross_down: 'x',
+            arrow_cross_left: 'x',
+            arrow_cross_right: 'x',
+            arrow_circle_up: 'o',
+            arrow_circle_down: 'o',
+            arrow_circle_left: 'o',
+            arrow_circle_right: 'o',
             dotted_horizontal: '-',
             dotted_vertical: ':',
             heavy_horizontal: '-',
@@ -175,6 +203,14 @@ impl CharSet {
             self.arrow_down,
             self.arrow_left,
             self.arrow_right,
+            self.arrow_cross_up,
+            self.arrow_cross_down,
+            self.arrow_cross_left,
+            self.arrow_cross_right,
+            self.arrow_circle_up,
+            self.arrow_circle_down,
+            self.arrow_circle_left,
+            self.arrow_circle_right,
         ]
         .contains(&ch)
     }
@@ -568,6 +604,33 @@ mod tests {
         let cs = CharSet::unicode();
         let conns = cs.infer_connections('┼');
         assert!(conns.up && conns.down && conns.left && conns.right);
+    }
+
+    #[test]
+    fn test_charset_has_cross_arrow_characters() {
+        let cs = CharSet::unicode();
+        assert_ne!(
+            cs.arrow_cross_up, cs.arrow_up,
+            "Cross should differ from normal"
+        );
+        assert_ne!(cs.arrow_cross_down, cs.arrow_down);
+    }
+
+    #[test]
+    fn test_charset_has_circle_arrow_characters() {
+        let cs = CharSet::unicode();
+        assert_ne!(
+            cs.arrow_circle_up, cs.arrow_up,
+            "Circle should differ from normal"
+        );
+        assert_ne!(cs.arrow_circle_down, cs.arrow_down);
+    }
+
+    #[test]
+    fn test_ascii_charset_cross_circle() {
+        let cs = CharSet::ascii();
+        assert_eq!(cs.arrow_cross_down, 'x');
+        assert_eq!(cs.arrow_circle_down, 'o');
     }
 
     #[test]

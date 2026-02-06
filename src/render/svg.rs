@@ -259,18 +259,19 @@ fn render_edge_labels(
 ) {
     writer.start_group("edgeLabels");
 
-    for (index, edge) in diagram.edges.iter().enumerate() {
+    for edge in diagram.edges.iter() {
         if edge.stroke == Stroke::Invisible {
             continue;
         }
         let Some(label) = edge.label.as_ref() else {
             continue;
         };
+        let edge_idx = edge.index;
         let position = layout
             .label_positions
-            .get(&index)
+            .get(&edge_idx)
             .map(|pos| pos.point)
-            .or_else(|| fallback_label_position(layout, index, self_edge_paths));
+            .or_else(|| fallback_label_position(layout, edge_idx, self_edge_paths));
         let Some(point) = position else {
             continue;
         };
@@ -883,18 +884,19 @@ fn compute_svg_bounds(
         }
     }
 
-    for (index, edge) in diagram.edges.iter().enumerate() {
+    for edge in diagram.edges.iter() {
         if edge.stroke == Stroke::Invisible {
             continue;
         }
         let Some(label) = edge.label.as_ref() else {
             continue;
         };
+        let edge_idx = edge.index;
         let position = layout
             .label_positions
-            .get(&index)
+            .get(&edge_idx)
             .map(|pos| pos.point)
-            .or_else(|| fallback_label_position(layout, index, self_edge_paths));
+            .or_else(|| fallback_label_position(layout, edge_idx, self_edge_paths));
         let Some(point) = position else {
             continue;
         };
