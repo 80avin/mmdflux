@@ -373,7 +373,7 @@ fn reconcile_sublayouts_draw(
                 diagram
                     .nodes
                     .get(&id.0)
-                    .map(|n| (id.0.clone(), node_dimensions(n)))
+                    .map(|n| (id.0.clone(), node_dimensions(n, sub_dir)))
             })
             .collect();
 
@@ -1633,11 +1633,12 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     let dagre_direction = dagre_config.direction;
 
     // Pre-compute sub-layouts for subgraphs with direction overrides.
+    let direction = diagram.direction;
     let sublayouts = compute_sublayouts(
         diagram,
         &dagre_config,
         |node| {
-            let (w, h) = node_dimensions(node);
+            let (w, h) = node_dimensions(node, direction);
             (w as f64, h as f64)
         },
         |edge| {
@@ -1651,7 +1652,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         diagram,
         &dagre_config,
         |node| {
-            let (w, h) = node_dimensions(node);
+            let (w, h) = node_dimensions(node, direction);
             (w as f64, h as f64)
         },
         |edge| {
@@ -1719,7 +1720,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     let node_dims: HashMap<String, (usize, usize)> = diagram
         .nodes
         .iter()
-        .map(|(id, node)| (id.clone(), node_dimensions(node)))
+        .map(|(id, node)| (id.clone(), node_dimensions(node, direction)))
         .collect();
 
     // --- Phase D: Scale dagre coordinates to ASCII ---
@@ -4578,7 +4579,7 @@ mod tests {
             if !diagram.is_subgraph(node_id)
                 && let Some(node) = diagram.nodes.get(node_id)
             {
-                let (w, h) = node_dimensions(node);
+                let (w, h) = node_dimensions(node, sub_dir);
                 sub_graph.add_node(node_id.as_str(), (w as f64, h as f64));
             }
         }

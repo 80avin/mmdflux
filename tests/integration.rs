@@ -338,7 +338,11 @@ mod rendering {
     #[test]
     fn shapes_special_render_bar_and_text() {
         let output = render_fixture("shapes_special.mmd");
-        assert!(output.contains('━'), "Fork/join should use heavy bar");
+        // shapes_special.mmd uses graph LR, so fork/join bar is vertical
+        assert!(
+            output.contains('┃'),
+            "Fork/join in LR should use heavy vertical bar"
+        );
         assert!(output.contains("Note"));
     }
 

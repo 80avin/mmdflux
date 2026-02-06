@@ -3,7 +3,7 @@
 use super::canvas::Canvas;
 use super::chars::CharSet;
 use super::intersect::NodeFace;
-use crate::graph::{Node, Shape};
+use crate::graph::{Direction, Node, Shape};
 
 /// Bounding box for a rendered node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -227,11 +227,25 @@ pub fn categorize_shape(shape: Shape) -> ShapeCategory {
 
 /// Calculate the dimensions needed to render a node.
 ///
-/// All shapes use the same formula: width = label_len + 4 (2 for borders/delimiters,
-/// 2 for padding), height = 3 (top border, label row, bottom border).
-pub fn node_dimensions(node: &Node) -> (usize, usize) {
+/// Most shapes use: width = label_len + 4 (2 for borders/delimiters, 2 for padding),
+/// height = 3 (top border, label row, bottom border).
+///
+/// ForkJoin bars are perpendicular to the flow direction: horizontal for TD/BT,
+/// vertical for LR/RL. When rendered vertically, width and height are swapped.
+pub fn node_dimensions(node: &Node, direction: Direction) -> (usize, usize) {
     let label_len = node.label.chars().count();
-    (label_len + 4, 3)
+    let (w, h) = (label_len + 4, 3);
+
+    // ForkJoin bars without labels are rendered as bars perpendicular to flow.
+    // In LR/RL, the bar is vertical so we swap dimensions.
+    if node.shape == Shape::ForkJoin
+        && node.label.trim().is_empty()
+        && matches!(direction, Direction::LeftRight | Direction::RightLeft)
+    {
+        return (h, w);
+    }
+
+    (w, h)
 }
 
 /// Render a node at the specified position.
@@ -243,8 +257,9 @@ pub fn render_node(
     x: usize,
     y: usize,
     charset: &CharSet,
+    direction: Direction,
 ) -> NodeBounds {
-    let (width, height) = node_dimensions(node);
+    let (width, height) = node_dimensions(node, direction);
     let label = &node.label;
     let label_len = label.chars().count();
 
@@ -299,7 +314,7 @@ pub fn render_node(
         }
         ShapeCategory::Bar => {
             if label.trim().is_empty() {
-                render_bar(canvas, x, y, width, height, charset);
+                render_bar(canvas, x, y, width, height, charset, direction);
             } else {
                 let corners = (
                     charset.corner_tl,
@@ -452,7 +467,7 @@ fn render_borderless(
     canvas.write_str(label_start, mid_y, label);
 }
 
-/// Render a horizontal bar (fork/join).
+/// Render a bar (fork/join), perpendicular to flow direction.
 fn render_bar(
     canvas: &mut Canvas,
     x: usize,
@@ -460,10 +475,20 @@ fn render_bar(
     width: usize,
     height: usize,
     charset: &CharSet,
+    direction: Direction,
 ) {
-    let mid_y = y + height / 2;
-    for dx in 0..width {
-        canvas.set(x + dx, mid_y, charset.heavy_horizontal);
+    if matches!(direction, Direction::LeftRight | Direction::RightLeft) {
+        // Vertical bar for horizontal flow
+        let mid_x = x + width / 2;
+        for dy in 0..height {
+            canvas.set(mid_x, y + dy, charset.heavy_vertical);
+        }
+    } else {
+        // Horizontal bar for vertical flow
+        let mid_y = y + height / 2;
+        for dx in 0..width {
+            canvas.set(x + dx, mid_y, charset.heavy_horizontal);
+        }
     }
 }
 
@@ -535,7 +560,7 @@ mod tests {
     #[test]
     fn test_node_dimensions_rectangle() {
         let node = Node::new("A").with_label("Start");
-        let (w, h) = node_dimensions(&node);
+        let (w, h) = node_dimensions(&node, Direction::TopDown);
         // "Start" is 5 chars, +4 = 9 width
         assert_eq!(w, 9);
         assert_eq!(h, 3);
@@ -546,7 +571,7 @@ mod tests {
         let node = Node::new("B")
             .with_label("Process")
             .with_shape(Shape::Round);
-        let (w, h) = node_dimensions(&node);
+        let (w, h) = node_dimensions(&node, Direction::TopDown);
         // "Process" is 7 chars, +4 = 11 width
         assert_eq!(w, 11);
         assert_eq!(h, 3);
@@ -555,7 +580,7 @@ mod tests {
     #[test]
     fn test_node_dimensions_diamond() {
         let node = Node::new("C").with_label("Yes").with_shape(Shape::Diamond);
-        let (w, h) = node_dimensions(&node);
+        let (w, h) = node_dimensions(&node, Direction::TopDown);
         // "Yes" is 3 chars, +4 = 7 width
         assert_eq!(w, 7);
         assert_eq!(h, 3);
@@ -567,7 +592,7 @@ mod tests {
         let node = Node::new("A").with_label("Start");
         let charset = CharSet::unicode();
 
-        let bounds = render_node(&mut canvas, &node, 2, 1, &charset);
+        let bounds = render_node(&mut canvas, &node, 2, 1, &charset, Direction::TopDown);
 
         assert_eq!(bounds.x, 2);
         assert_eq!(bounds.y, 1);
@@ -586,7 +611,7 @@ mod tests {
         let node = Node::new("A").with_label("Start");
         let charset = CharSet::ascii();
 
-        render_node(&mut canvas, &node, 2, 1, &charset);
+        render_node(&mut canvas, &node, 2, 1, &charset, Direction::TopDown);
 
         let output = canvas.to_string();
         assert!(output.contains("+-------+"));
@@ -599,7 +624,7 @@ mod tests {
         let node = Node::new("B").with_label("Hi").with_shape(Shape::Round);
         let charset = CharSet::unicode();
 
-        render_node(&mut canvas, &node, 2, 1, &charset);
+        render_node(&mut canvas, &node, 2, 1, &charset, Direction::TopDown);
 
         let output = canvas.to_string();
         assert!(output.contains("╭────╮"));
@@ -613,7 +638,7 @@ mod tests {
         let node = Node::new("C").with_label("?").with_shape(Shape::Diamond);
         let charset = CharSet::unicode();
 
-        render_node(&mut canvas, &node, 2, 1, &charset);
+        render_node(&mut canvas, &node, 2, 1, &charset, Direction::TopDown);
 
         let output = canvas.to_string();
         assert!(output.contains("┌───┐"));
@@ -629,7 +654,7 @@ mod tests {
             .with_shape(Shape::Diamond);
         let charset = CharSet::unicode();
 
-        let bounds = render_node(&mut canvas, &node, 1, 1, &charset);
+        let bounds = render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
 
         assert_eq!(bounds.width, 12);
         assert_eq!(bounds.height, 3);
@@ -697,7 +722,7 @@ mod tests {
             .with_shape(Shape::Subroutine);
         let charset = CharSet::unicode();
 
-        render_node(&mut canvas, &node, 1, 1, &charset);
+        render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
         let output = canvas.to_string();
         assert!(output.contains("║ Sub ║"));
     }
@@ -708,7 +733,7 @@ mod tests {
         let node = Node::new("D").with_label("Doc").with_shape(Shape::Document);
         let charset = CharSet::unicode();
 
-        render_node(&mut canvas, &node, 1, 1, &charset);
+        render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
         let output = canvas.to_string();
         assert!(output.contains("~"));
     }
@@ -721,7 +746,7 @@ mod tests {
             .with_shape(Shape::TaggedDocument);
         let charset = CharSet::unicode();
 
-        render_node(&mut canvas, &node, 1, 1, &charset);
+        render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
         let output = canvas.to_string();
         assert!(output.contains("~"));
         assert!(output.contains(charset.fold_corner));
@@ -735,7 +760,7 @@ mod tests {
             .with_shape(Shape::Documents);
         let charset = CharSet::unicode();
 
-        render_node(&mut canvas, &node, 1, 1, &charset);
+        render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
         let shadow_cell = canvas.get(9, 4).unwrap().ch;
         assert_eq!(shadow_cell, charset.corner_br);
     }
@@ -746,7 +771,7 @@ mod tests {
         let node = Node::new("J").with_label("").with_shape(Shape::SmallCircle);
         let charset = CharSet::unicode();
 
-        render_node(&mut canvas, &node, 1, 1, &charset);
+        render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
         let output = canvas.to_string();
         assert!(output.contains(charset.glyph_small_circle));
     }
@@ -759,7 +784,7 @@ mod tests {
             .with_shape(Shape::SmallCircle);
         let charset = CharSet::unicode();
 
-        render_node(&mut canvas, &node, 1, 1, &charset);
+        render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
         let output = canvas.to_string();
         assert!(output.contains("╭"));
         assert!(output.contains("╯"));
@@ -771,7 +796,7 @@ mod tests {
         let node = Node::new("F").with_label("").with_shape(Shape::ForkJoin);
         let charset = CharSet::unicode();
 
-        render_node(&mut canvas, &node, 1, 1, &charset);
+        render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
         let output = canvas.to_string();
         assert!(output.contains(charset.heavy_horizontal));
     }
@@ -862,7 +887,7 @@ mod tests {
         let node = Node::new("A").with_label("X");
         let charset = CharSet::unicode();
 
-        let bounds = render_node(&mut canvas, &node, 2, 1, &charset);
+        let bounds = render_node(&mut canvas, &node, 2, 1, &charset, Direction::TopDown);
 
         // Check that cells within the node bounds are marked as protected
         for dy in 0..bounds.height {

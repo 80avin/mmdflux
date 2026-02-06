@@ -61,7 +61,7 @@ fn main() {
     // Collect nodes (diagram nodes + subgraphs), sorted by id for determinism
     let mut nodes: Vec<(String, String, f64, f64, Option<String>, bool)> = Vec::new();
     for (id, node) in &diagram.nodes {
-        let (w, h) = node_dimensions(node);
+        let (w, h) = node_dimensions(node, diagram.direction);
         nodes.push((
             id.clone(),
             node.label.clone(),

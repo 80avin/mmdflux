@@ -34,10 +34,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         config.dagre_cluster_rank_sep = 0.0;
     }
 
+    let direction = diagram.direction;
     let mut layout = build_dagre_layout(
         diagram,
         &config,
-        |node| svg_node_dimensions(&metrics, node),
+        |node| svg_node_dimensions(&metrics, node, direction),
         |edge| {
             edge.label
                 .as_ref()
@@ -49,7 +50,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let sublayouts = compute_sublayouts(
         diagram,
         &dagre_config,
-        |node| svg_node_dimensions(&metrics, node),
+        |node| svg_node_dimensions(&metrics, node, direction),
         |edge| {
             edge.label
                 .as_ref()
@@ -437,7 +438,7 @@ fn build_override_node_map(diagram: &Diagram) -> HashMap<String, String> {
     override_nodes
 }
 
-fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node) -> (f64, f64) {
+fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node, direction: Direction) -> (f64, f64) {
     let (label_w, label_h) = metrics.measure_text_with_padding(&node.label, 0.0, 0.0);
 
     let (mut width, mut height) = match node.shape {
@@ -467,6 +468,14 @@ fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node) -> (f64, f64) {
             height = size;
         }
         _ => {}
+    }
+
+    // ForkJoin bars are perpendicular to flow: swap dimensions for LR/RL.
+    if node.shape == Shape::ForkJoin
+        && node.label.trim().is_empty()
+        && matches!(direction, Direction::LeftRight | Direction::RightLeft)
+    {
+        std::mem::swap(&mut width, &mut height);
     }
 
     (width, height)
@@ -854,7 +863,7 @@ fn render_nodes(
         let Some(rect) = layout.nodes.get(&crate::dagre::NodeId(node_id.clone())) else {
             continue;
         };
-        render_node_shape(writer, node, rect, scale);
+        render_node_shape(writer, node, rect, scale, diagram.direction);
 
         let center = rect.center();
         render_text_centered(
@@ -870,7 +879,13 @@ fn render_nodes(
     writer.end_group();
 }
 
-fn render_node_shape(writer: &mut SvgWriter, node: &Node, rect: &Rect, scale: f64) {
+fn render_node_shape(
+    writer: &mut SvgWriter,
+    node: &Node,
+    rect: &Rect,
+    scale: f64,
+    direction: Direction,
+) {
     let rect = scale_rect(rect, scale);
     let stroke_width = fmt_f64(1.0 * scale);
     let style = format!(
@@ -1295,20 +1310,39 @@ fn render_node_shape(writer: &mut SvgWriter, node: &Node, rect: &Rect, scale: f6
             // Borderless: only text will be drawn.
         }
         Shape::ForkJoin => {
-            let y = rect.y + rect.height / 2.0;
-            let stroke = format!(
-                " stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" stroke-linecap=\"square\"",
-                stroke = STROKE_COLOR,
-                stroke_width = fmt_f64((rect.height * 0.3).max(3.0 * scale))
-            );
-            let line = format!(
-                "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\"{stroke} />",
-                x1 = fmt_f64(rect.x),
-                x2 = fmt_f64(rect.x + rect.width),
-                y = fmt_f64(y),
-                stroke = stroke
-            );
-            writer.push_line(&line);
+            if matches!(direction, Direction::LeftRight | Direction::RightLeft) {
+                // Vertical bar for horizontal flow
+                let x = rect.x + rect.width / 2.0;
+                let stroke = format!(
+                    " stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" stroke-linecap=\"square\"",
+                    stroke = STROKE_COLOR,
+                    stroke_width = fmt_f64((rect.width * 0.3).max(3.0 * scale))
+                );
+                let line = format!(
+                    "<line x1=\"{x}\" y1=\"{y1}\" x2=\"{x}\" y2=\"{y2}\"{stroke} />",
+                    x = fmt_f64(x),
+                    y1 = fmt_f64(rect.y),
+                    y2 = fmt_f64(rect.y + rect.height),
+                    stroke = stroke
+                );
+                writer.push_line(&line);
+            } else {
+                // Horizontal bar for vertical flow
+                let y = rect.y + rect.height / 2.0;
+                let stroke = format!(
+                    " stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" stroke-linecap=\"square\"",
+                    stroke = STROKE_COLOR,
+                    stroke_width = fmt_f64((rect.height * 0.3).max(3.0 * scale))
+                );
+                let line = format!(
+                    "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\"{stroke} />",
+                    x1 = fmt_f64(rect.x),
+                    x2 = fmt_f64(rect.x + rect.width),
+                    y = fmt_f64(y),
+                    stroke = stroke
+                );
+                writer.push_line(&line);
+            }
         }
     }
 }

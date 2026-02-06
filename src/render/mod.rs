@@ -184,7 +184,7 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
     for node_id in node_keys {
         let node = &diagram.nodes[node_id];
         if let Some(&(x, y)) = layout.draw_positions.get(node_id) {
-            render_node(&mut canvas, node, x, y, &charset);
+            render_node(&mut canvas, node, x, y, &charset, diagram.direction);
         }
     }
 
