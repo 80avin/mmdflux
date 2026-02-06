@@ -104,7 +104,6 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         diagram,
         &layout,
         &self_edge_paths,
-        &override_nodes,
         svg_options.edge_curve,
         svg_options.edge_curve_radius,
         scale,
@@ -303,7 +302,6 @@ fn render_edges(
     diagram: &Diagram,
     layout: &LayoutResult,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
-    override_nodes: &HashMap<String, String>,
     edge_curve: SvgEdgeCurve,
     edge_curve_radius: f64,
     scale: f64,
@@ -328,65 +326,7 @@ fn render_edges(
             continue;
         };
         let mut points = points;
-        if edge.from_subgraph.is_none() && edge.to_subgraph.is_none() {
-            let from_override = override_nodes.get(&edge.from);
-            let to_override = override_nodes.get(&edge.to);
-            let is_cross_boundary = match (from_override, to_override) {
-                (Some(a), Some(b)) => a != b,
-                (Some(_), None) | (None, Some(_)) => true,
-                _ => false,
-            };
-            if is_cross_boundary {
-                if let Some(rerouted) =
-                    reroute_cross_boundary_points(diagram, layout, edge, from_override, to_override)
-                {
-                    points = rerouted;
-                } else {
-                    if let Some(sg_id) = from_override {
-                        if let (Some(rect), Some(node_rect), Some(other_rect)) = (
-                            layout.subgraph_bounds.get(sg_id),
-                            layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())),
-                            layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())),
-                        ) {
-                            let center = node_rect.center();
-                            let other_center = other_rect.center();
-                            if point_inside_rect(rect, center)
-                                && !point_inside_rect(rect, other_center)
-                            {
-                                let boundary =
-                                    segment_rect_intersection(center, other_center, rect)
-                                        .unwrap_or(center);
-                                points = splice_points_from_subgraph_start(
-                                    &points,
-                                    rect,
-                                    boundary,
-                                    center,
-                                );
-                            }
-                        }
-                    }
-                    if let Some(sg_id) = to_override {
-                        if let (Some(rect), Some(node_rect), Some(other_rect)) = (
-                            layout.subgraph_bounds.get(sg_id),
-                            layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())),
-                            layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())),
-                        ) {
-                            let center = node_rect.center();
-                            let other_center = other_rect.center();
-                            if point_inside_rect(rect, center)
-                                && !point_inside_rect(rect, other_center)
-                            {
-                                let boundary =
-                                    segment_rect_intersection(center, other_center, rect)
-                                        .unwrap_or(center);
-                                points =
-                                    splice_points_to_subgraph_end(&points, rect, boundary, center);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // Clip subgraph-as-node edges to subgraph borders
         if let Some(sg_id) = edge.from_subgraph.as_ref() {
             if let Some(rect) = layout.subgraph_bounds.get(sg_id) {
                 points = clip_points_to_rect_start(&points, rect);
