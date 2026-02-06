@@ -72,7 +72,7 @@ impl Flowchart {
 }
 
 /// Strip YAML frontmatter delimited by `---` at the start of input.
-fn strip_frontmatter(input: &str) -> &str {
+pub(crate) fn strip_frontmatter(input: &str) -> &str {
     let trimmed = input.trim_start();
     if !trimmed.starts_with("---") {
         return input;

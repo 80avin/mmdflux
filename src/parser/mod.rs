@@ -26,6 +26,7 @@ pub enum DiagramType {
 /// Skips leading whitespace, blank lines, and `%%` comment lines.
 /// Returns `None` for unrecognized or unsupported diagram types.
 pub fn detect_diagram_type(input: &str) -> Option<DiagramType> {
+    let input = flowchart::strip_frontmatter(input);
     let first_word = input
         .lines()
         .map(|l| l.trim())
@@ -112,6 +113,14 @@ mod tests {
     #[test]
     fn test_detect_unknown() {
         assert_eq!(detect_diagram_type("sequence\nA->>B: hello\n"), None);
+    }
+
+    #[test]
+    fn test_detect_skips_frontmatter() {
+        assert_eq!(
+            detect_diagram_type("---\nconfig:\n  theme: dark\n---\ngraph TD\nA-->B\n"),
+            Some(DiagramType::Flowchart)
+        );
     }
 
     #[test]
