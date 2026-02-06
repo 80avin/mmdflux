@@ -22,7 +22,7 @@ struct Cli {
     #[arg(long)]
     debug: bool,
 
-    /// Output format (text, ascii, or svg)
+    /// Output format (text, ascii, svg, or json)
     #[arg(short = 'f', long, value_enum, default_value_t = FormatArg::Text)]
     format: FormatArg,
 
@@ -49,6 +49,14 @@ struct Cli {
     /// Extra ranksep applied when subgraphs are present (Mermaid clusters)
     #[arg(long)]
     cluster_ranksep: Option<f64>,
+
+    /// Validate input and report diagnostics (no rendering)
+    #[arg(long)]
+    lint: bool,
+
+    /// Show node IDs alongside labels (e.g., "A: Start")
+    #[arg(long)]
+    show_ids: bool,
 
     /// ASCII padding around the diagram
     #[arg(long)]
@@ -87,6 +95,8 @@ enum FormatArg {
     Ascii,
     /// SVG vector graphics
     Svg,
+    /// JSON structured output
+    Json,
 }
 
 impl From<FormatArg> for OutputFormat {
@@ -95,6 +105,7 @@ impl From<FormatArg> for OutputFormat {
             FormatArg::Text => OutputFormat::Text,
             FormatArg::Ascii => OutputFormat::Ascii,
             FormatArg::Svg => OutputFormat::Svg,
+            FormatArg::Json => OutputFormat::Json,
         }
     }
 }
@@ -145,6 +156,24 @@ fn main() -> io::Result<()> {
 
     let format: OutputFormat = cli.format.into();
 
+    // Lint mode: validate and exit
+    if cli.lint {
+        let result = mmdflux::lint::lint(&input);
+
+        if matches!(format, OutputFormat::Json) {
+            println!("{}", result.to_json());
+        } else {
+            for diag in &result.errors {
+                eprintln!("{}", diag);
+            }
+            for diag in &result.warnings {
+                eprintln!("{}", diag);
+            }
+        }
+
+        std::process::exit(result.exit_code());
+    }
+
     // Build render config from CLI options
     let config = RenderConfig {
         layout: LayoutConfig {
@@ -164,6 +193,7 @@ fn main() -> io::Result<()> {
         svg_edge_curve: cli.svg_edge_curve.map(Into::into),
         svg_edge_curve_radius: cli.svg_edge_curve_radius,
         svg_diagram_padding: cli.svg_diagram_padding,
+        show_ids: cli.show_ids,
     };
 
     // Use registry for detection and rendering

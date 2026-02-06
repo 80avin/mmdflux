@@ -40,15 +40,14 @@ pub mod dagre;
 pub mod diagram;
 pub mod diagrams;
 pub mod graph;
+pub mod json;
+pub mod lint;
 pub mod parser;
 pub mod registry;
 pub mod render;
 
-// Re-export commonly used items from graph module
-// Re-export diagram abstractions
+// Re-export commonly used types for convenience
 pub use diagram::{OutputFormat, RenderConfig, RenderError};
 pub use graph::{Diagram, Direction, Edge, Node, Shape, build_diagram};
-// Re-export commonly used items from parser module
 pub use parser::{DiagramType, Flowchart, ParseError, detect_diagram_type, parse_flowchart};
-// Re-export registry entry point
 pub use registry::default_registry;

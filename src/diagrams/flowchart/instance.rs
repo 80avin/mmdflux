@@ -2,9 +2,10 @@
 
 use crate::diagram::{OutputFormat, RenderConfig, RenderError};
 use crate::graph::{Diagram, build_diagram};
+use crate::json::to_json;
 use crate::parser::parse_flowchart;
 use crate::registry::DiagramInstance;
-use crate::render::{RenderOptions, render};
+use crate::render::{RenderOptions, compute_layout_direct, layout_config_for_diagram, render};
 
 /// Flowchart diagram instance.
 ///
@@ -40,9 +41,23 @@ impl DiagramInstance for FlowchartInstance {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
 
-        // Convert RenderConfig to RenderOptions
+        // Apply ID annotations if requested
+        let annotated;
+        let diagram = if config.show_ids {
+            annotated = annotate_node_ids(diagram);
+            &annotated
+        } else {
+            diagram
+        };
+
         let mut options: RenderOptions = config.into();
         options.output_format = format;
+
+        if matches!(format, OutputFormat::Json) {
+            let layout_config = layout_config_for_diagram(diagram, &options);
+            let layout = compute_layout_direct(diagram, &layout_config);
+            return Ok(to_json(diagram, Some(&layout)));
+        }
 
         Ok(render(diagram, &options))
     }
@@ -50,7 +65,19 @@ impl DiagramInstance for FlowchartInstance {
     fn supports_format(&self, format: OutputFormat) -> bool {
         matches!(
             format,
-            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg
+            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
         )
     }
+}
+
+/// Create a copy of the diagram with node labels annotated as "ID: Label".
+/// Skips nodes where label == id (bare nodes).
+fn annotate_node_ids(diagram: &Diagram) -> Diagram {
+    let mut annotated = diagram.clone();
+    for node in annotated.nodes.values_mut() {
+        if node.label != node.id {
+            node.label = format!("{}: {}", node.id, node.label);
+        }
+    }
+    annotated
 }

@@ -30,6 +30,8 @@ pub enum OutputFormat {
     Ascii,
     /// SVG vector graphics.
     Svg,
+    /// JSON structured output.
+    Json,
 }
 
 /// SVG edge curve style.
@@ -46,6 +48,7 @@ impl std::fmt::Display for OutputFormat {
             OutputFormat::Text => write!(f, "text"),
             OutputFormat::Ascii => write!(f, "ascii"),
             OutputFormat::Svg => write!(f, "svg"),
+            OutputFormat::Json => write!(f, "json"),
         }
     }
 }
@@ -141,6 +144,8 @@ pub struct RenderConfig {
     pub svg_node_padding_x: Option<f64>,
     /// SVG-specific: node padding on y-axis (px).
     pub svg_node_padding_y: Option<f64>,
+    /// Show node IDs alongside labels (e.g., "A: Start").
+    pub show_ids: bool,
 }
 
 /// Error type for rendering failures.

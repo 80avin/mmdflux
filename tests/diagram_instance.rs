@@ -23,7 +23,7 @@ impl DiagramInstance for MockDiagram {
         match format {
             OutputFormat::Text => Ok(format!("[TEXT] {}", content)),
             OutputFormat::Ascii => Ok(format!("[ASCII] {}", content)),
-            OutputFormat::Svg => Err("SVG not supported".into()),
+            OutputFormat::Svg | OutputFormat::Json => Err("Not supported".into()),
         }
     }
 

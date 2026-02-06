@@ -1,7 +1,10 @@
 //! Edge types including stroke styles and arrow heads.
 
+use serde::Serialize;
+
 /// Style of the edge line.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Stroke {
     /// Normal solid line: --
     #[default]
@@ -15,7 +18,8 @@ pub enum Stroke {
 }
 
 /// Type of arrow head.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Arrow {
     /// Arrow head pointing to target: >
     #[default]
@@ -25,7 +29,7 @@ pub enum Arrow {
 }
 
 /// An edge connecting two nodes.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Edge {
     /// Source node ID.
     pub from: String,

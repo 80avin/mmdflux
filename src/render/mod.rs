@@ -212,7 +212,7 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
 /// Compute layout configuration appropriate for the diagram.
 ///
 /// For LR/RL layouts, we need more horizontal spacing to accommodate edge labels.
-fn layout_config_for_diagram(diagram: &Diagram, options: &RenderOptions) -> LayoutConfig {
+pub fn layout_config_for_diagram(diagram: &Diagram, options: &RenderOptions) -> LayoutConfig {
     let mut config = LayoutConfig::default();
 
     // Check if any edges have labels

@@ -72,6 +72,30 @@ fn flowchart_instance_render_svg() {
 }
 
 #[test]
+fn flowchart_instance_render_json() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA[Start] --> B[End]").unwrap();
+
+    let config = RenderConfig::default();
+    let output = instance.render(OutputFormat::Json, &config).unwrap();
+
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(parsed["version"], 1);
+    assert_eq!(parsed["nodes"].as_array().unwrap().len(), 2);
+    assert_eq!(parsed["edges"].as_array().unwrap().len(), 1);
+
+    // Should include positions since layout is computed
+    let nodes = parsed["nodes"].as_array().unwrap();
+    for node in nodes {
+        assert!(
+            node["position"].is_object(),
+            "Node should have position: {}",
+            node
+        );
+    }
+}
+
+#[test]
 fn flowchart_instance_matches_existing_render_output() {
     // Verify that FlowchartInstance produces the same output as the
     // existing render() function
@@ -93,4 +117,88 @@ fn flowchart_instance_matches_existing_render_output() {
         .unwrap();
 
     assert_eq!(old_output, new_output);
+}
+
+#[test]
+fn test_show_ids_annotates_labels() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA[Start] --> B[End]\n").unwrap();
+
+    let config = RenderConfig {
+        show_ids: true,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(
+        output.contains("A: Start"),
+        "Should contain 'A: Start', got: {}",
+        output
+    );
+    assert!(
+        output.contains("B: End"),
+        "Should contain 'B: End', got: {}",
+        output
+    );
+}
+
+#[test]
+fn test_show_ids_bare_nodes_unchanged() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA --> B\n").unwrap();
+
+    let config = RenderConfig {
+        show_ids: true,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(
+        !output.contains("A: A"),
+        "Bare node should not be annotated: {}",
+        output
+    );
+}
+
+#[test]
+fn test_show_ids_false_no_annotation() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA[Start] --> B[End]\n").unwrap();
+
+    let config = RenderConfig::default();
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(
+        !output.contains("A:"),
+        "Default should not annotate: {}",
+        output
+    );
+}
+
+#[test]
+fn test_json_with_show_ids() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA[Start] --> B[End]\n").unwrap();
+
+    let config = RenderConfig {
+        show_ids: true,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Json, &config).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+    let nodes = parsed["nodes"].as_array().unwrap();
+    let node_a = nodes.iter().find(|n| n["id"] == "A").unwrap();
+    assert_eq!(node_a["label"], "A: Start");
+}
+
+#[test]
+fn test_json_without_show_ids() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA[Start] --> B[End]\n").unwrap();
+
+    let config = RenderConfig::default();
+    let output = instance.render(OutputFormat::Json, &config).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+    let nodes = parsed["nodes"].as_array().unwrap();
+    let node_a = nodes.iter().find(|n| n["id"] == "A").unwrap();
+    assert_eq!(node_a["label"], "Start");
 }
