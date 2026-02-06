@@ -34,9 +34,9 @@ pub enum ShapeSpec {
     Trapezoid(String),
     /// Inverse trapezoid: [\text/]
     InvTrapezoid(String),
-    /// Parallelogram: @{shape: sl-rect}
+    /// Parallelogram: @{shape: lean-r} or @{shape: parallelogram}
     Parallelogram(String),
-    /// Inverted parallelogram: @{shape: inv-parallelogram}
+    /// Inverted parallelogram: @{shape: lean-l} or @{shape: inv-parallelogram}
     InvParallelogram(String),
     /// Manual input: @{shape: manual}
     ManualInput(String),

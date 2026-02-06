@@ -84,6 +84,9 @@ fn strip_frontmatter(input: &str) -> &str {
     };
     for (i, line) in after_first_newline.lines().enumerate() {
         if line.trim() == "---" {
+            // Sum byte lengths of lines up to and including the closing ---.
+            // The +1 accounts for the newline delimiter stripped by .lines().
+            // Clamp to input length in case the final line has no trailing newline.
             let consumed: usize = after_first_newline
                 .lines()
                 .take(i + 1)
@@ -173,7 +176,7 @@ fn is_known_passthrough(line: &str) -> bool {
         || lower.starts_with("linkstyle ")
         || lower.starts_with("direction ")
         || lower.starts_with("subgraph ")
-        || lower.starts_with("subgraph\n")
+        || lower == "subgraph"
         || lower == "end"
         || lower.starts_with("end ")
         || lower.starts_with("end;")

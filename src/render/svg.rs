@@ -854,16 +854,15 @@ fn compute_svg_bounds(
         bounds.update_rect(rect);
     }
 
-    let edge_count = diagram.edges.len();
-    for edge in &layout.edges {
-        if edge.index >= edge_count {
-            continue;
-        }
-        if diagram
+    let is_invisible = |index: usize| -> bool {
+        diagram
             .edges
-            .get(edge.index)
-            .is_some_and(|edge| edge.stroke == Stroke::Invisible)
-        {
+            .get(index)
+            .is_some_and(|e| e.stroke == Stroke::Invisible)
+    };
+
+    for edge in &layout.edges {
+        if edge.index >= diagram.edges.len() || is_invisible(edge.index) {
             continue;
         }
         for point in &edge.points {
@@ -872,11 +871,7 @@ fn compute_svg_bounds(
     }
 
     for edge in &layout.self_edges {
-        if diagram
-            .edges
-            .get(edge.edge_index)
-            .is_some_and(|edge| edge.stroke == Stroke::Invisible)
-        {
+        if is_invisible(edge.edge_index) {
             continue;
         }
         let points = self_edge_paths
