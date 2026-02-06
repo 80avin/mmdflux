@@ -70,7 +70,8 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     // This must happen after reconciliation moves nodes but before padding,
     // so routes use the reconciled node positions.
     let node_directions = svg_router::build_node_directions_svg(diagram);
-    svg_router::reroute_override_edges(diagram, &mut layout, &node_directions);
+    let (_stats, rerouted_edges) =
+        svg_router::reroute_override_edges(diagram, &mut layout, &node_directions);
 
     // Add horizontal padding to subgraph bounds so SVG renders with breathing
     // room on left/right edges.
@@ -104,6 +105,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         diagram,
         &layout,
         &self_edge_paths,
+        &rerouted_edges,
         svg_options.edge_curve,
         svg_options.edge_curve_radius,
         scale,
@@ -297,11 +299,13 @@ fn render_subgraphs(
     writer.end_group();
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_edges(
     writer: &mut SvgWriter,
     diagram: &Diagram,
     layout: &LayoutResult,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
+    rerouted_edges: &std::collections::HashSet<usize>,
     edge_curve: SvgEdgeCurve,
     edge_curve_radius: f64,
     scale: f64,
@@ -338,7 +342,13 @@ fn render_edges(
             points = clip_points_to_rect_end(&points, rect);
         }
 
-        let mut points = adjust_edge_points_for_shapes(diagram, layout, edge, &points);
+        // Rerouted edges already have border-snapped endpoints; skip adjustment
+        // which assumes dagre-style center-to-center paths.
+        let mut points = if rerouted_edges.contains(&index) {
+            points
+        } else {
+            adjust_edge_points_for_shapes(diagram, layout, edge, &points)
+        };
         points = fix_corner_points(&points);
         points = apply_marker_offsets(&points, edge);
         let d = path_from_points(&points, scale, edge_curve, edge_curve_radius);

@@ -5,7 +5,7 @@
 //! fresh orthogonal edge paths in float coordinates for all edges touching
 //! override subgraphs.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::dagre::{LayoutResult, NodeId, Point, Rect};
 use crate::graph::{Diagram, Direction};
@@ -234,85 +234,61 @@ pub fn route_svg_edge_with_boundary(
     // Compute the boundary crossing point
     let boundary = rect_boundary_crossing(inside_center, outside_center, sg_rect);
 
-    // Route inside portion: from inside node to boundary using inside direction
-    let inside_exit = exit_point(inside_rect, inside_direction);
-    let outside_entry = entry_point(outside_rect, outside_direction);
-
-    let mut points = Vec::new();
-
-    if from_is_inside {
-        // inside -> boundary -> outside
-        points.push(inside_exit);
-        // Add elbow if needed between exit and boundary
-        let is_inside_vertical =
-            matches!(inside_direction, Direction::TopDown | Direction::BottomTop);
-        if is_inside_vertical {
-            if (inside_exit.x - boundary.x).abs() > 0.5 {
-                points.push(Point {
-                    x: inside_exit.x,
-                    y: boundary.y,
-                });
-            }
-        } else if (inside_exit.y - boundary.y).abs() > 0.5 {
-            points.push(Point {
-                x: boundary.x,
-                y: inside_exit.y,
-            });
-        }
-        points.push(boundary);
-        // Add elbow if needed between boundary and entry
-        let is_outside_vertical =
-            matches!(outside_direction, Direction::TopDown | Direction::BottomTop);
-        if is_outside_vertical {
-            if (boundary.x - outside_entry.x).abs() > 0.5 {
-                points.push(Point {
-                    x: outside_entry.x,
-                    y: boundary.y,
-                });
-            }
-        } else if (boundary.y - outside_entry.y).abs() > 0.5 {
-            points.push(Point {
-                x: boundary.x,
-                y: outside_entry.y,
-            });
-        }
-        points.push(outside_entry);
+    // Compute source and target connection points based on edge direction.
+    // The source (from) always exits, the target (to) always enters.
+    let (source_point, source_dir, target_point, target_dir) = if from_is_inside {
+        (
+            exit_point(inside_rect, inside_direction),
+            inside_direction,
+            entry_point(outside_rect, outside_direction),
+            outside_direction,
+        )
     } else {
-        // outside -> boundary -> inside
-        points.push(outside_entry);
-        let is_outside_vertical =
-            matches!(outside_direction, Direction::TopDown | Direction::BottomTop);
-        if is_outside_vertical {
-            if (outside_entry.x - boundary.x).abs() > 0.5 {
-                points.push(Point {
-                    x: outside_entry.x,
-                    y: boundary.y,
-                });
-            }
-        } else if (outside_entry.y - boundary.y).abs() > 0.5 {
+        (
+            exit_point(outside_rect, outside_direction),
+            outside_direction,
+            entry_point(inside_rect, inside_direction),
+            inside_direction,
+        )
+    };
+
+    // Build path: source -> elbow -> boundary -> elbow -> target
+    let mut points = Vec::new();
+    points.push(source_point);
+
+    // Add elbow between source and boundary if not aligned
+    let is_source_vertical = matches!(source_dir, Direction::TopDown | Direction::BottomTop);
+    if is_source_vertical {
+        if (source_point.x - boundary.x).abs() > 0.5 {
             points.push(Point {
-                x: boundary.x,
-                y: outside_entry.y,
+                x: source_point.x,
+                y: boundary.y,
             });
         }
-        points.push(boundary);
-        let is_inside_vertical =
-            matches!(inside_direction, Direction::TopDown | Direction::BottomTop);
-        if is_inside_vertical {
-            if (boundary.x - inside_exit.x).abs() > 0.5 {
-                points.push(Point {
-                    x: inside_exit.x,
-                    y: boundary.y,
-                });
-            }
-        } else if (boundary.y - inside_exit.y).abs() > 0.5 {
-            points.push(Point {
-                x: boundary.x,
-                y: inside_exit.y,
-            });
-        }
-        points.push(inside_exit);
+    } else if (source_point.y - boundary.y).abs() > 0.5 {
+        points.push(Point {
+            x: boundary.x,
+            y: source_point.y,
+        });
     }
+    points.push(boundary);
+
+    // Add elbow between boundary and target if not aligned
+    let is_target_vertical = matches!(target_dir, Direction::TopDown | Direction::BottomTop);
+    if is_target_vertical {
+        if (boundary.x - target_point.x).abs() > 0.5 {
+            points.push(Point {
+                x: target_point.x,
+                y: boundary.y,
+            });
+        }
+    } else if (boundary.y - target_point.y).abs() > 0.5 {
+        points.push(Point {
+            x: boundary.x,
+            y: target_point.y,
+        });
+    }
+    points.push(target_point);
 
     // Collapse collinear points
     collapse_collinear(&mut points);
@@ -356,17 +332,18 @@ pub fn reroute_override_edges(
     diagram: &Diagram,
     layout: &mut LayoutResult,
     node_directions: &HashMap<String, Direction>,
-) -> RerouteStats {
+) -> (RerouteStats, HashSet<usize>) {
     // Check if any subgraphs have direction overrides
     let has_overrides = diagram.subgraphs.values().any(|sg| sg.dir.is_some());
     if !has_overrides {
-        return RerouteStats::default();
+        return (RerouteStats::default(), HashSet::new());
     }
 
     // Build override node map: node_id -> subgraph_id (deepest wins)
     let override_nodes = build_override_node_map_internal(diagram);
 
     let mut stats = RerouteStats::default();
+    let mut rerouted_indices = HashSet::new();
 
     for edge_layout in &mut layout.edges {
         let Some(edge) = diagram.edges.get(edge_layout.index) else {
@@ -401,6 +378,7 @@ pub fn reroute_override_edges(
                     layout.nodes.get(&NodeId(edge.to.clone())),
                 ) {
                     edge_layout.points = route_svg_edge_direct(from_rect, to_rect, dir);
+                    rerouted_indices.insert(edge_layout.index);
                 }
             }
             _ => {
@@ -439,12 +417,13 @@ pub fn reroute_override_edges(
                         inside_dir,
                         outside_dir,
                     );
+                    rerouted_indices.insert(edge_layout.index);
                 }
             }
         }
     }
 
-    stats
+    (stats, rerouted_indices)
 }
 
 /// Build the override node map: node_id -> subgraph_id.
