@@ -6,7 +6,7 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="clusters">
-      <rect class="subgraph" x="92.45" y="8.00" width="187.82" height="624.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <rect class="subgraph" x="84.45" y="8.00" width="203.82" height="624.00" fill="none" stroke="#888" stroke-width="1.00" />
       <text x="186.36" y="12.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Horizontal Section</text>
     </g>
     <g class="edgePaths">

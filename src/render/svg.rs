@@ -57,6 +57,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     );
     reconcile_sublayouts_dagre(diagram, &mut layout, &sublayouts);
 
+    // Add horizontal padding to subgraph bounds so SVG renders with breathing
+    // room on left/right edges.
+    let subgraph_pad_x = metrics.font_size * 0.5;
+    apply_subgraph_svg_padding(diagram, &mut layout, subgraph_pad_x, 0.0);
+
     let self_edge_paths = compute_self_edge_paths(diagram, &layout, &metrics);
     let bounds = compute_svg_bounds(diagram, &layout, &metrics, &self_edge_paths);
     let padding = svg_options.diagram_padding;
@@ -99,6 +104,37 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 
     writer.end_svg();
     writer.finish()
+}
+
+fn apply_subgraph_svg_padding(
+    diagram: &Diagram,
+    layout: &mut LayoutResult,
+    pad_x: f64,
+    pad_y: f64,
+) {
+    if pad_x <= 0.0 && pad_y <= 0.0 {
+        return;
+    }
+
+    for (id, rect) in layout.subgraph_bounds.iter_mut() {
+        rect.x -= pad_x;
+        rect.y -= pad_y;
+        rect.width = (rect.width + pad_x * 2.0).max(0.0);
+        rect.height = (rect.height + pad_y * 2.0).max(0.0);
+
+        if let Some(node_rect) = layout.nodes.get_mut(&crate::dagre::NodeId(id.clone())) {
+            *node_rect = *rect;
+        }
+    }
+
+    // Ensure all subgraph IDs exist in nodes map for bounds updates.
+    for (id, rect) in layout.subgraph_bounds.iter() {
+        if !layout.nodes.contains_key(&crate::dagre::NodeId(id.clone()))
+            && diagram.subgraphs.contains_key(id)
+        {
+            layout.nodes.insert(crate::dagre::NodeId(id.clone()), *rect);
+        }
+    }
 }
 
 fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node) -> (f64, f64) {
@@ -246,6 +282,18 @@ fn render_edges(
         let Some(edge) = diagram.edges.get(index) else {
             continue;
         };
+        let mut points = points;
+        if let Some(sg_id) = edge.from_subgraph.as_ref() {
+            if let Some(rect) = layout.subgraph_bounds.get(sg_id) {
+                points = clip_points_to_rect_start(&points, rect);
+            }
+        }
+        if let Some(sg_id) = edge.to_subgraph.as_ref() {
+            if let Some(rect) = layout.subgraph_bounds.get(sg_id) {
+                points = clip_points_to_rect_end(&points, rect);
+            }
+        }
+
         let mut points = adjust_edge_points_for_shapes(diagram, layout, edge, &points);
         points = fix_corner_points(&points);
         points = apply_marker_offsets(&points, edge);
@@ -259,6 +307,121 @@ fn render_edges(
         writer.push_line(&line);
     }
     writer.end_group();
+}
+
+fn point_inside_rect(rect: &Rect, point: Point) -> bool {
+    let eps = 0.01;
+    point.x > rect.x + eps
+        && point.x < rect.x + rect.width - eps
+        && point.y > rect.y + eps
+        && point.y < rect.y + rect.height - eps
+}
+
+fn segment_rect_intersection(start: Point, end: Point, rect: &Rect) -> Option<Point> {
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+        return None;
+    }
+
+    let mut candidates: Vec<(f64, Point)> = Vec::new();
+
+    let x_min = rect.x;
+    let x_max = rect.x + rect.width;
+    let y_min = rect.y;
+    let y_max = rect.y + rect.height;
+
+    if dx.abs() > f64::EPSILON {
+        let t_left = (x_min - start.x) / dx;
+        if (0.0..=1.0).contains(&t_left) {
+            let y = start.y + t_left * dy;
+            if y >= y_min && y <= y_max {
+                candidates.push((t_left, Point { x: x_min, y }));
+            }
+        }
+        let t_right = (x_max - start.x) / dx;
+        if (0.0..=1.0).contains(&t_right) {
+            let y = start.y + t_right * dy;
+            if y >= y_min && y <= y_max {
+                candidates.push((t_right, Point { x: x_max, y }));
+            }
+        }
+    }
+
+    if dy.abs() > f64::EPSILON {
+        let t_top = (y_min - start.y) / dy;
+        if (0.0..=1.0).contains(&t_top) {
+            let x = start.x + t_top * dx;
+            if x >= x_min && x <= x_max {
+                candidates.push((t_top, Point { x, y: y_min }));
+            }
+        }
+        let t_bottom = (y_max - start.y) / dy;
+        if (0.0..=1.0).contains(&t_bottom) {
+            let x = start.x + t_bottom * dx;
+            if x >= x_min && x <= x_max {
+                candidates.push((t_bottom, Point { x, y: y_max }));
+            }
+        }
+    }
+
+    candidates
+        .into_iter()
+        .filter(|(t, _)| *t >= 0.0 && *t <= 1.0)
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, point)| point)
+}
+
+fn clip_points_to_rect_start(points: &[Point], rect: &Rect) -> Vec<Point> {
+    if points.len() < 2 {
+        return points.to_vec();
+    }
+    if !point_inside_rect(rect, points[0]) {
+        return points.to_vec();
+    }
+
+    let mut idx = 0usize;
+    while idx + 1 < points.len() && point_inside_rect(rect, points[idx]) {
+        idx += 1;
+    }
+    if idx == 0 || idx >= points.len() {
+        return points.to_vec();
+    }
+
+    let inside = points[idx - 1];
+    let outside = points[idx];
+    let intersection = segment_rect_intersection(inside, outside, rect).unwrap_or(inside);
+
+    let mut out = Vec::new();
+    out.push(intersection);
+    out.extend_from_slice(&points[idx..]);
+    out
+}
+
+fn clip_points_to_rect_end(points: &[Point], rect: &Rect) -> Vec<Point> {
+    if points.len() < 2 {
+        return points.to_vec();
+    }
+    let last_idx = points.len() - 1;
+    if !point_inside_rect(rect, points[last_idx]) {
+        return points.to_vec();
+    }
+
+    let mut idx = last_idx;
+    while idx > 0 && point_inside_rect(rect, points[idx]) {
+        idx -= 1;
+    }
+    if idx == last_idx || idx >= last_idx {
+        return points.to_vec();
+    }
+
+    let outside = points[idx];
+    let inside = points[idx + 1];
+    let intersection = segment_rect_intersection(outside, inside, rect).unwrap_or(inside);
+
+    let mut out = points[..=idx].to_vec();
+    out.push(intersection);
+    out
 }
 
 fn render_edge_labels(

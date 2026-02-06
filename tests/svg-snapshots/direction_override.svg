@@ -1,12 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 443.00 536.00" style="max-width: 443.00px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 459.00 536.00" style="max-width: 459.00px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(124.00,0.00)">
+  <g transform="translate(132.00,0.00)">
     <g class="clusters">
-      <rect class="subgraph" x="-116.00" y="112.00" width="427.00" height="312.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <rect class="subgraph" x="-124.00" y="112.00" width="443.00" height="312.00" fill="none" stroke="#888" stroke-width="1.00" />
       <text x="97.50" y="116.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Horizontal Section</text>
     </g>
     <g class="edgePaths">

@@ -1,14 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 243.54 378.00" style="max-width: 243.54px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 259.54 378.00" style="max-width: 259.54px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(0.00,0.00)">
+  <g transform="translate(8.00,0.00)">
     <g class="clusters">
-      <rect class="subgraph" x="8.00" y="8.00" width="227.54" height="362.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <rect class="subgraph" x="0.00" y="8.00" width="243.54" height="362.00" fill="none" stroke="#888" stroke-width="1.00" />
       <text x="121.77" y="12.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Outer</text>
-      <rect class="subgraph" x="28.00" y="137.00" width="187.54" height="208.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <rect class="subgraph" x="20.00" y="137.00" width="203.54" height="208.00" fill="none" stroke="#888" stroke-width="1.00" />
       <text x="121.77" y="141.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Inner</text>
     </g>
     <g class="edgePaths">
