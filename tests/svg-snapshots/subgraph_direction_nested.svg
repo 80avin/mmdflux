@@ -14,7 +14,7 @@
     <g class="edgePaths">
       <path d="M13.00,301.00 L59.00,301.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M131.91,301.00 L177.91,301.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M97.45,87.00 L97.45,114.70 C97.45,142.40 97.45,197.80 77.64,225.50 C57.82,253.20 18.18,253.20 -1.64,256.00 C-21.45,258.80 -21.45,264.40 -21.45,267.20 L-21.45,270.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M97.45,87.00 L97.45,102.58 C97.45,118.17 97.45,149.33 77.64,164.92 C57.82,180.50 18.18,180.50 -1.64,195.42 C-21.45,210.33 -21.45,240.17 -21.45,255.08 L-21.45,270.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

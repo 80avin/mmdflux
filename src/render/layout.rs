@@ -687,6 +687,90 @@ pub(crate) fn reconcile_sublayouts_dagre(
     }
 }
 
+/// Push external nodes that overlap with reconciled subgraph bounds downward.
+///
+/// After sublayout reconciliation, the subgraph may now occupy space where dagre
+/// placed external nodes.  This shifts those nodes (and everything below them)
+/// down to maintain a minimum gap.
+pub(crate) fn resolve_sublayout_overlaps(
+    diagram: &Diagram,
+    layout: &mut dagre::LayoutResult,
+    min_gap: f64,
+) {
+    for (sg_id, sg) in &diagram.subgraphs {
+        if sg.dir.is_none() {
+            continue;
+        }
+        let Some(sg_bounds) = layout.subgraph_bounds.get(sg_id).copied() else {
+            continue;
+        };
+
+        let sg_bottom = sg_bounds.y + sg_bounds.height;
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+
+        // Find the maximum shift needed to clear overlapping external nodes.
+        let mut max_shift = 0.0f64;
+        for (nid, rect) in &layout.nodes {
+            if sg_node_set.contains(nid.0.as_str()) || nid.0 == *sg_id {
+                continue;
+            }
+            // Only consider nodes whose center is below the subgraph center
+            // (i.e., they should be below the subgraph, not above it).
+            let node_cy = rect.y + rect.height / 2.0;
+            let sg_cy = sg_bounds.y + sg_bounds.height / 2.0;
+            if node_cy > sg_cy && rect.y < sg_bottom + min_gap {
+                let needed = sg_bottom + min_gap - rect.y;
+                if needed > max_shift {
+                    max_shift = needed;
+                }
+            }
+        }
+
+        if max_shift < 0.01 {
+            continue;
+        }
+
+        // Shift all nodes below the subgraph center.
+        let sg_cy = sg_bounds.y + sg_bounds.height / 2.0;
+        for (nid, rect) in layout.nodes.iter_mut() {
+            if sg_node_set.contains(nid.0.as_str()) || nid.0 == *sg_id {
+                continue;
+            }
+            if rect.y + rect.height / 2.0 > sg_cy {
+                rect.y += max_shift;
+            }
+        }
+
+        // Shift edge points that are below the subgraph center.
+        for edge in &mut layout.edges {
+            for point in &mut edge.points {
+                if point.y > sg_cy {
+                    point.y += max_shift;
+                }
+            }
+        }
+
+        // Shift self-edge points.
+        for se in &mut layout.self_edges {
+            for point in &mut se.points {
+                if point.y > sg_cy {
+                    point.y += max_shift;
+                }
+            }
+        }
+
+        // Shift label positions.
+        for pos in layout.label_positions.values_mut() {
+            if pos.point.y > sg_cy {
+                pos.point.y += max_shift;
+            }
+        }
+
+        // Update layout height.
+        layout.height += max_shift;
+    }
+}
+
 fn build_dagre_layout_with_config<FN, FE>(
     diagram: &Diagram,
     dagre_config: &DagreConfig,

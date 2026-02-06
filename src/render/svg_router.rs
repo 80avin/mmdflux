@@ -157,163 +157,21 @@ pub fn route_svg_edge_direct(
     }
 }
 
-/// Find the intersection point where a line segment from `inside` to `outside`
-/// crosses the boundary of a rectangle.
-fn rect_boundary_crossing(inside: Point, outside: Point, rect: &Rect) -> Point {
-    let dx = outside.x - inside.x;
-    let dy = outside.y - inside.y;
-    if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
-        return inside;
-    }
-
-    let x_min = rect.x;
-    let x_max = rect.x + rect.width;
-    let y_min = rect.y;
-    let y_max = rect.y + rect.height;
-
-    let mut best_t = f64::INFINITY;
-
-    // Check each edge of the rectangle
-    if dx.abs() > f64::EPSILON {
-        for &x_edge in &[x_min, x_max] {
-            let t = (x_edge - inside.x) / dx;
-            if t > 0.0 && t <= 1.0 {
-                let y = inside.y + t * dy;
-                if y >= y_min - 0.01 && y <= y_max + 0.01 && t < best_t {
-                    best_t = t;
-                }
-            }
-        }
-    }
-    if dy.abs() > f64::EPSILON {
-        for &y_edge in &[y_min, y_max] {
-            let t = (y_edge - inside.y) / dy;
-            if t > 0.0 && t <= 1.0 {
-                let x = inside.x + t * dx;
-                if x >= x_min - 0.01 && x <= x_max + 0.01 && t < best_t {
-                    best_t = t;
-                }
-            }
-        }
-    }
-
-    if best_t.is_finite() {
-        Point {
-            x: inside.x + best_t * dx,
-            y: inside.y + best_t * dy,
-        }
-    } else {
-        inside
-    }
-}
-
 /// Route an edge that crosses a subgraph boundary.
 ///
-/// Computes a path from a node inside an override subgraph through the subgraph
-/// boundary to a node outside (or vice versa).
-///
-/// The `inside_direction` is the override direction for the inside portion.
-/// The `outside_direction` is the diagram direction for the outside portion.
+/// Uses a simple L-shaped path with the outside (diagram) direction for both
+/// endpoints.  Cross-boundary edges are routed the same way as normal edges —
+/// exit source along the flow direction, elbow at the midpoint, enter target
+/// along the flow direction — so paths swing outward rather than cutting
+/// through the interior of the diagram.
 pub fn route_svg_edge_with_boundary(
     from_rect: &Rect,
     to_rect: &Rect,
-    sg_rect: &Rect,
-    from_is_inside: bool,
+    _sg_rect: &Rect,
+    _from_is_inside: bool,
     outside_direction: Direction,
 ) -> Vec<Point> {
-    let (inside_rect, outside_rect) = if from_is_inside {
-        (from_rect, to_rect)
-    } else {
-        (to_rect, from_rect)
-    };
-
-    let inside_center = inside_rect.center();
-    let outside_center = outside_rect.center();
-
-    // Compute the boundary crossing point
-    let boundary = rect_boundary_crossing(inside_center, outside_center, sg_rect);
-
-    // Cross-boundary edges use the outside (diagram) direction for both
-    // endpoints. The override direction only applies to edges fully within
-    // the subgraph. This matches Mermaid.js behavior and ensures the approach
-    // to the target node is always from outside the node rect.
-    let (source_point, source_dir, target_point, target_dir) = if from_is_inside {
-        (
-            exit_point(inside_rect, outside_direction),
-            outside_direction,
-            entry_point(outside_rect, outside_direction),
-            outside_direction,
-        )
-    } else {
-        (
-            exit_point(outside_rect, outside_direction),
-            outside_direction,
-            entry_point(inside_rect, outside_direction),
-            outside_direction,
-        )
-    };
-
-    // Build path: source -> elbow -> boundary -> elbow -> target
-    let mut points = Vec::new();
-    points.push(source_point);
-
-    // Add elbow between source and boundary if not aligned
-    let is_source_vertical = matches!(source_dir, Direction::TopDown | Direction::BottomTop);
-    if is_source_vertical {
-        if (source_point.x - boundary.x).abs() > 0.5 {
-            points.push(Point {
-                x: source_point.x,
-                y: boundary.y,
-            });
-        }
-    } else if (source_point.y - boundary.y).abs() > 0.5 {
-        points.push(Point {
-            x: boundary.x,
-            y: source_point.y,
-        });
-    }
-    points.push(boundary);
-
-    // Add elbow between boundary and target if not aligned
-    let is_target_vertical = matches!(target_dir, Direction::TopDown | Direction::BottomTop);
-    if is_target_vertical {
-        if (boundary.x - target_point.x).abs() > 0.5 {
-            points.push(Point {
-                x: target_point.x,
-                y: boundary.y,
-            });
-        }
-    } else if (boundary.y - target_point.y).abs() > 0.5 {
-        points.push(Point {
-            x: boundary.x,
-            y: target_point.y,
-        });
-    }
-    points.push(target_point);
-
-    // Collapse collinear points
-    collapse_collinear(&mut points);
-    points
-}
-
-/// Remove collinear points from a path.
-fn collapse_collinear(points: &mut Vec<Point>) {
-    if points.len() < 3 {
-        return;
-    }
-    let mut i = 1;
-    while i + 1 < points.len() {
-        let prev = points[i - 1];
-        let curr = points[i];
-        let next = points[i + 1];
-        let collinear = ((prev.x - curr.x).abs() < 0.01 && (curr.x - next.x).abs() < 0.01)
-            || ((prev.y - curr.y).abs() < 0.01 && (curr.y - next.y).abs() < 0.01);
-        if collinear {
-            points.remove(i);
-        } else {
-            i += 1;
-        }
-    }
+    route_svg_edge_direct(from_rect, to_rect, outside_direction)
 }
 
 /// Statistics about rerouted edges for debugging.

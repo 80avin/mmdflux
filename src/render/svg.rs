@@ -5,6 +5,7 @@ use std::fmt::Write;
 
 use super::layout::{
     build_dagre_layout, compute_sublayouts, dagre_config_for_layout, reconcile_sublayouts_dagre,
+    resolve_sublayout_overlaps,
 };
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
@@ -65,6 +66,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         title_pad_y,
         content_pad_y,
     );
+
+    // Push external nodes that now overlap with reconciled subgraph bounds.
+    // The gap must account for subgraph padding (added later) plus breathing room.
+    let overlap_gap = metrics.node_padding_y + metrics.font_size;
+    resolve_sublayout_overlaps(diagram, &mut layout, overlap_gap);
 
     // Reroute edges affected by direction-override subgraphs.
     // This must happen after reconciliation moves nodes but before padding,
