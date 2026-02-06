@@ -527,6 +527,22 @@ pub(crate) fn reconcile_sublayouts_dagre(
         return;
     }
 
+    let mut external_overrides: HashSet<String> = HashSet::new();
+    for (sg_id, sg) in &diagram.subgraphs {
+        if sg.dir.is_none() {
+            continue;
+        }
+        let node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+        for edge in &diagram.edges {
+            let from_in = node_set.contains(edge.from.as_str());
+            let to_in = node_set.contains(edge.to.as_str());
+            if from_in ^ to_in {
+                external_overrides.insert(sg_id.clone());
+                break;
+            }
+        }
+    }
+
     // Process sublayouts in deterministic depth order (shallowest first).
     let mut sorted_sg_ids: Vec<&String> = sublayouts.keys().collect();
     sorted_sg_ids.sort_by(|a, b| {
@@ -573,7 +589,13 @@ pub(crate) fn reconcile_sublayouts_dagre(
         let final_h = sub_h + title_pad + content_pad_y * 2.0;
 
         let new_sg_x = sg_cx - final_w / 2.0;
-        let new_sg_y = sg_cy - final_h / 2.0;
+        let mut new_sg_y = sg_cy - final_h / 2.0;
+        if external_overrides.contains(sg_id) {
+            let bias = title_pad_y * 0.5;
+            let min_y = parent_bounds.y;
+            let max_y = parent_bounds.y + parent_bounds.height - final_h;
+            new_sg_y = (new_sg_y + bias).clamp(min_y, max_y);
+        }
 
         let offset_x = new_sg_x + (final_w - sub_w) / 2.0 - min_x;
         let offset_y = new_sg_y + content_pad_y + title_pad - min_y;

@@ -330,36 +330,51 @@ fn render_edges(
                 _ => false,
             };
             if is_cross_boundary {
-                if let Some(sg_id) = from_override {
-                    if let (Some(rect), Some(node_rect), Some(other_rect)) = (
-                        layout.subgraph_bounds.get(sg_id),
-                        layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())),
-                        layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())),
-                    ) {
-                        let center = node_rect.center();
-                        let other_center = other_rect.center();
-                        if point_inside_rect(rect, center) && !point_inside_rect(rect, other_center)
-                        {
-                            let boundary = segment_rect_intersection(center, other_center, rect)
-                                .unwrap_or(center);
-                            points =
-                                splice_points_from_subgraph_start(&points, rect, boundary, center);
+                if let Some(rerouted) =
+                    reroute_cross_boundary_points(diagram, layout, edge, from_override, to_override)
+                {
+                    points = rerouted;
+                } else {
+                    if let Some(sg_id) = from_override {
+                        if let (Some(rect), Some(node_rect), Some(other_rect)) = (
+                            layout.subgraph_bounds.get(sg_id),
+                            layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())),
+                            layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())),
+                        ) {
+                            let center = node_rect.center();
+                            let other_center = other_rect.center();
+                            if point_inside_rect(rect, center)
+                                && !point_inside_rect(rect, other_center)
+                            {
+                                let boundary =
+                                    segment_rect_intersection(center, other_center, rect)
+                                        .unwrap_or(center);
+                                points = splice_points_from_subgraph_start(
+                                    &points,
+                                    rect,
+                                    boundary,
+                                    center,
+                                );
+                            }
                         }
                     }
-                }
-                if let Some(sg_id) = to_override {
-                    if let (Some(rect), Some(node_rect), Some(other_rect)) = (
-                        layout.subgraph_bounds.get(sg_id),
-                        layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())),
-                        layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())),
-                    ) {
-                        let center = node_rect.center();
-                        let other_center = other_rect.center();
-                        if point_inside_rect(rect, center) && !point_inside_rect(rect, other_center)
-                        {
-                            let boundary = segment_rect_intersection(center, other_center, rect)
-                                .unwrap_or(center);
-                            points = splice_points_to_subgraph_end(&points, rect, boundary, center);
+                    if let Some(sg_id) = to_override {
+                        if let (Some(rect), Some(node_rect), Some(other_rect)) = (
+                            layout.subgraph_bounds.get(sg_id),
+                            layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())),
+                            layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())),
+                        ) {
+                            let center = node_rect.center();
+                            let other_center = other_rect.center();
+                            if point_inside_rect(rect, center)
+                                && !point_inside_rect(rect, other_center)
+                            {
+                                let boundary =
+                                    segment_rect_intersection(center, other_center, rect)
+                                        .unwrap_or(center);
+                                points =
+                                    splice_points_to_subgraph_end(&points, rect, boundary, center);
+                            }
                         }
                     }
                 }
@@ -391,6 +406,51 @@ fn render_edges(
     writer.end_group();
 }
 
+fn reroute_cross_boundary_points(
+    diagram: &Diagram,
+    layout: &LayoutResult,
+    edge: &Edge,
+    from_override: Option<&String>,
+    to_override: Option<&String>,
+) -> Option<Vec<Point>> {
+    let from_rect = layout.nodes.get(&crate::dagre::NodeId(edge.from.clone()))?;
+    let to_rect = layout.nodes.get(&crate::dagre::NodeId(edge.to.clone()))?;
+    let from_node = diagram.nodes.get(&edge.from)?;
+    let to_node = diagram.nodes.get(&edge.to)?;
+
+    let from_center = from_rect.center();
+    let to_center = to_rect.center();
+    let start = intersect_svg_node(from_rect, to_center, from_node.shape);
+    let end = intersect_svg_node(to_rect, from_center, to_node.shape);
+
+    let mut anchors = Vec::new();
+    anchors.push(start);
+
+    if let Some(sg_id) = from_override {
+        if let Some(rect) = layout.subgraph_bounds.get(sg_id) {
+            if point_inside_rect(rect, from_center) && !point_inside_rect(rect, to_center) {
+                if let Some(boundary) = segment_rect_intersection(from_center, to_center, rect) {
+                    push_unique_point(&mut anchors, boundary);
+                }
+            }
+        }
+    }
+
+    if let Some(sg_id) = to_override {
+        if let Some(rect) = layout.subgraph_bounds.get(sg_id) {
+            if point_inside_rect(rect, to_center) && !point_inside_rect(rect, from_center) {
+                if let Some(boundary) = segment_rect_intersection(to_center, from_center, rect) {
+                    push_unique_point(&mut anchors, boundary);
+                }
+            }
+        }
+    }
+
+    push_unique_point(&mut anchors, end);
+
+    Some(orthogonalize_anchors(&anchors, diagram.direction))
+}
+
 fn point_inside_rect(rect: &Rect, point: Point) -> bool {
     let eps = 0.01;
     point.x > rect.x + eps
@@ -401,6 +461,64 @@ fn point_inside_rect(rect: &Rect, point: Point) -> bool {
 
 fn points_close(a: Point, b: Point) -> bool {
     (a.x - b.x).abs() < 0.01 && (a.y - b.y).abs() < 0.01
+}
+
+fn push_unique_point(points: &mut Vec<Point>, point: Point) {
+    let should_push = match points.last() {
+        Some(last) => !points_close(*last, point),
+        None => true,
+    };
+    if should_push {
+        points.push(point);
+    }
+}
+
+fn orthogonalize_anchors(points: &[Point], direction: Direction) -> Vec<Point> {
+    if points.is_empty() {
+        return Vec::new();
+    }
+    let prefer_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
+    let mut out = Vec::new();
+    out.push(points[0]);
+
+    for window in points.windows(2) {
+        let start = window[0];
+        let end = window[1];
+        if (start.x - end.x).abs() < 0.01 || (start.y - end.y).abs() < 0.01 {
+            push_unique_point(&mut out, end);
+            continue;
+        }
+
+        let elbow = if prefer_vertical {
+            Point { x: start.x, y: end.y }
+        } else {
+            Point { x: end.x, y: start.y }
+        };
+        push_unique_point(&mut out, elbow);
+        push_unique_point(&mut out, end);
+    }
+
+    collapse_collinear_points(&mut out);
+    out
+}
+
+fn collapse_collinear_points(points: &mut Vec<Point>) {
+    if points.len() < 3 {
+        return;
+    }
+    let mut i = 1;
+    while i + 1 < points.len() {
+        let prev = points[i - 1];
+        let curr = points[i];
+        let next = points[i + 1];
+        let collinear = (prev.x - curr.x).abs() < 0.01 && (curr.x - next.x).abs() < 0.01
+            || (prev.y - curr.y).abs() < 0.01 && (curr.y - next.y).abs() < 0.01;
+        if collinear {
+            points.remove(i);
+        } else {
+            i += 1;
+        }
+    }
 }
 
 fn segment_rect_intersection(start: Point, end: Point, rect: &Rect) -> Option<Point> {
