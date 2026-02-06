@@ -70,6 +70,8 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let subgraph_pad_x = metrics.node_padding_x;
     apply_subgraph_svg_padding(diagram, &mut layout, subgraph_pad_x, 0.0);
 
+    let override_nodes = build_override_node_map(diagram);
+
     let self_edge_paths = compute_self_edge_paths(diagram, &layout, &metrics);
     let bounds = compute_svg_bounds(diagram, &layout, &metrics, &self_edge_paths);
     let padding = svg_options.diagram_padding;
@@ -95,6 +97,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         diagram,
         &layout,
         &self_edge_paths,
+        &override_nodes,
         svg_options.edge_curve,
         svg_options.edge_curve_radius,
         scale,
@@ -104,6 +107,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         diagram,
         &layout,
         &self_edge_paths,
+        &override_nodes,
         &metrics,
         scale,
     );
@@ -143,6 +147,31 @@ fn apply_subgraph_svg_padding(
             layout.nodes.insert(crate::dagre::NodeId(id.clone()), *rect);
         }
     }
+}
+
+fn build_override_node_map(diagram: &Diagram) -> HashMap<String, String> {
+    let mut override_nodes = HashMap::new();
+    let mut sg_ids: Vec<&String> = diagram
+        .subgraphs
+        .iter()
+        .filter(|(_, sg)| sg.dir.is_some())
+        .map(|(id, _)| id)
+        .collect();
+    sg_ids.sort_by(|a, b| {
+        diagram
+            .subgraph_depth(a)
+            .cmp(&diagram.subgraph_depth(b))
+            .then_with(|| a.cmp(b))
+    });
+    for sg_id in sg_ids {
+        let sg = &diagram.subgraphs[sg_id];
+        for node_id in &sg.nodes {
+            if !diagram.is_subgraph(node_id) {
+                override_nodes.insert(node_id.clone(), sg_id.clone());
+            }
+        }
+    }
+    override_nodes
 }
 
 fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node) -> (f64, f64) {
@@ -267,6 +296,7 @@ fn render_edges(
     diagram: &Diagram,
     layout: &LayoutResult,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
+    override_nodes: &HashMap<String, String>,
     edge_curve: SvgEdgeCurve,
     edge_curve_radius: f64,
     scale: f64,
@@ -291,6 +321,50 @@ fn render_edges(
             continue;
         };
         let mut points = points;
+        if edge.from_subgraph.is_none() && edge.to_subgraph.is_none() {
+            let from_override = override_nodes.get(&edge.from);
+            let to_override = override_nodes.get(&edge.to);
+            let is_cross_boundary = match (from_override, to_override) {
+                (Some(a), Some(b)) => a != b,
+                (Some(_), None) | (None, Some(_)) => true,
+                _ => false,
+            };
+            if is_cross_boundary {
+                if let Some(sg_id) = from_override {
+                    if let (Some(rect), Some(node_rect), Some(other_rect)) = (
+                        layout.subgraph_bounds.get(sg_id),
+                        layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())),
+                        layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())),
+                    ) {
+                        let center = node_rect.center();
+                        let other_center = other_rect.center();
+                        if point_inside_rect(rect, center) && !point_inside_rect(rect, other_center)
+                        {
+                            let boundary = segment_rect_intersection(center, other_center, rect)
+                                .unwrap_or(center);
+                            points =
+                                splice_points_from_subgraph_start(&points, rect, boundary, center);
+                        }
+                    }
+                }
+                if let Some(sg_id) = to_override {
+                    if let (Some(rect), Some(node_rect), Some(other_rect)) = (
+                        layout.subgraph_bounds.get(sg_id),
+                        layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())),
+                        layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())),
+                    ) {
+                        let center = node_rect.center();
+                        let other_center = other_rect.center();
+                        if point_inside_rect(rect, center) && !point_inside_rect(rect, other_center)
+                        {
+                            let boundary = segment_rect_intersection(center, other_center, rect)
+                                .unwrap_or(center);
+                            points = splice_points_to_subgraph_end(&points, rect, boundary, center);
+                        }
+                    }
+                }
+            }
+        }
         if let Some(sg_id) = edge.from_subgraph.as_ref() {
             if let Some(rect) = layout.subgraph_bounds.get(sg_id) {
                 points = clip_points_to_rect_start(&points, rect);
@@ -323,6 +397,10 @@ fn point_inside_rect(rect: &Rect, point: Point) -> bool {
         && point.x < rect.x + rect.width - eps
         && point.y > rect.y + eps
         && point.y < rect.y + rect.height - eps
+}
+
+fn points_close(a: Point, b: Point) -> bool {
+    (a.x - b.x).abs() < 0.01 && (a.y - b.y).abs() < 0.01
 }
 
 fn segment_rect_intersection(start: Point, end: Point, rect: &Rect) -> Option<Point> {
@@ -432,11 +510,69 @@ fn clip_points_to_rect_end(points: &[Point], rect: &Rect) -> Vec<Point> {
     out
 }
 
+fn splice_points_from_subgraph_start(
+    points: &[Point],
+    rect: &Rect,
+    boundary: Point,
+    center: Point,
+) -> Vec<Point> {
+    let mut idx = 0;
+    while idx < points.len() && point_inside_rect(rect, points[idx]) {
+        idx += 1;
+    }
+
+    let mut out = Vec::new();
+    out.push(center);
+    if !points_close(center, boundary) {
+        out.push(boundary);
+    }
+
+    if idx < points.len() {
+        let mut rest: Vec<Point> = points[idx..].to_vec();
+        if let Some(first) = rest.first() {
+            if points_close(*first, boundary) {
+                rest.remove(0);
+            }
+        }
+        out.extend(rest);
+    }
+
+    out
+}
+
+fn splice_points_to_subgraph_end(
+    points: &[Point],
+    rect: &Rect,
+    boundary: Point,
+    center: Point,
+) -> Vec<Point> {
+    let mut out: Vec<Point> = points.to_vec();
+    while out.len() > 1 && point_inside_rect(rect, *out.last().unwrap()) {
+        out.pop();
+    }
+    let should_push_boundary = match out.last() {
+        Some(point) => !points_close(*point, boundary),
+        None => true,
+    };
+    if should_push_boundary {
+        out.push(boundary);
+    }
+    let should_push_center = match out.last() {
+        Some(point) => !points_close(*point, center),
+        None => true,
+    };
+    if should_push_center {
+        out.push(center);
+    }
+    out
+}
+
 fn render_edge_labels(
     writer: &mut SvgWriter,
     diagram: &Diagram,
     layout: &LayoutResult,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
+    override_nodes: &HashMap<String, String>,
     metrics: &SvgTextMetrics,
     scale: f64,
 ) {
@@ -446,7 +582,18 @@ fn render_edge_labels(
         let Some(label) = edge.label.as_ref() else {
             continue;
         };
-        let use_precomputed = edge.from_subgraph.is_none() && edge.to_subgraph.is_none();
+        let cross_boundary = if edge.from_subgraph.is_none() && edge.to_subgraph.is_none() {
+            let from_override = override_nodes.get(&edge.from);
+            let to_override = override_nodes.get(&edge.to);
+            matches!(
+                (from_override, to_override),
+                (Some(a), Some(b)) if a != b
+            ) || matches!((from_override, to_override), (Some(_), None) | (None, Some(_)))
+        } else {
+            false
+        };
+        let use_precomputed =
+            edge.from_subgraph.is_none() && edge.to_subgraph.is_none() && !cross_boundary;
         let position = if use_precomputed {
             layout.label_positions.get(&index).map(|pos| pos.point)
         } else {
