@@ -202,9 +202,11 @@ fn to_dagre_direction(dir: Direction) -> DagreDirection {
 }
 
 /// Pre-computed sub-layout result for a direction-override subgraph.
-struct SubLayoutResult {
+pub(crate) struct SubLayoutResult {
     /// The dagre LayoutResult with node positions in the sub-layout coordinate system.
     result: dagre::LayoutResult,
+    /// Map from sublayout edge index to original diagram edge index.
+    edge_index_map: Vec<usize>,
 }
 
 /// Compute sub-layouts for subgraphs with direction overrides.
@@ -213,10 +215,16 @@ struct SubLayoutResult {
 /// graph with just the subgraph's internal nodes and edges, and runs layout with
 /// the overridden direction. The resulting dimensions can be injected into the
 /// parent layout so the compound node is sized correctly.
-fn compute_sublayouts(
+pub(crate) fn compute_sublayouts<FN, FE>(
     diagram: &Diagram,
     parent_dagre_config: &DagreConfig,
-) -> HashMap<String, SubLayoutResult> {
+    node_dims: FN,
+    edge_label_dims: FE,
+) -> HashMap<String, SubLayoutResult>
+where
+    FN: Fn(&Node) -> (f64, f64),
+    FE: Fn(&Edge) -> Option<(f64, f64)>,
+{
     let mut sublayouts = HashMap::new();
 
     for (sg_id, sg) in &diagram.subgraphs {
@@ -234,16 +242,26 @@ fn compute_sublayouts(
             if !diagram.is_subgraph(node_id)
                 && let Some(node) = diagram.nodes.get(node_id)
             {
-                let (w, h) = node_dimensions(node);
-                sub_graph.add_node(node_id.as_str(), (w as f64, h as f64));
+                let (w, h) = node_dims(node);
+                sub_graph.add_node(node_id.as_str(), (w, h));
             }
         }
 
         // Add internal edges only (both endpoints inside this subgraph)
         let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
-        for edge in &diagram.edges {
+        let mut edge_labels: HashMap<usize, dagre::normalize::EdgeLabelInfo> = HashMap::new();
+        let mut edge_index_map = Vec::new();
+        for (edge_idx, edge) in diagram.edges.iter().enumerate() {
             if sg_node_set.contains(edge.from.as_str()) && sg_node_set.contains(edge.to.as_str()) {
+                let sub_edge_idx = edge_index_map.len();
+                edge_index_map.push(edge_idx);
                 sub_graph.add_edge(edge.from.as_str(), edge.to.as_str());
+                if let Some((label_width, label_height)) = edge_label_dims(edge) {
+                    edge_labels.insert(
+                        sub_edge_idx,
+                        dagre::normalize::EdgeLabelInfo::new(label_width, label_height),
+                    );
+                }
             }
         }
 
@@ -253,9 +271,15 @@ fn compute_sublayouts(
             ..parent_dagre_config.clone()
         };
 
-        let result = dagre::layout(&sub_graph, &sub_config, |_, dims| *dims);
+        let result = dagre::layout_with_labels(&sub_graph, &sub_config, |_, dims| *dims, &edge_labels);
 
-        sublayouts.insert(sg_id.clone(), SubLayoutResult { result });
+        sublayouts.insert(
+            sg_id.clone(),
+            SubLayoutResult {
+                result,
+                edge_index_map,
+            },
+        );
     }
 
     sublayouts
@@ -465,7 +489,7 @@ fn reconcile_sublayouts_draw(
     }
 }
 
-fn dagre_config_for_layout(diagram: &Diagram, config: &LayoutConfig) -> DagreConfig {
+pub(crate) fn dagre_config_for_layout(diagram: &Diagram, config: &LayoutConfig) -> DagreConfig {
     let dagre_direction = to_dagre_direction(diagram.direction);
 
     let node_sep = config.dagre_node_sep;
@@ -485,6 +509,146 @@ fn dagre_config_for_layout(diagram: &Diagram, config: &LayoutConfig) -> DagreCon
         margin: config.dagre_margin,
         acyclic: true,
         ranker: config.ranker.unwrap_or_default(),
+    }
+}
+
+/// Reconcile direction-override sub-layouts into a dagre LayoutResult (SVG pipeline).
+///
+/// This updates node positions, internal edge paths, label positions, and subgraph bounds
+/// for subgraphs that override direction.
+pub(crate) fn reconcile_sublayouts_dagre(
+    diagram: &Diagram,
+    layout: &mut dagre::LayoutResult,
+    sublayouts: &HashMap<String, SubLayoutResult>,
+) {
+    if sublayouts.is_empty() {
+        return;
+    }
+
+    // Process sublayouts in deterministic depth order (shallowest first).
+    let mut sorted_sg_ids: Vec<&String> = sublayouts.keys().collect();
+    sorted_sg_ids.sort_by(|a, b| {
+        diagram
+            .subgraph_depth(a)
+            .cmp(&diagram.subgraph_depth(b))
+            .then_with(|| a.cmp(b))
+    });
+
+    for sg_id in sorted_sg_ids {
+        let sublayout = &sublayouts[sg_id];
+        let Some(parent_bounds) = layout.subgraph_bounds.get(sg_id).copied() else {
+            continue;
+        };
+
+        // Compute sublayout bounds from node rects.
+        let mut min_x = f64::INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        for rect in sublayout.result.nodes.values() {
+            min_x = min_x.min(rect.x);
+            min_y = min_y.min(rect.y);
+            max_x = max_x.max(rect.x + rect.width);
+            max_y = max_y.max(rect.y + rect.height);
+        }
+
+        if !min_x.is_finite() || !min_y.is_finite() {
+            continue;
+        }
+
+        let sub_w = (max_x - min_x).max(0.0);
+        let sub_h = (max_y - min_y).max(0.0);
+
+        let sg_cx = parent_bounds.x + parent_bounds.width / 2.0;
+        let sg_cy = parent_bounds.y + parent_bounds.height / 2.0;
+        let final_w = parent_bounds.width.max(sub_w);
+        let final_h = parent_bounds.height.max(sub_h);
+
+        let new_sg_x = sg_cx - final_w / 2.0;
+        let new_sg_y = sg_cy - final_h / 2.0;
+
+        let offset_x = new_sg_x + (final_w - sub_w) / 2.0 - min_x;
+        let offset_y = new_sg_y + (final_h - sub_h) / 2.0 - min_y;
+
+        // Update node positions for sublayout nodes.
+        for (node_id, rect) in &sublayout.result.nodes {
+            if let Some(existing) = layout.nodes.get_mut(node_id) {
+                *existing = Rect {
+                    x: rect.x + offset_x,
+                    y: rect.y + offset_y,
+                    width: rect.width,
+                    height: rect.height,
+                };
+            }
+        }
+
+        // Update subgraph bounds and compound node rect.
+        let new_bounds = Rect {
+            x: new_sg_x,
+            y: new_sg_y,
+            width: final_w,
+            height: final_h,
+        };
+        layout.subgraph_bounds.insert(sg_id.clone(), new_bounds);
+        if let Some(existing) = layout.nodes.get_mut(&dagre::NodeId(sg_id.clone())) {
+            *existing = new_bounds;
+        }
+
+        // Remap edge paths for internal edges.
+        let mut edge_points_by_orig_idx: HashMap<usize, Vec<dagre::Point>> = HashMap::new();
+        for edge in &sublayout.result.edges {
+            if let Some(orig_idx) = sublayout.edge_index_map.get(edge.index) {
+                let points: Vec<dagre::Point> = edge
+                    .points
+                    .iter()
+                    .map(|p| dagre::Point {
+                        x: p.x + offset_x,
+                        y: p.y + offset_y,
+                    })
+                    .collect();
+                edge_points_by_orig_idx.insert(*orig_idx, points);
+            }
+        }
+
+        for edge in layout.edges.iter_mut() {
+            if let Some(points) = edge_points_by_orig_idx.get(&edge.index) {
+                edge.points = points.clone();
+            }
+        }
+
+        // Remap label positions for internal edges.
+        for (sub_idx, pos) in &sublayout.result.label_positions {
+            if let Some(orig_idx) = sublayout.edge_index_map.get(*sub_idx) {
+                let mut updated = *pos;
+                updated.point = dagre::Point {
+                    x: pos.point.x + offset_x,
+                    y: pos.point.y + offset_y,
+                };
+                layout.label_positions.insert(*orig_idx, updated);
+            }
+        }
+
+        // Remap self-edge paths for internal edges.
+        let mut self_edge_points_by_idx: HashMap<usize, Vec<dagre::Point>> = HashMap::new();
+        for edge in &sublayout.result.self_edges {
+            if let Some(orig_idx) = sublayout.edge_index_map.get(edge.edge_index) {
+                let points: Vec<dagre::Point> = edge
+                    .points
+                    .iter()
+                    .map(|p| dagre::Point {
+                        x: p.x + offset_x,
+                        y: p.y + offset_y,
+                    })
+                    .collect();
+                self_edge_points_by_idx.insert(*orig_idx, points);
+            }
+        }
+
+        for edge in layout.self_edges.iter_mut() {
+            if let Some(points) = self_edge_points_by_idx.get(&edge.edge_index) {
+                edge.points = points.clone();
+            }
+        }
     }
 }
 
@@ -613,7 +777,19 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     let dagre_direction = dagre_config.direction;
 
     // Pre-compute sub-layouts for subgraphs with direction overrides.
-    let sublayouts = compute_sublayouts(diagram, &dagre_config);
+    let sublayouts = compute_sublayouts(
+        diagram,
+        &dagre_config,
+        |node| {
+            let (w, h) = node_dimensions(node);
+            (w as f64, h as f64)
+        },
+        |edge| {
+            edge.label
+                .as_ref()
+                .map(|label| (label.len() as f64 + 2.0, 1.0))
+        },
+    );
 
     let result = build_dagre_layout_with_config(
         diagram,
@@ -2406,14 +2582,9 @@ mod tests {
     #[test]
     fn waypoint_transform_vertical_basic() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "C".into(),
-            label: None,
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-        }];
+        let edges = vec![Edge::new("A", "C")
+            .with_stroke(Stroke::Solid)
+            .with_arrows(Arrow::None, Arrow::Normal)];
 
         let mut waypoints = HashMap::new();
         waypoints.insert(
@@ -2449,14 +2620,9 @@ mod tests {
     #[test]
     fn waypoint_transform_horizontal_basic() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "C".into(),
-            label: None,
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-        }];
+        let edges = vec![Edge::new("A", "C")
+            .with_stroke(Stroke::Solid)
+            .with_arrows(Arrow::None, Arrow::Normal)];
 
         let mut waypoints = HashMap::new();
         waypoints.insert(
@@ -2490,14 +2656,9 @@ mod tests {
     #[test]
     fn waypoint_transform_clamps_to_canvas() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "B".into(),
-            label: None,
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-        }];
+        let edges = vec![Edge::new("A", "B")
+            .with_stroke(Stroke::Solid)
+            .with_arrows(Arrow::None, Arrow::Normal)];
 
         let mut waypoints = HashMap::new();
         waypoints.insert(
@@ -2552,14 +2713,10 @@ mod tests {
     #[test]
     fn label_transform_basic_scaling() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "B".into(),
-            label: Some("yes".into()),
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-        }];
+        let edges = vec![Edge::new("A", "B")
+            .with_label("yes")
+            .with_stroke(Stroke::Solid)
+            .with_arrows(Arrow::None, Arrow::Normal)];
 
         let mut labels = HashMap::new();
         labels.insert(
@@ -2595,14 +2752,10 @@ mod tests {
     #[test]
     fn label_transform_with_left_margin() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "B".into(),
-            label: Some("yes".into()),
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-        }];
+        let edges = vec![Edge::new("A", "B")
+            .with_label("yes")
+            .with_stroke(Stroke::Solid)
+            .with_arrows(Arrow::None, Arrow::Normal)];
 
         let mut labels = HashMap::new();
         labels.insert(
@@ -2796,14 +2949,10 @@ mod tests {
     #[test]
     fn label_transform_skips_missing_edge() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "B".into(),
-            label: Some("x".into()),
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-        }];
+        let edges = vec![Edge::new("A", "B")
+            .with_label("x")
+            .with_stroke(Stroke::Solid)
+            .with_arrows(Arrow::None, Arrow::Normal)];
 
         let mut labels = HashMap::new();
         labels.insert(

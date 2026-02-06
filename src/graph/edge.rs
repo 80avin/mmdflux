@@ -29,6 +29,10 @@ pub struct Edge {
     pub from: String,
     /// Target node ID.
     pub to: String,
+    /// Original subgraph ID for the source endpoint, if the edge targeted a subgraph.
+    pub from_subgraph: Option<String>,
+    /// Original subgraph ID for the target endpoint, if the edge targeted a subgraph.
+    pub to_subgraph: Option<String>,
     /// Optional label on the edge.
     pub label: Option<String>,
     /// Line style.
@@ -45,6 +49,8 @@ impl Edge {
         Self {
             from: from.into(),
             to: to.into(),
+            from_subgraph: None,
+            to_subgraph: None,
             label: None,
             stroke: Stroke::default(),
             arrow_start: Arrow::None,

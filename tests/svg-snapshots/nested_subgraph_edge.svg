@@ -12,8 +12,8 @@
       <text x="202.94" y="141.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">US East</text>
     </g>
     <g class="edgePaths">
-      <path d="M120.47,62.00 L120.47,66.17 C120.47,70.33 120.47,78.67 120.47,87.00 C120.47,95.33 120.47,103.67 120.47,112.00 C120.47,120.33 120.47,128.67 120.47,136.33 C120.47,144.00 120.47,151.00 120.47,154.50 L120.47,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M120.47,216.00 L120.47,220.17 C120.47,224.33 120.47,232.67 120.47,241.00 C120.47,249.33 120.47,257.67 120.47,266.00 C120.47,274.33 120.47,282.67 120.47,290.33 C120.47,298.00 120.47,305.00 120.47,308.50 L120.47,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M120.47,62.00 L120.47,66.17 C120.47,70.33 120.47,78.67 120.47,87.00 C120.47,95.33 120.47,103.67 120.47,111.17 C120.47,118.67 120.47,125.33 120.47,129.50 C120.47,133.67 120.47,135.33 119.76,135.72 C119.06,136.11 117.65,135.22 111.61,131.41 C105.56,127.60 94.88,120.87 89.54,117.50 L84.20,114.13" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M80.82,266.00 L87.43,261.83 C94.04,257.67 107.25,249.33 113.86,249.33 C120.47,249.33 120.47,257.67 120.47,266.00 C120.47,274.33 120.47,282.67 120.47,290.33 C120.47,298.00 120.47,305.00 120.47,308.50 L120.47,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

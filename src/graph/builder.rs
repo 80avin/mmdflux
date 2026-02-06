@@ -89,6 +89,17 @@ fn resolve_subgraph_edges(diagram: &mut Diagram) {
     let mut resolved_edges = Vec::new();
 
     for edge in &diagram.edges {
+        let from_subgraph = if diagram.is_subgraph(&edge.from) {
+            Some(edge.from.clone())
+        } else {
+            None
+        };
+        let to_subgraph = if diagram.is_subgraph(&edge.to) {
+            Some(edge.to.clone())
+        } else {
+            None
+        };
+
         let from = if diagram.is_subgraph(&edge.from) {
             match find_non_cluster_child(diagram, &edge.from) {
                 Some(child) => child,
@@ -110,6 +121,8 @@ fn resolve_subgraph_edges(diagram: &mut Diagram) {
         resolved_edges.push(Edge {
             from,
             to,
+            from_subgraph,
+            to_subgraph,
             stroke: edge.stroke,
             arrow_start: edge.arrow_start,
             arrow_end: edge.arrow_end,

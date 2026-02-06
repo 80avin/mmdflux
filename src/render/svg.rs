@@ -3,7 +3,9 @@
 use std::collections::HashMap;
 use std::fmt::Write;
 
-use super::layout::build_dagre_layout;
+use super::layout::{
+    build_dagre_layout, compute_sublayouts, dagre_config_for_layout, reconcile_sublayouts_dagre,
+};
 use super::svg_metrics::SvgTextMetrics;
 use super::{RenderOptions, SvgEdgeCurve, layout_config_for_diagram};
 use crate::dagre::{LayoutResult, Point, Rect};
@@ -31,7 +33,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         config.dagre_cluster_rank_sep = 0.0;
     }
 
-    let layout = build_dagre_layout(
+    let mut layout = build_dagre_layout(
         diagram,
         &config,
         |node| svg_node_dimensions(&metrics, node),
@@ -41,6 +43,19 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
                 .map(|label| metrics.edge_label_dimensions(label))
         },
     );
+
+    let dagre_config = dagre_config_for_layout(diagram, &config);
+    let sublayouts = compute_sublayouts(
+        diagram,
+        &dagre_config,
+        |node| svg_node_dimensions(&metrics, node),
+        |edge| {
+            edge.label
+                .as_ref()
+                .map(|label| metrics.edge_label_dimensions(label))
+        },
+    );
+    reconcile_sublayouts_dagre(diagram, &mut layout, &sublayouts);
 
     let self_edge_paths = compute_self_edge_paths(diagram, &layout, &metrics);
     let bounds = compute_svg_bounds(diagram, &layout, &metrics, &self_edge_paths);
@@ -260,11 +275,13 @@ fn render_edge_labels(
         let Some(label) = edge.label.as_ref() else {
             continue;
         };
-        let position = layout
-            .label_positions
-            .get(&index)
-            .map(|pos| pos.point)
-            .or_else(|| fallback_label_position(layout, index, self_edge_paths));
+        let use_precomputed = edge.from_subgraph.is_none() && edge.to_subgraph.is_none();
+        let position = if use_precomputed {
+            layout.label_positions.get(&index).map(|pos| pos.point)
+        } else {
+            None
+        }
+        .or_else(|| fallback_label_position(layout, index, self_edge_paths));
         let Some(point) = position else {
             continue;
         };
@@ -872,11 +889,13 @@ fn compute_svg_bounds(
         let Some(label) = edge.label.as_ref() else {
             continue;
         };
-        let position = layout
-            .label_positions
-            .get(&index)
-            .map(|pos| pos.point)
-            .or_else(|| fallback_label_position(layout, index, self_edge_paths));
+        let use_precomputed = edge.from_subgraph.is_none() && edge.to_subgraph.is_none();
+        let position = if use_precomputed {
+            layout.label_positions.get(&index).map(|pos| pos.point)
+        } else {
+            None
+        }
+        .or_else(|| fallback_label_position(layout, index, self_edge_paths));
         let Some(point) = position else {
             continue;
         };
@@ -952,17 +971,34 @@ fn adjust_edge_points_for_shapes(
         return points.to_vec();
     }
 
-    let Some(from_rect) = layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())) else {
-        return points.to_vec();
+    let (from_rect, from_shape) = if let Some(sg_id) = edge.from_subgraph.as_ref() {
+        match layout.subgraph_bounds.get(sg_id) {
+            Some(rect) => (rect, Shape::Rectangle),
+            None => return points.to_vec(),
+        }
+    } else {
+        let Some(rect) = layout.nodes.get(&crate::dagre::NodeId(edge.from.clone())) else {
+            return points.to_vec();
+        };
+        let Some(node) = diagram.nodes.get(&edge.from) else {
+            return points.to_vec();
+        };
+        (rect, node.shape)
     };
-    let Some(to_rect) = layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())) else {
-        return points.to_vec();
-    };
-    let Some(from_node) = diagram.nodes.get(&edge.from) else {
-        return points.to_vec();
-    };
-    let Some(to_node) = diagram.nodes.get(&edge.to) else {
-        return points.to_vec();
+
+    let (to_rect, to_shape) = if let Some(sg_id) = edge.to_subgraph.as_ref() {
+        match layout.subgraph_bounds.get(sg_id) {
+            Some(rect) => (rect, Shape::Rectangle),
+            None => return points.to_vec(),
+        }
+    } else {
+        let Some(rect) = layout.nodes.get(&crate::dagre::NodeId(edge.to.clone())) else {
+            return points.to_vec();
+        };
+        let Some(node) = diagram.nodes.get(&edge.to) else {
+            return points.to_vec();
+        };
+        (rect, node.shape)
     };
 
     let mut adjusted = points.to_vec();
@@ -977,9 +1013,9 @@ fn adjust_edge_points_for_shapes(
         to_rect.center()
     };
 
-    adjusted[0] = intersect_svg_node(from_rect, from_target, from_node.shape);
+    adjusted[0] = intersect_svg_node(from_rect, from_target, from_shape);
     let last = adjusted.len() - 1;
-    adjusted[last] = intersect_svg_node(to_rect, to_target, to_node.shape);
+    adjusted[last] = intersect_svg_node(to_rect, to_target, to_shape);
 
     adjusted
 }
