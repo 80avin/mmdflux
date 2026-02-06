@@ -466,6 +466,32 @@ fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node, direction: Directi
             let ry = rx / (2.5 + w / 50.0);
             (w, label_h + metrics.node_padding_y * 2.0 + ry)
         }
+        Shape::Document => {
+            let w = label_w + metrics.node_padding_x * 2.0;
+            let h = label_h + metrics.node_padding_y * 2.0;
+            (w, h + h / 8.0) // wave amplitude = content_h / 8
+        }
+        Shape::Documents => {
+            let w = label_w + metrics.node_padding_x * 2.0;
+            let h = label_h + metrics.node_padding_y * 2.0;
+            let offset = 5.0;
+            (w + 2.0 * offset, h + h / 4.0 + 2.0 * offset) // wave amp = h/4
+        }
+        Shape::TaggedDocument => {
+            let w = label_w + metrics.node_padding_x * 2.0;
+            let h = label_h + metrics.node_padding_y * 3.0; // extra padding for taller shape
+            (w * 1.1, h + h / 4.0) // 10% wider, wave amp = h/4
+        }
+        Shape::Card => {
+            let w = label_w + metrics.node_padding_x * 2.0;
+            let h = label_h + metrics.node_padding_y * 2.0;
+            (w + 12.0, h) // extra width for corner fold
+        }
+        Shape::TaggedRect => {
+            let w = label_w + metrics.node_padding_x * 2.0;
+            let h = label_h + metrics.node_padding_y * 2.0;
+            (w + 0.2 * h, h) // extra width for tag triangle
+        }
         _ => (
             label_w + metrics.node_padding_x * 2.0,
             label_h + metrics.node_padding_y * 2.0,
@@ -880,6 +906,7 @@ fn render_nodes(
         render_node_shape(writer, node, rect, scale, diagram.direction);
 
         let center = rect.center();
+        let mut text_x = center.x;
         let mut text_y = center.y;
         // Offset text downward for cylinders so it centers in the body below the top cap.
         if node.shape == Shape::Cylinder {
@@ -887,9 +914,25 @@ fn render_nodes(
             let ry = rx / (2.5 + rect.width / 50.0);
             text_y += ry / 2.0;
         }
+        // Offset text upward for document shapes to center in content area above wave.
+        if node.shape == Shape::Document {
+            let wave_amp = rect.height / 9.0;
+            text_y -= wave_amp / 2.0;
+        }
+        if node.shape == Shape::TaggedDocument {
+            let wave_amp = rect.height / 5.0;
+            text_y -= wave_amp / 2.0;
+        }
+        if node.shape == Shape::Documents {
+            let offset = 5.0;
+            let front_h = rect.height - 2.0 * offset;
+            let wave_amp = front_h / 5.0;
+            text_y += offset - wave_amp / 2.0;
+            text_x -= offset; // front doc is shifted left
+        }
         render_text_centered(
             writer,
-            center.x * scale,
+            text_x * scale,
             text_y * scale,
             &node.label,
             metrics,
@@ -956,12 +999,96 @@ fn render_node_shape(
             );
             writer.push_line(&line);
         }
-        Shape::Document
-        | Shape::Documents
-        | Shape::TaggedDocument
-        | Shape::Card
-        | Shape::TaggedRect => {
-            // Base rectangle
+        Shape::Document => {
+            // Single closed path with sine wave bottom (matching Mermaid waveEdgedRectangle).
+            // wave_amp = content_h/8; total_h = content_h + wave_amp = 9/8 * content_h
+            let wave_amp = rect.height / 9.0;
+            let d = document_svg_path(rect.x, rect.y, rect.width, rect.height, wave_amp);
+            writer.push_line(&format!("<path d=\"{d}\"{style} />"));
+        }
+        Shape::Documents => {
+            // Three stacked document paths (back → middle → front), each filled white.
+            // Front doc covers the others; back docs peek out at top-right.
+            let offset = 5.0 * scale;
+            let doc_w = rect.width - 2.0 * offset;
+            let doc_h = rect.height - 2.0 * offset;
+            // wave_amp = content_h/4; doc_h = content_h + wave_amp = 5/4 * content_h
+            let wave_amp = doc_h / 5.0;
+            // Back document (top-right)
+            let d = document_svg_path(rect.x + 2.0 * offset, rect.y, doc_w, doc_h, wave_amp);
+            writer.push_line(&format!("<path d=\"{d}\"{style} />"));
+            // Middle document
+            let d = document_svg_path(rect.x + offset, rect.y + offset, doc_w, doc_h, wave_amp);
+            writer.push_line(&format!("<path d=\"{d}\"{style} />"));
+            // Front document
+            let d = document_svg_path(rect.x, rect.y + 2.0 * offset, doc_w, doc_h, wave_amp);
+            writer.push_line(&format!("<path d=\"{d}\"{style} />"));
+        }
+        Shape::TaggedDocument => {
+            // Document with sine wave bottom + page fold at bottom-right.
+            // wave_amp = content_h/4; total_h = content_h + wave_amp = 5/4 * content_h
+            let wave_amp = rect.height / 5.0;
+            let wave_y = rect.y + rect.height - wave_amp;
+            let freq = std::f64::consts::TAU * 0.8 / rect.width;
+
+            // Main document path with wave bottom.
+            let d = document_svg_path(rect.x, rect.y, rect.width, rect.height, wave_amp);
+            writer.push_line(&format!("<path d=\"{d}\"{style} />"));
+
+            // Fold at bottom-right corner: a white-filled shape that covers the
+            // wave in that area and shows a diagonal fold line.
+            let content_h = rect.height - wave_amp;
+            let fold_w = 0.2 * rect.width;
+            let fold_h = 0.25 * content_h;
+            let right_x = rect.x + rect.width;
+            let fold_left_x = right_x - fold_w;
+
+            // Wave Y at the fold's left edge.
+            let t_left = (fold_left_x - rect.x) / rect.width;
+            let y_fold_left = wave_y + wave_amp * (freq * t_left * rect.width).sin();
+            let fold_top_y = y_fold_left - fold_h;
+
+            // Build fold shape: follow the wave from fold_left to right edge,
+            // then up to fold_top; Z closes with the diagonal (the fold line).
+            let steps = 50usize;
+            let i_start = (t_left * steps as f64).ceil() as usize;
+            let mut fold_d = format!("M{},{}", fmt_f64(fold_left_x), fmt_f64(y_fold_left));
+            for i in i_start..=steps {
+                let t = i as f64 / steps as f64;
+                let x = rect.x + t * rect.width;
+                let y = wave_y + wave_amp * (freq * t * rect.width).sin();
+                let _ = write!(fold_d, " L{},{}", fmt_f64(x), fmt_f64(y));
+            }
+            let _ = write!(fold_d, " L{},{}", fmt_f64(right_x), fmt_f64(fold_top_y));
+            fold_d.push_str(" Z");
+            writer.push_line(&format!(
+                "<path d=\"{fold_d}\" fill=\"{NODE_FILL}\" stroke=\"{STROKE_COLOR}\" stroke-width=\"{stroke_width}\" />"
+            ));
+        }
+        Shape::Card => {
+            // Polygon with cut corner at top-left (matching Mermaid card shape).
+            let fold = 12.0 * scale;
+            let x = rect.x;
+            let y = rect.y;
+            let w = rect.width;
+            let h = rect.height;
+            let d = format!(
+                "M{},{} L{},{} L{},{} L{},{} L{},{} Z",
+                fmt_f64(x + fold),
+                fmt_f64(y),
+                fmt_f64(x + w),
+                fmt_f64(y),
+                fmt_f64(x + w),
+                fmt_f64(y + h),
+                fmt_f64(x),
+                fmt_f64(y + h),
+                fmt_f64(x),
+                fmt_f64(y + fold),
+            );
+            writer.push_line(&format!("<path d=\"{d}\"{style} />"));
+        }
+        Shape::TaggedRect => {
+            // Rectangle with triangle tag at bottom-right (matching Mermaid taggedRect).
             let line = format!(
                 "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\"{style} />",
                 x = fmt_f64(rect.x),
@@ -971,85 +1098,20 @@ fn render_node_shape(
                 style = style
             );
             writer.push_line(&line);
-
-            // Optional folded corner for card/tagged shapes
-            if matches!(
-                node.shape,
-                Shape::Card | Shape::TaggedRect | Shape::TaggedDocument
-            ) {
-                let fold = (rect.width.min(rect.height) * 0.2).max(4.0 * scale);
-                let x1 = rect.x + rect.width - fold;
-                let y1 = rect.y;
-                let x2 = rect.x + rect.width;
-                let y2 = rect.y + fold;
-                let stroke = format!(
-                    " stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" fill=\"none\"",
-                    stroke = STROKE_COLOR,
-                    stroke_width = stroke_width
-                );
-                let fold_path = format!(
-                    "<path d=\"M{x1},{y1} L{x2},{y1} L{x2},{y2}\"{stroke} />",
-                    x1 = fmt_f64(x1),
-                    y1 = fmt_f64(y1),
-                    x2 = fmt_f64(x2),
-                    y2 = fmt_f64(y2),
-                    stroke = stroke
-                );
-                writer.push_line(&fold_path);
-            }
-
-            // Optional wavy bottom for document shapes
-            if matches!(
-                node.shape,
-                Shape::Document | Shape::Documents | Shape::TaggedDocument
-            ) {
-                let wave_height = (rect.height * 0.12).max(3.0 * scale);
-                let y = rect.y + rect.height - wave_height;
-                let wave_count = 2;
-                let wave_width = rect.width / wave_count as f64;
-                let mut d = String::new();
-                let _ = write!(d, "M{},{}", fmt_f64(rect.x), fmt_f64(y));
-                for i in 0..wave_count {
-                    let x0 = rect.x + (i as f64) * wave_width;
-                    let x1 = x0 + wave_width / 2.0;
-                    let x2 = x0 + wave_width;
-                    let y1 = if i % 2 == 0 {
-                        rect.y + rect.height
-                    } else {
-                        rect.y + rect.height - wave_height
-                    };
-                    let _ = write!(
-                        d,
-                        " Q{},{} {},{}",
-                        fmt_f64(x1),
-                        fmt_f64(y1),
-                        fmt_f64(x2),
-                        fmt_f64(y)
-                    );
-                }
-                let wave = format!(
-                    "<path d=\"{d}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" />",
-                    d = d,
-                    stroke = STROKE_COLOR,
-                    stroke_width = stroke_width
-                );
-                writer.push_line(&wave);
-            }
-
-            // Optional shadow for stacked documents
-            if matches!(node.shape, Shape::Documents) {
-                let offset = (rect.height * 0.12).max(3.0 * scale);
-                let shadow = format!(
-                    "<rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"none\" stroke=\"{stroke}\" stroke-width=\"{stroke_width}\" opacity=\"0.4\" />",
-                    x = fmt_f64(rect.x + offset),
-                    y = fmt_f64(rect.y + offset),
-                    w = fmt_f64(rect.width),
-                    h = fmt_f64(rect.height),
-                    stroke = STROKE_COLOR,
-                    stroke_width = stroke_width
-                );
-                writer.push_line(&shadow);
-            }
+            // Triangle tag at bottom-right
+            let tag = 0.2 * rect.height;
+            let tag_d = format!(
+                "M{},{} L{},{} L{},{} Z",
+                fmt_f64(rect.x + rect.width - tag),
+                fmt_f64(rect.y + rect.height),
+                fmt_f64(rect.x + rect.width),
+                fmt_f64(rect.y + rect.height),
+                fmt_f64(rect.x + rect.width),
+                fmt_f64(rect.y + rect.height - tag),
+            );
+            writer.push_line(&format!(
+                "<path d=\"{tag_d}\" fill=\"{NODE_FILL}\" stroke=\"{STROKE_COLOR}\" stroke-width=\"{stroke_width}\" />"
+            ));
         }
         Shape::Diamond => {
             let cx = rect.x + rect.width / 2.0;
@@ -2097,6 +2159,33 @@ fn path_from_points_rounded(points: &[(f64, f64)], radius: f64) -> String {
 
     let (lx, ly) = points[points.len() - 1];
     let _ = write!(d, " L{},{}", fmt_f64(lx), fmt_f64(ly));
+    d
+}
+
+/// Generate sine wave as SVG path L-segments (matching Mermaid's generateFullSineWavePoints).
+/// The wave starts at (x_start, y_center) with sin(0)=0 and traverses `width` pixels
+/// using 0.8 cycles and 50 line segments.
+fn sine_wave_segments(x_start: f64, y_center: f64, width: f64, amplitude: f64) -> String {
+    let steps = 50usize;
+    let freq = std::f64::consts::TAU * 0.8 / width;
+    let mut d = String::new();
+    for i in 0..=steps {
+        let t = i as f64 / steps as f64;
+        let x = x_start + t * width;
+        let y = y_center + amplitude * (freq * t * width).sin();
+        let _ = write!(d, " L{},{}", fmt_f64(x), fmt_f64(y));
+    }
+    d
+}
+
+/// Build a closed SVG path for a document shape (straight top/sides, sine wave bottom).
+fn document_svg_path(x: f64, y: f64, w: f64, h: f64, wave_amp: f64) -> String {
+    let wave_y = y + h - wave_amp;
+    let mut d = format!("M{},{}", fmt_f64(x), fmt_f64(wave_y));
+    d.push_str(&sine_wave_segments(x, wave_y, w, wave_amp));
+    let _ = write!(d, " L{},{}", fmt_f64(x + w), fmt_f64(y));
+    let _ = write!(d, " L{},{}", fmt_f64(x), fmt_f64(y));
+    d.push_str(" Z");
     d
 }
 
