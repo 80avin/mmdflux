@@ -22,7 +22,7 @@ pub fn definition() -> DiagramDefinition {
         id: "pie",
         family: DiagramFamily::Chart,
         detector: detect as DiagramDetector,
-        factory: || Box::new(PieInstance::new()),
+        factory: || Box::new(PieInstance::default()),
         supported_formats: &[OutputFormat::Text, OutputFormat::Ascii],
     }
 }
@@ -47,7 +47,6 @@ impl Default for PieInstance {
 
 impl DiagramInstance for PieInstance {
     fn parse(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // Minimal validation: just check it starts with "pie"
         if !detect(input) {
             return Err("Not a pie diagram".into());
         }
@@ -58,8 +57,6 @@ impl DiagramInstance for PieInstance {
     fn render(&self, _format: OutputFormat, _config: &RenderConfig) -> Result<String, RenderError> {
         let input = self.input.as_ref().ok_or("Not parsed")?;
 
-        // Trivial rendering: echo the input with a header
-        // This matches current behavior in main.rs
         Ok(format!("[Pie Chart]\n{}", input))
     }
 

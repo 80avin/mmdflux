@@ -192,7 +192,6 @@ fn collect_unsupported_warnings(input: &str) -> Vec<LintDiagnostic> {
     for (line_num, line) in input.lines().enumerate() {
         let trimmed = line.trim();
 
-        // Check table-driven keywords
         for &(prefix, message) in UNSUPPORTED_KEYWORDS {
             if trimmed.starts_with(prefix) {
                 warnings.push(LintDiagnostic {

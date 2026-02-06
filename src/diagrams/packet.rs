@@ -22,7 +22,7 @@ pub fn definition() -> DiagramDefinition {
         id: "packet",
         family: DiagramFamily::Table,
         detector: detect as DiagramDetector,
-        factory: || Box::new(PacketInstance::new()),
+        factory: || Box::new(PacketInstance::default()),
         supported_formats: &[OutputFormat::Text, OutputFormat::Ascii],
     }
 }
@@ -57,7 +57,6 @@ impl DiagramInstance for PacketInstance {
     fn render(&self, _format: OutputFormat, _config: &RenderConfig) -> Result<String, RenderError> {
         let input = self.input.as_ref().ok_or("Not parsed")?;
 
-        // Trivial rendering: echo the input with a header
         Ok(format!("[Packet Diagram]\n{}", input))
     }
 

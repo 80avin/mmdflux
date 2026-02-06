@@ -21,7 +21,7 @@ pub fn definition() -> DiagramDefinition {
         id: "info",
         family: DiagramFamily::Chart,
         detector: detect as DiagramDetector,
-        factory: || Box::new(InfoInstance::new()),
+        factory: || Box::new(InfoInstance::default()),
         supported_formats: &[OutputFormat::Text, OutputFormat::Ascii],
     }
 }

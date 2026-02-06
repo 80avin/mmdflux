@@ -26,7 +26,7 @@ pub fn definition() -> DiagramDefinition {
         id: "flowchart",
         family: DiagramFamily::Graph,
         detector: detect as DiagramDetector,
-        factory: || Box::new(FlowchartInstance::new()),
+        factory: || Box::new(FlowchartInstance::default()),
         supported_formats: &[OutputFormat::Text, OutputFormat::Ascii, OutputFormat::Svg],
     }
 }

@@ -177,13 +177,12 @@ fn main() -> io::Result<()> {
     // Build render config from CLI options
     let config = RenderConfig {
         layout: LayoutConfig {
-            direction: Default::default(),
             node_sep: cli.node_spacing.unwrap_or(50.0),
             edge_sep: cli.edge_spacing.unwrap_or(20.0),
             rank_sep: cli.rank_spacing.unwrap_or(50.0),
             margin: cli.margin.unwrap_or(8.0),
-            acyclic: true,
             ranker: cli.ranker.into(),
+            ..LayoutConfig::default()
         },
         cluster_ranksep: cli.cluster_ranksep,
         padding: cli.padding,

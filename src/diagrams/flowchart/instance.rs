@@ -41,7 +41,6 @@ impl DiagramInstance for FlowchartInstance {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
 
-        // Apply ID annotations if requested
         let annotated;
         let diagram = if config.show_ids {
             annotated = annotate_node_ids(diagram);
