@@ -1,14 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 421.88 378.00" style="max-width: 421.88px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 435.88 378.00" style="max-width: 435.88px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(8.00,0.00)">
+  <g transform="translate(15.00,0.00)">
     <g class="clusters">
-      <rect class="subgraph" x="0.00" y="112.00" width="405.88" height="154.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <rect class="subgraph" x="-7.00" y="112.00" width="419.88" height="154.00" fill="none" stroke="#888" stroke-width="1.00" />
       <text x="202.94" y="116.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Cloud</text>
-      <rect class="subgraph" x="20.00" y="137.00" width="365.88" height="104.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <rect class="subgraph" x="13.00" y="137.00" width="379.88" height="104.00" fill="none" stroke="#888" stroke-width="1.00" />
       <text x="202.94" y="141.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">US East</text>
     </g>
     <g class="edgePaths">

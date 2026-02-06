@@ -67,7 +67,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 
     // Add horizontal padding to subgraph bounds so SVG renders with breathing
     // room on left/right edges.
-    let subgraph_pad_x = metrics.font_size * 0.5;
+    let subgraph_pad_x = metrics.node_padding_x;
     apply_subgraph_svg_padding(diagram, &mut layout, subgraph_pad_x, 0.0);
 
     let self_edge_paths = compute_self_edge_paths(diagram, &layout, &metrics);
