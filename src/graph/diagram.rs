@@ -33,6 +33,8 @@ pub struct Subgraph {
     pub nodes: Vec<String>,
     /// Parent subgraph ID (None if top-level).
     pub parent: Option<String>,
+    /// Direction override for this subgraph (None = inherit from parent).
+    pub dir: Option<Direction>,
 }
 
 /// A complete flowchart diagram.
@@ -88,6 +90,11 @@ impl Diagram {
         !self.subgraphs.is_empty()
     }
 
+    /// Check if an ID corresponds to a subgraph (compound node).
+    pub fn is_subgraph(&self, id: &str) -> bool {
+        self.subgraphs.contains_key(id)
+    }
+
     /// Return the IDs of subgraphs whose parent is `parent_id`.
     pub fn subgraph_children(&self, parent_id: &str) -> Vec<&String> {
         self.subgraphs
@@ -132,9 +139,9 @@ mod tests {
         let sg = Subgraph {
             id: "sg1".to_string(),
             title: "My Group".to_string(),
-
             nodes: vec!["A".to_string(), "B".to_string()],
             parent: None,
+            dir: None,
         };
         assert_eq!(sg.id, "sg1");
         assert_eq!(sg.title, "My Group");
@@ -172,6 +179,7 @@ mod tests {
             title: "Inner".to_string(),
             nodes: vec!["A".to_string()],
             parent: Some("outer".to_string()),
+            dir: None,
         };
         assert_eq!(sg.parent, Some("outer".to_string()));
     }
@@ -209,9 +217,9 @@ mod tests {
             Subgraph {
                 id: "sg1".to_string(),
                 title: "Group".to_string(),
-
                 nodes: vec![],
                 parent: None,
+                dir: None,
             },
         );
         assert!(diagram.has_subgraphs());

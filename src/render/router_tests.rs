@@ -706,9 +706,9 @@ fn test_lr_attachment_consensus_y_same_height() {
     let from = make_bounds_sized(0, 2, 10, 3);
     let to = make_bounds_sized(20, 4, 10, 3);
     let ep = EdgeEndpoints {
-        from_bounds: &from,
+        from_bounds: from,
         from_shape: Shape::Rectangle,
-        to_bounds: &to,
+        to_bounds: to,
         to_shape: Shape::Rectangle,
     };
     let (src, tgt) = resolve_attachment_points(None, None, &ep, &[], Direction::LeftRight);
@@ -724,9 +724,9 @@ fn test_lr_attachment_consensus_y_different_height() {
     let from = make_bounds_sized(0, 2, 10, 3);
     let to = make_bounds_sized(20, 3, 10, 5);
     let ep = EdgeEndpoints {
-        from_bounds: &from,
+        from_bounds: from,
         from_shape: Shape::Rectangle,
-        to_bounds: &to,
+        to_bounds: to,
         to_shape: Shape::Rectangle,
     };
     let (src, tgt) = resolve_attachment_points(None, None, &ep, &[], Direction::LeftRight);
@@ -742,9 +742,9 @@ fn test_rl_attachment_consensus_y() {
     let from = make_bounds_sized(20, 2, 10, 3);
     let to = make_bounds_sized(0, 4, 10, 3);
     let ep = EdgeEndpoints {
-        from_bounds: &from,
+        from_bounds: from,
         from_shape: Shape::Rectangle,
-        to_bounds: &to,
+        to_bounds: to,
         to_shape: Shape::Rectangle,
     };
     let (src, tgt) = resolve_attachment_points(None, None, &ep, &[], Direction::RightLeft);

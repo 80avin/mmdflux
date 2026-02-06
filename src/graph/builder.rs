@@ -15,6 +15,7 @@ pub fn build_diagram(flowchart: &Flowchart) -> Diagram {
     let direction = convert_direction(flowchart.direction);
     let mut diagram = Diagram::new(direction);
     process_statements(&mut diagram, &flowchart.statements, None);
+    resolve_subgraph_edges(&mut diagram);
     diagram
 }
 
@@ -44,6 +45,7 @@ fn process_statements(
                         title: sg_spec.title.clone(),
                         nodes: node_ids,
                         parent: parent_subgraph.map(|s| s.to_string()),
+                        dir: sg_spec.dir.map(convert_direction),
                     },
                 );
                 diagram.subgraph_order.push(sg_spec.id.clone());
@@ -80,6 +82,105 @@ fn add_vertex_to_diagram(diagram: &mut Diagram, vertex: &Vertex, parent: Option<
         node.parent = parent.map(|s| s.to_string());
         diagram.add_node(node);
     }
+}
+
+/// Replace edge endpoints that reference subgraph IDs with representative child nodes.
+fn resolve_subgraph_edges(diagram: &mut Diagram) {
+    let mut resolved_edges = Vec::new();
+
+    for edge in &diagram.edges {
+        let from_subgraph = if diagram.is_subgraph(&edge.from) {
+            Some(edge.from.clone())
+        } else {
+            None
+        };
+        let to_subgraph = if diagram.is_subgraph(&edge.to) {
+            Some(edge.to.clone())
+        } else {
+            None
+        };
+
+        let from = if diagram.is_subgraph(&edge.from) {
+            match find_subgraph_sink(diagram, &edge.from) {
+                Some(child) => child,
+                None => continue,
+            }
+        } else {
+            edge.from.clone()
+        };
+
+        let to = if diagram.is_subgraph(&edge.to) {
+            match find_non_cluster_child(diagram, &edge.to) {
+                Some(child) => child,
+                None => continue,
+            }
+        } else {
+            edge.to.clone()
+        };
+
+        resolved_edges.push(Edge {
+            from,
+            to,
+            from_subgraph,
+            to_subgraph,
+            stroke: edge.stroke,
+            arrow_start: edge.arrow_start,
+            arrow_end: edge.arrow_end,
+            label: edge.label.clone(),
+            minlen: edge.minlen,
+            index: edge.index,
+        });
+    }
+
+    diagram.edges = resolved_edges;
+
+    // Remove spurious regular nodes created for subgraph IDs during edge parsing
+    let subgraph_ids: Vec<String> = diagram.subgraphs.keys().cloned().collect();
+    for sg_id in &subgraph_ids {
+        if let Some(node) = diagram.nodes.get(sg_id)
+            && node.parent.is_none()
+            && node.label == *sg_id
+        {
+            diagram.nodes.remove(sg_id);
+        }
+    }
+}
+
+/// Find a non-compound child node within a subgraph.
+///
+/// Walks the subgraph's children, returning the first leaf node that is not
+/// itself a subgraph. Returns `None` for empty subgraphs or nonexistent IDs.
+///
+/// This is the Rust equivalent of Mermaid's `findNonClusterChild()`.
+pub fn find_non_cluster_child(diagram: &Diagram, subgraph_id: &str) -> Option<String> {
+    let sg = diagram.subgraphs.get(subgraph_id)?;
+    sg.nodes.iter().find(|id| !diagram.is_subgraph(id)).cloned()
+}
+
+/// Find a sink node in a subgraph — a non-cluster child that has no successors
+/// within the subgraph.  Used when the subgraph is the **source** of an edge
+/// so the target ends up ranked after the entire subgraph, not beside internal
+/// nodes.  Falls back to `find_non_cluster_child` if every node has a successor.
+fn find_subgraph_sink(diagram: &Diagram, subgraph_id: &str) -> Option<String> {
+    let sg = diagram.subgraphs.get(subgraph_id)?;
+    let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+    let non_cluster: Vec<&str> = sg
+        .nodes
+        .iter()
+        .filter(|id| !diagram.is_subgraph(id))
+        .map(|s| s.as_str())
+        .collect();
+
+    // A sink has no outgoing edges to other nodes within the subgraph.
+    let sink = non_cluster.iter().find(|&&node| {
+        !diagram
+            .edges
+            .iter()
+            .any(|e| e.from == node && sg_node_set.contains(e.to.as_str()) && e.to != node)
+    });
+
+    sink.map(|s| s.to_string())
+        .or_else(|| find_non_cluster_child(diagram, subgraph_id))
 }
 
 fn collect_node_ids(statements: &[Statement]) -> Vec<String> {
@@ -397,6 +498,132 @@ mod tests {
         );
         assert_eq!(diagram.edges[0].label, Some("first".to_string()));
         assert_eq!(diagram.edges[1].label, Some("second".to_string()));
+    }
+
+    #[test]
+    fn test_find_non_cluster_child_simple() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let child = find_non_cluster_child(&diagram, "sg1");
+        assert!(child.is_some());
+        let child_id = child.unwrap();
+        assert!(child_id == "A" || child_id == "B");
+    }
+
+    #[test]
+    fn test_find_non_cluster_child_nested() {
+        let input = "graph TD\nsubgraph outer[Outer]\nsubgraph inner[Inner]\nA --> B\nend\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let child = find_non_cluster_child(&diagram, "outer");
+        assert!(child.is_some());
+        let child_id = child.unwrap();
+        assert!(child_id == "A" || child_id == "B");
+    }
+
+    #[test]
+    fn test_find_non_cluster_child_empty_subgraph() {
+        let input = "graph TD\nsubgraph sg1[Empty]\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let child = find_non_cluster_child(&diagram, "sg1");
+        assert!(child.is_none());
+    }
+
+    #[test]
+    fn test_find_non_cluster_child_nonexistent() {
+        let input = "graph TD\nA --> B\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let child = find_non_cluster_child(&diagram, "no_such_sg");
+        assert!(child.is_none());
+    }
+
+    #[test]
+    fn test_build_diagram_subgraph_dir_propagated() {
+        let input = "graph TD\nsubgraph sg1[Group]\ndirection LR\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert_eq!(diagram.subgraphs["sg1"].dir, Some(Direction::LeftRight));
+    }
+
+    #[test]
+    fn test_build_diagram_subgraph_no_dir() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert_eq!(diagram.subgraphs["sg1"].dir, None);
+    }
+
+    #[test]
+    fn test_edge_to_subgraph_resolved() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\nC --> sg1\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let c_edges: Vec<_> = diagram.edges.iter().filter(|e| e.from == "C").collect();
+        assert_eq!(c_edges.len(), 1);
+        assert!(
+            c_edges[0].to == "A" || c_edges[0].to == "B",
+            "Edge to subgraph should resolve to child, got: {}",
+            c_edges[0].to
+        );
+    }
+
+    #[test]
+    fn test_edge_from_subgraph_resolved() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\nsg1 --> C\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let c_edges: Vec<_> = diagram.edges.iter().filter(|e| e.to == "C").collect();
+        assert_eq!(c_edges.len(), 1);
+        assert!(
+            c_edges[0].from == "A" || c_edges[0].from == "B",
+            "Edge from subgraph should resolve to child, got: {}",
+            c_edges[0].from
+        );
+    }
+
+    #[test]
+    fn test_edge_between_subgraphs_resolved() {
+        let input = "graph TD\nsubgraph sg1[G1]\nA\nend\nsubgraph sg2[G2]\nB\nend\nsg1 --> sg2\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let edges: Vec<_> = diagram.edges.iter().collect();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].from, "A");
+        assert_eq!(edges[0].to, "B");
+    }
+
+    #[test]
+    fn test_edge_to_subgraph_no_duplicate_node() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\nC --> sg1\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        assert!(
+            !diagram.nodes.contains_key("sg1") || diagram.subgraphs.contains_key("sg1"),
+            "sg1 should be a subgraph, not a regular node"
+        );
+    }
+
+    #[test]
+    fn test_edge_to_empty_subgraph_dropped() {
+        let input = "graph TD\nsubgraph sg1[Empty]\nend\nC --> sg1\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let c_edges: Vec<_> = diagram.edges.iter().filter(|e| e.from == "C").collect();
+        assert_eq!(c_edges.len(), 0, "Edge to empty subgraph should be dropped");
     }
 
     #[test]

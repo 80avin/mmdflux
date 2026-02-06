@@ -117,12 +117,32 @@ pub struct Layout {
 
     /// Self-edge loop data in draw coordinates.
     pub self_edges: Vec<SelfEdgeDrawData>,
+
+    /// Effective layout direction per node.
+    /// Nodes inside a direction-override subgraph use the subgraph's direction;
+    /// other nodes use the diagram's root direction.
+    pub node_directions: HashMap<String, Direction>,
 }
 
 impl Layout {
     /// Get the bounding box for a node.
     pub fn get_bounds(&self, node_id: &str) -> Option<&NodeBounds> {
         self.node_bounds.get(node_id)
+    }
+
+    /// Get the effective layout direction for an edge.
+    ///
+    /// If both endpoints share the same direction override (e.g. both are in an LR
+    /// subgraph), returns that override direction.  Otherwise returns the fallback
+    /// (typically the diagram's root direction).
+    pub fn effective_edge_direction(&self, from: &str, to: &str, fallback: Direction) -> Direction {
+        let src_dir = self.node_directions.get(from).copied().unwrap_or(fallback);
+        let tgt_dir = self.node_directions.get(to).copied().unwrap_or(fallback);
+        if src_dir == tgt_dir {
+            src_dir
+        } else {
+            fallback
+        }
     }
 }
 
@@ -171,13 +191,493 @@ impl Default for LayoutConfig {
     }
 }
 
-fn dagre_config_for_layout(diagram: &Diagram, config: &LayoutConfig) -> DagreConfig {
-    let dagre_direction = match diagram.direction {
+/// Convert a graph-level Direction to a dagre Direction.
+fn to_dagre_direction(dir: Direction) -> DagreDirection {
+    match dir {
         Direction::TopDown => DagreDirection::TopBottom,
         Direction::BottomTop => DagreDirection::BottomTop,
         Direction::LeftRight => DagreDirection::LeftRight,
         Direction::RightLeft => DagreDirection::RightLeft,
-    };
+    }
+}
+
+/// Pre-computed sub-layout result for a direction-override subgraph.
+pub(crate) struct SubLayoutResult {
+    /// The dagre LayoutResult with node positions in the sub-layout coordinate system.
+    result: dagre::LayoutResult,
+    /// Map from sublayout edge index to original diagram edge index.
+    edge_index_map: Vec<usize>,
+}
+
+/// Compute sub-layouts for subgraphs with direction overrides.
+///
+/// For each subgraph that has a `dir` override, this creates a standalone dagre
+/// graph with just the subgraph's internal nodes and edges, and runs layout with
+/// the overridden direction. The resulting dimensions can be injected into the
+/// parent layout so the compound node is sized correctly.
+pub(crate) fn compute_sublayouts<FN, FE>(
+    diagram: &Diagram,
+    parent_dagre_config: &DagreConfig,
+    node_dims: FN,
+    edge_label_dims: FE,
+) -> HashMap<String, SubLayoutResult>
+where
+    FN: Fn(&Node) -> (f64, f64),
+    FE: Fn(&Edge) -> Option<(f64, f64)>,
+{
+    let mut sublayouts = HashMap::new();
+
+    for (sg_id, sg) in &diagram.subgraphs {
+        let sub_dir = match sg.dir {
+            Some(d) => d,
+            None => continue,
+        };
+
+        let dagre_direction = to_dagre_direction(sub_dir);
+
+        let mut sub_graph: dagre::DiGraph<(f64, f64)> = dagre::DiGraph::new();
+
+        // Add leaf nodes (not child subgraphs)
+        for node_id in &sg.nodes {
+            if !diagram.is_subgraph(node_id)
+                && let Some(node) = diagram.nodes.get(node_id)
+            {
+                let (w, h) = node_dims(node);
+                sub_graph.add_node(node_id.as_str(), (w, h));
+            }
+        }
+
+        // Add internal edges only (both endpoints inside this subgraph)
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+        let mut edge_labels: HashMap<usize, dagre::normalize::EdgeLabelInfo> = HashMap::new();
+        let mut edge_index_map = Vec::new();
+        for (edge_idx, edge) in diagram.edges.iter().enumerate() {
+            if sg_node_set.contains(edge.from.as_str()) && sg_node_set.contains(edge.to.as_str()) {
+                let sub_edge_idx = edge_index_map.len();
+                edge_index_map.push(edge_idx);
+                sub_graph.add_edge(edge.from.as_str(), edge.to.as_str());
+                if let Some((label_width, label_height)) = edge_label_dims(edge) {
+                    edge_labels.insert(
+                        sub_edge_idx,
+                        dagre::normalize::EdgeLabelInfo::new(label_width, label_height),
+                    );
+                }
+            }
+        }
+
+        // Use parent config but override direction
+        let sub_config = DagreConfig {
+            direction: dagre_direction,
+            ..parent_dagre_config.clone()
+        };
+
+        let result =
+            dagre::layout_with_labels(&sub_graph, &sub_config, |_, dims| *dims, &edge_labels);
+
+        sublayouts.insert(
+            sg_id.clone(),
+            SubLayoutResult {
+                result,
+                edge_index_map,
+            },
+        );
+    }
+
+    sublayouts
+}
+
+/// Reconcile direction-override sub-layout positions in draw coordinates.
+///
+/// For each subgraph with a direction override:
+/// 1. Get the current subgraph draw bounds (from the main layout's compound pipeline)
+/// 2. Convert sub-layout dagre positions to draw coordinates using simple spacing
+/// 3. Center the sub-layout's draw positions within the subgraph bounds
+/// 4. Override draw_positions, node_bounds, and subgraph_bounds
+#[allow(clippy::too_many_arguments)]
+fn reconcile_sublayouts_draw(
+    diagram: &Diagram,
+    config: &LayoutConfig,
+    sublayouts: &HashMap<String, SubLayoutResult>,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+    canvas_width: &mut usize,
+    canvas_height: &mut usize,
+) {
+    // Process sublayouts in deterministic depth order (shallowest first).
+    // This ensures that when both parent and child subgraphs have direction
+    // overrides, the deeper override writes last and wins.
+    let mut sorted_sg_ids: Vec<&String> = sublayouts.keys().collect();
+    sorted_sg_ids.sort_by(|a, b| {
+        diagram
+            .subgraph_depth(a)
+            .cmp(&diagram.subgraph_depth(b))
+            .then_with(|| a.cmp(b))
+    });
+
+    for sg_id in sorted_sg_ids {
+        let sublayout = &sublayouts[sg_id];
+        let sg = &diagram.subgraphs[sg_id];
+
+        // Get the current subgraph draw bounds as the anchor position
+        let sg_draw = match subgraph_bounds.get(sg_id) {
+            Some(b) => b.clone(),
+            None => continue,
+        };
+
+        // Compute draw coordinates for sub-layout nodes.
+        // Each node's position in the sub-layout is in dagre float coords.
+        // We convert them to character positions using a simple approach:
+        // node draw (x, y) = dagre position scaled to fit draw space.
+        //
+        // For the sub-layout, we use the node dimensions directly and add spacing.
+        let sub_dir = sg.dir.unwrap_or(diagram.direction);
+        let sub_is_vertical = matches!(sub_dir, Direction::TopDown | Direction::BottomTop);
+
+        // Collect sub-layout node draw positions relative to (0,0)
+        let mut sub_draw_nodes: Vec<(String, usize, usize, usize, usize)> = Vec::new();
+
+        // Compute sub-layout-specific scale factors
+        let sub_node_dims: HashMap<String, (usize, usize)> = sublayout
+            .result
+            .nodes
+            .iter()
+            .filter_map(|(id, _)| {
+                diagram
+                    .nodes
+                    .get(&id.0)
+                    .map(|n| (id.0.clone(), node_dimensions(n)))
+            })
+            .collect();
+
+        let sub_rank_sep = config.dagre_rank_sep + config.dagre_cluster_rank_sep;
+        let (sub_scale_x, sub_scale_y) = compute_ascii_scale_factors(
+            &sub_node_dims,
+            sub_rank_sep,
+            config.dagre_node_sep,
+            config.v_spacing,
+            config.h_spacing,
+            sub_is_vertical,
+            false,
+        );
+
+        // Find sub-layout dagre bounding box min
+        let sub_dagre_min_x = sublayout
+            .result
+            .nodes
+            .values()
+            .map(|r| r.x)
+            .fold(f64::INFINITY, f64::min);
+        let sub_dagre_min_y = sublayout
+            .result
+            .nodes
+            .values()
+            .map(|r| r.y)
+            .fold(f64::INFINITY, f64::min);
+
+        // Convert each sub-layout node to draw coordinates (relative)
+        for (node_id, rect) in &sublayout.result.nodes {
+            let (w, h) = match sub_node_dims.get(&node_id.0) {
+                Some(&dims) => dims,
+                None => continue,
+            };
+
+            let cx = ((rect.x + rect.width / 2.0 - sub_dagre_min_x) * sub_scale_x).round() as usize;
+            let cy =
+                ((rect.y + rect.height / 2.0 - sub_dagre_min_y) * sub_scale_y).round() as usize;
+            let x = cx.saturating_sub(w / 2);
+            let y = cy.saturating_sub(h / 2);
+
+            sub_draw_nodes.push((node_id.0.clone(), x, y, w, h));
+        }
+
+        if sub_draw_nodes.is_empty() {
+            continue;
+        }
+
+        // Find the bounding box of the sub-layout in draw coordinates
+        let sub_draw_min_x = sub_draw_nodes
+            .iter()
+            .map(|(_, x, _, _, _)| *x)
+            .min()
+            .unwrap_or(0);
+        let sub_draw_min_y = sub_draw_nodes
+            .iter()
+            .map(|(_, _, y, _, _)| *y)
+            .min()
+            .unwrap_or(0);
+        let sub_draw_max_x = sub_draw_nodes
+            .iter()
+            .map(|(_, x, _, w, _)| x + w)
+            .max()
+            .unwrap_or(0);
+        let sub_draw_max_y = sub_draw_nodes
+            .iter()
+            .map(|(_, _, y, _, h)| y + h)
+            .max()
+            .unwrap_or(0);
+
+        let sub_draw_w = sub_draw_max_x - sub_draw_min_x;
+        let sub_draw_h = sub_draw_max_y - sub_draw_min_y;
+
+        // Padding around sub-layout content within the subgraph border
+        let border_pad = 2; // 1 for border char + 1 for spacing
+        let title_pad = if !sg.title.trim().is_empty() { 1 } else { 0 };
+
+        // Compute the total subgraph bounds needed
+        let sg_needed_w = sub_draw_w + 2 * border_pad;
+        let sg_needed_h = sub_draw_h + 2 * border_pad + title_pad;
+
+        // Enforce title-width minimum
+        let min_title_width = if !sg.title.trim().is_empty() {
+            sg.title.len() + 6
+        } else {
+            0
+        };
+        let sg_final_w = sg_needed_w.max(min_title_width);
+
+        // Use the current subgraph center as the anchor point
+        let sg_cx = sg_draw.x + sg_draw.width / 2;
+        let sg_cy = sg_draw.y + sg_draw.height / 2;
+
+        // Compute new subgraph bounds centered on the old center
+        let new_sg_x = sg_cx.saturating_sub(sg_final_w / 2);
+        let new_sg_y = sg_cy.saturating_sub(sg_needed_h / 2);
+
+        // Offset to place sub-layout content within the new subgraph bounds
+        let content_x = new_sg_x + border_pad + (sg_final_w - sg_needed_w) / 2;
+        let content_y = new_sg_y + border_pad + title_pad;
+
+        let offset_x = content_x.saturating_sub(sub_draw_min_x);
+        let offset_y = content_y.saturating_sub(sub_draw_min_y);
+
+        // Override node positions
+        for (node_id, rel_x, rel_y, w, h) in &sub_draw_nodes {
+            let final_x = rel_x + offset_x;
+            let final_y = rel_y + offset_y;
+
+            draw_positions.insert(node_id.clone(), (final_x, final_y));
+            node_bounds.insert(
+                node_id.clone(),
+                NodeBounds {
+                    x: final_x,
+                    y: final_y,
+                    width: *w,
+                    height: *h,
+                    dagre_center_x: Some(final_x + w / 2),
+                    dagre_center_y: Some(final_y + h / 2),
+                },
+            );
+        }
+
+        // Update subgraph bounds
+        let depth = diagram.subgraph_depth(sg_id);
+        subgraph_bounds.insert(
+            sg_id.clone(),
+            SubgraphBounds {
+                x: new_sg_x,
+                y: new_sg_y,
+                width: sg_final_w,
+                height: sg_needed_h,
+                title: sg.title.clone(),
+                depth,
+            },
+        );
+
+        // Expand canvas if needed
+        *canvas_width = (*canvas_width).max(new_sg_x + sg_final_w + config.padding);
+        *canvas_height = (*canvas_height).max(new_sg_y + sg_needed_h + config.padding);
+    }
+}
+
+/// After draw-coordinate reconciliation, sibling nodes and child subgraphs
+/// within a direction-override parent may overlap.  This happens because the
+/// parent's sublayout positions its member nodes individually without knowing
+/// the final dimensions of child subgraphs (which are reconciled separately).
+///
+/// For each direction-override parent, detect nodes that overlap with sibling
+/// child subgraph bounds and shift the subgraph (and all its contents) away
+/// to create separation.
+fn resolve_sibling_overlaps_draw(
+    diagram: &Diagram,
+    node_bounds: &mut HashMap<String, NodeBounds>,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+) {
+    // Build set of nodes that belong to each child subgraph, so we can
+    // identify "direct" children of the parent (nodes not in any grandchild).
+    let child_sg_nodes: HashMap<&str, HashSet<&str>> = diagram
+        .subgraphs
+        .iter()
+        .map(|(id, sg)| (id.as_str(), sg.nodes.iter().map(|s| s.as_str()).collect()))
+        .collect();
+
+    for (sg_id, sg) in &diagram.subgraphs {
+        if sg.dir.is_none() {
+            continue;
+        }
+        let sub_dir = sg.dir.unwrap();
+
+        // Find child subgraphs (subgraphs whose parent is this one).
+        let child_sgs: Vec<&str> = diagram
+            .subgraphs
+            .iter()
+            .filter(|(_, child)| child.parent.as_deref() == Some(sg_id.as_str()))
+            .map(|(id, _)| id.as_str())
+            .collect();
+
+        if child_sgs.is_empty() {
+            continue;
+        }
+
+        // Find direct member nodes (in this subgraph but not inside any child subgraph).
+        let direct_nodes: Vec<&str> = sg
+            .nodes
+            .iter()
+            .filter(|n| {
+                !diagram.is_subgraph(n)
+                    && !child_sgs.iter().any(|cs| {
+                        child_sg_nodes
+                            .get(cs)
+                            .map_or(false, |set| set.contains(n.as_str()))
+                    })
+            })
+            .map(|s| s.as_str())
+            .collect();
+
+        // For each child subgraph, check if any direct node overlaps.
+        for child_sg_id in &child_sgs {
+            let Some(sg_b) = subgraph_bounds.get(*child_sg_id).cloned() else {
+                continue;
+            };
+
+            for node_id in &direct_nodes {
+                let Some(nb) = node_bounds.get(*node_id) else {
+                    continue;
+                };
+
+                // Check overlap based on the parent's direction.
+                // For LR/RL, the primary axis is x; check if node and subgraph
+                // share y-range (cross axis) and overlap on x (primary axis).
+                let (shift_x, shift_y) = match sub_dir {
+                    Direction::LeftRight | Direction::RightLeft => {
+                        // Check y-range overlap (cross axis).
+                        let y_overlap = nb.y < sg_b.y + sg_b.height && nb.y + nb.height > sg_b.y;
+                        if !y_overlap {
+                            continue;
+                        }
+                        // Check x overlap.
+                        let node_right = nb.x + nb.width;
+                        if node_right <= sg_b.x {
+                            continue; // no overlap
+                        }
+                        let node_left = nb.x;
+                        if node_left >= sg_b.x + sg_b.width {
+                            continue; // no overlap
+                        }
+                        // Node overlaps with subgraph on x.  Determine which
+                        // side the node is on and push the subgraph away.
+                        let node_cx = nb.x + nb.width / 2;
+                        let sg_cx = sg_b.x + sg_b.width / 2;
+                        if node_cx < sg_cx {
+                            // Node is to the left — push subgraph right.
+                            let shift = node_right + 1 - sg_b.x;
+                            (shift, 0)
+                        } else {
+                            // Node is to the right — push subgraph left (shift node right).
+                            let shift = sg_b.x + sg_b.width + 1 - nb.x;
+                            // Shift the node instead.
+                            if let Some(pos) = draw_positions.get_mut(*node_id) {
+                                pos.0 += shift;
+                            }
+                            if let Some(b) = node_bounds.get_mut(*node_id) {
+                                b.x += shift;
+                                if let Some(ref mut cx) = b.dagre_center_x {
+                                    *cx += shift;
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                    Direction::TopDown | Direction::BottomTop => {
+                        // Check x-range overlap (cross axis).
+                        let x_overlap = nb.x < sg_b.x + sg_b.width && nb.x + nb.width > sg_b.x;
+                        if !x_overlap {
+                            continue;
+                        }
+                        // Check y overlap.
+                        let node_bottom = nb.y + nb.height;
+                        if node_bottom <= sg_b.y {
+                            continue;
+                        }
+                        let node_top = nb.y;
+                        if node_top >= sg_b.y + sg_b.height {
+                            continue;
+                        }
+                        let node_cy = nb.y + nb.height / 2;
+                        let sg_cy = sg_b.y + sg_b.height / 2;
+                        if node_cy < sg_cy {
+                            let shift = node_bottom + 1 - sg_b.y;
+                            (0, shift)
+                        } else {
+                            let shift = sg_b.y + sg_b.height + 1 - nb.y;
+                            if let Some(pos) = draw_positions.get_mut(*node_id) {
+                                pos.1 += shift;
+                            }
+                            if let Some(b) = node_bounds.get_mut(*node_id) {
+                                b.y += shift;
+                                if let Some(ref mut cy) = b.dagre_center_y {
+                                    *cy += shift;
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                };
+
+                if shift_x == 0 && shift_y == 0 {
+                    continue;
+                }
+
+                // Shift the child subgraph and all its contents.
+                if let Some(b) = subgraph_bounds.get_mut(*child_sg_id) {
+                    b.x += shift_x;
+                    b.y += shift_y;
+                }
+                // Shift nodes inside the child subgraph.
+                let child_sg = &diagram.subgraphs[*child_sg_id];
+                for member_id in &child_sg.nodes {
+                    if let Some(pos) = draw_positions.get_mut(member_id) {
+                        pos.0 += shift_x;
+                        pos.1 += shift_y;
+                    }
+                    if let Some(b) = node_bounds.get_mut(member_id) {
+                        b.x += shift_x;
+                        b.y += shift_y;
+                        if let Some(ref mut cx) = b.dagre_center_x {
+                            *cx += shift_x;
+                        }
+                        if let Some(ref mut cy) = b.dagre_center_y {
+                            *cy += shift_y;
+                        }
+                    }
+                }
+                // Shift grandchild subgraph bounds too.
+                for (gc_id, gc_sg) in &diagram.subgraphs {
+                    if gc_sg.parent.as_deref() == Some(*child_sg_id) {
+                        if let Some(b) = subgraph_bounds.get_mut(gc_id) {
+                            b.x += shift_x;
+                            b.y += shift_y;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub(crate) fn dagre_config_for_layout(diagram: &Diagram, config: &LayoutConfig) -> DagreConfig {
+    let dagre_direction = to_dagre_direction(diagram.direction);
 
     let node_sep = config.dagre_node_sep;
     let edge_sep = config.dagre_edge_sep;
@@ -196,6 +696,618 @@ fn dagre_config_for_layout(diagram: &Diagram, config: &LayoutConfig) -> DagreCon
         margin: config.dagre_margin,
         acyclic: true,
         ranker: config.ranker.unwrap_or_default(),
+    }
+}
+
+/// Reconcile direction-override sub-layouts into a dagre LayoutResult (SVG pipeline).
+///
+/// This updates node positions, internal edge paths, label positions, and subgraph bounds
+/// for subgraphs that override direction.
+pub(crate) fn reconcile_sublayouts_dagre(
+    diagram: &Diagram,
+    layout: &mut dagre::LayoutResult,
+    sublayouts: &HashMap<String, SubLayoutResult>,
+    title_pad_y: f64,
+    content_pad_y: f64,
+) {
+    if sublayouts.is_empty() {
+        return;
+    }
+
+    // Process sublayouts in deterministic depth order (shallowest first).
+    let mut sorted_sg_ids: Vec<&String> = sublayouts.keys().collect();
+    sorted_sg_ids.sort_by(|a, b| {
+        diagram
+            .subgraph_depth(a)
+            .cmp(&diagram.subgraph_depth(b))
+            .then_with(|| a.cmp(b))
+    });
+
+    for sg_id in sorted_sg_ids {
+        let sublayout = &sublayouts[sg_id];
+        let Some(parent_bounds) = layout.subgraph_bounds.get(sg_id).copied() else {
+            continue;
+        };
+
+        // Compute sublayout bounds from node rects.
+        let mut min_x = f64::INFINITY;
+        let mut min_y = f64::INFINITY;
+        let mut max_x = f64::NEG_INFINITY;
+        let mut max_y = f64::NEG_INFINITY;
+        for rect in sublayout.result.nodes.values() {
+            min_x = min_x.min(rect.x);
+            min_y = min_y.min(rect.y);
+            max_x = max_x.max(rect.x + rect.width);
+            max_y = max_y.max(rect.y + rect.height);
+        }
+
+        if !min_x.is_finite() || !min_y.is_finite() {
+            continue;
+        }
+
+        let sub_w = (max_x - min_x).max(0.0);
+        let sub_h = (max_y - min_y).max(0.0);
+
+        // Use the center of dagre's internal node positions as anchor,
+        // not the oversized parent cluster bounds.  Dagre's compound node
+        // bounds span many ranks for long cross-boundary edges, but the
+        // sublayout should sit where the internal nodes were ranked.
+        let sg = &diagram.subgraphs[sg_id];
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+        let (nodes_cx, nodes_cy) = {
+            let mut nx_min = f64::INFINITY;
+            let mut ny_min = f64::INFINITY;
+            let mut nx_max = f64::NEG_INFINITY;
+            let mut ny_max = f64::NEG_INFINITY;
+            for (nid, rect) in &layout.nodes {
+                if sg_node_set.contains(nid.0.as_str()) {
+                    nx_min = nx_min.min(rect.x);
+                    ny_min = ny_min.min(rect.y);
+                    nx_max = nx_max.max(rect.x + rect.width);
+                    ny_max = ny_max.max(rect.y + rect.height);
+                }
+            }
+            if nx_min.is_finite() {
+                ((nx_min + nx_max) / 2.0, (ny_min + ny_max) / 2.0)
+            } else {
+                (
+                    parent_bounds.x + parent_bounds.width / 2.0,
+                    parent_bounds.y + parent_bounds.height / 2.0,
+                )
+            }
+        };
+
+        let has_title = diagram
+            .subgraphs
+            .get(sg_id)
+            .is_some_and(|sg| !sg.title.trim().is_empty());
+        let title_pad = if has_title { title_pad_y } else { 0.0 };
+
+        let final_w = sub_w;
+        let final_h = sub_h + title_pad + content_pad_y * 2.0;
+
+        let new_sg_x = nodes_cx - final_w / 2.0;
+        let new_sg_y = nodes_cy - final_h / 2.0;
+
+        let offset_x = new_sg_x + (final_w - sub_w) / 2.0 - min_x;
+        let offset_y = new_sg_y + content_pad_y + title_pad - min_y;
+
+        // Update node positions for sublayout nodes.
+        for (node_id, rect) in &sublayout.result.nodes {
+            if let Some(existing) = layout.nodes.get_mut(node_id) {
+                *existing = Rect {
+                    x: rect.x + offset_x,
+                    y: rect.y + offset_y,
+                    width: rect.width,
+                    height: rect.height,
+                };
+            }
+        }
+
+        // Update subgraph bounds and compound node rect.
+        let new_bounds = Rect {
+            x: new_sg_x,
+            y: new_sg_y,
+            width: final_w,
+            height: final_h,
+        };
+        layout.subgraph_bounds.insert(sg_id.clone(), new_bounds);
+        if let Some(existing) = layout.nodes.get_mut(&dagre::NodeId(sg_id.clone())) {
+            *existing = new_bounds;
+        }
+
+        // Remap edge paths for internal edges.
+        let mut edge_points_by_orig_idx: HashMap<usize, Vec<dagre::Point>> = HashMap::new();
+        for edge in &sublayout.result.edges {
+            if let Some(orig_idx) = sublayout.edge_index_map.get(edge.index) {
+                let points: Vec<dagre::Point> = edge
+                    .points
+                    .iter()
+                    .map(|p| dagre::Point {
+                        x: p.x + offset_x,
+                        y: p.y + offset_y,
+                    })
+                    .collect();
+                edge_points_by_orig_idx.insert(*orig_idx, points);
+            }
+        }
+
+        for edge in layout.edges.iter_mut() {
+            if let Some(points) = edge_points_by_orig_idx.get(&edge.index) {
+                edge.points = points.clone();
+            }
+        }
+
+        // Remap label positions for internal edges.
+        for (sub_idx, pos) in &sublayout.result.label_positions {
+            if let Some(orig_idx) = sublayout.edge_index_map.get(*sub_idx) {
+                let mut updated = *pos;
+                updated.point = dagre::Point {
+                    x: pos.point.x + offset_x,
+                    y: pos.point.y + offset_y,
+                };
+                layout.label_positions.insert(*orig_idx, updated);
+            }
+        }
+
+        // Remap self-edge paths for internal edges.
+        let mut self_edge_points_by_idx: HashMap<usize, Vec<dagre::Point>> = HashMap::new();
+        for edge in &sublayout.result.self_edges {
+            if let Some(orig_idx) = sublayout.edge_index_map.get(edge.edge_index) {
+                let points: Vec<dagre::Point> = edge
+                    .points
+                    .iter()
+                    .map(|p| dagre::Point {
+                        x: p.x + offset_x,
+                        y: p.y + offset_y,
+                    })
+                    .collect();
+                self_edge_points_by_idx.insert(*orig_idx, points);
+            }
+        }
+
+        for edge in layout.self_edges.iter_mut() {
+            if let Some(points) = self_edge_points_by_idx.get(&edge.edge_index) {
+                edge.points = points.clone();
+            }
+        }
+    }
+}
+
+/// Shift external predecessor and successor nodes of subgraphs on the
+/// cross-axis so they align with the subgraph center.
+///
+/// Applies to two kinds of subgraphs:
+/// 1. **Direction overrides** (`dir.is_some()`): internal layout is computed
+///    separately, so external nodes should align with the subgraph as a whole.
+/// 2. **Subgraph-as-node targets**: edges like `Client --> sg1` conceptually
+///    connect to the subgraph, not a specific child — centering the external
+///    node over the subgraph is the natural position.
+///
+/// Only the earliest-rank predecessors and latest-rank successors are shifted —
+/// intermediate chain nodes are left in place so their internal edges remain
+/// intact.
+///
+/// Edge points connected to shifted nodes are interpolated: full shift at the
+/// shifted endpoint, tapering to zero at the unshifted endpoint.
+pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::LayoutResult) {
+    // Cross-axis: x for TD/BT, y for LR/RL.
+    let horizontal = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
+
+    // Subgraphs referenced as edge endpoints (subgraph-as-node).
+    let sg_as_node_ids: HashSet<&str> = diagram
+        .edges
+        .iter()
+        .filter_map(|e| e.to_subgraph.as_deref())
+        .chain(
+            diagram
+                .edges
+                .iter()
+                .filter_map(|e| e.from_subgraph.as_deref()),
+        )
+        .collect();
+
+    // Nodes belonging to any subgraph — these should never be shifted since
+    // they are positioned by their own subgraph's layout.
+    let all_sg_members: HashSet<&str> = diagram
+        .subgraphs
+        .values()
+        .flat_map(|sg| sg.nodes.iter().map(|s| s.as_str()))
+        .collect();
+
+    // Collect all shifts to apply: node_id → delta on cross-axis.
+    let mut node_shifts: HashMap<String, f64> = HashMap::new();
+
+    for (sg_id, sg) in &diagram.subgraphs {
+        let is_dir_override = sg.dir.is_some();
+        let is_sg_as_node = sg_as_node_ids.contains(sg_id.as_str());
+
+        if !is_dir_override && !is_sg_as_node {
+            continue;
+        }
+
+        let Some(sg_bounds) = layout.subgraph_bounds.get(sg_id).copied() else {
+            continue;
+        };
+
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+
+        let sg_center = if horizontal {
+            sg_bounds.x + sg_bounds.width / 2.0
+        } else {
+            sg_bounds.y + sg_bounds.height / 2.0
+        };
+
+        // Collect external predecessors: edges entering the subgraph.
+        // Two sources:
+        // 1. Edges where `to` is a direct member and `from` is outside (direction overrides)
+        // 2. Edges where `to_subgraph` references this subgraph (subgraph-as-node)
+        let mut predecessors: Vec<String> = Vec::new();
+        for edge in &diagram.edges {
+            let is_incoming = (is_dir_override
+                && sg_node_set.contains(edge.to.as_str())
+                && !sg_node_set.contains(edge.from.as_str()))
+                || (is_sg_as_node && edge.to_subgraph.as_deref() == Some(sg_id.as_str()));
+
+            if is_incoming
+                && edge.from != *sg_id
+                && !sg_node_set.contains(edge.from.as_str())
+                && !all_sg_members.contains(edge.from.as_str())
+            {
+                if !predecessors.contains(&edge.from) {
+                    predecessors.push(edge.from.clone());
+                }
+            }
+        }
+
+        // Collect external successors: edges leaving the subgraph.
+        let mut successors: Vec<String> = Vec::new();
+        for edge in &diagram.edges {
+            let is_outgoing = (is_dir_override
+                && sg_node_set.contains(edge.from.as_str())
+                && !sg_node_set.contains(edge.to.as_str()))
+                || (is_sg_as_node && edge.from_subgraph.as_deref() == Some(sg_id.as_str()));
+
+            if is_outgoing
+                && edge.to != *sg_id
+                && !sg_node_set.contains(edge.to.as_str())
+                && !all_sg_members.contains(edge.to.as_str())
+            {
+                if !successors.contains(&edge.to) {
+                    successors.push(edge.to.clone());
+                }
+            }
+        }
+
+        if predecessors.is_empty() && successors.is_empty() {
+            continue;
+        }
+
+        // Filter predecessors to earliest-rank only.  This avoids shifting
+        // intermediate chain nodes (e.g. Z in C→X→Y→Z→A) which would break
+        // the chain's internal edges.
+        if predecessors.len() > 1 {
+            let min_rank = predecessors
+                .iter()
+                .filter_map(|id| layout.node_ranks.get(&dagre::NodeId(id.clone())).copied())
+                .min();
+
+            if let Some(min_rank) = min_rank {
+                predecessors.retain(|id| {
+                    layout.node_ranks.get(&dagre::NodeId(id.clone())).copied() == Some(min_rank)
+                });
+            }
+        }
+
+        // Filter successors to latest-rank only (symmetric with predecessors).
+        if successors.len() > 1 {
+            let max_rank = successors
+                .iter()
+                .filter_map(|id| layout.node_ranks.get(&dagre::NodeId(id.clone())).copied())
+                .max();
+
+            if let Some(max_rank) = max_rank {
+                successors.retain(|id| {
+                    layout.node_ranks.get(&dagre::NodeId(id.clone())).copied() == Some(max_rank)
+                });
+            }
+        }
+
+        // Shift both predecessors and successors toward the subgraph center,
+        // but only if the node is outside the subgraph bounds on the primary
+        // axis.  Nodes at the same rank as internal nodes (e.g. Logs beside
+        // Database) would overlap after a cross-axis shift.
+        for node_id in predecessors.iter().chain(successors.iter()) {
+            if let Some(rect) = layout.nodes.get(&dagre::NodeId(node_id.clone())) {
+                let node_cy = rect.y + rect.height / 2.0;
+                let node_cx = rect.x + rect.width / 2.0;
+                let inside_primary = if horizontal {
+                    node_cy >= sg_bounds.y && node_cy <= sg_bounds.y + sg_bounds.height
+                } else {
+                    node_cx >= sg_bounds.x && node_cx <= sg_bounds.x + sg_bounds.width
+                };
+                if inside_primary {
+                    continue;
+                }
+                let node_center = if horizontal { node_cx } else { node_cy };
+                let delta = sg_center - node_center;
+                if delta.abs() >= 1.0 {
+                    node_shifts.insert(node_id.clone(), delta);
+                }
+            }
+        }
+    }
+
+    if node_shifts.is_empty() {
+        return;
+    }
+
+    // Apply node position shifts.
+    for (node_id, delta) in &node_shifts {
+        if let Some(rect) = layout.nodes.get_mut(&dagre::NodeId(node_id.clone())) {
+            if horizontal {
+                rect.x += delta;
+            } else {
+                rect.y += delta;
+            }
+        }
+    }
+
+    // Adjust edge points: interpolate shift from shifted endpoint to unshifted endpoint.
+    for edge in &mut layout.edges {
+        let from_delta = node_shifts.get(edge.from.0.as_str()).copied();
+        let to_delta = node_shifts.get(edge.to.0.as_str()).copied();
+
+        let n = edge.points.len();
+        if n == 0 {
+            continue;
+        }
+
+        match (from_delta, to_delta) {
+            (Some(d1), Some(d2)) => {
+                // Both endpoints shifted — interpolate between the two deltas.
+                for (i, p) in edge.points.iter_mut().enumerate() {
+                    let t = if n > 1 {
+                        i as f64 / (n - 1) as f64
+                    } else {
+                        0.5
+                    };
+                    let shift = d1 * (1.0 - t) + d2 * t;
+                    if horizontal {
+                        p.x += shift;
+                    } else {
+                        p.y += shift;
+                    }
+                }
+            }
+            (Some(d), None) => {
+                // Only source shifted — taper from full shift to zero.
+                for (i, p) in edge.points.iter_mut().enumerate() {
+                    let t = if n > 1 {
+                        i as f64 / (n - 1) as f64
+                    } else {
+                        0.0
+                    };
+                    let shift = d * (1.0 - t);
+                    if horizontal {
+                        p.x += shift;
+                    } else {
+                        p.y += shift;
+                    }
+                }
+            }
+            (None, Some(d)) => {
+                // Only target shifted — taper from zero to full shift.
+                for (i, p) in edge.points.iter_mut().enumerate() {
+                    let t = if n > 1 {
+                        i as f64 / (n - 1) as f64
+                    } else {
+                        1.0
+                    };
+                    let shift = d * t;
+                    if horizontal {
+                        p.x += shift;
+                    } else {
+                        p.y += shift;
+                    }
+                }
+            }
+            (None, None) => {}
+        }
+    }
+
+    // Adjust self-edge points for shifted nodes.
+    for se in &mut layout.self_edges {
+        if let Some(d) = node_shifts.get(se.node.0.as_str()) {
+            for p in &mut se.points {
+                if horizontal {
+                    p.x += d;
+                } else {
+                    p.y += d;
+                }
+            }
+        }
+    }
+
+    // Adjust label positions for edges with shifted endpoints.
+    for (key, pos) in &mut layout.label_positions {
+        if let Some(diag_edge) = diagram.edges.get(*key) {
+            let from_delta = node_shifts.get(diag_edge.from.as_str()).copied();
+            let to_delta = node_shifts.get(diag_edge.to.as_str()).copied();
+            let avg_delta = match (from_delta, to_delta) {
+                (Some(d1), Some(d2)) => (d1 + d2) / 2.0,
+                (Some(d), None) | (None, Some(d)) => d / 2.0,
+                (None, None) => continue,
+            };
+            if horizontal {
+                pos.point.x += avg_delta;
+            } else {
+                pos.point.y += avg_delta;
+            }
+        }
+    }
+}
+
+/// Expand parent subgraph bounds to encompass all member nodes and child
+/// subgraph bounds.
+///
+/// After sublayout reconciliation and centering, child subgraphs may have been
+/// repositioned (e.g., an LR inner subgraph is wider than dagre predicted).
+/// This walks subgraphs inner-first and expands each parent's bounds to be the
+/// union of its current bounds and all member content.
+///
+/// `child_margin` adds space between parent and child subgraph borders.
+/// In SVG this should match the subgraph padding so borders don't overlap;
+/// in the text pipeline pass 0.0 (draw-coordinate expansion handles padding).
+///
+/// `title_margin` adds extra top space when the parent has a visible title,
+/// so the child border doesn't overlap the parent's title text.
+pub(crate) fn expand_parent_bounds_dagre(
+    diagram: &Diagram,
+    layout: &mut dagre::LayoutResult,
+    child_margin: f64,
+    title_margin: f64,
+) {
+    // Process inner-first so child bounds are finalized before parents.
+    let order: Vec<&String> = if !diagram.subgraph_order.is_empty() {
+        diagram.subgraph_order.iter().collect()
+    } else {
+        let mut keys: Vec<&String> = diagram.subgraphs.keys().collect();
+        keys.sort();
+        keys
+    };
+
+    for sg_id in &order {
+        let sg = match diagram.subgraphs.get(*sg_id) {
+            Some(sg) => sg,
+            None => continue,
+        };
+        let Some(current) = layout.subgraph_bounds.get(*sg_id).copied() else {
+            continue;
+        };
+
+        let mut min_x = current.x;
+        let mut min_y = current.y;
+        let mut max_x = current.x + current.width;
+        let mut max_y = current.y + current.height;
+
+        // Check member nodes.
+        for member_id in &sg.nodes {
+            if let Some(rect) = layout.nodes.get(&dagre::NodeId(member_id.clone())) {
+                min_x = min_x.min(rect.x);
+                min_y = min_y.min(rect.y);
+                max_x = max_x.max(rect.x + rect.width);
+                max_y = max_y.max(rect.y + rect.height);
+            }
+        }
+
+        // Check child subgraph bounds (subgraphs whose parent is this subgraph).
+        // Add child_margin so the parent border sits outside the child border.
+        // Add title_margin at the top when the parent has a visible title, so the
+        // child border clears the parent's title text.
+        let has_title = !sg.title.trim().is_empty();
+        let top_margin = child_margin + if has_title { title_margin } else { 0.0 };
+        for (child_sg_id, child_sg) in &diagram.subgraphs {
+            if child_sg.parent.as_deref() == Some(sg_id.as_str()) {
+                if let Some(child_bounds) = layout.subgraph_bounds.get(child_sg_id) {
+                    min_x = min_x.min(child_bounds.x - child_margin);
+                    min_y = min_y.min(child_bounds.y - top_margin);
+                    max_x = max_x.max(child_bounds.x + child_bounds.width + child_margin);
+                    max_y = max_y.max(child_bounds.y + child_bounds.height + child_margin);
+                }
+            }
+        }
+
+        if let Some(bounds) = layout.subgraph_bounds.get_mut(*sg_id) {
+            bounds.x = min_x;
+            bounds.y = min_y;
+            bounds.width = max_x - min_x;
+            bounds.height = max_y - min_y;
+        }
+    }
+}
+
+/// Push external nodes that overlap with reconciled subgraph bounds downward.
+///
+/// After sublayout reconciliation, the subgraph may now occupy space where dagre
+/// placed external nodes.  This shifts those nodes (and everything below them)
+/// down to maintain a minimum gap.
+pub(crate) fn resolve_sublayout_overlaps(
+    diagram: &Diagram,
+    layout: &mut dagre::LayoutResult,
+    min_gap: f64,
+) {
+    for (sg_id, sg) in &diagram.subgraphs {
+        if sg.dir.is_none() {
+            continue;
+        }
+        let Some(sg_bounds) = layout.subgraph_bounds.get(sg_id).copied() else {
+            continue;
+        };
+
+        let sg_bottom = sg_bounds.y + sg_bounds.height;
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+
+        // Find the maximum shift needed to clear overlapping external nodes.
+        let mut max_shift = 0.0f64;
+        for (nid, rect) in &layout.nodes {
+            if sg_node_set.contains(nid.0.as_str()) || nid.0 == *sg_id {
+                continue;
+            }
+            // Only consider nodes whose center is below the subgraph center
+            // (i.e., they should be below the subgraph, not above it).
+            let node_cy = rect.y + rect.height / 2.0;
+            let sg_cy = sg_bounds.y + sg_bounds.height / 2.0;
+            if node_cy > sg_cy && rect.y < sg_bottom + min_gap {
+                let needed = sg_bottom + min_gap - rect.y;
+                if needed > max_shift {
+                    max_shift = needed;
+                }
+            }
+        }
+
+        if max_shift < 0.01 {
+            continue;
+        }
+
+        // Shift all nodes below the subgraph center.
+        let sg_cy = sg_bounds.y + sg_bounds.height / 2.0;
+        for (nid, rect) in layout.nodes.iter_mut() {
+            if sg_node_set.contains(nid.0.as_str()) || nid.0 == *sg_id {
+                continue;
+            }
+            if rect.y + rect.height / 2.0 > sg_cy {
+                rect.y += max_shift;
+            }
+        }
+
+        // Shift edge points that are below the subgraph center.
+        for edge in &mut layout.edges {
+            for point in &mut edge.points {
+                if point.y > sg_cy {
+                    point.y += max_shift;
+                }
+            }
+        }
+
+        // Shift self-edge points.
+        for se in &mut layout.self_edges {
+            for point in &mut se.points {
+                if point.y > sg_cy {
+                    point.y += max_shift;
+                }
+            }
+        }
+
+        // Shift label positions.
+        for pos in layout.label_positions.values_mut() {
+            if pos.point.y > sg_cy {
+                pos.point.y += max_shift;
+            }
+        }
+
+        // Update layout height.
+        layout.height += max_shift;
     }
 }
 
@@ -327,7 +1439,9 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // --- Phase A: Build dagre graph ---
     let dagre_config = dagre_config_for_layout(diagram, config);
     let dagre_direction = dagre_config.direction;
-    let result = build_dagre_layout_with_config(
+
+    // Pre-compute sub-layouts for subgraphs with direction overrides.
+    let sublayouts = compute_sublayouts(
         diagram,
         &dagre_config,
         |node| {
@@ -340,6 +1454,25 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                 .map(|label| (label.len() as f64 + 2.0, 1.0))
         },
     );
+
+    let mut result = build_dagre_layout_with_config(
+        diagram,
+        &dagre_config,
+        |node| {
+            let (w, h) = node_dimensions(node);
+            (w as f64, h as f64)
+        },
+        |edge| {
+            edge.label
+                .as_ref()
+                .map(|label| (label.len() as f64 + 2.0, 1.0))
+        },
+    );
+
+    // Shift external predecessors of direction-override subgraphs to align
+    // with the subgraph center, before coordinate transformation.
+    center_override_subgraphs(diagram, &mut result);
+    expand_parent_bounds_dagre(diagram, &mut result, 0.0, 0.0);
 
     // --- Phase B: Group nodes into layers ---
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
@@ -711,7 +1844,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         }
     }
 
-    let edge_label_positions_converted = transform_label_positions_direct(
+    let mut edge_label_positions_converted = transform_label_positions_direct(
         &result.label_positions,
         &diagram.edges,
         &ctx,
@@ -887,6 +2020,99 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         }
     }
 
+    // --- Phase M: Direction-override sub-layout reconciliation in draw coordinates ---
+    // For subgraphs with direction overrides, compute sub-layout positions in draw
+    // coordinates and override the main layout's positions.
+    if !sublayouts.is_empty() {
+        reconcile_sublayouts_draw(
+            diagram,
+            config,
+            &sublayouts,
+            &mut draw_positions,
+            &mut node_bounds,
+            &mut subgraph_bounds,
+            &mut width,
+            &mut height,
+        );
+
+        // Re-expand parent bounds after reconciliation repositioned children.
+        expand_parent_subgraph_bounds(&diagram.subgraphs, &mut subgraph_bounds);
+
+        // Push sibling nodes and child subgraphs apart when they overlap.
+        resolve_sibling_overlaps_draw(
+            diagram,
+            &mut node_bounds,
+            &mut draw_positions,
+            &mut subgraph_bounds,
+        );
+
+        // Invalidate or adjust waypoints and label positions for edges touching
+        // direction-override subgraphs. The main layout computed these for
+        // the parent direction; after reconciliation the node positions have
+        // moved, so the old waypoints are stale.
+        //
+        // - Internal edges (both endpoints inside the override) have their
+        //   waypoints removed so the router uses the subgraph's direction.
+        // - Cross-boundary edges keep waypoints but clip them to the subgraph
+        //   border so they don't run through internal nodes.
+        // - Labels for all touched edges are removed to avoid stale positions.
+        for sg in diagram.subgraphs.values() {
+            if sg.dir.is_none() {
+                continue;
+            }
+            let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+            for edge in &diagram.edges {
+                let from_in = sg_node_set.contains(edge.from.as_str());
+                let to_in = sg_node_set.contains(edge.to.as_str());
+                if !(from_in || to_in) {
+                    continue;
+                }
+                let key = edge.index;
+                if from_in && to_in {
+                    edge_waypoints_final.remove(&key);
+                } else if let Some(bounds) = subgraph_bounds.get(&sg.id) {
+                    if let Some(wps) = edge_waypoints_final.get(&key).cloned() {
+                        let clipped = clip_waypoints_to_subgraph(&wps, bounds, from_in, to_in);
+                        edge_waypoints_final.insert(key, clipped);
+                    }
+                }
+                edge_label_positions_converted.remove(&key);
+            }
+        }
+    }
+
+    // Build per-node effective direction map.
+    // Nodes inside a direction-override subgraph get the subgraph's direction;
+    // all other nodes get the diagram's root direction.
+    //
+    // Process subgraphs in depth order (shallowest first) so the deepest
+    // override deterministically wins for nodes in nested subgraphs.
+    let mut node_directions: HashMap<String, Direction> = HashMap::new();
+    for node_id in diagram.nodes.keys() {
+        node_directions.insert(node_id.clone(), diagram.direction);
+    }
+    let mut dir_sg_ids: Vec<&String> = diagram
+        .subgraphs
+        .iter()
+        .filter(|(_, sg)| sg.dir.is_some())
+        .map(|(id, _)| id)
+        .collect();
+    dir_sg_ids.sort_by(|a, b| {
+        diagram
+            .subgraph_depth(a)
+            .cmp(&diagram.subgraph_depth(b))
+            .then_with(|| a.cmp(b))
+    });
+    for sg_id in dir_sg_ids {
+        let sg = &diagram.subgraphs[sg_id];
+        let override_dir = sg.dir.unwrap();
+        for node_id in &sg.nodes {
+            if !diagram.is_subgraph(node_id) {
+                node_directions.insert(node_id.clone(), override_dir);
+            }
+        }
+    }
+
     Layout {
         grid_positions,
         draw_positions,
@@ -900,6 +2126,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         node_shapes,
         subgraph_bounds,
         self_edges,
+        node_directions,
     }
 }
 
@@ -1805,6 +3032,123 @@ fn transform_label_positions_direct(
     converted
 }
 
+fn waypoint_inside_bounds(bounds: &SubgraphBounds, point: (usize, usize)) -> bool {
+    let (x, y) = point;
+    let max_x = bounds.x + bounds.width.saturating_sub(1);
+    let max_y = bounds.y + bounds.height.saturating_sub(1);
+    x > bounds.x && x < max_x && y > bounds.y && y < max_y
+}
+
+fn segment_bounds_intersection(
+    start: (usize, usize),
+    end: (usize, usize),
+    bounds: &SubgraphBounds,
+) -> Option<(usize, usize)> {
+    let (x0, y0) = (start.0 as f64, start.1 as f64);
+    let (x1, y1) = (end.0 as f64, end.1 as f64);
+    let dx = x1 - x0;
+    let dy = y1 - y0;
+    if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+        return None;
+    }
+
+    let x_min = bounds.x as f64;
+    let x_max = (bounds.x + bounds.width) as f64;
+    let y_min = bounds.y as f64;
+    let y_max = (bounds.y + bounds.height) as f64;
+
+    let mut candidates: Vec<(f64, (usize, usize))> = Vec::new();
+
+    if dx.abs() > f64::EPSILON {
+        let t_left = (x_min - x0) / dx;
+        if (0.0..=1.0).contains(&t_left) {
+            let y = y0 + t_left * dy;
+            if y >= y_min && y <= y_max {
+                candidates.push((t_left, (x_min.round() as usize, y.round() as usize)));
+            }
+        }
+        let t_right = (x_max - x0) / dx;
+        if (0.0..=1.0).contains(&t_right) {
+            let y = y0 + t_right * dy;
+            if y >= y_min && y <= y_max {
+                candidates.push((t_right, (x_max.round() as usize, y.round() as usize)));
+            }
+        }
+    }
+
+    if dy.abs() > f64::EPSILON {
+        let t_top = (y_min - y0) / dy;
+        if (0.0..=1.0).contains(&t_top) {
+            let x = x0 + t_top * dx;
+            if x >= x_min && x <= x_max {
+                candidates.push((t_top, (x.round() as usize, y_min.round() as usize)));
+            }
+        }
+        let t_bottom = (y_max - y0) / dy;
+        if (0.0..=1.0).contains(&t_bottom) {
+            let x = x0 + t_bottom * dx;
+            if x >= x_min && x <= x_max {
+                candidates.push((t_bottom, (x.round() as usize, y_max.round() as usize)));
+            }
+        }
+    }
+
+    candidates
+        .into_iter()
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, point)| point)
+}
+
+fn clip_waypoints_to_subgraph(
+    waypoints: &[(usize, usize)],
+    bounds: &SubgraphBounds,
+    clip_start: bool,
+    clip_end: bool,
+) -> Vec<(usize, usize)> {
+    if waypoints.len() < 2 {
+        return waypoints.to_vec();
+    }
+    let mut out = waypoints.to_vec();
+
+    if clip_start && waypoint_inside_bounds(bounds, out[0]) {
+        let mut idx = 0usize;
+        while idx + 1 < out.len() && waypoint_inside_bounds(bounds, out[idx]) {
+            idx += 1;
+        }
+        if idx < out.len() {
+            let inside = out[idx.saturating_sub(1)];
+            let outside = out[idx];
+            let intersection =
+                segment_bounds_intersection(inside, outside, bounds).unwrap_or(inside);
+            let mut new_points = Vec::new();
+            new_points.push(intersection);
+            new_points.extend_from_slice(&out[idx..]);
+            out = new_points;
+        }
+    }
+
+    if clip_end && out.len() >= 2 {
+        let last_idx = out.len() - 1;
+        if waypoint_inside_bounds(bounds, out[last_idx]) {
+            let mut idx = last_idx;
+            while idx > 0 && waypoint_inside_bounds(bounds, out[idx]) {
+                idx -= 1;
+            }
+            if idx < last_idx {
+                let outside = out[idx];
+                let inside = out[idx + 1];
+                let intersection =
+                    segment_bounds_intersection(outside, inside, bounds).unwrap_or(inside);
+                let mut new_points = out[..=idx].to_vec();
+                new_points.push(intersection);
+                out = new_points;
+            }
+        }
+    }
+
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2041,16 +3385,11 @@ mod tests {
     #[test]
     fn waypoint_transform_vertical_basic() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "C".into(),
-            label: None,
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-            minlen: 1,
-            index: 0,
-        }];
+        let edges = vec![
+            Edge::new("A", "C")
+                .with_stroke(Stroke::Solid)
+                .with_arrows(Arrow::None, Arrow::Normal),
+        ];
 
         let mut waypoints = HashMap::new();
         waypoints.insert(
@@ -2088,16 +3427,11 @@ mod tests {
     #[test]
     fn waypoint_transform_horizontal_basic() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "C".into(),
-            label: None,
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-            minlen: 1,
-            index: 0,
-        }];
+        let edges = vec![
+            Edge::new("A", "C")
+                .with_stroke(Stroke::Solid)
+                .with_arrows(Arrow::None, Arrow::Normal),
+        ];
 
         let mut waypoints = HashMap::new();
         waypoints.insert(
@@ -2130,16 +3464,11 @@ mod tests {
     #[test]
     fn waypoint_transform_clamps_to_canvas() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "B".into(),
-            label: None,
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-            minlen: 1,
-            index: 0,
-        }];
+        let edges = vec![
+            Edge::new("A", "B")
+                .with_stroke(Stroke::Solid)
+                .with_arrows(Arrow::None, Arrow::Normal),
+        ];
 
         let mut waypoints = HashMap::new();
         waypoints.insert(
@@ -2193,16 +3522,12 @@ mod tests {
     #[test]
     fn label_transform_basic_scaling() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "B".into(),
-            label: Some("yes".into()),
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-            minlen: 1,
-            index: 0,
-        }];
+        let edges = vec![
+            Edge::new("A", "B")
+                .with_label("yes")
+                .with_stroke(Stroke::Solid)
+                .with_arrows(Arrow::None, Arrow::Normal),
+        ];
 
         let mut labels = HashMap::new();
         labels.insert(
@@ -2237,16 +3562,12 @@ mod tests {
     #[test]
     fn label_transform_with_left_margin() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "B".into(),
-            label: Some("yes".into()),
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-            minlen: 1,
-            index: 0,
-        }];
+        let edges = vec![
+            Edge::new("A", "B")
+                .with_label("yes")
+                .with_stroke(Stroke::Solid)
+                .with_arrows(Arrow::None, Arrow::Normal),
+        ];
 
         let mut labels = HashMap::new();
         labels.insert(
@@ -2444,16 +3765,12 @@ mod tests {
     #[test]
     fn label_transform_skips_missing_edge() {
         use crate::graph::{Arrow, Stroke};
-        let edges = vec![Edge {
-            from: "A".into(),
-            to: "B".into(),
-            label: Some("x".into()),
-            stroke: Stroke::Solid,
-            arrow_start: Arrow::None,
-            arrow_end: Arrow::Normal,
-            minlen: 1,
-            index: 0,
-        }];
+        let edges = vec![
+            Edge::new("A", "B")
+                .with_label("x")
+                .with_stroke(Stroke::Solid)
+                .with_arrows(Arrow::None, Arrow::Normal),
+        ];
 
         let mut labels = HashMap::new();
         labels.insert(
@@ -2588,6 +3905,7 @@ mod tests {
                 title: "Inner".to_string(),
                 nodes: vec!["A".to_string()],
                 parent: Some("outer".to_string()),
+                dir: None,
             },
         );
         subgraphs.insert(
@@ -2597,6 +3915,7 @@ mod tests {
                 title: "Outer".to_string(),
                 nodes: vec!["A".to_string()],
                 parent: None,
+                dir: None,
             },
         );
         let children_map = build_children_map(&subgraphs);
@@ -2618,9 +3937,9 @@ mod tests {
             Subgraph {
                 id: "sg1".to_string(),
                 title: "Left".to_string(),
-
                 nodes: vec!["A".to_string()],
                 parent: None,
+                dir: None,
             },
         );
         subgraphs.insert(
@@ -2628,9 +3947,9 @@ mod tests {
             Subgraph {
                 id: "sg2".to_string(),
                 title: "Right".to_string(),
-
                 nodes: vec!["B".to_string()],
                 parent: None,
+                dir: None,
             },
         );
 
@@ -2702,9 +4021,9 @@ mod tests {
             Subgraph {
                 id: "sg1".to_string(),
                 title: "G".to_string(),
-
                 nodes: vec!["A".to_string()],
                 parent: None,
+                dir: None,
             },
         );
 
@@ -2994,5 +4313,470 @@ mod tests {
                 "{sg_id} bottom ({sg_bottom}) should be >= {member_id} bottom ({nb_bottom})"
             );
         }
+    }
+
+    // =========================================================================
+    // Direction Override: Field Plumbing (Phase 4, Task 4.1)
+    // =========================================================================
+
+    #[test]
+    fn direction_override_field_available_at_layout() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Group]\ndirection LR\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        // Direction override is present on the subgraph
+        assert_eq!(diagram.subgraphs["sg1"].dir, Some(Direction::LeftRight));
+
+        // Layout computation succeeds without panic
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+        assert!(!layout.node_bounds.is_empty());
+    }
+
+    #[test]
+    fn direction_override_none_when_not_specified() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        // No direction override: field should be None
+        assert_eq!(diagram.subgraphs["sg1"].dir, None);
+    }
+
+    // =========================================================================
+    // Direction Override Sub-Layout Tests (Phase 4, Tasks 4.2-4.4)
+    // =========================================================================
+
+    /// Helper: compute a sub-layout for a direction-override subgraph.
+    /// Returns the dagre LayoutResult for just the subgraph's internal nodes/edges.
+    fn run_sublayout_for_sg(diagram: &Diagram, sg_id: &str) -> dagre::LayoutResult {
+        let sg = &diagram.subgraphs[sg_id];
+        let sub_dir = sg.dir.expect("subgraph should have direction override");
+
+        let dagre_direction = match sub_dir {
+            Direction::TopDown => DagreDirection::TopBottom,
+            Direction::BottomTop => DagreDirection::BottomTop,
+            Direction::LeftRight => DagreDirection::LeftRight,
+            Direction::RightLeft => DagreDirection::RightLeft,
+        };
+
+        let mut sub_graph: dagre::DiGraph<(f64, f64)> = dagre::DiGraph::new();
+
+        // Add leaf nodes (not child subgraphs)
+        for node_id in &sg.nodes {
+            if !diagram.is_subgraph(node_id)
+                && let Some(node) = diagram.nodes.get(node_id)
+            {
+                let (w, h) = node_dimensions(node);
+                sub_graph.add_node(node_id.as_str(), (w as f64, h as f64));
+            }
+        }
+
+        // Add internal edges
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+        for edge in &diagram.edges {
+            if sg_node_set.contains(edge.from.as_str()) && sg_node_set.contains(edge.to.as_str()) {
+                sub_graph.add_edge(edge.from.as_str(), edge.to.as_str());
+            }
+        }
+
+        let sub_config = DagreConfig {
+            direction: dagre_direction,
+            ..DagreConfig::default()
+        };
+
+        dagre::layout(&sub_graph, &sub_config, |_, dims| *dims)
+    }
+
+    #[test]
+    fn sublayout_lr_nodes_arranged_horizontally() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA[Step 1] --> B[Step 2] --> C[Step 3]\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let result = run_sublayout_for_sg(&diagram, "sg1");
+
+        // In LR layout, nodes should be arranged horizontally (increasing x, similar y)
+        let a = &result.nodes[&dagre::NodeId::from("A")];
+        let b = &result.nodes[&dagre::NodeId::from("B")];
+        let c = &result.nodes[&dagre::NodeId::from("C")];
+
+        // Centers should have increasing x
+        let a_cx = a.x + a.width / 2.0;
+        let b_cx = b.x + b.width / 2.0;
+        let c_cx = c.x + c.width / 2.0;
+
+        assert!(
+            a_cx < b_cx,
+            "A center_x ({a_cx}) should be < B center_x ({b_cx})"
+        );
+        assert!(
+            b_cx < c_cx,
+            "B center_x ({b_cx}) should be < C center_x ({c_cx})"
+        );
+
+        // Centers should have similar y (within tolerance for same-rank nodes)
+        let a_cy = a.y + a.height / 2.0;
+        let b_cy = b.y + b.height / 2.0;
+        let c_cy = c.y + c.height / 2.0;
+
+        assert!(
+            (a_cy - b_cy).abs() < 1.0,
+            "A and B should be at similar y: {a_cy} vs {b_cy}"
+        );
+        assert!(
+            (b_cy - c_cy).abs() < 1.0,
+            "B and C should be at similar y: {b_cy} vs {c_cy}"
+        );
+    }
+
+    #[test]
+    fn sublayout_dimensions_wider_than_tall_for_lr() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA[Step 1] --> B[Step 2] --> C[Step 3]\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let result = run_sublayout_for_sg(&diagram, "sg1");
+
+        assert!(
+            result.width > result.height,
+            "LR sub-layout should be wider than tall: {}x{}",
+            result.width,
+            result.height
+        );
+    }
+
+    #[test]
+    fn sublayout_bt_nodes_arranged_bottom_to_top() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph LR\nsubgraph sg1[Vertical]\ndirection BT\nA[Start] --> B[End]\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let result = run_sublayout_for_sg(&diagram, "sg1");
+
+        let a = &result.nodes[&dagre::NodeId::from("A")];
+        let b = &result.nodes[&dagre::NodeId::from("B")];
+
+        // BT: A should be below B (higher y means lower on screen)
+        let a_cy = a.y + a.height / 2.0;
+        let b_cy = b.y + b.height / 2.0;
+
+        assert!(
+            a_cy > b_cy,
+            "In BT layout, A (start) should be below B (end): A_cy={a_cy} B_cy={b_cy}"
+        );
+    }
+
+    #[test]
+    fn sublayout_rl_reverses_node_order() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Reverse]\ndirection RL\nA[Left] --> B[Right]\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let a = layout.get_bounds("A").unwrap();
+        let b = layout.get_bounds("B").unwrap();
+
+        // RL: A (start) should be RIGHT of B (end) since flow goes right-to-left
+        assert!(
+            a.center_x() > b.center_x(),
+            "In RL layout, A should be right of B: A_cx={} B_cx={}",
+            a.center_x(),
+            b.center_x()
+        );
+
+        // Both should be at similar y
+        let y_tolerance = 2;
+        assert!(
+            (a.center_y() as isize - b.center_y() as isize).abs() <= y_tolerance,
+            "A and B should be at similar y in RL: {} vs {}",
+            a.center_y(),
+            b.center_y()
+        );
+    }
+
+    #[test]
+    fn direction_override_nodes_horizontal_in_final_layout() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Horizontal Section]\ndirection LR\nA[Step 1] --> B[Step 2] --> C[Step 3]\nend\nStart --> A\nC --> End\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let a = layout.get_bounds("A").unwrap();
+        let b = layout.get_bounds("B").unwrap();
+        let c = layout.get_bounds("C").unwrap();
+
+        // In an LR subgraph within a TD parent:
+        // A, B, C should be arranged horizontally (increasing x, similar y)
+        assert!(
+            a.center_x() < b.center_x(),
+            "A ({}) should be left of B ({})",
+            a.center_x(),
+            b.center_x()
+        );
+        assert!(
+            b.center_x() < c.center_x(),
+            "B ({}) should be left of C ({})",
+            b.center_x(),
+            c.center_x()
+        );
+
+        // All should be at similar y (within a small tolerance for rounding)
+        let y_tolerance = 2;
+        assert!(
+            (a.center_y() as isize - b.center_y() as isize).abs() <= y_tolerance,
+            "A and B should be at similar y: {} vs {}",
+            a.center_y(),
+            b.center_y()
+        );
+        assert!(
+            (b.center_y() as isize - c.center_y() as isize).abs() <= y_tolerance,
+            "B and C should be at similar y: {} vs {}",
+            b.center_y(),
+            c.center_y()
+        );
+    }
+
+    #[test]
+    fn direction_override_subgraph_wider_than_tall() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA[Step 1] --> B[Step 2] --> C[Step 3]\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let sg = &layout.subgraph_bounds["sg1"];
+        assert!(
+            sg.width > sg.height,
+            "LR subgraph should be wider than tall: {}x{}",
+            sg.width,
+            sg.height
+        );
+    }
+
+    #[test]
+    fn direction_override_bt_subgraph_taller_than_wide() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        // BT subgraph inside an LR parent: subgraph should be taller than wide
+        let input =
+            "graph LR\nsubgraph sg1[Vertical]\ndirection BT\nA[Top] --> B[Mid] --> C[Bot]\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let sg = &layout.subgraph_bounds["sg1"];
+        assert!(
+            sg.height > sg.width,
+            "BT subgraph should be taller than wide: {}w x {}h",
+            sg.width,
+            sg.height
+        );
+    }
+
+    #[test]
+    fn direction_override_subgraph_title_width_minimum() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        // Subgraph with a long title should have bounds wide enough for the title
+        let input =
+            "graph TD\nsubgraph sg1[A Very Long Section Title]\ndirection LR\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let sg = &layout.subgraph_bounds["sg1"];
+        let title = "A Very Long Section Title";
+        // Title with padding characters on either side
+        assert!(
+            sg.width >= title.len(),
+            "Subgraph width ({}) should accommodate title length ({})",
+            sg.width,
+            title.len()
+        );
+    }
+
+    #[test]
+    fn direction_override_nodes_inside_subgraph_bounds() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA[Step 1] --> B[Step 2] --> C[Step 3]\nend\nStart --> A\nC --> End\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        assert_subgraph_contains_members(&layout, "sg1", &["A", "B", "C"]);
+    }
+
+    #[test]
+    fn direction_override_no_node_overlap() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA[Step 1] --> B[Step 2] --> C[Step 3]\nend\nStart --> A\nC --> End\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        // Verify no overlap between A, B, C
+        let nodes = ["A", "B", "C"];
+        for i in 0..nodes.len() {
+            for j in (i + 1)..nodes.len() {
+                let a = layout.get_bounds(nodes[i]).unwrap();
+                let b = layout.get_bounds(nodes[j]).unwrap();
+                let overlap_x = a.x < b.x + b.width && b.x < a.x + a.width;
+                let overlap_y = a.y < b.y + b.height && b.y < a.y + a.height;
+                assert!(
+                    !(overlap_x && overlap_y),
+                    "Nodes {} and {} should not overlap: {:?} vs {:?}",
+                    nodes[i],
+                    nodes[j],
+                    (a.x, a.y, a.width, a.height),
+                    (b.x, b.y, b.width, b.height)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn direction_override_external_nodes_outside_subgraph() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA[Step 1] --> B[Step 2]\nend\nStart --> A\nB --> End\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        let sg = &layout.subgraph_bounds["sg1"];
+
+        // Start and End should NOT be inside the subgraph bounds
+        // (they are external to sg1)
+        for ext_node in &["Start", "End"] {
+            let bounds = layout.get_bounds(ext_node).unwrap();
+            let inside_x = bounds.x >= sg.x && bounds.x + bounds.width <= sg.x + sg.width;
+            let inside_y = bounds.y >= sg.y && bounds.y + bounds.height <= sg.y + sg.height;
+            // At least one dimension should be outside
+            assert!(
+                !(inside_x && inside_y),
+                "External node {} should not be fully inside sg1 bounds",
+                ext_node
+            );
+        }
+    }
+
+    // =========================================================================
+    // Cross-Boundary Edge Routing (Phase 4, Task 4.5)
+    // =========================================================================
+
+    #[test]
+    fn cross_boundary_edge_no_panic() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+        use crate::render::{RenderOptions, render};
+
+        let input =
+            "graph TD\nsubgraph sg1[Horizontal]\ndirection LR\nA --> B\nend\nC --> A\nB --> D\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let options = RenderOptions::default();
+
+        // Full render pipeline should not panic
+        let output = render(&diagram, &options);
+        assert!(output.contains("A"));
+        assert!(output.contains("B"));
+        assert!(output.contains("C"));
+        assert!(output.contains("D"));
+        assert!(output.contains("Horizontal"));
+    }
+
+    #[test]
+    fn node_effective_direction_populated() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input = "graph TD\nsubgraph sg1[Group]\ndirection LR\nA --> B\nend\nC --> A\nB --> D\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let config = LayoutConfig::default();
+        let layout = compute_layout_direct(&diagram, &config);
+
+        // Nodes inside the LR subgraph should have LR effective direction
+        assert_eq!(
+            layout.node_directions.get("A"),
+            Some(&Direction::LeftRight),
+            "A should have LR direction"
+        );
+        assert_eq!(
+            layout.node_directions.get("B"),
+            Some(&Direction::LeftRight),
+            "B should have LR direction"
+        );
+
+        // Nodes outside the subgraph should have the parent direction (TD)
+        assert_eq!(
+            layout.node_directions.get("C"),
+            Some(&Direction::TopDown),
+            "C should have TD direction"
+        );
+        assert_eq!(
+            layout.node_directions.get("D"),
+            Some(&Direction::TopDown),
+            "D should have TD direction"
+        );
+    }
+
+    #[test]
+    fn sublayout_excludes_cross_boundary_edges() {
+        use crate::graph::build_diagram;
+        use crate::parser::parse_flowchart;
+
+        let input =
+            "graph TD\nsubgraph sg1[Group]\ndirection LR\nA --> B\nend\nStart --> A\nB --> End\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+
+        let result = run_sublayout_for_sg(&diagram, "sg1");
+
+        // Sub-layout should only have A and B, not Start or End
+        assert!(result.nodes.contains_key(&dagre::NodeId::from("A")));
+        assert!(result.nodes.contains_key(&dagre::NodeId::from("B")));
+        assert!(!result.nodes.contains_key(&dagre::NodeId::from("Start")));
+        assert!(!result.nodes.contains_key(&dagre::NodeId::from("End")));
     }
 }

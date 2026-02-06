@@ -1,15 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 194.91 274.00" style="max-width: 194.91px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 224.91 310.00" style="max-width: 224.91px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(0.00,0.00)">
+  <g transform="translate(15.00,21.00)">
     <g class="clusters">
-      <rect class="subgraph" x="8.00" y="8.00" width="178.91" height="258.00" fill="none" stroke="#888" stroke-width="1.00" />
-      <text x="97.45" y="12.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Outer</text>
-      <rect class="subgraph" x="28.00" y="33.00" width="138.91" height="208.00" fill="none" stroke="#888" stroke-width="1.00" />
-      <text x="97.45" y="37.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Inner</text>
+      <rect class="subgraph" x="-7.00" y="-13.00" width="208.91" height="294.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="97.45" y="-9.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Outer</text>
+      <rect class="subgraph" x="13.00" y="18.00" width="168.91" height="238.00" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="97.45" y="22.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Inner</text>
     </g>
     <g class="edgePaths">
       <path d="M97.45,112.00 L97.45,116.17 C97.45,120.33 97.45,128.67 97.45,136.33 C97.45,144.00 97.45,151.00 97.45,154.50 L97.45,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />

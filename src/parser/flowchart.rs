@@ -223,6 +223,7 @@ pub fn parse_flowchart_with_options(
 
     let mut direction = Direction::TopDown;
     let mut statements = Vec::new();
+    let mut subgraph_counter = 0usize;
 
     for pair in pairs.filter(|p| p.as_rule() == Rule::flowchart) {
         for inner in pair.into_inner() {
@@ -234,7 +235,9 @@ pub fn parse_flowchart_with_options(
                         .and_then(|p| Direction::from_str(p.as_str()))
                         .unwrap_or(Direction::TopDown);
                 }
-                Rule::statement => statements.extend(parse_statement(inner)),
+                Rule::statement => {
+                    statements.extend(parse_statement(inner, &mut subgraph_counter));
+                }
                 _ => {}
             }
         }
@@ -246,11 +249,17 @@ pub fn parse_flowchart_with_options(
     })
 }
 
-fn parse_statement(pair: pest::iterators::Pair<Rule>) -> Vec<Statement> {
+fn parse_statement(
+    pair: pest::iterators::Pair<Rule>,
+    subgraph_counter: &mut usize,
+) -> Vec<Statement> {
     pair.into_inner()
         .flat_map(|inner| match inner.as_rule() {
             Rule::vertex_statement => parse_vertex_statement(inner),
-            Rule::subgraph_stmt => vec![Statement::Subgraph(parse_subgraph(inner))],
+            Rule::subgraph_stmt => {
+                vec![Statement::Subgraph(parse_subgraph(inner, subgraph_counter))]
+            }
+            Rule::direction_stmt => vec![],
             _ => vec![],
         })
         .collect()
@@ -274,10 +283,12 @@ fn strip_quotes_any(s: &str) -> &str {
     s
 }
 
-fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
+fn parse_subgraph(pair: pest::iterators::Pair<Rule>, counter: &mut usize) -> SubgraphSpec {
     let mut id = String::new();
     let mut title = None;
+    let mut has_explicit_id = false;
     let mut body_statements = Vec::new();
+    let mut dir = None;
 
     for inner in pair.into_inner() {
         match inner.as_rule() {
@@ -286,6 +297,7 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
                     match spec_inner.as_rule() {
                         Rule::subgraph_id => {
                             id = spec_inner.as_str().to_string();
+                            has_explicit_id = true;
                         }
                         Rule::subgraph_title_bracket => {
                             title = spec_inner
@@ -293,26 +305,55 @@ fn parse_subgraph(pair: pest::iterators::Pair<Rule>) -> SubgraphSpec {
                                 .find(|t| t.as_rule() == Rule::subgraph_title_text)
                                 .map(|t| strip_quotes(t.as_str()).to_string());
                         }
+                        Rule::subgraph_quoted_title => {
+                            title = spec_inner
+                                .into_inner()
+                                .find(|t| t.as_rule() == Rule::subgraph_quoted_title_text)
+                                .map(|t| t.as_str().to_string());
+                        }
                         _ => {}
                     }
                 }
             }
             Rule::subgraph_body_line => {
-                body_statements.extend(
-                    inner
-                        .into_inner()
-                        .filter(|b| b.as_rule() == Rule::statement)
-                        .flat_map(parse_statement),
-                );
+                for body_inner in inner.into_inner() {
+                    if body_inner.as_rule() == Rule::statement {
+                        for stmt_inner in body_inner.into_inner() {
+                            match stmt_inner.as_rule() {
+                                Rule::direction_stmt => {
+                                    dir = stmt_inner
+                                        .into_inner()
+                                        .find(|p| p.as_rule() == Rule::direction_value)
+                                        .and_then(|p| Direction::from_str(p.as_str()));
+                                }
+                                Rule::vertex_statement => {
+                                    body_statements.extend(parse_vertex_statement(stmt_inner));
+                                }
+                                Rule::subgraph_stmt => {
+                                    body_statements.push(Statement::Subgraph(parse_subgraph(
+                                        stmt_inner, counter,
+                                    )));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
             }
             _ => {}
         }
+    }
+
+    if !has_explicit_id {
+        id = format!("subGraph{}", counter);
+        *counter += 1;
     }
 
     SubgraphSpec {
         title: title.unwrap_or_else(|| id.clone()),
         id,
         statements: body_statements,
+        dir,
     }
 }
 
@@ -1707,6 +1748,146 @@ mod tests {
         assert_eq!(edge.connector.stroke, StrokeSpec::Thick);
         assert_eq!(edge.connector.left, ArrowHead::Normal);
         assert_eq!(edge.connector.right, ArrowHead::Normal);
+    }
+
+    #[test]
+    fn test_parse_subgraph_quoted_multi_word_title() {
+        let input = "graph TD\nsubgraph \"Multi Word Title\"\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.title, "Multi Word Title");
+                assert!(!sg.id.is_empty());
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_id_space_quoted_title() {
+        let input = "graph TD\nsubgraph myId \"My Title\"\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "myId");
+                assert_eq!(sg.title, "My Title");
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_direction_lr() {
+        let input = "graph TD\nsubgraph sg1[Group]\ndirection LR\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "sg1");
+                assert_eq!(sg.dir, Some(Direction::LeftRight));
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_direction_bt() {
+        let input = "graph TD\nsubgraph sg1[Group]\ndirection BT\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.dir, Some(Direction::BottomTop));
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_no_direction() {
+        let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.dir, None);
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_auto_ids_are_unique() {
+        let input = "graph TD\nsubgraph \"First\"\nA\nend\nsubgraph \"Second\"\nB\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        let subgraphs: Vec<_> = result
+            .statements
+            .iter()
+            .filter_map(|s| match s {
+                Statement::Subgraph(sg) => Some(sg),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(subgraphs.len(), 2);
+        assert_ne!(
+            subgraphs[0].id, subgraphs[1].id,
+            "Auto-generated IDs should be unique"
+        );
+    }
+
+    #[test]
+    fn test_auto_ids_unique_same_title() {
+        let input = "graph TD\nsubgraph \"Same\"\nA\nend\nsubgraph \"Same\"\nB\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        let subgraphs: Vec<_> = result
+            .statements
+            .iter()
+            .filter_map(|s| match s {
+                Statement::Subgraph(sg) => Some(sg),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(subgraphs.len(), 2);
+        assert_ne!(
+            subgraphs[0].id, subgraphs[1].id,
+            "Auto-generated IDs should be unique even with same title"
+        );
+    }
+
+    #[test]
+    fn test_parse_subgraph_numeric_starting_id() {
+        let input = "graph TD\nsubgraph 1test[Group]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "1test");
+                assert_eq!(sg.title, "Group");
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_all_numeric_id() {
+        let input = "graph TD\nsubgraph 123[Numbers]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "123");
+                assert_eq!(sg.title, "Numbers");
+            }
+            _ => panic!("Expected subgraph"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subgraph_existing_bracket_syntax_unchanged() {
+        let input = "graph TD\nsubgraph sg1[My Group]\nA --> B\nend\n";
+        let result = parse_flowchart(input).unwrap();
+        match &result.statements[0] {
+            Statement::Subgraph(sg) => {
+                assert_eq!(sg.id, "sg1");
+                assert_eq!(sg.title, "My Group");
+            }
+            _ => panic!("Expected subgraph"),
+        }
     }
 
     #[test]

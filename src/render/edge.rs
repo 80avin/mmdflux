@@ -786,13 +786,19 @@ pub fn render_all_edges_with_labels(
 
             // Use precomputed position if available and within canvas bounds,
             // otherwise fall back to heuristic placement.
-            let precomputed = label_positions
-                .get(&routed.edge.index)
-                .filter(|&&(px, py)| {
-                    px < canvas.width()
-                        && py < canvas.height()
-                        && px.saturating_add(label_len) <= canvas.width()
-                });
+            let allow_precomputed =
+                routed.edge.from_subgraph.is_none() && routed.edge.to_subgraph.is_none();
+            let precomputed = if allow_precomputed {
+                label_positions
+                    .get(&routed.edge.index)
+                    .filter(|&&(px, py)| {
+                        px < canvas.width()
+                            && py < canvas.height()
+                            && px.saturating_add(label_len) <= canvas.width()
+                    })
+            } else {
+                None
+            };
 
             let placed = if routed.is_self_edge || routed.is_backward {
                 // For backward edges, compute label position from actual routed path

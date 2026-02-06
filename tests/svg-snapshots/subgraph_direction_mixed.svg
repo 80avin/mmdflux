@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 233.82 435.60" style="max-width: 233.82px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(39.45,-49.20)">
+    <g class="clusters">
+      <rect class="subgraph" x="28.00" y="263.20" width="98.91" height="213.60" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="77.45" y="267.20" text-anchor="middle" dominant-baseline="hanging" fill="#333">Bottom to Top</text>
+      <rect class="subgraph" x="-31.45" y="57.20" width="217.82" height="109.60" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="77.45" y="61.20" text-anchor="middle" dominant-baseline="hanging" fill="#333">Left to Right</text>
+    </g>
+    <g class="edgePaths">
+      <path d="M52.45,120.00 L98.45,120.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M60.23,403.00 L60.23,398.83 C60.23,394.67 60.23,386.33 63.10,382.17 C65.97,378.00 71.71,378.00 74.58,374.50 C77.45,371.00 77.45,364.00 77.45,360.50 L77.45,357.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M136.91,147.00 L136.91,168.33 C136.91,189.67 136.91,232.33 129.87,253.67 C122.83,275.00 108.76,275.00 101.72,295.67 C94.68,316.33 94.68,357.67 94.68,378.33 L94.68,399.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="-16.45" y="93.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="18.00" y="120.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
+      <rect x="102.45" y="93.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="136.91" y="120.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="43.00" y="403.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.45" y="430.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
+      <rect x="43.00" y="299.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.45" y="326.00" text-anchor="middle" dominant-baseline="middle" fill="#333">D</text>
+    </g>
+  </g>
+</svg>

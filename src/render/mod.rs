@@ -12,6 +12,7 @@ mod shape;
 mod subgraph;
 mod svg;
 mod svg_metrics;
+pub(crate) mod svg_router;
 
 pub use canvas::Canvas;
 use canvas::{Cell, Connections};
