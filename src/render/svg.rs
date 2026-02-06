@@ -73,7 +73,10 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     center_override_subgraphs(diagram, &mut layout);
 
     // Expand parent subgraph bounds to encompass repositioned children.
-    expand_parent_bounds_dagre(diagram, &mut layout);
+    // Use node_padding as margin so parent borders don't overlap child borders
+    // after apply_subgraph_svg_padding adds equal padding to both.
+    let child_margin = metrics.node_padding_x.max(metrics.node_padding_y);
+    expand_parent_bounds_dagre(diagram, &mut layout, child_margin);
 
     // Push external nodes that now overlap with reconciled subgraph bounds.
     // The gap must account for subgraph padding (added later) plus breathing room.

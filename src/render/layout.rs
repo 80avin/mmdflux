@@ -979,9 +979,14 @@ pub(crate) fn center_override_subgraphs(
 /// repositioned (e.g., an LR inner subgraph is wider than dagre predicted).
 /// This walks subgraphs inner-first and expands each parent's bounds to be the
 /// union of its current bounds and all member content.
+///
+/// `child_margin` adds space between parent and child subgraph borders.
+/// In SVG this should match the subgraph padding so borders don't overlap;
+/// in the text pipeline pass 0.0 (draw-coordinate expansion handles padding).
 pub(crate) fn expand_parent_bounds_dagre(
     diagram: &Diagram,
     layout: &mut dagre::LayoutResult,
+    child_margin: f64,
 ) {
     // Process inner-first so child bounds are finalized before parents.
     let order: Vec<&String> = if !diagram.subgraph_order.is_empty() {
@@ -1017,13 +1022,14 @@ pub(crate) fn expand_parent_bounds_dagre(
         }
 
         // Check child subgraph bounds (subgraphs whose parent is this subgraph).
+        // Add child_margin so the parent border sits outside the child border.
         for (child_sg_id, child_sg) in &diagram.subgraphs {
             if child_sg.parent.as_deref() == Some(sg_id.as_str()) {
                 if let Some(child_bounds) = layout.subgraph_bounds.get(child_sg_id) {
-                    min_x = min_x.min(child_bounds.x);
-                    min_y = min_y.min(child_bounds.y);
-                    max_x = max_x.max(child_bounds.x + child_bounds.width);
-                    max_y = max_y.max(child_bounds.y + child_bounds.height);
+                    min_x = min_x.min(child_bounds.x - child_margin);
+                    min_y = min_y.min(child_bounds.y - child_margin);
+                    max_x = max_x.max(child_bounds.x + child_bounds.width + child_margin);
+                    max_y = max_y.max(child_bounds.y + child_bounds.height + child_margin);
                 }
             }
         }
@@ -1277,7 +1283,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Shift external predecessors of direction-override subgraphs to align
     // with the subgraph center, before coordinate transformation.
     center_override_subgraphs(diagram, &mut result);
-    expand_parent_bounds_dagre(diagram, &mut result);
+    expand_parent_bounds_dagre(diagram, &mut result, 0.0);
 
     // --- Phase B: Group nodes into layers ---
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
