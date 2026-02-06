@@ -12,9 +12,9 @@
       <text x="364.37" y="-3.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Frontend</text>
     </g>
     <g class="edgePaths">
-      <path d="M161.56,87.00 L168.93,91.17 C176.29,95.33 191.02,103.67 212.04,112.00 C233.06,120.33 260.37,128.67 280.03,136.64 C299.68,144.62 311.68,152.24 317.69,156.05 L323.69,159.86" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M364.79,87.00 L365.60,91.17 C366.40,95.33 368.00,103.67 368.80,112.00 C369.60,120.33 369.60,128.67 369.60,136.33 C369.60,144.00 369.60,151.00 369.60,154.50 L369.60,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M113.83,216.00 L113.83,220.17 C113.83,224.33 113.83,232.67 113.83,241.00 C113.83,249.33 113.83,257.67 113.83,265.33 C113.83,273.00 113.83,280.00 113.83,283.50 L113.83,287.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M224.66,116.51 L211.52,115.76 C198.37,115.01 172.08,113.50 158.70,113.77 C145.33,114.03 144.87,116.07 144.64,117.08 L144.41,118.10" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M224.66,160.02 L231.68,153.75" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
@@ -25,8 +25,8 @@
       <text x="113.83" y="318.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Database</text>
       <rect x="285.59" y="162.00" width="168.02" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="369.60" y="189.00" text-anchor="middle" dominant-baseline="middle" fill="#333">State Manager</text>
-      <rect x="28.89" y="33.00" width="169.88" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="113.83" y="60.00" text-anchor="middle" dominant-baseline="middle" fill="#333">User Interface</text>
+      <rect x="274.66" y="33.00" width="169.88" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="359.60" y="60.00" text-anchor="middle" dominant-baseline="middle" fill="#333">User Interface</text>
     </g>
   </g>
 </svg>

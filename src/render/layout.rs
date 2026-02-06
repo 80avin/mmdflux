@@ -723,6 +723,14 @@ pub(crate) fn center_override_subgraphs(
         )
         .collect();
 
+    // Nodes belonging to any subgraph — these should never be shifted since
+    // they are positioned by their own subgraph's layout.
+    let all_sg_members: HashSet<&str> = diagram
+        .subgraphs
+        .values()
+        .flat_map(|sg| sg.nodes.iter().map(|s| s.as_str()))
+        .collect();
+
     // Collect all shifts to apply: node_id → delta on cross-axis.
     let mut node_shifts: HashMap<String, f64> = HashMap::new();
 
@@ -758,7 +766,11 @@ pub(crate) fn center_override_subgraphs(
                 || (is_sg_as_node
                     && edge.to_subgraph.as_deref() == Some(sg_id.as_str()));
 
-            if is_incoming && edge.from != *sg_id && !sg_node_set.contains(edge.from.as_str()) {
+            if is_incoming
+                && edge.from != *sg_id
+                && !sg_node_set.contains(edge.from.as_str())
+                && !all_sg_members.contains(edge.from.as_str())
+            {
                 if !predecessors.contains(&edge.from) {
                     predecessors.push(edge.from.clone());
                 }
@@ -774,7 +786,11 @@ pub(crate) fn center_override_subgraphs(
                 || (is_sg_as_node
                     && edge.from_subgraph.as_deref() == Some(sg_id.as_str()));
 
-            if is_outgoing && edge.to != *sg_id && !sg_node_set.contains(edge.to.as_str()) {
+            if is_outgoing
+                && edge.to != *sg_id
+                && !sg_node_set.contains(edge.to.as_str())
+                && !all_sg_members.contains(edge.to.as_str())
+            {
                 if !successors.contains(&edge.to) {
                     successors.push(edge.to.clone());
                 }
