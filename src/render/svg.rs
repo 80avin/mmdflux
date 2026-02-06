@@ -880,10 +880,17 @@ fn render_nodes(
         render_node_shape(writer, node, rect, scale, diagram.direction);
 
         let center = rect.center();
+        let mut text_y = center.y;
+        // Offset text downward for cylinders so it centers in the body below the top cap.
+        if node.shape == Shape::Cylinder {
+            let rx = rect.width / 2.0;
+            let ry = rx / (2.5 + rect.width / 50.0);
+            text_y += ry / 2.0;
+        }
         render_text_centered(
             writer,
             center.x * scale,
-            center.y * scale,
+            text_y * scale,
             &node.label,
             metrics,
             scale,

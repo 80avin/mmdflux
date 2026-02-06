@@ -24,7 +24,7 @@
     <g class="nodes">
       <path d="M29.22,434.35 A44.14,10.35 0 0,0 117.50,434.35 A44.14,10.35 0 0,0 29.22,434.35 L29.22,478.00 A44.14,10.35 0 0,0 117.50,478.00 L117.50,434.35" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <path d="M29.22,434.35 A44.14,10.35 0 0,1 117.50,434.35" fill="none" stroke="#333" stroke-width="1.00" />
-      <text x="73.36" y="456.17" text-anchor="middle" dominant-baseline="middle" fill="#333">Cylinder</text>
+      <text x="73.36" y="461.35" text-anchor="middle" dominant-baseline="middle" fill="#333">Cylinder</text>
       <polygon points="73.36,538.35 130.80,595.79 73.36,653.22 15.92,595.79" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="73.36" y="595.79" text-anchor="middle" dominant-baseline="middle" fill="#333">Decision</text>
       <polygon points="42.26,703.22 104.45,703.22 125.18,730.22 104.45,757.22 42.26,757.22 21.53,730.22" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
