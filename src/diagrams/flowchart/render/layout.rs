@@ -1665,6 +1665,15 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     center_override_subgraphs(diagram, &mut result);
     expand_parent_bounds_dagre(diagram, &mut result, 0.0, 0.0);
 
+    // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
+    // From this point on, phases read from `geom` (and `dagre_hints` for
+    // rank-annotated data) instead of the raw `result`.
+    let geom = super::super::geometry::from_dagre_layout(&result, diagram);
+    let dagre_hints = match &geom.engine_hints {
+        Some(super::super::geometry::EngineHints::Dagre(h)) => h,
+        _ => unreachable!("dagre adapter always produces dagre hints"),
+    };
+
     // --- Phase B: Group nodes into layers ---
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
 
@@ -1672,14 +1681,22 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     let subgraph_ids: std::collections::HashSet<&str> =
         diagram.subgraphs.keys().map(|s| s.as_str()).collect();
 
-    let mut layer_coords: Vec<(String, f64, f64)> = result
+    let mut layer_coords: Vec<(String, f64, f64)> = geom
         .nodes
         .iter()
-        .filter(|(id, _)| !subgraph_ids.contains(id.0.as_str()))
-        .map(|(id, rect)| {
-            let primary = if is_vertical { rect.y } else { rect.x };
-            let secondary = if is_vertical { rect.x } else { rect.y };
-            (id.0.clone(), primary, secondary)
+        .filter(|(id, _)| !subgraph_ids.contains(id.as_str()))
+        .map(|(id, pos_node)| {
+            let primary = if is_vertical {
+                pos_node.rect.y
+            } else {
+                pos_node.rect.x
+            };
+            let secondary = if is_vertical {
+                pos_node.rect.x
+            } else {
+                pos_node.rect.y
+            };
+            (id.clone(), primary, secondary)
         })
         .collect();
     layer_coords.sort_by(|a, b| a.1.total_cmp(&b.1));
@@ -1702,10 +1719,9 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     }
 
     let secondary_coord = |id: &String| -> f64 {
-        result
-            .nodes
-            .get(&dagre::NodeId(id.clone()))
-            .map(|r| if is_vertical { r.x } else { r.y })
+        geom.nodes
+            .get(id)
+            .map(|n| if is_vertical { n.rect.x } else { n.rect.y })
             .unwrap_or(0.0)
     };
     for layer in &mut layers {
@@ -1741,27 +1757,27 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     );
 
     // Find dagre bounding box min
-    let mut dagre_min_x = result
+    let mut dagre_min_x = geom
         .nodes
         .values()
-        .map(|r| r.x)
+        .map(|n| n.rect.x)
         .fold(f64::INFINITY, f64::min);
-    let mut dagre_min_y = result
+    let mut dagre_min_y = geom
         .nodes
         .values()
-        .map(|r| r.y)
+        .map(|n| n.rect.y)
         .fold(f64::INFINITY, f64::min);
 
-    if !result.subgraph_bounds.is_empty() {
-        let sg_min_x = result
-            .subgraph_bounds
+    if !geom.subgraphs.is_empty() {
+        let sg_min_x = geom
+            .subgraphs
             .values()
-            .map(|r| r.x)
+            .map(|sg| sg.rect.x)
             .fold(f64::INFINITY, f64::min);
-        let sg_min_y = result
-            .subgraph_bounds
+        let sg_min_y = geom
+            .subgraphs
             .values()
-            .map(|r| r.y)
+            .map(|sg| sg.rect.y)
             .fold(f64::INFINITY, f64::min);
         dagre_min_x = dagre_min_x.min(sg_min_x);
         dagre_min_y = dagre_min_y.min(sg_min_y);
@@ -1790,11 +1806,12 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     let mut max_overhang_x: usize = 0;
     let mut max_overhang_y: usize = 0;
 
-    for (id, rect) in &result.nodes {
-        let node_id = &id.0;
+    for (node_id, pos_node) in &geom.nodes {
         if let Some(&(w, h)) = node_dims.get(node_id) {
-            let cx = ((rect.x + rect.width / 2.0 - dagre_min_x) * scale_x).round() as usize;
-            let cy = ((rect.y + rect.height / 2.0 - dagre_min_y) * scale_y).round() as usize;
+            let cx = ((pos_node.rect.x + pos_node.rect.width / 2.0 - dagre_min_x) * scale_x).round()
+                as usize;
+            let cy = ((pos_node.rect.y + pos_node.rect.height / 2.0 - dagre_min_y) * scale_y)
+                .round() as usize;
             if w / 2 > cx {
                 max_overhang_x = max_overhang_x.max(w / 2 - cx);
             }
@@ -1885,7 +1902,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
 
     // --- Phase F: Compute canvas size ---
     // Add margin for synthetic backward-edge routing around nodes
-    let has_backward_edges = !result.reversed_edges.is_empty();
+    let has_backward_edges = !geom.reversed_edges.is_empty();
     let backward_margin = if has_backward_edges {
         super::router::BACKWARD_ROUTE_GAP + 2
     } else {
@@ -1922,8 +1939,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // neighboring real node ranks.
     let rank_to_actual_bounds: HashMap<i32, (usize, usize)> = {
         let mut rank_bounds: HashMap<i32, (usize, usize)> = HashMap::new();
-        for (node_id, &rank) in &result.node_ranks {
-            if let Some(bounds) = node_bounds.get(&node_id.0) {
+        for (node_id, &rank) in &dagre_hints.node_ranks {
+            if let Some(bounds) = node_bounds.get(node_id) {
                 let (start, end) = if is_vertical {
                     (bounds.y, bounds.y + bounds.height)
                 } else {
@@ -1944,7 +1961,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Build layer_starts as a Vec indexed by dagre rank.
     // Real node ranks use the actual node bounds extent.
     // Missing ranks (e.g., dummy/label ranks) interpolate between the nearest neighbors.
-    let max_rank = result
+    let max_rank = dagre_hints
         .node_ranks
         .values()
         .copied()
@@ -2003,11 +2020,43 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         overhang_y: max_overhang_y,
     };
 
+    // Transient adapter glue: convert DagreHints back to WaypointWithRank for
+    // the transform functions. This conversion will be removed when the transform
+    // functions are updated to consume geometry IR types directly (Plan 0055).
+    let edge_waypoints_raw: HashMap<usize, Vec<WaypointWithRank>> = dagre_hints
+        .edge_waypoints
+        .iter()
+        .map(|(&idx, wps)| {
+            (
+                idx,
+                wps.iter()
+                    .map(|(fp, rank)| WaypointWithRank {
+                        point: dagre::Point { x: fp.x, y: fp.y },
+                        rank: *rank,
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    let label_positions_raw: HashMap<usize, WaypointWithRank> = dagre_hints
+        .label_positions
+        .iter()
+        .map(|(&idx, (fp, rank))| {
+            (
+                idx,
+                WaypointWithRank {
+                    point: dagre::Point { x: fp.x, y: fp.y },
+                    rank: *rank,
+                },
+            )
+        })
+        .collect();
+
     if std::env::var("MMDFLUX_DEBUG_WAYPOINTS").is_ok_and(|v| v == "1") {
-        eprintln!("[node_ranks] {:?}", result.node_ranks);
+        eprintln!("[node_ranks] {:?}", dagre_hints.node_ranks);
         eprintln!("[rank_to_actual_bounds] {:?}", rank_to_actual_bounds);
         eprintln!("[layer_starts] {:?}", layer_starts);
-        for (edge_idx, wps) in &result.edge_waypoints {
+        for (edge_idx, wps) in &edge_waypoints_raw {
             if let Some(edge) = diagram.edges.get(*edge_idx) {
                 eprintln!(
                     "[raw dagre waypoints] {} -> {}: {:?}",
@@ -2018,7 +2067,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     }
 
     let edge_waypoints_converted = transform_waypoints_direct(
-        &result.edge_waypoints,
+        &edge_waypoints_raw,
         &diagram.edges,
         &ctx,
         &layer_starts,
@@ -2036,7 +2085,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     }
 
     let mut edge_label_positions_converted = transform_label_positions_direct(
-        &result.label_positions,
+        &label_positions_raw,
         &diagram.edges,
         &ctx,
         &layer_starts,
@@ -2092,15 +2141,19 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         max_overhang_y,
         config,
     };
-    let mut subgraph_bounds = dagre_subgraph_bounds_to_draw(
-        &diagram.subgraphs,
-        &result.subgraph_bounds,
-        &coord_transform,
-    );
+    // Transient adapter glue: convert GraphGeometry subgraphs back to dagre Rect map
+    // for dagre_subgraph_bounds_to_draw. Will be removed in Plan 0055.
+    let dagre_sg_bounds: HashMap<String, Rect> = geom
+        .subgraphs
+        .iter()
+        .map(|(id, sg)| (id.clone(), sg.rect.into()))
+        .collect();
+    let mut subgraph_bounds =
+        dagre_subgraph_bounds_to_draw(&diagram.subgraphs, &dagre_sg_bounds, &coord_transform);
     debug_compare_subgraph_bounds(
         &diagram.subgraphs,
         &subgraph_bounds,
-        &result.subgraph_bounds,
+        &dagre_sg_bounds,
         &coord_transform,
     );
     shrink_subgraph_vertical_gaps(
@@ -2122,11 +2175,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // --- Phase L: Compute self-edge loop paths in draw coordinates ---
     // We use node bounds directly rather than transforming dagre-space loop points,
     // because the dagre gap (1.0) would collapse to 0 after ASCII scaling.
-    let self_edges: Vec<SelfEdgeDrawData> = result
+    let self_edges: Vec<SelfEdgeDrawData> = geom
         .self_edges
         .iter()
-        .filter_map(|sel| {
-            let bounds = node_bounds.get(&sel.node.0)?;
+        .filter_map(|se| {
+            let bounds = node_bounds.get(&se.node_id)?;
             let loop_extent = 3; // how far the loop extends beyond the node edge
 
             // Dagre.js places self-edge loops on the right face (TD/BT) or
@@ -2188,8 +2241,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             };
 
             Some(SelfEdgeDrawData {
-                node_id: sel.node.0.clone(),
-                edge_index: sel.edge_index,
+                node_id: se.node_id.clone(),
+                edge_index: se.edge_index,
                 points,
             })
         })
@@ -2284,37 +2337,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         }
     }
 
-    // Build per-node effective direction map.
-    // Nodes inside a direction-override subgraph get the subgraph's direction;
-    // all other nodes get the diagram's root direction.
-    //
-    // Process subgraphs in depth order (shallowest first) so the deepest
-    // override deterministically wins for nodes in nested subgraphs.
-    let mut node_directions: HashMap<String, Direction> = HashMap::new();
-    for node_id in diagram.nodes.keys() {
-        node_directions.insert(node_id.clone(), diagram.direction);
-    }
-    let mut dir_sg_ids: Vec<&String> = diagram
-        .subgraphs
-        .iter()
-        .filter(|(_, sg)| sg.dir.is_some())
-        .map(|(id, _)| id)
-        .collect();
-    dir_sg_ids.sort_by(|a, b| {
-        diagram
-            .subgraph_depth(a)
-            .cmp(&diagram.subgraph_depth(b))
-            .then_with(|| a.cmp(b))
-    });
-    for sg_id in dir_sg_ids {
-        let sg = &diagram.subgraphs[sg_id];
-        let override_dir = sg.dir.unwrap();
-        for node_id in &sg.nodes {
-            if !diagram.is_subgraph(node_id) {
-                node_directions.insert(node_id.clone(), override_dir);
-            }
-        }
-    }
+    let node_directions = geom.node_directions.clone();
 
     Layout {
         grid_positions,

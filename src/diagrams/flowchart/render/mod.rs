@@ -2,6 +2,7 @@
 
 pub mod edge;
 pub mod layout;
+pub mod route_policy;
 pub mod router;
 pub mod shape;
 pub mod subgraph;
