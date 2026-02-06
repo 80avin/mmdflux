@@ -96,6 +96,19 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let subgraph_pad_y = metrics.node_padding_y;
     apply_subgraph_svg_padding(diagram, &mut layout, subgraph_pad_x, subgraph_pad_y);
 
+    // Push external nodes away from subgraph borders so that subgraph-as-node
+    // edges have visible length comparable to normal edges.  Without this,
+    // the subgraph padding eats into the gap dagre allocated.
+    let min_edge_gap = config.dagre_rank_sep;
+    ensure_subgraph_edge_spacing(diagram, &mut layout, min_edge_gap);
+
+    // Reroute subgraph-as-node edges with fresh orthogonal paths computed from
+    // padded subgraph bounds.  Must run after padding so endpoints land on the
+    // visible subgraph border.
+    let sg_node_rerouted = svg_router::reroute_subgraph_node_edges(diagram, &mut layout);
+    let mut rerouted_edges = rerouted_edges;
+    rerouted_edges.extend(sg_node_rerouted);
+
     let override_nodes = build_override_node_map(diagram);
 
     let self_edge_paths = compute_self_edge_paths(diagram, &layout, &metrics);
@@ -171,6 +184,109 @@ fn apply_subgraph_svg_padding(
             && diagram.subgraphs.contains_key(id)
         {
             layout.nodes.insert(crate::dagre::NodeId(id.clone()), *rect);
+        }
+    }
+}
+
+/// Push external nodes away from subgraph borders for subgraph-as-node edges.
+///
+/// After `apply_subgraph_svg_padding` expands subgraph bounds, the gap between
+/// external nodes and the visible subgraph border can be much smaller than a
+/// normal inter-rank edge.  This function ensures those gaps are at least
+/// `min_gap`, matching the visual weight of normal edges.
+fn ensure_subgraph_edge_spacing(diagram: &Diagram, layout: &mut LayoutResult, min_gap: f64) {
+    for edge in &diagram.edges {
+        if edge.stroke == Stroke::Invisible {
+            continue;
+        }
+
+        // external node → subgraph
+        if let Some(sg_id) = &edge.to_subgraph {
+            if edge.from_subgraph.is_none() {
+                push_node_from_subgraph(
+                    layout,
+                    &edge.from,
+                    sg_id,
+                    diagram.direction,
+                    min_gap,
+                    true,
+                );
+            }
+        }
+
+        // subgraph → external node
+        if let Some(sg_id) = &edge.from_subgraph {
+            if edge.to_subgraph.is_none() {
+                push_node_from_subgraph(layout, &edge.to, sg_id, diagram.direction, min_gap, false);
+            }
+        }
+    }
+}
+
+/// Push a single node away from a subgraph border if the gap is below `min_gap`.
+///
+/// `node_is_upstream` is true when the node is the source (exits toward the
+/// subgraph) and false when it is the target (the subgraph exits toward it).
+fn push_node_from_subgraph(
+    layout: &mut LayoutResult,
+    node_id: &str,
+    sg_id: &str,
+    direction: Direction,
+    min_gap: f64,
+    node_is_upstream: bool,
+) {
+    let node_key = crate::dagre::NodeId(node_id.to_string());
+    let sg_rect = match layout.subgraph_bounds.get(sg_id) {
+        Some(r) => *r,
+        None => return,
+    };
+    let node_rect = match layout.nodes.get(&node_key) {
+        Some(r) => *r,
+        None => return,
+    };
+
+    // Compute the gap between the node face and the subgraph face along the
+    // flow axis.  "upstream trailing edge → downstream leading edge".
+    let gap = if node_is_upstream {
+        // node (source) → subgraph (target)
+        match direction {
+            Direction::TopDown => sg_rect.y - (node_rect.y + node_rect.height),
+            Direction::BottomTop => node_rect.y - (sg_rect.y + sg_rect.height),
+            Direction::LeftRight => sg_rect.x - (node_rect.x + node_rect.width),
+            Direction::RightLeft => node_rect.x - (sg_rect.x + sg_rect.width),
+        }
+    } else {
+        // subgraph (source) → node (target)
+        match direction {
+            Direction::TopDown => node_rect.y - (sg_rect.y + sg_rect.height),
+            Direction::BottomTop => sg_rect.y - (node_rect.y + node_rect.height),
+            Direction::LeftRight => node_rect.x - (sg_rect.x + sg_rect.width),
+            Direction::RightLeft => sg_rect.x - (node_rect.x + node_rect.width),
+        }
+    };
+
+    if gap >= min_gap {
+        return;
+    }
+
+    let shift = min_gap - gap;
+    let node_rect = layout.nodes.get_mut(&node_key).unwrap();
+
+    // Push the node away from the subgraph (against flow for upstream,
+    // with flow for downstream).
+    if node_is_upstream {
+        match direction {
+            Direction::TopDown => node_rect.y -= shift,
+            Direction::BottomTop => node_rect.y += shift,
+            Direction::LeftRight => node_rect.x -= shift,
+            Direction::RightLeft => node_rect.x += shift,
+        }
+    } else {
+        match direction {
+            Direction::TopDown => node_rect.y += shift,
+            Direction::BottomTop => node_rect.y -= shift,
+            Direction::LeftRight => node_rect.x += shift,
+            Direction::RightLeft => node_rect.x -= shift,
         }
     }
 }
@@ -351,16 +467,19 @@ fn render_edges(
             continue;
         }
         let mut points = points;
-        // Clip subgraph-as-node edges to subgraph borders
-        if let Some(sg_id) = edge.from_subgraph.as_ref()
-            && let Some(rect) = layout.subgraph_bounds.get(sg_id)
-        {
-            points = clip_points_to_rect_start(&points, rect);
-        }
-        if let Some(sg_id) = edge.to_subgraph.as_ref()
-            && let Some(rect) = layout.subgraph_bounds.get(sg_id)
-        {
-            points = clip_points_to_rect_end(&points, rect);
+        // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
+        // edges whose endpoints already land on the subgraph border).
+        if !rerouted_edges.contains(&index) {
+            if let Some(sg_id) = edge.from_subgraph.as_ref()
+                && let Some(rect) = layout.subgraph_bounds.get(sg_id)
+            {
+                points = clip_points_to_rect_start(&points, rect);
+            }
+            if let Some(sg_id) = edge.to_subgraph.as_ref()
+                && let Some(rect) = layout.subgraph_bounds.get(sg_id)
+            {
+                points = clip_points_to_rect_end(&points, rect);
+            }
         }
 
         // Rerouted edges already have border-snapped endpoints; skip shape

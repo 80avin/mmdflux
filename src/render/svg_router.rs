@@ -442,6 +442,145 @@ pub fn reroute_override_edges(
     (stats, rerouted_indices)
 }
 
+/// Reroute edges where one or both endpoints target a subgraph (subgraph-as-node).
+///
+/// Dagre routes these through resolved child nodes inside the subgraph, creating
+/// waypoints with small horizontal offsets.  The B-spline curve amplifies these
+/// into visible curves.  This function replaces those paths with fresh orthogonal
+/// routes computed from the subgraph bounds, producing straight lines or clean
+/// L-shaped elbows.
+///
+/// Returns the set of diagram edge indices that were rerouted so that downstream
+/// code can skip redundant shape-adjustment and clipping.
+pub fn reroute_subgraph_node_edges(diagram: &Diagram, layout: &mut LayoutResult) -> HashSet<usize> {
+    // --- Pass 1: Collect routing decisions ---
+    struct PendingRoute {
+        layout_pos: usize,
+        edge_index: usize,
+        direction: Direction,
+        from_id: String,
+        to_id: String,
+    }
+
+    let mut pending: Vec<PendingRoute> = Vec::new();
+
+    for (pos, edge_layout) in layout.edges.iter().enumerate() {
+        let Some(edge) = diagram.edges.get(edge_layout.index) else {
+            continue;
+        };
+
+        if edge.from_subgraph.is_none() && edge.to_subgraph.is_none() {
+            continue;
+        }
+
+        // Resolve the rect key for each endpoint
+        let from_id = edge
+            .from_subgraph
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| edge.from.clone());
+        let to_id = edge
+            .to_subgraph
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| edge.to.clone());
+
+        pending.push(PendingRoute {
+            layout_pos: pos,
+            edge_index: edge_layout.index,
+            direction: diagram.direction,
+            from_id,
+            to_id,
+        });
+    }
+
+    if pending.is_empty() {
+        return HashSet::new();
+    }
+
+    // --- Pass 2: Compute port fractions for shared faces ---
+    let mut face_edges: HashMap<(String, Face), Vec<(usize, f64)>> = HashMap::new();
+
+    for (pi, pr) in pending.iter().enumerate() {
+        let from_rect = get_rect(layout, &pr.from_id);
+        let to_rect = get_rect(layout, &pr.to_id);
+        if let (Some(fr), Some(tr)) = (from_rect, to_rect) {
+            let horizontal_face = matches!(pr.direction, Direction::TopDown | Direction::BottomTop);
+
+            let ef = exit_face(pr.direction);
+            let exit_sort = if horizontal_face {
+                tr.x + tr.width / 2.0
+            } else {
+                tr.y + tr.height / 2.0
+            };
+            face_edges
+                .entry((pr.from_id.clone(), ef))
+                .or_default()
+                .push((pi, exit_sort));
+
+            let enf = entry_face(pr.direction);
+            let entry_sort = if horizontal_face {
+                fr.x + fr.width / 2.0
+            } else {
+                fr.y + fr.height / 2.0
+            };
+            face_edges
+                .entry((pr.to_id.clone(), enf))
+                .or_default()
+                .push((pi, entry_sort));
+        }
+    }
+
+    let mut from_fractions: Vec<f64> = vec![0.5; pending.len()];
+    let mut to_fractions: Vec<f64> = vec![0.5; pending.len()];
+
+    for ((node_id, face), mut entries) in face_edges {
+        if entries.len() <= 1 {
+            continue;
+        }
+
+        entries.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        let n = entries.len();
+        let margin = 0.25;
+
+        for (rank, &(pi, _)) in entries.iter().enumerate() {
+            let frac = margin + (1.0 - 2.0 * margin) * (rank as f64) / ((n - 1) as f64);
+
+            let pr = &pending[pi];
+            let is_exit = pr.from_id == node_id && exit_face(pr.direction) == face;
+            if is_exit {
+                from_fractions[pi] = frac;
+            } else {
+                to_fractions[pi] = frac;
+            }
+        }
+    }
+
+    // --- Pass 3: Route each edge with its port fractions ---
+    let mut rerouted = HashSet::new();
+
+    for (pi, pr) in pending.iter().enumerate() {
+        let from_rect = get_rect(layout, &pr.from_id);
+        let to_rect = get_rect(layout, &pr.to_id);
+        if let (Some(fr), Some(tr)) = (from_rect, to_rect) {
+            layout.edges[pr.layout_pos].points =
+                route_svg_edge_ported(fr, tr, pr.direction, from_fractions[pi], to_fractions[pi]);
+            rerouted.insert(pr.edge_index);
+        }
+    }
+
+    rerouted
+}
+
+/// Look up a rect by ID, checking subgraph_bounds first, then nodes.
+fn get_rect<'a>(layout: &'a LayoutResult, id: &str) -> Option<&'a Rect> {
+    layout
+        .subgraph_bounds
+        .get(id)
+        .or_else(|| layout.nodes.get(&NodeId(id.to_string())))
+}
+
 /// Build the override node map: node_id -> subgraph_id.
 ///
 /// Processes subgraphs in depth order so the deepest override wins.
