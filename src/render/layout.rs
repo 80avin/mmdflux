@@ -687,6 +687,214 @@ pub(crate) fn reconcile_sublayouts_dagre(
     }
 }
 
+/// Shift external predecessor nodes of direction-override subgraphs on the
+/// cross-axis so they align with the subgraph center.
+///
+/// Dagre's BK coordinate assignment positions external nodes based on all their
+/// connections — for example, a node C connected to both a subgraph entry node
+/// A and an external chain X→Y→Z gets pulled toward X/Y/Z.  This moves C so
+/// it sits above/beside the subgraph center, keeping the C→A edge from cutting
+/// through the X→Y→Z chain.
+///
+/// Only the earliest-rank (topmost for TD, leftmost for LR, etc.) predecessors
+/// are shifted — intermediate chain nodes like Z are left in place so their
+/// internal chain edges remain intact.
+///
+/// Edge points connected to shifted nodes are interpolated: full shift at the
+/// shifted endpoint, tapering to zero at the unshifted endpoint.
+pub(crate) fn center_override_subgraphs(
+    diagram: &Diagram,
+    layout: &mut dagre::LayoutResult,
+) {
+    // Cross-axis: x for TD/BT, y for LR/RL.
+    let horizontal = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
+
+    // Collect all shifts to apply: node_id → delta on cross-axis.
+    let mut node_shifts: HashMap<String, f64> = HashMap::new();
+
+    for (sg_id, sg) in &diagram.subgraphs {
+        if sg.dir.is_none() {
+            continue;
+        }
+        let Some(sg_bounds) = layout.subgraph_bounds.get(sg_id).copied() else {
+            continue;
+        };
+
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+
+        let sg_center = if horizontal {
+            sg_bounds.x + sg_bounds.width / 2.0
+        } else {
+            sg_bounds.y + sg_bounds.height / 2.0
+        };
+
+        // Find external predecessor node IDs: edges where `to` is inside, `from` is outside.
+        let mut predecessors: Vec<String> = Vec::new();
+        for edge in &diagram.edges {
+            if sg_node_set.contains(edge.to.as_str())
+                && !sg_node_set.contains(edge.from.as_str())
+                && edge.from != *sg_id
+            {
+                if !predecessors.contains(&edge.from) {
+                    predecessors.push(edge.from.clone());
+                }
+            }
+        }
+
+        // Fall back to successors if no predecessors.
+        if predecessors.is_empty() {
+            for edge in &diagram.edges {
+                if sg_node_set.contains(edge.from.as_str())
+                    && !sg_node_set.contains(edge.to.as_str())
+                    && edge.to != *sg_id
+                {
+                    if !predecessors.contains(&edge.to) {
+                        predecessors.push(edge.to.clone());
+                    }
+                }
+            }
+        }
+
+        if predecessors.is_empty() {
+            continue;
+        }
+
+        // Filter to earliest-rank predecessors only.  This avoids shifting
+        // intermediate chain nodes (e.g. Z in C→X→Y→Z→A) which would break
+        // the chain's internal edges.
+        let min_rank = predecessors
+            .iter()
+            .filter_map(|id| {
+                layout
+                    .node_ranks
+                    .get(&dagre::NodeId(id.clone()))
+                    .copied()
+            })
+            .min();
+
+        if let Some(min_rank) = min_rank {
+            predecessors.retain(|id| {
+                layout
+                    .node_ranks
+                    .get(&dagre::NodeId(id.clone()))
+                    .copied()
+                    == Some(min_rank)
+            });
+        }
+
+        for pred_id in &predecessors {
+            if let Some(rect) = layout.nodes.get(&dagre::NodeId(pred_id.clone())) {
+                let pred_center = if horizontal {
+                    rect.x + rect.width / 2.0
+                } else {
+                    rect.y + rect.height / 2.0
+                };
+                let delta = sg_center - pred_center;
+                if delta.abs() >= 1.0 {
+                    node_shifts.insert(pred_id.clone(), delta);
+                }
+            }
+        }
+    }
+
+    if node_shifts.is_empty() {
+        return;
+    }
+
+    // Apply node position shifts.
+    for (node_id, delta) in &node_shifts {
+        if let Some(rect) = layout.nodes.get_mut(&dagre::NodeId(node_id.clone())) {
+            if horizontal {
+                rect.x += delta;
+            } else {
+                rect.y += delta;
+            }
+        }
+    }
+
+    // Adjust edge points: interpolate shift from shifted endpoint to unshifted endpoint.
+    for edge in &mut layout.edges {
+        let from_delta = node_shifts.get(edge.from.0.as_str()).copied();
+        let to_delta = node_shifts.get(edge.to.0.as_str()).copied();
+
+        let n = edge.points.len();
+        if n == 0 {
+            continue;
+        }
+
+        match (from_delta, to_delta) {
+            (Some(d1), Some(d2)) => {
+                // Both endpoints shifted — interpolate between the two deltas.
+                for (i, p) in edge.points.iter_mut().enumerate() {
+                    let t = if n > 1 { i as f64 / (n - 1) as f64 } else { 0.5 };
+                    let shift = d1 * (1.0 - t) + d2 * t;
+                    if horizontal {
+                        p.x += shift;
+                    } else {
+                        p.y += shift;
+                    }
+                }
+            }
+            (Some(d), None) => {
+                // Only source shifted — taper from full shift to zero.
+                for (i, p) in edge.points.iter_mut().enumerate() {
+                    let t = if n > 1 { i as f64 / (n - 1) as f64 } else { 0.0 };
+                    let shift = d * (1.0 - t);
+                    if horizontal {
+                        p.x += shift;
+                    } else {
+                        p.y += shift;
+                    }
+                }
+            }
+            (None, Some(d)) => {
+                // Only target shifted — taper from zero to full shift.
+                for (i, p) in edge.points.iter_mut().enumerate() {
+                    let t = if n > 1 { i as f64 / (n - 1) as f64 } else { 1.0 };
+                    let shift = d * t;
+                    if horizontal {
+                        p.x += shift;
+                    } else {
+                        p.y += shift;
+                    }
+                }
+            }
+            (None, None) => {}
+        }
+    }
+
+    // Adjust self-edge points for shifted nodes.
+    for se in &mut layout.self_edges {
+        if let Some(d) = node_shifts.get(se.node.0.as_str()) {
+            for p in &mut se.points {
+                if horizontal {
+                    p.x += d;
+                } else {
+                    p.y += d;
+                }
+            }
+        }
+    }
+
+    // Adjust label positions for edges with shifted endpoints.
+    for (key, pos) in &mut layout.label_positions {
+        if let Some(diag_edge) = diagram.edges.get(*key) {
+            let from_delta = node_shifts.get(diag_edge.from.as_str()).copied();
+            let to_delta = node_shifts.get(diag_edge.to.as_str()).copied();
+            let avg_delta = match (from_delta, to_delta) {
+                (Some(d1), Some(d2)) => (d1 + d2) / 2.0,
+                (Some(d), None) | (None, Some(d)) => d / 2.0,
+                (None, None) => continue,
+            };
+            if horizontal {
+                pos.point.x += avg_delta;
+            } else {
+                pos.point.y += avg_delta;
+            }
+        }
+    }
+}
+
 /// Push external nodes that overlap with reconciled subgraph bounds downward.
 ///
 /// After sublayout reconciliation, the subgraph may now occupy space where dagre
@@ -910,7 +1118,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         },
     );
 
-    let result = build_dagre_layout_with_config(
+    let mut result = build_dagre_layout_with_config(
         diagram,
         &dagre_config,
         |node| {
@@ -923,6 +1131,10 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                 .map(|label| (label.len() as f64 + 2.0, 1.0))
         },
     );
+
+    // Shift external predecessors of direction-override subgraphs to align
+    // with the subgraph center, before coordinate transformation.
+    center_override_subgraphs(diagram, &mut result);
 
     // --- Phase B: Group nodes into layers ---
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);

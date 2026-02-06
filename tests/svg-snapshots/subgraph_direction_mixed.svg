@@ -12,17 +12,17 @@
       <text x="77.45" y="61.20" text-anchor="middle" dominant-baseline="hanging" fill="#333">Left to Right</text>
     </g>
     <g class="edgePaths">
-      <path d="M52.45,120.00 L98.45,120.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M52.45,120.00 L47.00,120.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M77.45,403.00 L77.45,357.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M136.91,93.00 L136.91,123.33 C136.91,153.67 136.91,214.33 127.00,244.67 C117.09,275.00 97.27,275.00 87.36,304.67 C77.45,334.33 77.45,393.67 77.45,423.33 L77.45,453.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M77.45,93.00 L77.45,453.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
       <rect x="-16.45" y="93.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="18.00" y="120.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
-      <rect x="102.45" y="93.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="136.91" y="120.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="43.00" y="93.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.45" y="120.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
       <rect x="43.00" y="403.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="77.45" y="430.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
       <rect x="43.00" y="299.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
