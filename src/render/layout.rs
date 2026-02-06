@@ -833,14 +833,23 @@ pub(crate) fn center_override_subgraphs(
             }
         }
 
-        // Shift both predecessors and successors toward the subgraph center.
+        // Shift both predecessors and successors toward the subgraph center,
+        // but only if the node is outside the subgraph bounds on the primary
+        // axis.  Nodes at the same rank as internal nodes (e.g. Logs beside
+        // Database) would overlap after a cross-axis shift.
         for node_id in predecessors.iter().chain(successors.iter()) {
             if let Some(rect) = layout.nodes.get(&dagre::NodeId(node_id.clone())) {
-                let node_center = if horizontal {
-                    rect.x + rect.width / 2.0
+                let node_cy = rect.y + rect.height / 2.0;
+                let node_cx = rect.x + rect.width / 2.0;
+                let inside_primary = if horizontal {
+                    node_cy >= sg_bounds.y && node_cy <= sg_bounds.y + sg_bounds.height
                 } else {
-                    rect.y + rect.height / 2.0
+                    node_cx >= sg_bounds.x && node_cx <= sg_bounds.x + sg_bounds.width
                 };
+                if inside_primary {
+                    continue;
+                }
+                let node_center = if horizontal { node_cx } else { node_cy };
                 let delta = sg_center - node_center;
                 if delta.abs() >= 1.0 {
                     node_shifts.insert(node_id.clone(), delta);

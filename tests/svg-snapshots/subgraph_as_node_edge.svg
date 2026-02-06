@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 263.77 343.00" style="max-width: 263.77px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 378.29 343.00" style="max-width: 378.29px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
   </defs>
-  <g transform="translate(-114.52,0.00)">
+  <g transform="translate(0.00,0.00)">
     <g class="clusters">
       <rect class="subgraph" x="122.52" y="97.00" width="247.77" height="238.00" fill="none" stroke="#888" stroke-width="1.00" />
       <text x="246.40" y="101.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Backend</text>
@@ -12,7 +12,7 @@
     <g class="edgePaths">
       <path d="M248.55,191.00 L249.35,195.17 C250.15,199.33 251.75,207.67 252.55,215.33 C253.35,223.00 253.35,230.00 253.35,233.50 L253.35,237.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M245.88,62.00 L245.80,66.17 C245.71,70.33 245.55,78.67 245.48,83.83 C245.40,89.00 245.42,91.00 245.43,92.00 L245.44,93.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M370.29,307.93 L275.47,243.25" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M122.52,246.20 L106.41,250.12" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
@@ -23,8 +23,8 @@
       <text x="246.40" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Client</text>
       <rect x="190.32" y="241.00" width="126.07" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="253.35" y="268.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Database</text>
-      <rect x="199.14" y="241.00" width="94.52" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="246.40" y="268.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Logs</text>
+      <rect x="8.00" y="241.00" width="94.52" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="55.26" y="268.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Logs</text>
     </g>
   </g>
 </svg>
