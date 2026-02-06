@@ -1373,29 +1373,42 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             &mut height,
         );
 
-        // Invalidate waypoints and label positions for edges touching
-        // direction-override subgraphs.  The main layout computed these for
+        // Invalidate or adjust waypoints and label positions for edges touching
+        // direction-override subgraphs. The main layout computed these for
         // the parent direction; after reconciliation the node positions have
-        // moved, so the old waypoints are stale.  Removing them causes the
-        // edge router to use direct routing with the correct effective
-        // direction (from node_directions).
+        // moved, so the old waypoints are stale.
         //
-        // We invalidate when *either* endpoint is in an override subgraph,
-        // not just when both are.  Cross-boundary edges also have stale
-        // waypoints because the inside node moved during reconciliation.
+        // - Internal edges (both endpoints inside the override) have their
+        //   waypoints removed so the router uses the subgraph's direction.
+        // - Cross-boundary edges keep waypoints but clip them to the subgraph
+        //   border so they don't run through internal nodes.
+        // - Labels for all touched edges are removed to avoid stale positions.
         for sg in diagram.subgraphs.values() {
             if sg.dir.is_none() {
                 continue;
             }
             let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
             for edge in &diagram.edges {
-                if sg_node_set.contains(edge.from.as_str())
-                    || sg_node_set.contains(edge.to.as_str())
-                {
-                    let key = (edge.from.clone(), edge.to.clone());
-                    edge_waypoints_final.remove(&key);
-                    edge_label_positions_converted.remove(&key);
+                let from_in = sg_node_set.contains(edge.from.as_str());
+                let to_in = sg_node_set.contains(edge.to.as_str());
+                if !(from_in || to_in) {
+                    continue;
                 }
+                let key = (edge.from.clone(), edge.to.clone());
+                if from_in && to_in {
+                    edge_waypoints_final.remove(&key);
+                } else if let Some(bounds) = subgraph_bounds.get(&sg.id) {
+                    if let Some(wps) = edge_waypoints_final.get(&key).cloned() {
+                        let clipped = clip_waypoints_to_subgraph(
+                            &wps,
+                            bounds,
+                            from_in,
+                            to_in,
+                        );
+                        edge_waypoints_final.insert(key.clone(), clipped);
+                    }
+                }
+                edge_label_positions_converted.remove(&key);
             }
         }
     }
@@ -2352,6 +2365,123 @@ fn transform_label_positions_direct(
     }
 
     converted
+}
+
+fn waypoint_inside_bounds(bounds: &SubgraphBounds, point: (usize, usize)) -> bool {
+    let (x, y) = point;
+    let max_x = bounds.x + bounds.width.saturating_sub(1);
+    let max_y = bounds.y + bounds.height.saturating_sub(1);
+    x > bounds.x && x < max_x && y > bounds.y && y < max_y
+}
+
+fn segment_bounds_intersection(
+    start: (usize, usize),
+    end: (usize, usize),
+    bounds: &SubgraphBounds,
+) -> Option<(usize, usize)> {
+    let (x0, y0) = (start.0 as f64, start.1 as f64);
+    let (x1, y1) = (end.0 as f64, end.1 as f64);
+    let dx = x1 - x0;
+    let dy = y1 - y0;
+    if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+        return None;
+    }
+
+    let x_min = bounds.x as f64;
+    let x_max = (bounds.x + bounds.width) as f64;
+    let y_min = bounds.y as f64;
+    let y_max = (bounds.y + bounds.height) as f64;
+
+    let mut candidates: Vec<(f64, (usize, usize))> = Vec::new();
+
+    if dx.abs() > f64::EPSILON {
+        let t_left = (x_min - x0) / dx;
+        if (0.0..=1.0).contains(&t_left) {
+            let y = y0 + t_left * dy;
+            if y >= y_min && y <= y_max {
+                candidates.push((t_left, (x_min.round() as usize, y.round() as usize)));
+            }
+        }
+        let t_right = (x_max - x0) / dx;
+        if (0.0..=1.0).contains(&t_right) {
+            let y = y0 + t_right * dy;
+            if y >= y_min && y <= y_max {
+                candidates.push((t_right, (x_max.round() as usize, y.round() as usize)));
+            }
+        }
+    }
+
+    if dy.abs() > f64::EPSILON {
+        let t_top = (y_min - y0) / dy;
+        if (0.0..=1.0).contains(&t_top) {
+            let x = x0 + t_top * dx;
+            if x >= x_min && x <= x_max {
+                candidates.push((t_top, (x.round() as usize, y_min.round() as usize)));
+            }
+        }
+        let t_bottom = (y_max - y0) / dy;
+        if (0.0..=1.0).contains(&t_bottom) {
+            let x = x0 + t_bottom * dx;
+            if x >= x_min && x <= x_max {
+                candidates.push((t_bottom, (x.round() as usize, y_max.round() as usize)));
+            }
+        }
+    }
+
+    candidates
+        .into_iter()
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, point)| point)
+}
+
+fn clip_waypoints_to_subgraph(
+    waypoints: &[(usize, usize)],
+    bounds: &SubgraphBounds,
+    clip_start: bool,
+    clip_end: bool,
+) -> Vec<(usize, usize)> {
+    if waypoints.len() < 2 {
+        return waypoints.to_vec();
+    }
+    let mut out = waypoints.to_vec();
+
+    if clip_start && waypoint_inside_bounds(bounds, out[0]) {
+        let mut idx = 0usize;
+        while idx + 1 < out.len() && waypoint_inside_bounds(bounds, out[idx]) {
+            idx += 1;
+        }
+        if idx < out.len() {
+            let inside = out[idx.saturating_sub(1)];
+            let outside = out[idx];
+            let intersection =
+                segment_bounds_intersection(inside, outside, bounds).unwrap_or(inside);
+            let mut new_points = Vec::new();
+            new_points.push(intersection);
+            new_points.extend_from_slice(&out[idx..]);
+            out = new_points;
+        }
+    }
+
+    if clip_end && out.len() >= 2 {
+        let last_idx = out.len() - 1;
+        if waypoint_inside_bounds(bounds, out[last_idx]) {
+            let mut idx = last_idx;
+            while idx > 0 && waypoint_inside_bounds(bounds, out[idx]) {
+                idx -= 1;
+            }
+            if idx < last_idx {
+                let outside = out[idx];
+                let inside = out[idx + 1];
+                let intersection =
+                    segment_bounds_intersection(outside, inside, bounds).unwrap_or(inside);
+                let mut new_points = out[..=idx].to_vec();
+                new_points.push(intersection);
+                out = new_points;
+            }
+        }
+    }
+
+    out
 }
 
 #[cfg(test)]

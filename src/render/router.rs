@@ -23,6 +23,25 @@ struct EdgeEndpoints {
     to_shape: Shape,
 }
 
+fn face_for_subgraph(bounds: &NodeBounds, other: (usize, usize)) -> NodeFace {
+    let other_x = other.0;
+    let other_y = other.1;
+    let max_x = bounds.x + bounds.width.saturating_sub(1);
+    let max_y = bounds.y + bounds.height.saturating_sub(1);
+
+    if other_x < bounds.x {
+        NodeFace::Left
+    } else if other_x > max_x {
+        NodeFace::Right
+    } else if other_y < bounds.y {
+        NodeFace::Top
+    } else if other_y > max_y {
+        NodeFace::Bottom
+    } else {
+        classify_face(bounds, other, Shape::Rectangle)
+    }
+}
+
 fn subgraph_bounds_as_node(bounds: &SubgraphBounds) -> NodeBounds {
     NodeBounds {
         x: bounds.x,
@@ -407,7 +426,14 @@ fn route_edge_with_waypoints(
     // Use face-aware offset to avoid corner ambiguity (e.g., a point at
     // the top-right corner should offset RIGHT for LR layouts, not UP)
     let is_backward = is_backward_edge(&ep.from_bounds, &ep.to_bounds, direction);
-    let (src_face, tgt_face) = edge_faces(direction, is_backward);
+    let (src_face, tgt_face) = if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
+        (
+            classify_face(&ep.from_bounds, src_attach, ep.from_shape),
+            classify_face(&ep.to_bounds, tgt_attach, ep.to_shape),
+        )
+    } else {
+        edge_faces(direction, is_backward)
+    };
     let mut start = offset_for_face(src_attach, src_face);
     let end = offset_for_face(tgt_attach, tgt_face);
 
@@ -556,7 +582,14 @@ fn route_edge_direct(
 
     // Use face-aware offset to avoid corner ambiguity
     let is_backward = is_backward_edge(&ep.from_bounds, &ep.to_bounds, direction);
-    let (src_face, tgt_face) = edge_faces(direction, is_backward);
+    let (src_face, tgt_face) = if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
+        (
+            classify_face(&ep.from_bounds, src_attach, ep.from_shape),
+            classify_face(&ep.to_bounds, tgt_attach, ep.to_shape),
+        )
+    } else {
+        edge_faces(direction, is_backward)
+    };
     let start = offset_for_face(src_attach, src_face);
     let end = offset_for_face(tgt_attach, tgt_face);
     let mut segments = Vec::new();
@@ -566,8 +599,22 @@ fn route_edge_direct(
         add_connector_segment(&mut segments, src_attach, start);
     }
 
-    // Build orthogonal path with direction-appropriate segment ordering
-    segments.extend(build_orthogonal_path_for_direction(start, end, direction));
+    // Build orthogonal path with direction-appropriate segment ordering.
+    // For subgraph edges that attach on left/right faces, route horizontally
+    // to avoid running straight through vertical stacks.
+    let mut path_direction = direction;
+    if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
+        if matches!(src_face, NodeFace::Left | NodeFace::Right)
+            || matches!(tgt_face, NodeFace::Left | NodeFace::Right)
+        {
+            path_direction = if start.x <= end.x {
+                Direction::LeftRight
+            } else {
+                Direction::RightLeft
+            };
+        }
+    }
+    segments.extend(build_orthogonal_path_for_direction(start, end, path_direction));
 
     // Determine entry direction: use canonical direction when start == end
     // (zero-length path produces a degenerate segment that can't indicate direction)
@@ -1257,15 +1304,20 @@ pub fn compute_attachment_plan(
         // subgraph's direction; cross-boundary edges use the diagram direction.
         let edge_dir = layout.effective_edge_direction(&edge.from, &edge.to, direction);
 
+        let is_subgraph_edge = edge.from_subgraph.is_some() || edge.to_subgraph.is_some();
+
         // Determine faces for this edge.
         // Backward edges without dagre waypoints use synthetic routing (around
         // the right/bottom of nodes), so they must be classified on the face
         // that matches the synthetic path — not the geometric approach angle.
         let is_backward = is_backward_edge(&src_bounds, &tgt_bounds, edge_dir);
         let has_dagre_waypoints = waypoints.is_some_and(|wps| !wps.is_empty());
-        let (src_face, tgt_face) = if is_backward && !has_dagre_waypoints {
+        let (mut src_face, mut tgt_face) = if is_backward && !has_dagre_waypoints {
             backward_routing_faces(edge_dir)
-        } else if matches!(edge_dir, Direction::TopDown | Direction::BottomTop) && !is_backward {
+        } else if matches!(edge_dir, Direction::TopDown | Direction::BottomTop)
+            && !is_backward
+            && !is_subgraph_edge
+        {
             // For forward edges in vertical layouts, stick to canonical faces to
             // keep fan-in/out attachment spreading stable.
             edge_faces(edge_dir, false)
@@ -1278,6 +1330,13 @@ pub fn compute_attachment_plan(
                 ),
             }
         };
+
+        if edge.from_subgraph.is_some() {
+            src_face = face_for_subgraph(&src_bounds, tgt_approach);
+        }
+        if edge.to_subgraph.is_some() {
+            tgt_face = face_for_subgraph(&tgt_bounds, src_approach);
+        }
 
         // Extract cross-axis coordinate from approach point for sorting
         let src_cross = match src_face {
