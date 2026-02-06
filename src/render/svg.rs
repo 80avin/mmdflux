@@ -373,6 +373,8 @@ fn render_defs(writer: &mut SvgWriter, scale: f64) {
     let marker_size = 8.0 * scale;
 
     writer.start_tag("<defs>");
+
+    // Normal arrowhead (triangle)
     let marker = format!(
         "<marker id=\"arrowhead\" viewBox=\"0 0 {base} {base}\" refX=\"{ref_x}\" refY=\"{ref_y}\" markerWidth=\"{mw}\" markerHeight=\"{mh}\" orient=\"auto-start-reverse\" markerUnits=\"userSpaceOnUse\">",
         base = fmt_f64(base),
@@ -391,6 +393,45 @@ fn render_defs(writer: &mut SvgWriter, scale: f64) {
     );
     writer.push_line(&path);
     writer.end_tag("</marker>");
+
+    // Cross marker (X shape)
+    let cross_size = 11.0;
+    let cross_marker_size = 11.0 * scale;
+    let marker = format!(
+        "<marker id=\"crosshead\" viewBox=\"0 0 {size} {size}\" refX=\"{ref_x}\" refY=\"{ref_y}\" markerWidth=\"{mw}\" markerHeight=\"{mh}\" orient=\"auto-start-reverse\" markerUnits=\"userSpaceOnUse\">",
+        size = fmt_f64(cross_size),
+        ref_x = fmt_f64(12.0),
+        ref_y = fmt_f64(5.2),
+        mw = fmt_f64(cross_marker_size),
+        mh = fmt_f64(cross_marker_size)
+    );
+    writer.start_tag(&marker);
+    let path = format!(
+        "<path d=\"M 1,1 l 9,9 M 10,1 l -9,9\" stroke=\"{color}\" stroke-width=\"2\" />",
+        color = STROKE_COLOR
+    );
+    writer.push_line(&path);
+    writer.end_tag("</marker>");
+
+    // Circle marker (filled circle)
+    let circle_size = 10.0;
+    let circle_marker_size = 11.0 * scale;
+    let marker = format!(
+        "<marker id=\"circlehead\" viewBox=\"0 0 {size} {size}\" refX=\"{ref_x}\" refY=\"{ref_y}\" markerWidth=\"{mw}\" markerHeight=\"{mh}\" orient=\"auto-start-reverse\" markerUnits=\"userSpaceOnUse\">",
+        size = fmt_f64(circle_size),
+        ref_x = fmt_f64(11.0),
+        ref_y = fmt_f64(5.0),
+        mw = fmt_f64(circle_marker_size),
+        mh = fmt_f64(circle_marker_size)
+    );
+    writer.start_tag(&marker);
+    let circle = format!(
+        "<circle cx=\"5\" cy=\"5\" r=\"5\" stroke=\"{color}\" stroke-width=\"1\" fill=\"{color}\" />",
+        color = STROKE_COLOR
+    );
+    writer.push_line(&circle);
+    writer.end_tag("</marker>");
+
     writer.end_tag("</defs>");
 }
 
@@ -1338,11 +1379,17 @@ fn edge_style_attrs(edge: &Edge, scale: f64) -> String {
 
 fn edge_marker_attrs(edge: &Edge) -> String {
     let mut attrs = String::new();
-    if edge.arrow_start == Arrow::Normal {
-        attrs.push_str(" marker-start=\"url(#arrowhead)\"");
+    match edge.arrow_start {
+        Arrow::Normal => attrs.push_str(" marker-start=\"url(#arrowhead)\""),
+        Arrow::Cross => attrs.push_str(" marker-start=\"url(#crosshead)\""),
+        Arrow::Circle => attrs.push_str(" marker-start=\"url(#circlehead)\""),
+        Arrow::None => {}
     }
-    if edge.arrow_end == Arrow::Normal {
-        attrs.push_str(" marker-end=\"url(#arrowhead)\"");
+    match edge.arrow_end {
+        Arrow::Normal => attrs.push_str(" marker-end=\"url(#arrowhead)\""),
+        Arrow::Cross => attrs.push_str(" marker-end=\"url(#crosshead)\""),
+        Arrow::Circle => attrs.push_str(" marker-end=\"url(#circlehead)\""),
+        Arrow::None => {}
     }
     attrs
 }
@@ -1534,15 +1581,13 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
         return points.to_vec();
     }
 
-    let start_offset = if edge.arrow_start == Arrow::Normal {
-        4.0
-    } else {
-        0.0
+    let start_offset = match edge.arrow_start {
+        Arrow::Normal | Arrow::Cross | Arrow::Circle => 4.0,
+        Arrow::None => 0.0,
     };
-    let end_offset = if edge.arrow_end == Arrow::Normal {
-        4.0
-    } else {
-        0.0
+    let end_offset = match edge.arrow_end {
+        Arrow::Normal | Arrow::Cross | Arrow::Circle => 4.0,
+        Arrow::None => 0.0,
     };
 
     let start = points[0];

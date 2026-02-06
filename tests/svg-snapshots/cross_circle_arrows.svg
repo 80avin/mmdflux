@@ -3,13 +3,19 @@
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
     </marker>
+    <marker id="crosshead" viewBox="0 0 11.00 11.00" refX="12.00" refY="5.20" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 1,1 l 9,9 M 10,1 l -9,9" stroke="#333" stroke-width="2" />
+    </marker>
+    <marker id="circlehead" viewBox="0 0 10.00 10.00" refX="11.00" refY="5.00" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="5" stroke="#333" stroke-width="1" fill="#333" />
+    </marker>
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M42.45,62.00 L42.45,66.17 C42.45,70.33 42.45,78.67 42.45,87.00 C42.45,95.33 42.45,103.67 42.45,107.83 L42.45,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-      <path d="M42.45,166.00 L42.45,170.17 C42.45,174.33 42.45,182.67 42.45,191.00 C42.45,199.33 42.45,207.67 42.45,211.83 L42.45,216.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-      <path d="M42.45,270.00 L42.45,274.17 C42.45,278.33 42.45,286.67 42.45,295.00 C42.45,303.33 42.45,311.67 42.45,315.83 L42.45,320.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" />
-      <path d="M42.45,374.00 L42.45,378.17 C42.45,382.33 42.45,390.67 42.45,399.00 C42.45,407.33 42.45,415.67 42.45,419.83 L42.45,424.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M42.45,62.00 L42.45,66.17 C42.45,70.33 42.45,78.67 42.45,86.33 C42.45,94.00 42.45,101.00 42.45,104.50 L42.45,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#crosshead)" />
+      <path d="M42.45,166.00 L42.45,170.17 C42.45,174.33 42.45,182.67 42.45,190.33 C42.45,198.00 42.45,205.00 42.45,208.50 L42.45,212.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
+      <path d="M42.45,274.00 L42.45,277.50 C42.45,281.00 42.45,288.00 42.45,295.00 C42.45,302.00 42.45,309.00 42.45,312.50 L42.45,316.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#crosshead)" marker-end="url(#crosshead)" />
+      <path d="M42.45,378.00 L42.45,381.50 C42.45,385.00 42.45,392.00 42.45,399.00 C42.45,406.00 42.45,413.00 42.45,416.50 L42.45,420.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#circlehead)" marker-end="url(#circlehead)" />
     </g>
     <g class="edgeLabels">
     </g>
