@@ -115,6 +115,7 @@ pub fn lint(input: &str) -> LintResult {
             };
         }
         Some(dt) if dt != DiagramType::Flowchart => {
+            let keyword = first_keyword(input);
             return LintResult {
                 valid: false,
                 errors: vec![LintDiagnostic {
@@ -123,12 +124,7 @@ pub fn lint(input: &str) -> LintResult {
                     column: Some(1),
                     message: format!(
                         "Unsupported diagram type '{}'. Only flowchart/graph diagrams are supported.",
-                        input
-                            .lines()
-                            .map(|l| l.trim())
-                            .find(|l| !l.is_empty() && !l.starts_with("%%"))
-                            .and_then(|l| l.split_whitespace().next())
-                            .unwrap_or("unknown")
+                        keyword
                     ),
                 }],
                 warnings: vec![],
@@ -157,41 +153,57 @@ pub fn lint(input: &str) -> LintResult {
     }
 }
 
+/// Extract the first non-comment keyword from the input (the diagram type identifier).
+fn first_keyword(input: &str) -> &str {
+    input
+        .lines()
+        .map(|l| l.trim())
+        .find(|l| !l.is_empty() && !l.starts_with("%%"))
+        .and_then(|l| l.split_whitespace().next())
+        .unwrap_or("unknown")
+}
+
+/// Keyword prefixes and their corresponding warning messages.
+const UNSUPPORTED_KEYWORDS: &[(&str, &str)] = &[
+    (
+        "classDef ",
+        "classDef statements are parsed but ignored in rendering",
+    ),
+    (
+        "style ",
+        "style statements are parsed but ignored in rendering",
+    ),
+    (
+        "click ",
+        "click statements are not applicable in text/ASCII output",
+    ),
+    (
+        "linkStyle ",
+        "linkStyle statements are parsed but ignored in rendering",
+    ),
+];
+
 fn collect_unsupported_warnings(input: &str) -> Vec<LintDiagnostic> {
     let mut warnings = Vec::new();
 
     for (line_num, line) in input.lines().enumerate() {
         let trimmed = line.trim();
 
-        if trimmed.starts_with("classDef ") {
-            warnings.push(LintDiagnostic {
-                severity: Severity::Warning,
-                line: Some(line_num + 1),
-                column: Some(1),
-                message: "classDef statements are parsed but ignored in rendering".to_string(),
-            });
-        } else if trimmed.starts_with("style ") {
-            warnings.push(LintDiagnostic {
-                severity: Severity::Warning,
-                line: Some(line_num + 1),
-                column: Some(1),
-                message: "style statements are parsed but ignored in rendering".to_string(),
-            });
-        } else if trimmed.starts_with("click ") {
-            warnings.push(LintDiagnostic {
-                severity: Severity::Warning,
-                line: Some(line_num + 1),
-                column: Some(1),
-                message: "click statements are not applicable in text/ASCII output".to_string(),
-            });
-        } else if trimmed.starts_with("linkStyle ") {
-            warnings.push(LintDiagnostic {
-                severity: Severity::Warning,
-                line: Some(line_num + 1),
-                column: Some(1),
-                message: "linkStyle statements are parsed but ignored in rendering".to_string(),
-            });
-        } else if trimmed.starts_with("class ") && !trimmed.starts_with("classDef") {
+        // Check table-driven keywords
+        for &(prefix, message) in UNSUPPORTED_KEYWORDS {
+            if trimmed.starts_with(prefix) {
+                warnings.push(LintDiagnostic {
+                    severity: Severity::Warning,
+                    line: Some(line_num + 1),
+                    column: Some(1),
+                    message: message.to_string(),
+                });
+                break;
+            }
+        }
+
+        // "class " needs special handling to avoid matching "classDef"
+        if trimmed.starts_with("class ") && !trimmed.starts_with("classDef") {
             warnings.push(LintDiagnostic {
                 severity: Severity::Warning,
                 line: Some(line_num + 1),

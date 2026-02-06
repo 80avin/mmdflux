@@ -19,7 +19,7 @@ pub fn to_json(diagram: &Diagram, layout: Option<&Layout>) -> String {
 
 fn build_json_output(diagram: &Diagram, layout: Option<&Layout>) -> JsonOutput {
     let metadata = GraphMetadata {
-        direction: direction_str(diagram.direction),
+        direction: direction_str(diagram.direction).to_string(),
         width: layout.map(|l| l.width),
         height: layout.map(|l| l.height),
     };
@@ -37,7 +37,7 @@ fn build_json_output(diagram: &Diagram, layout: Option<&Layout>) -> JsonOutput {
             JsonNode {
                 id: node.id.clone(),
                 label: node.label.clone(),
-                shape: shape_str(node.shape),
+                shape: shape_str(node.shape).to_string(),
                 parent: node.parent.clone(),
                 position,
             }
@@ -52,9 +52,9 @@ fn build_json_output(diagram: &Diagram, layout: Option<&Layout>) -> JsonOutput {
             source: edge.from.clone(),
             target: edge.to.clone(),
             label: edge.label.clone(),
-            stroke: stroke_str(edge.stroke),
-            arrow_start: arrow_str(edge.arrow_start),
-            arrow_end: arrow_str(edge.arrow_end),
+            stroke: stroke_str(edge.stroke).to_string(),
+            arrow_start: arrow_str(edge.arrow_start).to_string(),
+            arrow_end: arrow_str(edge.arrow_end).to_string(),
         })
         .collect();
 
@@ -93,17 +93,16 @@ fn build_json_output(diagram: &Diagram, layout: Option<&Layout>) -> JsonOutput {
     }
 }
 
-fn direction_str(dir: Direction) -> String {
+fn direction_str(dir: Direction) -> &'static str {
     match dir {
         Direction::TopDown => "TD",
         Direction::BottomTop => "BT",
         Direction::LeftRight => "LR",
         Direction::RightLeft => "RL",
     }
-    .to_string()
 }
 
-fn shape_str(shape: Shape) -> String {
+fn shape_str(shape: Shape) -> &'static str {
     match shape {
         Shape::Rectangle => "rectangle",
         Shape::Round => "round",
@@ -131,24 +130,21 @@ fn shape_str(shape: Shape) -> String {
         Shape::TextBlock => "text_block",
         Shape::ForkJoin => "fork_join",
     }
-    .to_string()
 }
 
-fn stroke_str(stroke: Stroke) -> String {
+fn stroke_str(stroke: Stroke) -> &'static str {
     match stroke {
         Stroke::Solid => "solid",
         Stroke::Dotted => "dotted",
         Stroke::Thick => "thick",
     }
-    .to_string()
 }
 
-fn arrow_str(arrow: Arrow) -> String {
+fn arrow_str(arrow: Arrow) -> &'static str {
     match arrow {
         Arrow::Normal => "normal",
         Arrow::None => "none",
     }
-    .to_string()
 }
 
 /// Top-level JSON output structure.

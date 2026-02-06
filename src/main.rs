@@ -154,10 +154,11 @@ fn main() -> io::Result<()> {
         }
     };
 
+    let format: OutputFormat = cli.format.into();
+
     // Lint mode: validate and exit
     if cli.lint {
         let result = mmdflux::lint::lint(&input);
-        let format: OutputFormat = cli.format.into();
 
         if matches!(format, OutputFormat::Json) {
             println!("{}", result.to_json());
@@ -172,8 +173,6 @@ fn main() -> io::Result<()> {
 
         std::process::exit(result.exit_code());
     }
-
-    let format: OutputFormat = cli.format.into();
 
     // Build render config from CLI options
     let config = RenderConfig {

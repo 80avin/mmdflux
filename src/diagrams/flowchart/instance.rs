@@ -50,17 +50,14 @@ impl DiagramInstance for FlowchartInstance {
             diagram
         };
 
+        let mut options: RenderOptions = config.into();
+        options.output_format = format;
+
         if matches!(format, OutputFormat::Json) {
-            let mut options: RenderOptions = config.into();
-            options.output_format = format;
             let layout_config = layout_config_for_diagram(diagram, &options);
             let layout = compute_layout_direct(diagram, &layout_config);
             return Ok(to_json(diagram, Some(&layout)));
         }
-
-        // Convert RenderConfig to RenderOptions
-        let mut options: RenderOptions = config.into();
-        options.output_format = format;
 
         Ok(render(diagram, &options))
     }
