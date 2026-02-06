@@ -492,6 +492,18 @@ fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node, direction: Directi
             let h = label_h + metrics.node_padding_y * 2.0;
             (w + 0.2 * h, h) // extra width for tag triangle
         }
+        Shape::SmallCircle => {
+            // UML initial node: fixed small size (Mermaid uses radius=7)
+            (14.0, 14.0)
+        }
+        Shape::FramedCircle => {
+            // UML activity final node: medium fixed size
+            (28.0, 28.0)
+        }
+        Shape::CrossedCircle => {
+            // UML flow final node: larger fixed size (Mermaid uses radius=30)
+            (60.0, 60.0)
+        }
         _ => (
             label_w + metrics.node_padding_x * 2.0,
             label_h + metrics.node_padding_y * 2.0,
@@ -502,7 +514,11 @@ fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node, direction: Directi
         Shape::Hexagon | Shape::Trapezoid | Shape::InvTrapezoid | Shape::Asymmetric => {
             width *= 1.15;
         }
-        Shape::Circle | Shape::DoubleCircle => {
+        Shape::Circle
+        | Shape::DoubleCircle
+        | Shape::SmallCircle
+        | Shape::FramedCircle
+        | Shape::CrossedCircle => {
             let size = width.max(height);
             width = size;
             height = size;
@@ -1282,10 +1298,53 @@ fn render_node_shape(
             );
             writer.push_line(&inner);
         }
-        Shape::SmallCircle | Shape::FramedCircle | Shape::CrossedCircle => {
+        Shape::SmallCircle => {
+            // UML initial node: small filled circle
             let cx = rect.x + rect.width / 2.0;
             let cy = rect.y + rect.height / 2.0;
-            let radius = rect.width.min(rect.height) * 0.35;
+            let radius = rect.width.min(rect.height) / 2.0;
+            let circle = format!(
+                "<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{sw}\" stroke-linejoin=\"round\" />",
+                cx = fmt_f64(cx),
+                cy = fmt_f64(cy),
+                r = fmt_f64(radius),
+                fill = STROKE_COLOR,
+                stroke = STROKE_COLOR,
+                sw = stroke_width
+            );
+            writer.push_line(&circle);
+        }
+        Shape::FramedCircle => {
+            // UML activity final node: outer circle with filled inner circle
+            let cx = rect.x + rect.width / 2.0;
+            let cy = rect.y + rect.height / 2.0;
+            let outer_radius = rect.width.min(rect.height) / 2.0;
+            let gap = 5.0 * scale;
+            let inner_radius = outer_radius - gap;
+            let outer = format!(
+                "<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\"{style} />",
+                cx = fmt_f64(cx),
+                cy = fmt_f64(cy),
+                r = fmt_f64(outer_radius),
+                style = style
+            );
+            writer.push_line(&outer);
+            let inner = format!(
+                "<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" fill=\"{fill}\" stroke=\"{stroke}\" stroke-width=\"{sw}\" stroke-linejoin=\"round\" />",
+                cx = fmt_f64(cx),
+                cy = fmt_f64(cy),
+                r = fmt_f64(inner_radius),
+                fill = STROKE_COLOR,
+                stroke = STROKE_COLOR,
+                sw = stroke_width
+            );
+            writer.push_line(&inner);
+        }
+        Shape::CrossedCircle => {
+            // UML flow final node: circle with diagonal cross
+            let cx = rect.x + rect.width / 2.0;
+            let cy = rect.y + rect.height / 2.0;
+            let radius = rect.width.min(rect.height) / 2.0;
             let circle = format!(
                 "<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\"{style} />",
                 cx = fmt_f64(cx),
@@ -1294,47 +1353,31 @@ fn render_node_shape(
                 style = style
             );
             writer.push_line(&circle);
-
-            if matches!(node.shape, Shape::FramedCircle) {
-                let inner = format!(
-                    "<circle cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\"{style} />",
-                    cx = fmt_f64(cx),
-                    cy = fmt_f64(cy),
-                    r = fmt_f64(radius * 0.65),
-                    style = style
-                );
-                writer.push_line(&inner);
-            }
-
-            if matches!(node.shape, Shape::CrossedCircle) {
-                let stroke = format!(
-                    " stroke=\"{stroke}\" stroke-width=\"{stroke_width}\"",
-                    stroke = STROKE_COLOR,
-                    stroke_width = stroke_width
-                );
-                let x1 = cx - radius * 0.6;
-                let x2 = cx + radius * 0.6;
-                let y1 = cy - radius * 0.6;
-                let y2 = cy + radius * 0.6;
-                let line1 = format!(
-                    "<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\"{stroke} />",
-                    x1 = fmt_f64(x1),
-                    y1 = fmt_f64(y1),
-                    x2 = fmt_f64(x2),
-                    y2 = fmt_f64(y2),
-                    stroke = stroke
-                );
-                let line2 = format!(
-                    "<line x1=\"{x1}\" y1=\"{y2}\" x2=\"{x2}\" y2=\"{y1}\"{stroke} />",
-                    x1 = fmt_f64(x1),
-                    y1 = fmt_f64(y1),
-                    x2 = fmt_f64(x2),
-                    y2 = fmt_f64(y2),
-                    stroke = stroke
-                );
-                writer.push_line(&line1);
-                writer.push_line(&line2);
-            }
+            let stroke_attr = format!(
+                " stroke=\"{stroke}\" stroke-width=\"{stroke_width}\"",
+                stroke = STROKE_COLOR,
+                stroke_width = stroke_width
+            );
+            // Cross lines span the full radius at 45 degrees
+            let d = radius * std::f64::consts::FRAC_1_SQRT_2;
+            let line1 = format!(
+                "<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\"{stroke} />",
+                x1 = fmt_f64(cx - d),
+                y1 = fmt_f64(cy - d),
+                x2 = fmt_f64(cx + d),
+                y2 = fmt_f64(cy + d),
+                stroke = stroke_attr
+            );
+            let line2 = format!(
+                "<line x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\"{stroke} />",
+                x1 = fmt_f64(cx - d),
+                y1 = fmt_f64(cy + d),
+                x2 = fmt_f64(cx + d),
+                y2 = fmt_f64(cy - d),
+                stroke = stroke_attr
+            );
+            writer.push_line(&line1);
+            writer.push_line(&line2);
         }
         Shape::Subroutine => {
             let line = format!(
