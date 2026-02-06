@@ -73,10 +73,10 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let (_stats, rerouted_edges) =
         svg_router::reroute_override_edges(diagram, &mut layout, &node_directions);
 
-    // Add horizontal padding to subgraph bounds so SVG renders with breathing
-    // room on left/right edges.
+    // Add padding to subgraph bounds for breathing room around nodes.
     let subgraph_pad_x = metrics.node_padding_x;
-    apply_subgraph_svg_padding(diagram, &mut layout, subgraph_pad_x, 0.0);
+    let subgraph_pad_y = metrics.node_padding_y;
+    apply_subgraph_svg_padding(diagram, &mut layout, subgraph_pad_x, subgraph_pad_y);
 
     let override_nodes = build_override_node_map(diagram);
 
