@@ -137,6 +137,7 @@ fn stroke_str(stroke: Stroke) -> &'static str {
         Stroke::Solid => "solid",
         Stroke::Dotted => "dotted",
         Stroke::Thick => "thick",
+        Stroke::Invisible => "invisible",
     }
 }
 

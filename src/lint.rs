@@ -7,7 +7,9 @@ use std::fmt;
 
 use serde::Serialize;
 
-use crate::parser::{DiagramType, ParseError, detect_diagram_type, parse_flowchart};
+use crate::parser::{
+    DiagramType, ParseError, ParseOptions, detect_diagram_type, parse_flowchart_with_options,
+};
 
 /// Severity level of a diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -133,7 +135,8 @@ pub fn lint(input: &str) -> LintResult {
         Some(_) => {} // Flowchart — proceed to parse
     }
 
-    match parse_flowchart(input) {
+    let strict = ParseOptions { strict: true };
+    match parse_flowchart_with_options(input, &strict) {
         Ok(_) => {
             let warnings = collect_unsupported_warnings(input);
             LintResult {
