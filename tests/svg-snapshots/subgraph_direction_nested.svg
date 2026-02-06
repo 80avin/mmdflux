@@ -8,23 +8,23 @@
     <g class="clusters">
       <rect class="subgraph" x="-7.00" y="-7.00" width="208.91" height="496.00" fill="none" stroke="#888" stroke-width="1.00" />
       <text x="97.45" y="-3.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Vertical Outer</text>
-      <rect class="subgraph" x="-70.91" y="246.20" width="336.73" height="109.60" fill="none" stroke="#888" stroke-width="1.00" />
-      <text x="97.45" y="250.20" text-anchor="middle" dominant-baseline="hanging" fill="#333">Horizontal Inner</text>
+      <rect class="subgraph" x="-70.91" y="238.20" width="336.73" height="109.60" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="97.45" y="242.20" text-anchor="middle" dominant-baseline="hanging" fill="#333">Horizontal Inner</text>
     </g>
     <g class="edgePaths">
-      <path d="M13.00,309.00 L59.00,309.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M131.91,309.00 L177.91,309.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M97.45,87.00 L97.45,116.03 C97.45,145.07 97.45,203.13 77.64,232.17 C57.82,261.20 18.18,261.20 -1.64,264.00 C-21.45,266.80 -21.45,272.40 -21.45,275.20 L-21.45,278.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M13.00,301.00 L59.00,301.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M131.91,301.00 L177.91,301.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M97.45,87.00 L97.45,114.70 C97.45,142.40 97.45,197.80 77.64,225.50 C57.82,253.20 18.18,253.20 -1.64,256.00 C-21.45,258.80 -21.45,264.40 -21.45,267.20 L-21.45,270.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
-      <rect x="-55.91" y="282.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="-21.45" y="309.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
-      <rect x="63.00" y="282.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="97.45" y="309.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
-      <rect x="181.91" y="282.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="216.36" y="309.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
+      <rect x="-55.91" y="274.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="-21.45" y="301.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
+      <rect x="63.00" y="274.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="97.45" y="301.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="181.91" y="274.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="216.36" y="301.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
       <rect x="63.00" y="33.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="97.45" y="60.00" text-anchor="middle" dominant-baseline="middle" fill="#333">D</text>
     </g>

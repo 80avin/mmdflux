@@ -527,22 +527,6 @@ pub(crate) fn reconcile_sublayouts_dagre(
         return;
     }
 
-    let mut external_overrides: HashSet<String> = HashSet::new();
-    for (sg_id, sg) in &diagram.subgraphs {
-        if sg.dir.is_none() {
-            continue;
-        }
-        let node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
-        for edge in &diagram.edges {
-            let from_in = node_set.contains(edge.from.as_str());
-            let to_in = node_set.contains(edge.to.as_str());
-            if from_in ^ to_in {
-                external_overrides.insert(sg_id.clone());
-                break;
-            }
-        }
-    }
-
     // Process sublayouts in deterministic depth order (shallowest first).
     let mut sorted_sg_ids: Vec<&String> = sublayouts.keys().collect();
     sorted_sg_ids.sort_by(|a, b| {
@@ -577,8 +561,35 @@ pub(crate) fn reconcile_sublayouts_dagre(
         let sub_w = (max_x - min_x).max(0.0);
         let sub_h = (max_y - min_y).max(0.0);
 
-        let sg_cx = parent_bounds.x + parent_bounds.width / 2.0;
-        let sg_cy = parent_bounds.y + parent_bounds.height / 2.0;
+        // Use the center of dagre's internal node positions as anchor,
+        // not the oversized parent cluster bounds.  Dagre's compound node
+        // bounds span many ranks for long cross-boundary edges, but the
+        // sublayout should sit where the internal nodes were ranked.
+        let sg = &diagram.subgraphs[sg_id];
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+        let (nodes_cx, nodes_cy) = {
+            let mut nx_min = f64::INFINITY;
+            let mut ny_min = f64::INFINITY;
+            let mut nx_max = f64::NEG_INFINITY;
+            let mut ny_max = f64::NEG_INFINITY;
+            for (nid, rect) in &layout.nodes {
+                if sg_node_set.contains(nid.0.as_str()) {
+                    nx_min = nx_min.min(rect.x);
+                    ny_min = ny_min.min(rect.y);
+                    nx_max = nx_max.max(rect.x + rect.width);
+                    ny_max = ny_max.max(rect.y + rect.height);
+                }
+            }
+            if nx_min.is_finite() {
+                ((nx_min + nx_max) / 2.0, (ny_min + ny_max) / 2.0)
+            } else {
+                (
+                    parent_bounds.x + parent_bounds.width / 2.0,
+                    parent_bounds.y + parent_bounds.height / 2.0,
+                )
+            }
+        };
+
         let has_title = diagram
             .subgraphs
             .get(sg_id)
@@ -588,14 +599,8 @@ pub(crate) fn reconcile_sublayouts_dagre(
         let final_w = sub_w;
         let final_h = sub_h + title_pad + content_pad_y * 2.0;
 
-        let new_sg_x = sg_cx - final_w / 2.0;
-        let mut new_sg_y = sg_cy - final_h / 2.0;
-        if external_overrides.contains(sg_id) {
-            let bias = title_pad_y * 0.5;
-            let min_y = parent_bounds.y;
-            let max_y = parent_bounds.y + parent_bounds.height - final_h;
-            new_sg_y = (new_sg_y + bias).clamp(min_y, max_y);
-        }
+        let new_sg_x = nodes_cx - final_w / 2.0;
+        let new_sg_y = nodes_cy - final_h / 2.0;
 
         let offset_x = new_sg_x + (final_w - sub_w) / 2.0 - min_x;
         let offset_y = new_sg_y + content_pad_y + title_pad - min_y;

@@ -6,28 +6,28 @@
   </defs>
   <g transform="translate(0.00,-25.00)">
     <g class="clusters">
-      <rect class="subgraph" x="77.45" y="273.20" width="217.82" height="109.60" fill="none" stroke="#888" stroke-width="1.00" />
-      <text x="186.36" y="277.20" text-anchor="middle" dominant-baseline="hanging" fill="#333">Horizontal Section</text>
+      <rect class="subgraph" x="77.45" y="473.20" width="217.82" height="109.60" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="186.36" y="477.20" text-anchor="middle" dominant-baseline="hanging" fill="#333">Horizontal Section</text>
     </g>
     <g class="edgePaths">
-      <path d="M161.36,336.00 L207.36,336.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M330.27,87.00 L330.27,120.53 C330.27,154.07 330.27,221.13 296.38,254.67 C262.48,288.20 194.70,288.20 160.80,291.00 C126.91,293.80 126.91,299.40 126.91,302.20 L126.91,305.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M161.36,536.00 L207.36,536.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M330.27,87.00 L330.27,153.87 C330.27,220.73 330.27,354.47 296.38,421.33 C262.48,488.20 194.70,488.20 160.80,491.00 C126.91,493.80 126.91,499.40 126.91,502.20 L126.91,505.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M330.27,87.00 L330.27,91.17 C330.27,95.33 330.27,103.67 330.27,111.33 C330.27,119.00 330.27,126.00 330.27,129.50 L330.27,133.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M330.27,191.00 L330.27,195.17 C330.27,199.33 330.27,207.67 330.27,215.33 C330.27,223.00 330.27,230.00 330.27,233.50 L330.27,237.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M330.27,295.00 L330.27,299.17 C330.27,303.33 330.27,311.67 330.27,319.33 C330.27,327.00 330.27,334.00 330.27,337.50 L330.27,341.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M330.27,399.00 L330.27,393.02 C330.27,387.05 330.27,375.10 296.38,369.12 C262.48,363.15 194.70,363.15 160.80,354.79 C126.91,346.43 126.91,329.72 126.91,321.36 L126.91,313.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M126.91,363.00 L126.91,363.80 C126.91,364.60 126.91,366.20 112.83,367.00 C98.76,367.80 70.61,367.80 56.53,398.00 C42.45,428.20 42.45,488.60 42.45,518.80 L42.45,549.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M330.27,399.00 L330.27,413.87 C330.27,428.73 330.27,458.47 296.38,473.33 C262.48,488.20 194.70,488.20 160.80,491.00 C126.91,493.80 126.91,499.40 126.91,502.20 L126.91,505.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M126.91,563.00 L126.91,561.49 C126.91,559.98 126.91,556.97 112.83,556.13 C98.76,555.30 70.61,556.65 56.53,557.16 C42.45,557.67 42.45,557.33 42.45,557.17 L42.45,557.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M42.45,607.00 L42.45,611.17 C42.45,615.33 42.45,623.67 42.45,632.00 C42.45,640.33 42.45,648.67 42.45,656.33 C42.45,664.00 42.45,671.00 42.45,674.50 L42.45,678.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M42.45,736.00 L42.45,740.17 C42.45,744.33 42.45,752.67 47.75,760.80 C53.05,768.94 63.65,776.87 68.95,780.84 L74.25,784.81" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M245.82,363.00 L245.82,363.80 C245.82,364.60 245.82,366.20 223.50,367.00 C201.18,367.80 156.55,367.80 134.23,436.83 C111.91,505.87 111.91,643.93 111.91,712.97 L111.91,782.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M245.82,563.00 L245.82,563.80 C245.82,564.60 245.82,566.20 223.50,567.00 C201.18,567.80 156.55,567.80 134.23,603.50 C111.91,639.20 111.91,710.60 111.91,746.30 L111.91,782.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
-      <rect x="92.45" y="309.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="126.91" y="336.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
-      <rect x="211.36" y="309.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="245.82" y="336.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
+      <rect x="92.45" y="509.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="126.91" y="536.00" text-anchor="middle" dominant-baseline="middle" fill="#333">A</text>
+      <rect x="211.36" y="509.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="245.82" y="536.00" text-anchor="middle" dominant-baseline="middle" fill="#333">B</text>
       <rect x="295.82" y="33.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="330.27" y="60.00" text-anchor="middle" dominant-baseline="middle" fill="#333">C</text>
       <rect x="77.45" y="786.00" width="68.91" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
