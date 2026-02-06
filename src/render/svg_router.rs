@@ -219,7 +219,6 @@ pub fn route_svg_edge_with_boundary(
     to_rect: &Rect,
     sg_rect: &Rect,
     from_is_inside: bool,
-    inside_direction: Direction,
     outside_direction: Direction,
 ) -> Vec<Point> {
     let (inside_rect, outside_rect) = if from_is_inside {
@@ -234,12 +233,14 @@ pub fn route_svg_edge_with_boundary(
     // Compute the boundary crossing point
     let boundary = rect_boundary_crossing(inside_center, outside_center, sg_rect);
 
-    // Compute source and target connection points based on edge direction.
-    // The source (from) always exits, the target (to) always enters.
+    // Cross-boundary edges use the outside (diagram) direction for both
+    // endpoints. The override direction only applies to edges fully within
+    // the subgraph. This matches Mermaid.js behavior and ensures the approach
+    // to the target node is always from outside the node rect.
     let (source_point, source_dir, target_point, target_dir) = if from_is_inside {
         (
-            exit_point(inside_rect, inside_direction),
-            inside_direction,
+            exit_point(inside_rect, outside_direction),
+            outside_direction,
             entry_point(outside_rect, outside_direction),
             outside_direction,
         )
@@ -247,8 +248,8 @@ pub fn route_svg_edge_with_boundary(
         (
             exit_point(outside_rect, outside_direction),
             outside_direction,
-            entry_point(inside_rect, inside_direction),
-            inside_direction,
+            entry_point(inside_rect, outside_direction),
+            outside_direction,
         )
     };
 
@@ -395,10 +396,6 @@ pub fn reroute_override_edges(
                     .get(inside_node)
                     .expect("inside node must be in override");
 
-                let inside_dir = node_directions
-                    .get(inside_node)
-                    .copied()
-                    .unwrap_or(diagram.direction);
                 let outside_dir = node_directions
                     .get(outside_node)
                     .copied()
@@ -414,7 +411,6 @@ pub fn reroute_override_edges(
                         to_rect,
                         sg_rect,
                         from_is_inside,
-                        inside_dir,
                         outside_dir,
                     );
                     rerouted_indices.insert(edge_layout.index);
@@ -591,7 +587,6 @@ mod tests {
             &to,
             &sg,
             true,
-            Direction::LeftRight,
             Direction::TopDown,
         );
         assert!(!points.is_empty());

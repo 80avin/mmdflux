@@ -342,8 +342,9 @@ fn render_edges(
             points = clip_points_to_rect_end(&points, rect);
         }
 
-        // Rerouted edges already have border-snapped endpoints; skip adjustment
-        // which assumes dagre-style center-to-center paths.
+        // Rerouted edges already have border-snapped endpoints; skip shape
+        // adjustment (which assumes dagre center-to-center paths) but still
+        // apply marker offsets to pull endpoints back for clean arrowheads.
         let mut points = if rerouted_edges.contains(&index) {
             points
         } else {
