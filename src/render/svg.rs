@@ -7,6 +7,7 @@ use super::layout::{
     build_dagre_layout, compute_sublayouts, dagre_config_for_layout, reconcile_sublayouts_dagre,
 };
 use super::svg_metrics::SvgTextMetrics;
+use super::svg_router;
 use super::{RenderOptions, SvgEdgeCurve, layout_config_for_diagram};
 use crate::dagre::{LayoutResult, Point, Rect};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
@@ -64,6 +65,12 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         title_pad_y,
         content_pad_y,
     );
+
+    // Reroute edges affected by direction-override subgraphs.
+    // This must happen after reconciliation moves nodes but before padding,
+    // so routes use the reconciled node positions.
+    let node_directions = svg_router::build_node_directions_svg(diagram);
+    svg_router::reroute_override_edges(diagram, &mut layout, &node_directions);
 
     // Add horizontal padding to subgraph bounds so SVG renders with breathing
     // room on left/right edges.

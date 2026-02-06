@@ -356,10 +356,11 @@ pub struct RerouteStats {
 pub fn reroute_override_edges(
     diagram: &Diagram,
     layout: &mut LayoutResult,
-    sublayouts: &HashMap<String, LayoutResult>,
     node_directions: &HashMap<String, Direction>,
 ) -> RerouteStats {
-    if sublayouts.is_empty() {
+    // Check if any subgraphs have direction overrides
+    let has_overrides = diagram.subgraphs.values().any(|sg| sg.dir.is_some());
+    if !has_overrides {
         return RerouteStats::default();
     }
 
