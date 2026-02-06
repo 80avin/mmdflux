@@ -327,15 +327,15 @@ fn render_edges(
         };
         let mut points = points;
         // Clip subgraph-as-node edges to subgraph borders
-        if let Some(sg_id) = edge.from_subgraph.as_ref() {
-            if let Some(rect) = layout.subgraph_bounds.get(sg_id) {
-                points = clip_points_to_rect_start(&points, rect);
-            }
+        if let Some(sg_id) = edge.from_subgraph.as_ref()
+            && let Some(rect) = layout.subgraph_bounds.get(sg_id)
+        {
+            points = clip_points_to_rect_start(&points, rect);
         }
-        if let Some(sg_id) = edge.to_subgraph.as_ref() {
-            if let Some(rect) = layout.subgraph_bounds.get(sg_id) {
-                points = clip_points_to_rect_end(&points, rect);
-            }
+        if let Some(sg_id) = edge.to_subgraph.as_ref()
+            && let Some(rect) = layout.subgraph_bounds.get(sg_id)
+        {
+            points = clip_points_to_rect_end(&points, rect);
         }
 
         let mut points = adjust_edge_points_for_shapes(diagram, layout, edge, &points);
@@ -353,119 +353,12 @@ fn render_edges(
     writer.end_group();
 }
 
-fn reroute_cross_boundary_points(
-    diagram: &Diagram,
-    layout: &LayoutResult,
-    edge: &Edge,
-    from_override: Option<&String>,
-    to_override: Option<&String>,
-) -> Option<Vec<Point>> {
-    let from_rect = layout.nodes.get(&crate::dagre::NodeId(edge.from.clone()))?;
-    let to_rect = layout.nodes.get(&crate::dagre::NodeId(edge.to.clone()))?;
-    let from_node = diagram.nodes.get(&edge.from)?;
-    let to_node = diagram.nodes.get(&edge.to)?;
-
-    let from_center = from_rect.center();
-    let to_center = to_rect.center();
-    let start = intersect_svg_node(from_rect, to_center, from_node.shape);
-    let end = intersect_svg_node(to_rect, from_center, to_node.shape);
-
-    let mut anchors = Vec::new();
-    anchors.push(start);
-
-    if let Some(sg_id) = from_override {
-        if let Some(rect) = layout.subgraph_bounds.get(sg_id) {
-            if point_inside_rect(rect, from_center) && !point_inside_rect(rect, to_center) {
-                if let Some(boundary) = segment_rect_intersection(from_center, to_center, rect) {
-                    push_unique_point(&mut anchors, boundary);
-                }
-            }
-        }
-    }
-
-    if let Some(sg_id) = to_override {
-        if let Some(rect) = layout.subgraph_bounds.get(sg_id) {
-            if point_inside_rect(rect, to_center) && !point_inside_rect(rect, from_center) {
-                if let Some(boundary) = segment_rect_intersection(to_center, from_center, rect) {
-                    push_unique_point(&mut anchors, boundary);
-                }
-            }
-        }
-    }
-
-    push_unique_point(&mut anchors, end);
-
-    Some(orthogonalize_anchors(&anchors, diagram.direction))
-}
-
 fn point_inside_rect(rect: &Rect, point: Point) -> bool {
     let eps = 0.01;
     point.x > rect.x + eps
         && point.x < rect.x + rect.width - eps
         && point.y > rect.y + eps
         && point.y < rect.y + rect.height - eps
-}
-
-fn points_close(a: Point, b: Point) -> bool {
-    (a.x - b.x).abs() < 0.01 && (a.y - b.y).abs() < 0.01
-}
-
-fn push_unique_point(points: &mut Vec<Point>, point: Point) {
-    let should_push = match points.last() {
-        Some(last) => !points_close(*last, point),
-        None => true,
-    };
-    if should_push {
-        points.push(point);
-    }
-}
-
-fn orthogonalize_anchors(points: &[Point], direction: Direction) -> Vec<Point> {
-    if points.is_empty() {
-        return Vec::new();
-    }
-    let prefer_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
-    let mut out = Vec::new();
-    out.push(points[0]);
-
-    for window in points.windows(2) {
-        let start = window[0];
-        let end = window[1];
-        if (start.x - end.x).abs() < 0.01 || (start.y - end.y).abs() < 0.01 {
-            push_unique_point(&mut out, end);
-            continue;
-        }
-
-        let elbow = if prefer_vertical {
-            Point { x: start.x, y: end.y }
-        } else {
-            Point { x: end.x, y: start.y }
-        };
-        push_unique_point(&mut out, elbow);
-        push_unique_point(&mut out, end);
-    }
-
-    collapse_collinear_points(&mut out);
-    out
-}
-
-fn collapse_collinear_points(points: &mut Vec<Point>) {
-    if points.len() < 3 {
-        return;
-    }
-    let mut i = 1;
-    while i + 1 < points.len() {
-        let prev = points[i - 1];
-        let curr = points[i];
-        let next = points[i + 1];
-        let collinear = (prev.x - curr.x).abs() < 0.01 && (curr.x - next.x).abs() < 0.01
-            || (prev.y - curr.y).abs() < 0.01 && (curr.y - next.y).abs() < 0.01;
-        if collinear {
-            points.remove(i);
-        } else {
-            i += 1;
-        }
-    }
 }
 
 fn segment_rect_intersection(start: Point, end: Point, rect: &Rect) -> Option<Point> {
@@ -572,63 +465,6 @@ fn clip_points_to_rect_end(points: &[Point], rect: &Rect) -> Vec<Point> {
 
     let mut out = points[..=idx].to_vec();
     out.push(intersection);
-    out
-}
-
-fn splice_points_from_subgraph_start(
-    points: &[Point],
-    rect: &Rect,
-    boundary: Point,
-    center: Point,
-) -> Vec<Point> {
-    let mut idx = 0;
-    while idx < points.len() && point_inside_rect(rect, points[idx]) {
-        idx += 1;
-    }
-
-    let mut out = Vec::new();
-    out.push(center);
-    if !points_close(center, boundary) {
-        out.push(boundary);
-    }
-
-    if idx < points.len() {
-        let mut rest: Vec<Point> = points[idx..].to_vec();
-        if let Some(first) = rest.first() {
-            if points_close(*first, boundary) {
-                rest.remove(0);
-            }
-        }
-        out.extend(rest);
-    }
-
-    out
-}
-
-fn splice_points_to_subgraph_end(
-    points: &[Point],
-    rect: &Rect,
-    boundary: Point,
-    center: Point,
-) -> Vec<Point> {
-    let mut out: Vec<Point> = points.to_vec();
-    while out.len() > 1 && point_inside_rect(rect, *out.last().unwrap()) {
-        out.pop();
-    }
-    let should_push_boundary = match out.last() {
-        Some(point) => !points_close(*point, boundary),
-        None => true,
-    };
-    if should_push_boundary {
-        out.push(boundary);
-    }
-    let should_push_center = match out.last() {
-        Some(point) => !points_close(*point, center),
-        None => true,
-    };
-    if should_push_center {
-        out.push(center);
-    }
     out
 }
 

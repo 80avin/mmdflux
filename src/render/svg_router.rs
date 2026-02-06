@@ -125,7 +125,7 @@ pub fn route_svg_edge_direct(
         vec![start, end]
     } else {
         // L-shaped elbow: go along primary axis to midpoint, then turn
-        let elbow = if is_vertical {
+        if is_vertical {
             let mid_y = (start.y + end.y) / 2.0;
             vec![
                 start,
@@ -153,8 +153,7 @@ pub fn route_svg_edge_direct(
                 },
                 end,
             ]
-        };
-        elbow
+        }
     }
 }
 
