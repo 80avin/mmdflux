@@ -67,45 +67,76 @@ pub fn effective_edge_direction_svg(
     }
 }
 
-/// Compute the exit point from a rectangular node along a given direction.
-fn exit_point(rect: &Rect, direction: Direction) -> Point {
-    let cx = rect.x + rect.width / 2.0;
-    let cy = rect.y + rect.height / 2.0;
+/// Which side of a rectangle an edge attaches to.
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+enum Face {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+/// The face an edge exits from in the given flow direction.
+fn exit_face(direction: Direction) -> Face {
     match direction {
-        Direction::TopDown => Point {
-            x: cx,
-            y: rect.y + rect.height,
-        },
-        Direction::BottomTop => Point { x: cx, y: rect.y },
-        Direction::LeftRight => Point {
-            x: rect.x + rect.width,
-            y: cy,
-        },
-        Direction::RightLeft => Point { x: rect.x, y: cy },
+        Direction::TopDown => Face::Bottom,
+        Direction::BottomTop => Face::Top,
+        Direction::LeftRight => Face::Right,
+        Direction::RightLeft => Face::Left,
     }
 }
 
-/// Compute the entry point into a rectangular node along a given direction.
-fn entry_point(rect: &Rect, direction: Direction) -> Point {
-    let cx = rect.x + rect.width / 2.0;
-    let cy = rect.y + rect.height / 2.0;
+/// The face an edge enters through in the given flow direction.
+fn entry_face(direction: Direction) -> Face {
     match direction {
-        Direction::TopDown => Point { x: cx, y: rect.y },
-        Direction::BottomTop => Point {
-            x: cx,
+        Direction::TopDown => Face::Top,
+        Direction::BottomTop => Face::Bottom,
+        Direction::LeftRight => Face::Left,
+        Direction::RightLeft => Face::Right,
+    }
+}
+
+/// Compute a point on a face at the given fraction (0.0 = start, 0.5 = center, 1.0 = end).
+///
+/// For horizontal faces (Top/Bottom), fraction runs left-to-right.
+/// For vertical faces (Left/Right), fraction runs top-to-bottom.
+fn point_on_face(rect: &Rect, face: Face, fraction: f64) -> Point {
+    match face {
+        Face::Top => Point {
+            x: rect.x + rect.width * fraction,
+            y: rect.y,
+        },
+        Face::Bottom => Point {
+            x: rect.x + rect.width * fraction,
             y: rect.y + rect.height,
         },
-        Direction::LeftRight => Point { x: rect.x, y: cy },
-        Direction::RightLeft => Point {
+        Face::Left => Point {
+            x: rect.x,
+            y: rect.y + rect.height * fraction,
+        },
+        Face::Right => Point {
             x: rect.x + rect.width,
-            y: cy,
+            y: rect.y + rect.height * fraction,
         },
     }
+}
+
+/// Compute the exit point from a rectangular node along a given direction (center of face).
+#[cfg(test)]
+fn exit_point(rect: &Rect, direction: Direction) -> Point {
+    point_on_face(rect, exit_face(direction), 0.5)
+}
+
+/// Compute the entry point into a rectangular node along a given direction (center of face).
+#[cfg(test)]
+fn entry_point(rect: &Rect, direction: Direction) -> Point {
+    point_on_face(rect, entry_face(direction), 0.5)
 }
 
 /// Route an orthogonal edge path between two nodes in float space.
 ///
 /// Computes a straight or L-shaped path using the effective direction.
+#[cfg(test)]
 pub fn route_svg_edge_direct(
     from_rect: &Rect,
     to_rect: &Rect,
@@ -157,6 +188,63 @@ pub fn route_svg_edge_direct(
     }
 }
 
+/// Route an edge with explicit port fractions for exit and entry faces.
+///
+/// `from_port` and `to_port` are fractions (0.0–1.0) along the face,
+/// where 0.5 is the center.  This allows multiple edges sharing a face
+/// to attach at different positions, preventing overlap.
+fn route_svg_edge_ported(
+    from_rect: &Rect,
+    to_rect: &Rect,
+    direction: Direction,
+    from_port: f64,
+    to_port: f64,
+) -> Vec<Point> {
+    let start = point_on_face(from_rect, exit_face(direction), from_port);
+    let end = point_on_face(to_rect, entry_face(direction), to_port);
+
+    let is_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
+    let aligned = if is_vertical {
+        (start.x - end.x).abs() < 0.5
+    } else {
+        (start.y - end.y).abs() < 0.5
+    };
+
+    if aligned {
+        vec![start, end]
+    } else {
+        if is_vertical {
+            let mid_y = (start.y + end.y) / 2.0;
+            vec![
+                start,
+                Point {
+                    x: start.x,
+                    y: mid_y,
+                },
+                Point {
+                    x: end.x,
+                    y: mid_y,
+                },
+                end,
+            ]
+        } else {
+            let mid_x = (start.x + end.x) / 2.0;
+            vec![
+                start,
+                Point {
+                    x: mid_x,
+                    y: start.y,
+                },
+                Point {
+                    x: mid_x,
+                    y: end.y,
+                },
+                end,
+            ]
+        }
+    }
+}
+
 /// Route an edge that crosses a subgraph boundary.
 ///
 /// Uses a simple L-shaped path with the outside (diagram) direction for both
@@ -164,6 +252,7 @@ pub fn route_svg_edge_direct(
 /// exit source along the flow direction, elbow at the midpoint, enter target
 /// along the flow direction — so paths swing outward rather than cutting
 /// through the interior of the diagram.
+#[cfg(test)]
 pub fn route_svg_edge_with_boundary(
     from_rect: &Rect,
     to_rect: &Rect,
@@ -187,6 +276,10 @@ pub struct RerouteStats {
 /// Modifies the `LayoutResult` in-place with fresh paths for edges touching
 /// override subgraphs. Edges where both endpoints are outside override subgraphs
 /// are left untouched.
+///
+/// Uses a two-pass approach: first collects routing decisions, then groups edges
+/// by shared node faces to spread attachment points so that multiple edges
+/// arriving at the same face don't overlap.
 pub fn reroute_override_edges(
     diagram: &Diagram,
     layout: &mut LayoutResult,
@@ -204,7 +297,18 @@ pub fn reroute_override_edges(
     let mut stats = RerouteStats::default();
     let mut rerouted_indices = HashSet::new();
 
-    for edge_layout in &mut layout.edges {
+    // --- Pass 1: Collect routing decisions ---
+    struct PendingRoute {
+        layout_pos: usize,  // position in layout.edges
+        edge_index: usize,  // edge_layout.index (into diagram.edges)
+        direction: Direction,
+        from_id: String,
+        to_id: String,
+    }
+
+    let mut pending: Vec<PendingRoute> = Vec::new();
+
+    for (pos, edge_layout) in layout.edges.iter().enumerate() {
         let Some(edge) = diagram.edges.get(edge_layout.index) else {
             continue;
         };
@@ -220,11 +324,9 @@ pub fn reroute_override_edges(
 
         match (from_sg, to_sg) {
             (None, None) => {
-                // Neither endpoint in an override subgraph
                 stats.unaffected += 1;
             }
             (Some(sg_a), Some(sg_b)) if sg_a == sg_b => {
-                // Both in same override subgraph: route with override direction
                 stats.internal += 1;
                 let dir = effective_edge_direction_svg(
                     node_directions,
@@ -232,48 +334,125 @@ pub fn reroute_override_edges(
                     &edge.to,
                     diagram.direction,
                 );
-                if let (Some(from_rect), Some(to_rect)) = (
-                    layout.nodes.get(&NodeId(edge.from.clone())),
-                    layout.nodes.get(&NodeId(edge.to.clone())),
-                ) {
-                    edge_layout.points = route_svg_edge_direct(from_rect, to_rect, dir);
-                    rerouted_indices.insert(edge_layout.index);
-                }
+                pending.push(PendingRoute {
+                    layout_pos: pos,
+                    edge_index: edge_layout.index,
+                    direction: dir,
+                    from_id: edge.from.clone(),
+                    to_id: edge.to.clone(),
+                });
             }
             _ => {
-                // Cross-boundary edge
                 stats.cross_boundary += 1;
-                let (inside_node, outside_node, from_is_inside) =
+                let (_, outside_node, _) =
                     if from_sg.is_some() && (to_sg.is_none() || from_sg != to_sg) {
                         (&edge.from, &edge.to, true)
                     } else {
                         (&edge.to, &edge.from, false)
                     };
 
-                let sg_id = override_nodes
-                    .get(inside_node)
-                    .expect("inside node must be in override");
+                // When both endpoints are in different override subgraphs,
+                // neither is truly "outside" — use the diagram's root direction
+                // so edges connect along the parent coordinate system.
+                let outside_dir = if from_sg.is_some() && to_sg.is_some() {
+                    diagram.direction
+                } else {
+                    node_directions
+                        .get(outside_node)
+                        .copied()
+                        .unwrap_or(diagram.direction)
+                };
 
-                let outside_dir = node_directions
-                    .get(outside_node)
-                    .copied()
-                    .unwrap_or(diagram.direction);
-
-                if let (Some(from_rect), Some(to_rect), Some(sg_rect)) = (
-                    layout.nodes.get(&NodeId(edge.from.clone())),
-                    layout.nodes.get(&NodeId(edge.to.clone())),
-                    layout.subgraph_bounds.get(sg_id.as_str()),
-                ) {
-                    edge_layout.points = route_svg_edge_with_boundary(
-                        from_rect,
-                        to_rect,
-                        sg_rect,
-                        from_is_inside,
-                        outside_dir,
-                    );
-                    rerouted_indices.insert(edge_layout.index);
-                }
+                pending.push(PendingRoute {
+                    layout_pos: pos,
+                    edge_index: edge_layout.index,
+                    direction: outside_dir,
+                    from_id: edge.from.clone(),
+                    to_id: edge.to.clone(),
+                });
             }
+        }
+    }
+
+    // --- Pass 2: Compute port fractions for shared faces ---
+    // Group edges by (node_id, face). Each entry records the pending index
+    // and the cross-axis coordinate of the "other end" node (for sort order).
+    let mut face_edges: HashMap<(String, Face), Vec<(usize, f64)>> = HashMap::new();
+
+    for (pi, pr) in pending.iter().enumerate() {
+        let from_rect = layout.nodes.get(&NodeId(pr.from_id.clone()));
+        let to_rect = layout.nodes.get(&NodeId(pr.to_id.clone()));
+        if let (Some(fr), Some(tr)) = (from_rect, to_rect) {
+            let horizontal_face =
+                matches!(pr.direction, Direction::TopDown | Direction::BottomTop);
+
+            // Exit face of from-node: sort by target's cross-axis position
+            let ef = exit_face(pr.direction);
+            let exit_sort = if horizontal_face {
+                tr.x + tr.width / 2.0
+            } else {
+                tr.y + tr.height / 2.0
+            };
+            face_edges
+                .entry((pr.from_id.clone(), ef))
+                .or_default()
+                .push((pi, exit_sort));
+
+            // Entry face of to-node: sort by source's cross-axis position
+            let enf = entry_face(pr.direction);
+            let entry_sort = if horizontal_face {
+                fr.x + fr.width / 2.0
+            } else {
+                fr.y + fr.height / 2.0
+            };
+            face_edges
+                .entry((pr.to_id.clone(), enf))
+                .or_default()
+                .push((pi, entry_sort));
+        }
+    }
+
+    let mut from_fractions: Vec<f64> = vec![0.5; pending.len()];
+    let mut to_fractions: Vec<f64> = vec![0.5; pending.len()];
+
+    for ((node_id, face), mut entries) in face_edges {
+        if entries.len() <= 1 {
+            continue; // single edge on face: keep center (0.5)
+        }
+
+        // Sort by cross-axis position of the other endpoint node
+        entries.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        let n = entries.len();
+        let margin = 0.25; // keep 25% away from corners
+
+        for (rank, &(pi, _)) in entries.iter().enumerate() {
+            let frac = margin + (1.0 - 2.0 * margin) * (rank as f64) / ((n - 1) as f64);
+
+            let pr = &pending[pi];
+            let is_exit = pr.from_id == node_id && exit_face(pr.direction) == face;
+            if is_exit {
+                from_fractions[pi] = frac;
+            } else {
+                to_fractions[pi] = frac;
+            }
+        }
+    }
+
+    // --- Pass 3: Route each edge with its port fractions ---
+    for (pi, pr) in pending.iter().enumerate() {
+        if let (Some(from_rect), Some(to_rect)) = (
+            layout.nodes.get(&NodeId(pr.from_id.clone())),
+            layout.nodes.get(&NodeId(pr.to_id.clone())),
+        ) {
+            layout.edges[pr.layout_pos].points = route_svg_edge_ported(
+                from_rect,
+                to_rect,
+                pr.direction,
+                from_fractions[pi],
+                to_fractions[pi],
+            );
+            rerouted_indices.insert(pr.edge_index);
         }
     }
 
@@ -451,6 +630,129 @@ mod tests {
         // No NaN
         for p in &points {
             assert!(p.x.is_finite() && p.y.is_finite(), "point has NaN: {:?}", p);
+        }
+    }
+
+    #[test]
+    fn test_route_svg_edge_ported_center_matches_direct() {
+        let from = Rect {
+            x: 10.0,
+            y: 10.0,
+            width: 40.0,
+            height: 20.0,
+        };
+        let to = Rect {
+            x: 80.0,
+            y: 10.0,
+            width: 40.0,
+            height: 20.0,
+        };
+        let direct = route_svg_edge_direct(&from, &to, Direction::TopDown);
+        let ported = route_svg_edge_ported(&from, &to, Direction::TopDown, 0.5, 0.5);
+        assert_eq!(direct.len(), ported.len());
+        for (d, p) in direct.iter().zip(ported.iter()) {
+            assert!((d.x - p.x).abs() < 0.01, "x mismatch: {} vs {}", d.x, p.x);
+            assert!((d.y - p.y).abs() < 0.01, "y mismatch: {} vs {}", d.y, p.y);
+        }
+    }
+
+    #[test]
+    fn test_route_svg_edge_ported_spread_endpoints() {
+        let from = Rect {
+            x: 100.0,
+            y: 10.0,
+            width: 60.0,
+            height: 40.0,
+        };
+        let to = Rect {
+            x: 100.0,
+            y: 100.0,
+            width: 60.0,
+            height: 40.0,
+        };
+        // Two edges entering `to` from top face at different ports
+        let left = route_svg_edge_ported(&from, &to, Direction::TopDown, 0.5, 0.25);
+        let right = route_svg_edge_ported(&from, &to, Direction::TopDown, 0.5, 0.75);
+
+        // Both share the same from-exit (center of bottom face: x=130)
+        assert!((left[0].x - 130.0).abs() < 0.01);
+        assert!((right[0].x - 130.0).abs() < 0.01);
+
+        // Entry points differ on to's top face
+        let left_end = left.last().unwrap();
+        let right_end = right.last().unwrap();
+        assert!((left_end.x - 115.0).abs() < 0.01, "left entry x={}", left_end.x); // 100 + 60*0.25
+        assert!((right_end.x - 145.0).abs() < 0.01, "right entry x={}", right_end.x); // 100 + 60*0.75
+        assert!((left_end.y - 100.0).abs() < 0.01); // top of `to`
+        assert!((right_end.y - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_point_on_face_fractions() {
+        let rect = Rect {
+            x: 50.0,
+            y: 100.0,
+            width: 80.0,
+            height: 40.0,
+        };
+
+        // Top face: x varies, y = rect.y
+        let top_left = point_on_face(&rect, Face::Top, 0.0);
+        assert!((top_left.x - 50.0).abs() < 0.01);
+        assert!((top_left.y - 100.0).abs() < 0.01);
+        let top_center = point_on_face(&rect, Face::Top, 0.5);
+        assert!((top_center.x - 90.0).abs() < 0.01);
+        let top_right = point_on_face(&rect, Face::Top, 1.0);
+        assert!((top_right.x - 130.0).abs() < 0.01);
+
+        // Right face: x = rect.x + width, y varies
+        let right_mid = point_on_face(&rect, Face::Right, 0.5);
+        assert!((right_mid.x - 130.0).abs() < 0.01);
+        assert!((right_mid.y - 120.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_reroute_spreads_shared_face_attachment_points() {
+        // Two cross-boundary edges entering the same node A from its top face.
+        // Check that the SVG output has different x positions for C→A and D→A edges.
+        let input = "graph TD\nsubgraph s1\ndirection LR\nA --> B\nend\nC --> A\nD --> A\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let options = crate::render::RenderOptions::default();
+        let svg = crate::render::render_svg(&diagram, &options);
+
+        // Parse out edge paths — look for paths ending near A's top
+        // The two edges should have different endpoint x coordinates.
+        // We verify by checking the SVG contains no duplicate endpoints.
+        let paths: Vec<&str> = svg
+            .lines()
+            .filter(|l| l.trim().starts_with("<path d=\"M"))
+            .collect();
+
+        // At least 3 edges: A→B (internal), C→A, D→A
+        assert!(
+            paths.len() >= 3,
+            "expected at least 3 edges, got {}",
+            paths.len()
+        );
+
+        // Collect final L coordinates from each path (the last "L" segment)
+        let mut endpoints: Vec<String> = Vec::new();
+        for path in &paths {
+            // Extract last "Lx,y" from the path
+            if let Some(last_l) = path.rfind(" L") {
+                let after = &path[last_l + 2..];
+                if let Some(end) = after.find('"') {
+                    endpoints.push(after[..end].to_string());
+                }
+            }
+        }
+
+        // Check that no two endpoints are identical (the spreading should make them unique)
+        for (i, a) in endpoints.iter().enumerate() {
+            for b in endpoints.iter().skip(i + 1) {
+                assert_ne!(a, b, "endpoints should not overlap: {}", a);
+            }
         }
     }
 }
