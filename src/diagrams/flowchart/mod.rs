@@ -4,9 +4,10 @@
 //! This is the original and most feature-complete diagram type in mmdflux.
 
 pub mod engine;
-pub(crate) mod geometry;
+pub mod geometry;
 mod instance;
 pub(crate) mod render;
+pub mod routing;
 
 pub use instance::FlowchartInstance;
 

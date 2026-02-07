@@ -1,5 +1,6 @@
 //! Flowchart diagram instance implementation.
 
+use super::routing;
 use crate::diagram::{LayoutEngineId, OutputFormat, RenderConfig, RenderError};
 use crate::graph::{Diagram, build_diagram};
 use crate::json::to_json;
@@ -55,6 +56,13 @@ impl DiagramInstance for FlowchartInstance {
         // Route runtime selection through the engine abstraction.
         let engine_result = super::engine::layout_with_selected_engine(diagram, config)?;
 
+        // Produce routed geometry through the routing stage (Layer-2 contract).
+        let routed = routing::route_graph_geometry(
+            diagram,
+            &engine_result.geometry,
+            engine_result.routing_mode,
+        );
+
         let mut options: RenderOptions = config.into();
         options.output_format = format;
 
@@ -73,10 +81,12 @@ impl DiagramInstance for FlowchartInstance {
         }
 
         if matches!(format, OutputFormat::Svg) && engine_result.engine_id != LayoutEngineId::Dagre {
+            // Non-dagre SVG: inject routed paths into geometry for rendering.
+            let geom = inject_routed_paths(&engine_result.geometry, &routed);
             return Ok(render_svg_from_geometry(
                 diagram,
                 &options,
-                &engine_result.geometry,
+                &geom,
                 engine_result.routing_mode,
             ));
         }
@@ -99,6 +109,26 @@ impl DiagramInstance for FlowchartInstance {
             OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
         )
     }
+}
+
+/// Inject routed edge paths from `RoutedGraphGeometry` into `GraphGeometry`.
+///
+/// Ensures the rendering pipeline uses paths produced by the routing stage.
+fn inject_routed_paths(
+    geom: &super::geometry::GraphGeometry,
+    routed: &super::geometry::RoutedGraphGeometry,
+) -> super::geometry::GraphGeometry {
+    let mut result = geom.clone();
+    for routed_edge in &routed.edges {
+        if let Some(layout_edge) = result
+            .edges
+            .iter_mut()
+            .find(|e| e.index == routed_edge.index)
+        {
+            layout_edge.layout_path_hint = Some(routed_edge.path.clone());
+        }
+    }
+    result
 }
 
 /// Create a copy of the diagram with node labels annotated as "ID: Label".

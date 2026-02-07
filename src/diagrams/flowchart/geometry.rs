@@ -354,8 +354,6 @@ pub fn from_dagre_layout(result: &dagre::LayoutResult, diagram: &Diagram) -> Gra
 /// Graph geometry with fully-routed edge paths.
 ///
 /// Produced by the routing stage, consumed by renderers.
-/// Currently a staged contract; kept to preserve the intended Layer-2 shape.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RoutedGraphGeometry {
     /// Same positioned nodes as input.
@@ -373,7 +371,6 @@ pub struct RoutedGraphGeometry {
 }
 
 /// A fully-routed edge with polyline path.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RoutedEdgeGeometry {
     pub index: usize,
@@ -385,10 +382,13 @@ pub struct RoutedEdgeGeometry {
     pub label_position: Option<FPoint>,
     /// Whether this edge flows backward in the layout direction.
     pub is_backward: bool,
+    /// If source is a subgraph-as-node, the subgraph ID.
+    pub from_subgraph: Option<String>,
+    /// If target is a subgraph-as-node, the subgraph ID.
+    pub to_subgraph: Option<String>,
 }
 
 /// A routed self-edge loop.
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RoutedSelfEdge {
     pub node_id: String,
