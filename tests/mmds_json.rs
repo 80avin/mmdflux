@@ -29,27 +29,6 @@ fn render_json_with_level(input: &str, level: GeometryLevel) -> String {
     instance.render(OutputFormat::Json, &config).unwrap()
 }
 
-fn render_json_compact(input: &str) -> String {
-    let mut instance = FlowchartInstance::new();
-    instance.parse(input).unwrap();
-    let config = RenderConfig {
-        mmds_compact: true,
-        ..RenderConfig::default()
-    };
-    instance.render(OutputFormat::Json, &config).unwrap()
-}
-
-fn render_json_compact_with_level(input: &str, level: GeometryLevel) -> String {
-    let mut instance = FlowchartInstance::new();
-    instance.parse(input).unwrap();
-    let config = RenderConfig {
-        geometry_level: level,
-        mmds_compact: true,
-        ..RenderConfig::default()
-    };
-    instance.render(OutputFormat::Json, &config).unwrap()
-}
-
 // -----------------------------------------------------------------------
 // Contract: MMDS envelope
 // -----------------------------------------------------------------------
@@ -248,12 +227,22 @@ fn mmds_routed_label_position_for_labeled_edge() {
 }
 
 // -----------------------------------------------------------------------
-// Contract: compact mode defaults
+// Contract: defaults + omission behavior
 // -----------------------------------------------------------------------
 
 #[test]
-fn mmds_compact_omits_default_edge_fields() {
-    let json = render_json_compact("graph TD\nA-->B");
+fn mmds_includes_defaults_block() {
+    let json = render_json("graph TD\nA-->B");
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(value["defaults"]["node"]["shape"], "rectangle");
+    assert_eq!(value["defaults"]["edge"]["stroke"], "solid");
+    assert_eq!(value["defaults"]["edge"]["arrow_start"], "none");
+    assert_eq!(value["defaults"]["edge"]["arrow_end"], "normal");
+}
+
+#[test]
+fn mmds_omits_default_edge_fields() {
+    let json = render_json("graph TD\nA-->B");
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     let edge = &value["edges"][0];
     assert!(edge.get("stroke").is_none());
@@ -262,8 +251,8 @@ fn mmds_compact_omits_default_edge_fields() {
 }
 
 #[test]
-fn mmds_compact_keeps_non_default_edge_fields() {
-    let json = render_json_compact("graph TD\nA -.-> B\nC --x D");
+fn mmds_keeps_non_default_edge_fields() {
+    let json = render_json("graph TD\nA -.-> B\nC --x D");
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     let edges = value["edges"].as_array().unwrap();
     assert_eq!(edges[0]["stroke"], "dotted");
@@ -271,8 +260,8 @@ fn mmds_compact_keeps_non_default_edge_fields() {
 }
 
 #[test]
-fn mmds_compact_omits_default_node_shape() {
-    let json = render_json_compact("graph TD\nA[Rect]\nB(Round)");
+fn mmds_omits_default_node_shape() {
+    let json = render_json("graph TD\nA[Rect]\nB(Round)");
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     let nodes = value["nodes"].as_array().unwrap();
     assert!(nodes[0].get("shape").is_none());
@@ -280,30 +269,30 @@ fn mmds_compact_omits_default_node_shape() {
 }
 
 #[test]
-fn mmds_compact_omits_empty_subgraphs() {
-    let json = render_json_compact("graph TD\nA-->B");
+fn mmds_omits_empty_subgraphs() {
+    let json = render_json("graph TD\nA-->B");
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert!(value.get("subgraphs").is_none());
 }
 
 #[test]
-fn mmds_compact_keeps_subgraphs_when_present() {
-    let json = render_json_compact("graph TD\nsubgraph sg1[Group]\nA-->B\nend");
+fn mmds_keeps_subgraphs_when_present() {
+    let json = render_json("graph TD\nsubgraph sg1[Group]\nA-->B\nend");
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert!(value.get("subgraphs").is_some());
 }
 
 #[test]
-fn mmds_compact_routed_still_includes_paths() {
-    let json = render_json_compact_with_level("graph TD\nA-->B", GeometryLevel::Routed);
+fn mmds_routed_still_includes_paths() {
+    let json = render_json_with_level("graph TD\nA-->B", GeometryLevel::Routed);
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     let edge = &value["edges"][0];
     assert!(edge.get("path").is_some());
 }
 
 #[test]
-fn mmds_compact_deserializes_with_defaults() {
-    let json = render_json_compact("graph TD\nA-->B");
+fn mmds_deserializes_with_defaults() {
+    let json = render_json("graph TD\nA-->B");
     let output: MmdsOutput = serde_json::from_str(&json).unwrap();
     assert_eq!(output.nodes[0].shape, "rectangle");
     assert_eq!(output.edges[0].stroke, "solid");

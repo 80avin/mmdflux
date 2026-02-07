@@ -96,20 +96,16 @@ fn flowchart_instance_render_json() {
 }
 
 #[test]
-fn flowchart_instance_render_json_compact() {
+fn flowchart_instance_render_json_uses_defaults_omission() {
     let mut instance = FlowchartInstance::new();
     instance.parse("graph TD\nA-->B").unwrap();
     let output = instance
-        .render(
-            OutputFormat::Json,
-            &RenderConfig {
-                mmds_compact: true,
-                ..RenderConfig::default()
-            },
-        )
+        .render(OutputFormat::Json, &RenderConfig::default())
         .unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
 
+    assert_eq!(parsed["defaults"]["node"]["shape"], "rectangle");
+    assert_eq!(parsed["defaults"]["edge"]["stroke"], "solid");
     assert_eq!(parsed["edges"][0]["id"], "e0");
     assert!(parsed["edges"][0]["stroke"].is_null());
     assert!(parsed["edges"][0]["arrow_start"].is_null());

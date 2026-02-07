@@ -351,12 +351,9 @@ mmdflux --format mmds diagram.mmd
 
 # Routed level: includes edge paths, bounds, and routing metadata
 mmdflux --format mmds --geometry-level routed diagram.mmd
-
-# Compact mode: omits default edge style fields
-mmdflux --format mmds --mmds-compact diagram.mmd
 ```
 
-MMDS output is supported for flowchart and class diagrams (`--format json` remains an alias). See [`docs/mmds.md`](docs/mmds.md) for the full specification and [`docs/mmds.schema.json`](docs/mmds.schema.json) for the JSON Schema. Adapter examples for React Flow, Cytoscape.js, and D3 are in [`examples/mmds/`](examples/mmds/).
+MMDS output is supported for flowchart and class diagrams (`--format json` remains an alias). The output includes a top-level `defaults` block and omits per-node/per-edge fields when they match those defaults. See [`docs/mmds.md`](docs/mmds.md) for the full specification and [`docs/mmds.schema.json`](docs/mmds.schema.json) for the JSON Schema. Adapter examples for React Flow, Cytoscape.js, and D3 are in [`examples/mmds/`](examples/mmds/).
 
 ## Library Usage
 

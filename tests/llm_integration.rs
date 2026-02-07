@@ -35,7 +35,7 @@ fn json_from_stdin() {
 }
 
 #[test]
-fn json_has_all_top_level_fields() {
+fn json_has_required_top_level_fields() {
     let output = mmdflux()
         .args(["-f", "json"])
         .write_stdin("graph TD\nA --> B\n")
@@ -44,10 +44,11 @@ fn json_has_all_top_level_fields() {
 
     let json: Value = serde_json::from_slice(&output.stdout).unwrap();
     assert!(json.get("version").is_some());
+    assert!(json.get("defaults").is_some());
     assert!(json.get("metadata").is_some());
     assert!(json.get("nodes").is_some());
     assert!(json.get("edges").is_some());
-    assert!(json.get("subgraphs").is_some());
+    assert!(json.get("subgraphs").is_none());
 }
 
 #[test]

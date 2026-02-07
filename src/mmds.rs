@@ -25,7 +25,7 @@ pub fn to_mmds_layout_typed(
     geometry: &GraphGeometry,
 ) -> String {
     let output = build_mmds_output(diagram_type, diagram, geometry, None);
-    serialize_mmds_output(&output, false)
+    serialize_mmds_output(&output)
 }
 
 /// Serialize a graph-family diagram to MMDS JSON at routed level.
@@ -48,7 +48,7 @@ pub fn to_mmds_routed_typed(
     routed: &RoutedGraphGeometry,
 ) -> String {
     let output = build_mmds_output(diagram_type, diagram, geometry, Some(routed));
-    serialize_mmds_output(&output, false)
+    serialize_mmds_output(&output)
 }
 
 /// Serialize a diagram to MMDS JSON at the specified geometry level.
@@ -58,25 +58,7 @@ pub fn to_mmds_json(
     routed: Option<&RoutedGraphGeometry>,
     level: GeometryLevel,
 ) -> Result<String, RenderError> {
-    to_mmds_json_with_options(diagram, geometry, routed, level, false)
-}
-
-/// Serialize a diagram to MMDS JSON at the specified geometry level with options.
-pub fn to_mmds_json_with_options(
-    diagram: &Diagram,
-    geometry: &GraphGeometry,
-    routed: Option<&RoutedGraphGeometry>,
-    level: GeometryLevel,
-    compact_defaults: bool,
-) -> Result<String, RenderError> {
-    to_mmds_json_typed_with_options(
-        "flowchart",
-        diagram,
-        geometry,
-        routed,
-        level,
-        compact_defaults,
-    )
+    to_mmds_json_typed("flowchart", diagram, geometry, routed, level)
 }
 
 /// Serialize a diagram to MMDS JSON at the specified geometry level with explicit type.
@@ -87,27 +69,15 @@ pub fn to_mmds_json_typed(
     routed: Option<&RoutedGraphGeometry>,
     level: GeometryLevel,
 ) -> Result<String, RenderError> {
-    to_mmds_json_typed_with_options(diagram_type, diagram, geometry, routed, level, false)
-}
-
-/// Serialize a diagram to MMDS JSON at the specified geometry level with explicit type and options.
-pub fn to_mmds_json_typed_with_options(
-    diagram_type: &str,
-    diagram: &Diagram,
-    geometry: &GraphGeometry,
-    routed: Option<&RoutedGraphGeometry>,
-    level: GeometryLevel,
-    compact_defaults: bool,
-) -> Result<String, RenderError> {
     match level {
         GeometryLevel::Layout => {
             let output = build_mmds_output(diagram_type, diagram, geometry, None);
-            Ok(serialize_mmds_output(&output, compact_defaults))
+            Ok(serialize_mmds_output(&output))
         }
         GeometryLevel::Routed => {
             if let Some(routed) = routed {
                 let output = build_mmds_output(diagram_type, diagram, geometry, Some(routed));
-                Ok(serialize_mmds_output(&output, compact_defaults))
+                Ok(serialize_mmds_output(&output))
             } else {
                 Err(RenderError {
                     message: "routed MMDS output requested but routed geometry was not provided"
@@ -118,73 +88,8 @@ pub fn to_mmds_json_typed_with_options(
     }
 }
 
-fn serialize_mmds_output(output: &MmdsOutput, compact_defaults: bool) -> String {
-    if !compact_defaults {
-        return serde_json::to_string_pretty(output).expect("MMDS serialization should not fail");
-    }
-
-    let mut value = serde_json::to_value(output).expect("MMDS value conversion should not fail");
-    compact_default_edge_fields(&mut value);
-    compact_default_node_fields(&mut value);
-    compact_empty_subgraphs(&mut value);
-    serde_json::to_string_pretty(&value).expect("MMDS serialization should not fail")
-}
-
-fn compact_default_edge_fields(value: &mut serde_json::Value) {
-    let Some(edges) = value
-        .get_mut("edges")
-        .and_then(serde_json::Value::as_array_mut)
-    else {
-        return;
-    };
-
-    for edge in edges {
-        let Some(obj) = edge.as_object_mut() else {
-            continue;
-        };
-
-        if obj.get("stroke").and_then(serde_json::Value::as_str) == Some("solid") {
-            obj.remove("stroke");
-        }
-        if obj.get("arrow_start").and_then(serde_json::Value::as_str) == Some("none") {
-            obj.remove("arrow_start");
-        }
-        if obj.get("arrow_end").and_then(serde_json::Value::as_str) == Some("normal") {
-            obj.remove("arrow_end");
-        }
-    }
-}
-
-fn compact_default_node_fields(value: &mut serde_json::Value) {
-    let Some(nodes) = value
-        .get_mut("nodes")
-        .and_then(serde_json::Value::as_array_mut)
-    else {
-        return;
-    };
-
-    for node in nodes {
-        let Some(obj) = node.as_object_mut() else {
-            continue;
-        };
-
-        if obj.get("shape").and_then(serde_json::Value::as_str) == Some("rectangle") {
-            obj.remove("shape");
-        }
-    }
-}
-
-fn compact_empty_subgraphs(value: &mut serde_json::Value) {
-    let is_empty = value
-        .get("subgraphs")
-        .and_then(serde_json::Value::as_array)
-        .is_some_and(Vec::is_empty);
-
-    if is_empty {
-        if let Some(obj) = value.as_object_mut() {
-            obj.remove("subgraphs");
-        }
-    }
+fn serialize_mmds_output(output: &MmdsOutput) -> String {
+    serde_json::to_string_pretty(output).expect("MMDS serialization should not fail")
 }
 
 fn build_mmds_output(
@@ -279,6 +184,7 @@ fn build_mmds_output(
 
     MmdsOutput {
         version: 1,
+        defaults: MmdsDefaults::default(),
         geometry_level: level.to_string(),
         metadata,
         nodes,
@@ -370,6 +276,8 @@ fn arrow_str(arrow: Arrow) -> &'static str {
 pub struct MmdsOutput {
     /// Schema version (1 for MMDS).
     pub version: u32,
+    /// Document-level default values for omitted node/edge fields.
+    pub defaults: MmdsDefaults,
     /// Geometry level: "layout" or "routed".
     pub geometry_level: String,
     /// Diagram metadata.
@@ -379,8 +287,51 @@ pub struct MmdsOutput {
     /// Edge inventory (topology at layout, paths at routed).
     pub edges: Vec<MmdsEdge>,
     /// Subgraph inventory.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subgraphs: Vec<MmdsSubgraph>,
+}
+
+/// Default values for omitted fields in nodes and edges.
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct MmdsDefaults {
+    pub node: MmdsNodeDefaults,
+    pub edge: MmdsEdgeDefaults,
+}
+
+/// Node-level default values.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MmdsNodeDefaults {
+    #[serde(default = "default_node_shape")]
+    pub shape: String,
+}
+
+impl Default for MmdsNodeDefaults {
+    fn default() -> Self {
+        Self {
+            shape: default_node_shape(),
+        }
+    }
+}
+
+/// Edge-level default values.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MmdsEdgeDefaults {
+    #[serde(default = "default_stroke")]
+    pub stroke: String,
+    #[serde(default = "default_arrow_start")]
+    pub arrow_start: String,
+    #[serde(default = "default_arrow_end")]
+    pub arrow_end: String,
+}
+
+impl Default for MmdsEdgeDefaults {
+    fn default() -> Self {
+        Self {
+            stroke: default_stroke(),
+            arrow_start: default_arrow_start(),
+            arrow_end: default_arrow_end(),
+        }
+    }
 }
 
 /// Diagram-level metadata.
@@ -409,7 +360,10 @@ pub struct MmdsNode {
     /// Display label.
     pub label: String,
     /// Shape name (snake_case).
-    #[serde(default = "default_node_shape")]
+    #[serde(
+        default = "default_node_shape",
+        skip_serializing_if = "is_default_node_shape"
+    )]
     pub shape: String,
     /// Parent subgraph ID, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -449,13 +403,19 @@ pub struct MmdsEdge {
     #[serde(default)]
     pub label: Option<String>,
     /// Stroke style.
-    #[serde(default = "default_stroke")]
+    #[serde(default = "default_stroke", skip_serializing_if = "is_default_stroke")]
     pub stroke: String,
     /// Arrow at source end.
-    #[serde(default = "default_arrow_start")]
+    #[serde(
+        default = "default_arrow_start",
+        skip_serializing_if = "is_default_arrow_start"
+    )]
     pub arrow_start: String,
     /// Arrow at target end.
-    #[serde(default = "default_arrow_end")]
+    #[serde(
+        default = "default_arrow_end",
+        skip_serializing_if = "is_default_arrow_end"
+    )]
     pub arrow_end: String,
     /// Routed edge path (routed level only).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -506,6 +466,22 @@ fn default_arrow_end() -> String {
     "normal".to_string()
 }
 
+fn is_default_node_shape(value: &String) -> bool {
+    value == "rectangle"
+}
+
+fn is_default_stroke(value: &String) -> bool {
+    value == "solid"
+}
+
+fn is_default_arrow_start(value: &String) -> bool {
+    value == "none"
+}
+
+fn is_default_arrow_end(value: &String) -> bool {
+    value == "normal"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -544,6 +520,10 @@ mod tests {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
         let json = to_mmds_layout(&diagram, &geom);
         let output: MmdsOutput = serde_json::from_str(&json).unwrap();
+        assert_eq!(output.defaults.node.shape, "rectangle");
+        assert_eq!(output.defaults.edge.stroke, "solid");
+        assert_eq!(output.defaults.edge.arrow_start, "none");
+        assert_eq!(output.defaults.edge.arrow_end, "normal");
         assert_eq!(output.metadata.diagram_type, "flowchart");
         assert_eq!(output.metadata.direction, "TD");
         assert!(output.metadata.bounds.width > 0.0);
@@ -595,10 +575,9 @@ mod tests {
     }
 
     #[test]
-    fn compact_layout_omits_default_edge_fields() {
+    fn layout_omits_default_edge_fields() {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
-        let json =
-            to_mmds_json_with_options(&diagram, &geom, None, GeometryLevel::Layout, true).unwrap();
+        let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         let edge = &value["edges"][0];
         assert!(edge.get("stroke").is_none());
@@ -607,10 +586,9 @@ mod tests {
     }
 
     #[test]
-    fn compact_layout_keeps_non_default_edge_fields() {
+    fn layout_keeps_non_default_edge_fields() {
         let (diagram, geom) = layout_geometry("graph TD\nA -.-> B\nC --x D");
-        let json =
-            to_mmds_json_with_options(&diagram, &geom, None, GeometryLevel::Layout, true).unwrap();
+        let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         let edges = value["edges"].as_array().unwrap();
         assert_eq!(edges[0]["stroke"], "dotted");
@@ -618,10 +596,9 @@ mod tests {
     }
 
     #[test]
-    fn compact_layout_omits_default_node_shape() {
+    fn layout_omits_default_node_shape() {
         let (diagram, geom) = layout_geometry("graph TD\nA[Rect]\nB(Round)");
-        let json =
-            to_mmds_json_with_options(&diagram, &geom, None, GeometryLevel::Layout, true).unwrap();
+        let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         let nodes = value["nodes"].as_array().unwrap();
         assert!(nodes[0].get("shape").is_none());
@@ -629,19 +606,17 @@ mod tests {
     }
 
     #[test]
-    fn compact_layout_omits_empty_subgraphs_key() {
+    fn layout_omits_empty_subgraphs_key() {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
-        let json =
-            to_mmds_json_with_options(&diagram, &geom, None, GeometryLevel::Layout, true).unwrap();
+        let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(value.get("subgraphs").is_none());
     }
 
     #[test]
-    fn compact_layout_deserializes_with_defaults() {
+    fn layout_deserializes_with_defaults() {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
-        let json =
-            to_mmds_json_with_options(&diagram, &geom, None, GeometryLevel::Layout, true).unwrap();
+        let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
         let output: MmdsOutput = serde_json::from_str(&json).unwrap();
         assert_eq!(output.nodes[0].shape, "rectangle");
         assert_eq!(output.edges[0].stroke, "solid");

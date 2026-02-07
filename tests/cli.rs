@@ -330,23 +330,30 @@ fn cli_json_alias_maps_to_mmds() {
 }
 
 #[test]
-fn cli_mmds_compact_omits_default_edge_fields() {
-    mmdflux()
-        .args(["--format", "mmds", "--mmds-compact"])
+fn cli_mmds_includes_defaults_block_and_omits_default_edge_fields() {
+    let assert = mmdflux()
+        .args(["--format", "mmds"])
         .write_stdin("graph TD\nA-->B")
         .assert()
-        .success()
-        .stdout(predicate::str::contains("\"id\": \"e0\""))
-        .stdout(predicate::str::contains("\"stroke\"").not())
-        .stdout(predicate::str::contains("\"arrow_start\"").not())
-        .stdout(predicate::str::contains("\"arrow_end\"").not())
-        .stdout(predicate::str::contains("\"subgraphs\"").not());
+        .success();
+
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(parsed["defaults"]["node"]["shape"], "rectangle");
+    assert_eq!(parsed["defaults"]["edge"]["stroke"], "solid");
+    assert_eq!(parsed["defaults"]["edge"]["arrow_start"], "none");
+    assert_eq!(parsed["defaults"]["edge"]["arrow_end"], "normal");
+    let edge = &parsed["edges"][0];
+    assert!(edge.get("stroke").is_none());
+    assert!(edge.get("arrow_start").is_none());
+    assert!(edge.get("arrow_end").is_none());
+    assert!(parsed.get("subgraphs").is_none());
 }
 
 #[test]
-fn cli_mmds_compact_keeps_non_default_edge_fields() {
+fn cli_mmds_keeps_non_default_edge_fields() {
     mmdflux()
-        .args(["--format", "mmds", "--mmds-compact"])
+        .args(["--format", "mmds"])
         .write_stdin("graph TD\nA -.-> B\nC --x D")
         .assert()
         .success()

@@ -4,11 +4,15 @@
   "title": "MMDS — Machine-Mediated Diagram Specification",
   "description": "Structured JSON output for graph-family Mermaid diagrams produced by mmdflux.",
   "type": "object",
-  "required": ["version", "geometry_level", "metadata", "nodes", "edges"],
+  "required": ["version", "defaults", "geometry_level", "metadata", "nodes", "edges"],
   "properties": {
     "version": {
       "const": 1,
       "description": "Schema version. Always 1 for MMDS."
+    },
+    "defaults": {
+      "$ref": "#/$defs/Defaults",
+      "description": "Document-level defaults for omitted node/edge fields."
     },
     "geometry_level": {
       "enum": ["layout", "routed"],
@@ -35,6 +39,42 @@
     }
   },
   "$defs": {
+    "Defaults": {
+      "type": "object",
+      "required": ["node", "edge"],
+      "properties": {
+        "node": { "$ref": "#/$defs/NodeDefaults" },
+        "edge": { "$ref": "#/$defs/EdgeDefaults" }
+      }
+    },
+    "NodeDefaults": {
+      "type": "object",
+      "required": ["shape"],
+      "properties": {
+        "shape": {
+          "type": "string",
+          "description": "Default node shape used when a node omits the shape field."
+        }
+      }
+    },
+    "EdgeDefaults": {
+      "type": "object",
+      "required": ["stroke", "arrow_start", "arrow_end"],
+      "properties": {
+        "stroke": {
+          "enum": ["solid", "dotted", "thick", "invisible"],
+          "description": "Default edge stroke used when an edge omits stroke."
+        },
+        "arrow_start": {
+          "enum": ["none", "normal", "cross", "circle"],
+          "description": "Default source-end marker used when an edge omits arrow_start."
+        },
+        "arrow_end": {
+          "enum": ["none", "normal", "cross", "circle"],
+          "description": "Default target-end marker used when an edge omits arrow_end."
+        }
+      }
+    },
     "Metadata": {
       "type": "object",
       "required": ["diagram_type", "direction", "bounds"],
@@ -62,7 +102,7 @@
         "shape": {
           "type": "string",
           "default": "rectangle",
-          "description": "Shape name in snake_case. Defaults to 'rectangle' when omitted in compact mode."
+          "description": "Shape name in snake_case. If omitted, consumers should use defaults.node.shape."
         },
         "parent": { "type": "string", "description": "Parent subgraph ID, if any." },
         "position": {
@@ -89,17 +129,17 @@
         "stroke": {
           "enum": ["solid", "dotted", "thick", "invisible"],
           "default": "solid",
-          "description": "Stroke style. Defaults to 'solid' when omitted in compact mode."
+          "description": "Stroke style. If omitted, consumers should use defaults.edge.stroke."
         },
         "arrow_start": {
           "enum": ["none", "normal", "cross", "circle"],
           "default": "none",
-          "description": "Arrow at source end. Defaults to 'none' when omitted in compact mode."
+          "description": "Arrow at source end. If omitted, consumers should use defaults.edge.arrow_start."
         },
         "arrow_end": {
           "enum": ["none", "normal", "cross", "circle"],
           "default": "normal",
-          "description": "Arrow at target end. Defaults to 'normal' when omitted in compact mode."
+          "description": "Arrow at target end. If omitted, consumers should use defaults.edge.arrow_end."
         },
         "path": {
           "type": "array",
