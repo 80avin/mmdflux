@@ -1,7 +1,7 @@
 // Convert MMDS layout-level JSON to Cytoscape.js elements.
-// Usage: mmdflux --format json diagram.mmd | node cytoscape.js
+// Usage: mmdflux --format mmds diagram.mmd | node cytoscape.js
 
-const mmds = JSON.parse(require("fs").readFileSync("/dev/stdin", "utf8"));
+const mmds = JSON.parse(require("fs").readFileSync(process.stdin.fd, "utf8"));
 
 const elements = [];
 
@@ -20,7 +20,7 @@ for (const sg of mmds.subgraphs) {
 
 for (const e of mmds.edges) {
   elements.push({
-    data: { source: e.source, target: e.target, label: e.label || undefined },
+    data: { id: e.id, source: e.source, target: e.target, label: e.label || undefined },
   });
 }
 

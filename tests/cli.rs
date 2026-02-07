@@ -277,9 +277,11 @@ fn cli_json_output_is_mmds_layout_by_default() {
         .stdout(predicate::str::contains("\"version\": 1"))
         .stdout(predicate::str::contains("\"geometry_level\": \"layout\""))
         .stdout(predicate::str::contains("\"metadata\""))
+        .stdout(predicate::str::contains("\"bounds\""))
         .stdout(predicate::str::contains("\"nodes\""))
         .stdout(predicate::str::contains("\"position\""))
         .stdout(predicate::str::contains("\"size\""))
+        .stdout(predicate::str::contains("\"id\": \"e0\""))
         .stdout(predicate::str::contains("\"path\"").not());
 }
 

@@ -75,8 +75,10 @@ fn flowchart_instance_render_json() {
     let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
     assert_eq!(parsed["version"], 1);
     assert_eq!(parsed["geometry_level"], "layout");
+    assert!(parsed["metadata"]["bounds"].is_object());
     assert_eq!(parsed["nodes"].as_array().unwrap().len(), 2);
     assert_eq!(parsed["edges"].as_array().unwrap().len(), 1);
+    assert_eq!(parsed["edges"][0]["id"], "e0");
 
     let nodes = parsed["nodes"].as_array().unwrap();
     for node in nodes {

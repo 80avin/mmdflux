@@ -36,7 +36,7 @@
   "$defs": {
     "Metadata": {
       "type": "object",
-      "required": ["diagram_type", "direction"],
+      "required": ["diagram_type", "direction", "bounds"],
       "properties": {
         "diagram_type": {
           "type": "string",
@@ -48,7 +48,7 @@
         },
         "bounds": {
           "$ref": "#/$defs/Bounds",
-          "description": "Overall layout bounding box. Present only at routed level."
+          "description": "Overall diagram bounds in MMDS layout space."
         }
       }
     },
@@ -62,18 +62,22 @@
         "parent": { "type": "string", "description": "Parent subgraph ID, if any." },
         "position": {
           "$ref": "#/$defs/Position",
-          "description": "Center position in layout float space."
+          "description": "Center position in unitless MMDS layout space."
         },
         "size": {
           "$ref": "#/$defs/Size",
-          "description": "Node bounding box dimensions."
+          "description": "Node bounding box dimensions in unitless MMDS layout space."
         }
       }
     },
     "Edge": {
       "type": "object",
-      "required": ["source", "target", "stroke", "arrow_start", "arrow_end"],
+      "required": ["id", "source", "target", "stroke", "arrow_start", "arrow_end"],
       "properties": {
+        "id": {
+          "type": "string",
+          "description": "Deterministic edge identifier (e.g., 'e0', 'e1') in declaration order."
+        },
         "source": { "type": "string", "description": "Source node ID." },
         "target": { "type": "string", "description": "Target node ID." },
         "label": { "type": "string", "description": "Edge label text." },
@@ -97,11 +101,11 @@
             "minItems": 2,
             "maxItems": 2
           },
-          "description": "Routed edge path as [x, y] coordinate pairs. Routed level only."
+          "description": "Routed edge path as [x, y] coordinate pairs in unitless MMDS layout space. Routed level only."
         },
         "label_position": {
           "$ref": "#/$defs/Position",
-          "description": "Label center position. Routed level only."
+          "description": "Label center position in unitless MMDS layout space. Routed level only."
         },
         "is_backward": {
           "type": "boolean",
@@ -131,24 +135,24 @@
       "type": "object",
       "required": ["x", "y"],
       "properties": {
-        "x": { "type": "number" },
-        "y": { "type": "number" }
+        "x": { "type": "number", "description": "X coordinate in unitless MMDS layout space." },
+        "y": { "type": "number", "description": "Y coordinate in unitless MMDS layout space." }
       }
     },
     "Size": {
       "type": "object",
       "required": ["width", "height"],
       "properties": {
-        "width": { "type": "number" },
-        "height": { "type": "number" }
+        "width": { "type": "number", "description": "Width in unitless MMDS layout space." },
+        "height": { "type": "number", "description": "Height in unitless MMDS layout space." }
       }
     },
     "Bounds": {
       "type": "object",
       "required": ["width", "height"],
       "properties": {
-        "width": { "type": "number" },
-        "height": { "type": "number" }
+        "width": { "type": "number", "description": "Overall width in unitless MMDS layout space." },
+        "height": { "type": "number", "description": "Overall height in unitless MMDS layout space." }
       }
     }
   }

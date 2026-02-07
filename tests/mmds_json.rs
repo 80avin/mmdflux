@@ -140,6 +140,7 @@ fn mmds_layout_edges_have_topology() {
     let output: MmdsOutput = serde_json::from_str(&json).unwrap();
 
     let edge = &output.edges[0];
+    assert_eq!(edge.id, "e0");
     assert_eq!(edge.source, "A");
     assert_eq!(edge.target, "B");
     assert_eq!(edge.stroke, "dotted");
@@ -149,10 +150,11 @@ fn mmds_layout_edges_have_topology() {
 }
 
 #[test]
-fn mmds_layout_metadata_has_no_bounds() {
+fn mmds_layout_metadata_includes_bounds() {
     let json = render_json("graph TD\nA-->B");
     let output: MmdsOutput = serde_json::from_str(&json).unwrap();
-    assert!(output.metadata.bounds.is_none());
+    assert!(output.metadata.bounds.width > 0.0);
+    assert!(output.metadata.bounds.height > 0.0);
 }
 
 // -----------------------------------------------------------------------
@@ -197,7 +199,7 @@ fn mmds_routed_includes_metadata_bounds() {
     let json = render_json_with_level("graph TD\nA-->B", GeometryLevel::Routed);
     let output: MmdsOutput = serde_json::from_str(&json).unwrap();
 
-    let bounds = output.metadata.bounds.as_ref().unwrap();
+    let bounds = &output.metadata.bounds;
     assert!(bounds.width > 0.0);
     assert!(bounds.height > 0.0);
 }

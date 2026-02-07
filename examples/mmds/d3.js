@@ -1,7 +1,7 @@
 // Convert MMDS layout-level JSON to D3 force-layout compatible format.
-// Usage: mmdflux --format json diagram.mmd | node d3.js
+// Usage: mmdflux --format mmds diagram.mmd | node d3.js
 
-const mmds = JSON.parse(require("fs").readFileSync("/dev/stdin", "utf8"));
+const mmds = JSON.parse(require("fs").readFileSync(process.stdin.fd, "utf8"));
 
 const nodes = mmds.nodes.map((n) => ({
   id: n.id,
@@ -13,6 +13,7 @@ const nodes = mmds.nodes.map((n) => ({
 }));
 
 const links = mmds.edges.map((e) => ({
+  id: e.id,
   source: e.source,
   target: e.target,
   label: e.label || undefined,

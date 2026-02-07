@@ -1,7 +1,7 @@
 // Convert MMDS layout-level JSON to React Flow nodes and edges.
-// Usage: mmdflux --format json diagram.mmd | node react_flow.js
+// Usage: mmdflux --format mmds diagram.mmd | node react_flow.js
 
-const mmds = JSON.parse(require("fs").readFileSync("/dev/stdin", "utf8"));
+const mmds = JSON.parse(require("fs").readFileSync(process.stdin.fd, "utf8"));
 
 const nodes = mmds.nodes.map((n) => ({
   id: n.id,
@@ -10,8 +10,8 @@ const nodes = mmds.nodes.map((n) => ({
   style: { width: n.size.width, height: n.size.height },
 }));
 
-const edges = mmds.edges.map((e, i) => ({
-  id: `e${i}`,
+const edges = mmds.edges.map((e) => ({
+  id: e.id,
   source: e.source,
   target: e.target,
   label: e.label || undefined,

@@ -100,13 +100,9 @@ fn build_mmds_output(
     let metadata = MmdsMetadata {
         diagram_type: diagram_type.to_string(),
         direction: direction_str(diagram.direction).to_string(),
-        bounds: if routed.is_some() {
-            Some(MmdsBounds {
-                width: geometry.bounds.width,
-                height: geometry.bounds.height,
-            })
-        } else {
-            None
+        bounds: MmdsBounds {
+            width: geometry.bounds.width,
+            height: geometry.bounds.height,
         },
     };
 
@@ -121,6 +117,7 @@ fn build_mmds_output(
         .enumerate()
         .map(|(i, edge)| {
             let mut mmds_edge = MmdsEdge {
+                id: format!("e{i}"),
                 source: edge.from.clone(),
                 target: edge.to.clone(),
                 label: edge.label.clone(),
@@ -294,10 +291,8 @@ pub struct MmdsMetadata {
     pub diagram_type: String,
     /// Layout direction: "TD", "BT", "LR", or "RL".
     pub direction: String,
-    /// Overall layout bounds (routed level only).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub bounds: Option<MmdsBounds>,
+    /// Overall diagram bounds in MMDS layout space.
+    pub bounds: MmdsBounds,
 }
 
 /// Bounding box dimensions.
@@ -343,6 +338,8 @@ pub struct MmdsSize {
 /// An edge in MMDS output.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MmdsEdge {
+    /// Deterministic edge identifier ("e{declaration_index}").
+    pub id: String,
     /// Source node ID.
     pub source: String,
     /// Target node ID.
@@ -430,7 +427,8 @@ mod tests {
         let output: MmdsOutput = serde_json::from_str(&json).unwrap();
         assert_eq!(output.metadata.diagram_type, "flowchart");
         assert_eq!(output.metadata.direction, "TD");
-        assert!(output.metadata.bounds.is_none());
+        assert!(output.metadata.bounds.width > 0.0);
+        assert!(output.metadata.bounds.height > 0.0);
     }
 
     #[test]
@@ -471,6 +469,7 @@ mod tests {
         let output: MmdsOutput = serde_json::from_str(&json).unwrap();
 
         let edge = &output.edges[0];
+        assert_eq!(edge.id, "e0");
         assert_eq!(edge.stroke, "dotted");
         assert_eq!(edge.label, Some("label".to_string()));
         assert_eq!(edge.arrow_end, "normal");
@@ -541,7 +540,7 @@ mod tests {
         let json = to_mmds_routed(&diagram, &geom, &routed);
         let output: MmdsOutput = serde_json::from_str(&json).unwrap();
 
-        let bounds = output.metadata.bounds.as_ref().unwrap();
+        let bounds = &output.metadata.bounds;
         assert!(bounds.width > 0.0);
         assert!(bounds.height > 0.0);
     }

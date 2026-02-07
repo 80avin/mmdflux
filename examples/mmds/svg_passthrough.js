@@ -1,7 +1,7 @@
 // Convert MMDS routed-level JSON to a simple SVG using edge paths directly.
-// Usage: mmdflux --format json --geometry-level routed diagram.mmd | node svg_passthrough.js
+// Usage: mmdflux --format mmds --geometry-level routed diagram.mmd | node svg_passthrough.js
 
-const mmds = JSON.parse(require("fs").readFileSync("/dev/stdin", "utf8"));
+const mmds = JSON.parse(require("fs").readFileSync(process.stdin.fd, "utf8"));
 
 if (mmds.geometry_level !== "routed") {
   console.error("This adapter requires routed-level MMDS. Use --geometry-level routed");
