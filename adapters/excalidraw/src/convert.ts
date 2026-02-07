@@ -383,13 +383,34 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 				(p) => [p[0] - pxPath[0][0], p[1] - pxPath[0][1]] as [number, number],
 			);
 		} else {
-			x = src.position.x * SCALE;
-			y = src.position.y * SCALE;
-			const dx = (tgt.position.x - src.position.x) * SCALE;
-			const dy = (tgt.position.y - src.position.y) * SCALE;
+			const srcCx = src.position.x * SCALE;
+			const srcCy = src.position.y * SCALE;
+			const tgtCx = tgt.position.x * SCALE;
+			const tgtCy = tgt.position.y * SCALE;
+			const srcSize = nodeSizes.get(e.source);
+			const tgtSize = nodeSizes.get(e.target);
+			if (!srcSize || !tgtSize) continue;
+			const start: [number, number] = adjustEndpoint(
+				[srcCx, srcCy],
+				[tgtCx, tgtCy],
+				srcCx,
+				srcCy,
+				srcSize.w,
+				srcSize.h,
+			);
+			const end: [number, number] = adjustEndpoint(
+				[tgtCx, tgtCy],
+				[srcCx, srcCy],
+				tgtCx,
+				tgtCy,
+				tgtSize.w,
+				tgtSize.h,
+			);
+			x = start[0];
+			y = start[1];
 			points = [
 				[0, 0],
-				[dx, dy],
+				[end[0] - start[0], end[1] - start[1]],
 			];
 		}
 
