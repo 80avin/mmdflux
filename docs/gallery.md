@@ -1,6 +1,6 @@
 # mmdflux gallery
 
-_Generated from commit `0768e15` — 70 fixtures_
+_Generated from commit `a361584` — 70 fixtures_
 
 This gallery is generated from test fixtures in `tests/fixtures`,
 text snapshots in `tests/snapshots`, and SVG snapshots in `tests/svg-snapshots`.
@@ -2426,7 +2426,10 @@ graph LR
 **Text**
 
 ```text
-━━━━─────►  Note
+┃
+┃
+┃ ─────►  Note
+┃
 ```
 
 **SVG**
