@@ -202,6 +202,52 @@ pub struct RerouteStats {
     pub cross_boundary: usize,
 }
 
+/// Resolve the direction policy for a cross-boundary edge.
+///
+/// This must stay in sync between spacing repair and rerouting:
+/// - if endpoints are in different override subgraphs and one is ancestor of the
+///   other, use the ancestor override direction;
+/// - if endpoints are in different non-ancestor branches, use root direction;
+/// - if only one endpoint is in an override subgraph, use the outside node's
+///   effective direction.
+fn cross_boundary_edge_direction(
+    diagram: &Diagram,
+    node_directions: &HashMap<String, Direction>,
+    from_sg: Option<&String>,
+    to_sg: Option<&String>,
+    from_node: &str,
+    to_node: &str,
+) -> Direction {
+    if let (Some(sg_a), Some(sg_b)) = (from_sg, to_sg) {
+        if is_ancestor_sg(diagram, sg_a, sg_b) {
+            return diagram
+                .subgraphs
+                .get(sg_a.as_str())
+                .and_then(|sg| sg.dir)
+                .unwrap_or(diagram.direction);
+        }
+        if is_ancestor_sg(diagram, sg_b, sg_a) {
+            return diagram
+                .subgraphs
+                .get(sg_b.as_str())
+                .and_then(|sg| sg.dir)
+                .unwrap_or(diagram.direction);
+        }
+        return diagram.direction;
+    }
+
+    let outside_node = if from_sg.is_some() && to_sg.is_none() {
+        to_node
+    } else {
+        from_node
+    };
+
+    node_directions
+        .get(outside_node)
+        .copied()
+        .unwrap_or(diagram.direction)
+}
+
 /// Reroute all edges affected by direction-override subgraphs.
 ///
 /// Modifies the `LayoutResult` in-place with fresh paths for edges touching
@@ -275,40 +321,14 @@ pub fn reroute_override_edges(
             }
             _ => {
                 stats.cross_boundary += 1;
-                let (_, outside_node, _) =
-                    if from_sg.is_some() && (to_sg.is_none() || from_sg != to_sg) {
-                        (&edge.from, &edge.to, true)
-                    } else {
-                        (&edge.to, &edge.from, false)
-                    };
-
-                // Determine the routing direction for cross-boundary edges.
-                let outside_dir = if let (Some(sg_a), Some(sg_b)) = (from_sg, to_sg) {
-                    // Both endpoints in different override subgraphs.
-                    // If one is an ancestor of the other, use the ancestor's
-                    // direction (the edge is "internal" from its perspective).
-                    if is_ancestor_sg(diagram, sg_a, sg_b) {
-                        diagram
-                            .subgraphs
-                            .get(sg_a.as_str())
-                            .and_then(|sg| sg.dir)
-                            .unwrap_or(diagram.direction)
-                    } else if is_ancestor_sg(diagram, sg_b, sg_a) {
-                        diagram
-                            .subgraphs
-                            .get(sg_b.as_str())
-                            .and_then(|sg| sg.dir)
-                            .unwrap_or(diagram.direction)
-                    } else {
-                        // Different branches — use the diagram's root direction.
-                        diagram.direction
-                    }
-                } else {
-                    node_directions
-                        .get(outside_node)
-                        .copied()
-                        .unwrap_or(diagram.direction)
-                };
+                let outside_dir = cross_boundary_edge_direction(
+                    diagram,
+                    node_directions,
+                    from_sg,
+                    to_sg,
+                    &edge.from,
+                    &edge.to,
+                );
 
                 pending.push(PendingRoute {
                     layout_pos: pos,
@@ -447,8 +467,14 @@ pub fn ensure_cross_boundary_edge_spacing(
             continue;
         }
 
-        let direction =
-            effective_edge_direction_svg(node_directions, &edge.from, &edge.to, diagram.direction);
+        let direction = cross_boundary_edge_direction(
+            diagram,
+            node_directions,
+            from_sg,
+            to_sg,
+            &edge.from,
+            &edge.to,
+        );
 
         let from_key = NodeId(edge.from.clone());
         let to_key = NodeId(edge.to.clone());
@@ -786,6 +812,47 @@ mod tests {
             effective_edge_direction_svg(&dirs, "A", "C", Direction::TopDown),
             Direction::TopDown,
         );
+    }
+
+    #[test]
+    fn test_cross_boundary_direction_uses_ancestor_override() {
+        let input = "graph TD\nsubgraph outer\ndirection LR\nA\nsubgraph inner\ndirection BT\nB\nend\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let dirs = build_node_directions_svg(&diagram);
+        let override_nodes = build_override_node_map(&diagram);
+
+        let direction = cross_boundary_edge_direction(
+            &diagram,
+            &dirs,
+            override_nodes.get("A"),
+            override_nodes.get("B"),
+            "A",
+            "B",
+        );
+
+        assert_eq!(direction, Direction::LeftRight);
+    }
+
+    #[test]
+    fn test_cross_boundary_direction_uses_outside_node_direction() {
+        let input = "graph TD\nsubgraph sg1\ndirection LR\nA --> B\nend\nB --> C\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let dirs = build_node_directions_svg(&diagram);
+        let override_nodes = build_override_node_map(&diagram);
+
+        let direction = cross_boundary_edge_direction(
+            &diagram,
+            &dirs,
+            override_nodes.get("B"),
+            override_nodes.get("C"),
+            "B",
+            "C",
+        );
+
+        // C is outside overrides, so this should use the root direction.
+        assert_eq!(direction, Direction::TopDown);
     }
 
     #[test]

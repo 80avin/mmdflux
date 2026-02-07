@@ -5,7 +5,9 @@
 
 use super::geometry::{self, GraphGeometry};
 use super::render::layout::build_dagre_layout;
-use crate::diagram::{EngineCapabilities, EngineConfig, GraphLayoutEngine, RenderError};
+use crate::diagram::{
+    EngineCapabilities, EngineConfig, GraphLayoutEngine, RenderConfig, RenderError,
+};
 use crate::graph::Diagram;
 
 /// Dagre (Sugiyama) layout engine.
@@ -59,6 +61,32 @@ impl GraphLayoutEngine for DagreLayoutEngine {
     }
 }
 
+/// Resolve the configured flowchart layout engine and execute it.
+///
+/// Phase 2 only supports Dagre. This function centralizes engine selection
+/// so runtime wiring uses the engine abstraction instead of ad-hoc string checks.
+pub(crate) fn layout_with_selected_engine(
+    diagram: &Diagram,
+    config: &RenderConfig,
+) -> Result<GraphGeometry, RenderError> {
+    let selected = config
+        .layout_engine
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("dagre");
+
+    if !selected.eq_ignore_ascii_case("dagre") {
+        return Err(RenderError {
+            message: format!("unsupported layout engine: {selected:?}"),
+        });
+    }
+
+    let engine = DagreLayoutEngine;
+    let engine_config = EngineConfig::Dagre(config.layout.clone());
+    engine.layout(diagram, &engine_config)
+}
+
 /// Build a flowchart LayoutConfig from dagre config parameters.
 ///
 /// This bridges the engine's dagre config back to the flowchart render
@@ -96,7 +124,7 @@ fn layout_config_from_dagre(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagram::GraphLayoutEngine;
+    use crate::diagram::{GraphLayoutEngine, RenderConfig};
 
     #[test]
     fn dagre_engine_name() {
@@ -152,5 +180,43 @@ mod tests {
         let engine: Box<dyn GraphLayoutEngine<Input = Diagram, Output = GraphGeometry>> =
             Box::new(DagreLayoutEngine);
         assert_eq!(engine.name(), "dagre");
+    }
+
+    #[test]
+    fn selected_engine_defaults_to_dagre() {
+        let input = "graph TD\nA-->B";
+        let flowchart = crate::parser::parse_flowchart(input).unwrap();
+        let diagram = crate::graph::build_diagram(&flowchart);
+
+        let geom = layout_with_selected_engine(&diagram, &RenderConfig::default()).unwrap();
+        assert_eq!(geom.nodes.len(), 2);
+    }
+
+    #[test]
+    fn selected_engine_accepts_explicit_dagre() {
+        let input = "graph TD\nA-->B";
+        let flowchart = crate::parser::parse_flowchart(input).unwrap();
+        let diagram = crate::graph::build_diagram(&flowchart);
+        let config = RenderConfig {
+            layout_engine: Some("dagre".to_string()),
+            ..RenderConfig::default()
+        };
+
+        let geom = layout_with_selected_engine(&diagram, &config).unwrap();
+        assert_eq!(geom.edges.len(), 1);
+    }
+
+    #[test]
+    fn selected_engine_rejects_unknown_engine() {
+        let input = "graph TD\nA-->B";
+        let flowchart = crate::parser::parse_flowchart(input).unwrap();
+        let diagram = crate::graph::build_diagram(&flowchart);
+        let config = RenderConfig {
+            layout_engine: Some("elk".to_string()),
+            ..RenderConfig::default()
+        };
+
+        let err = layout_with_selected_engine(&diagram, &config).unwrap_err();
+        assert!(err.message.contains("unsupported layout engine"));
     }
 }

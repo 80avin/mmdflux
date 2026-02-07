@@ -1,15 +1,14 @@
-//! Temporary parity check while the legacy path exists.
-//! Remove or replace with golden-output tests once the legacy path is retired.
+//! Parity checks between the direct render API and registry instance API.
 
 use mmdflux::diagram::{OutputFormat, RenderConfig};
 use mmdflux::registry::default_registry;
 use mmdflux::render::{RenderOptions, render};
 use mmdflux::{build_diagram, parse_flowchart};
 
-/// Helper to compare old vs new rendering paths (temporary)
+/// Helper to compare direct vs registry rendering paths.
 fn compare_outputs(input: &str, ascii: bool) {
-    // Old path: direct parsing and rendering
-    let flowchart = parse_flowchart(input).expect("Old path parse failed");
+    // Direct API path
+    let flowchart = parse_flowchart(input).expect("Direct path parse failed");
     let diagram = build_diagram(&flowchart);
     let output_format = if ascii {
         OutputFormat::Ascii
@@ -22,17 +21,19 @@ fn compare_outputs(input: &str, ascii: bool) {
     };
     let old_output = render(&diagram, &old_options);
 
-    // New path: registry-based
+    // Registry API path
     let registry = default_registry();
-    let diagram_id = registry.detect(input).expect("New path detect failed");
+    let diagram_id = registry.detect(input).expect("Registry path detect failed");
     assert_eq!(diagram_id, "flowchart");
 
-    let mut instance = registry.create(diagram_id).expect("New path create failed");
-    instance.parse(input).expect("New path parse failed");
+    let mut instance = registry
+        .create(diagram_id)
+        .expect("Registry path create failed");
+    instance.parse(input).expect("Registry path parse failed");
 
     let new_output = instance
         .render(output_format, &RenderConfig::default())
-        .expect("New path render failed");
+        .expect("Registry path render failed");
 
     assert_eq!(
         old_output, new_output,

@@ -37,15 +37,6 @@ impl DiagramInstance for FlowchartInstance {
     }
 
     fn render(&self, format: OutputFormat, config: &RenderConfig) -> Result<String, RenderError> {
-        // Validate engine selection: None and "dagre" are accepted; anything else is an error.
-        if let Some(ref engine) = config.layout_engine
-            && engine != "dagre"
-        {
-            return Err(RenderError {
-                message: format!("unsupported layout engine: {engine:?}"),
-            });
-        }
-
         let diagram = self.diagram.as_ref().ok_or_else(|| RenderError {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
@@ -57,6 +48,11 @@ impl DiagramInstance for FlowchartInstance {
         } else {
             diagram
         };
+
+        // Route runtime selection through the engine abstraction.
+        // Rendering still uses the mature phase-0/1 pipelines; this preflight ensures
+        // the selected engine can produce geometry for the current input/config.
+        let _geometry = super::engine::layout_with_selected_engine(diagram, config)?;
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;

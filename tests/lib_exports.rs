@@ -1,4 +1,4 @@
-// Verify all expected items are accessible from crate root
+// Verify core expected items are accessible from crate root.
 use mmdflux::{
     Diagram,
     DiagramType,
@@ -16,7 +16,7 @@ use mmdflux::{
     parse_flowchart,
     // Registry
     registry::{DiagramInstance, default_registry},
-    // Legacy exports (kept for compatibility)
+    // Direct rendering API
     render::{RenderOptions, render},
 };
 
@@ -46,7 +46,7 @@ fn registry_api_works() {
 }
 
 #[test]
-fn legacy_api_still_works() {
+fn direct_render_api_works() {
     let input = "graph TD\nA-->B";
     let flowchart = parse_flowchart(input).unwrap();
     let diagram = build_diagram(&flowchart);
@@ -56,7 +56,7 @@ fn legacy_api_still_works() {
 }
 
 #[test]
-fn legacy_exports_accessible() {
+fn core_types_accessible() {
     let _ = DiagramType::Flowchart;
     let _ = detect_diagram_type("graph TD\nA-->B");
     let _ = ParseError::UnexpectedEof;

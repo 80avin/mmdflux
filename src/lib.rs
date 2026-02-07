@@ -3,7 +3,7 @@
 //! This library provides parsing and rendering for Mermaid diagram syntax.
 //! Currently supports flowcharts with text (Unicode/ASCII) output.
 //!
-//! # Quick Start (Legacy API)
+//! # Quick Start (Direct Render API)
 //!
 //! ```
 //! use mmdflux::{parse_flowchart, build_diagram};
@@ -16,7 +16,7 @@
 //! println!("{}", output);
 //! ```
 //!
-//! # Using the Registry (New API)
+//! # Using the Registry API
 //!
 //! The registry provides a unified interface for all diagram types:
 //!
