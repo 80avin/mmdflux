@@ -267,12 +267,17 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 	// Pre-compute pixel sizes for each node (text-aware)
 	const nodeSizes = new Map<string, { w: number; h: number }>();
 	for (const n of mmds.nodes) {
+		const shape = n.shape ?? nodeDefaults.shape ?? "rectangle";
 		const textW = n.label.length * NODE_FONT_SIZE * CHAR_WIDTH_FACTOR;
 		const textH = NODE_FONT_SIZE * 1.25;
-		nodeSizes.set(n.id, {
-			w: Math.max(textW, n.size.width * SCALE) + TEXT_PAD_X,
-			h: Math.max(textH, n.size.height * SCALE) + TEXT_PAD_Y,
-		});
+		let w = Math.max(textW, n.size.width * SCALE) + TEXT_PAD_X;
+		let h = Math.max(textH, n.size.height * SCALE) + TEXT_PAD_Y;
+		if (shape === "diamond") {
+			const side = Math.max(w, h);
+			w = side;
+			h = side;
+		}
+		nodeSizes.set(n.id, { w, h });
 	}
 
 	// Bounding box tracking
