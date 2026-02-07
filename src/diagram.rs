@@ -109,6 +109,71 @@ pub trait DiagramRenderer: Send + Sync {
 /// canonical layout configuration type across the crate.
 pub type LayoutConfig = crate::dagre::types::LayoutConfig;
 
+/// Typed layout engine identifier.
+///
+/// Strongly typed engine IDs replace raw strings for engine selection.
+/// Parsing is case-insensitive: "dagre", "DAGRE", "Dagre" all resolve to `Dagre`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LayoutEngineId {
+    /// Dagre (Sugiyama) hierarchical layout.
+    Dagre,
+    /// ELK (Eclipse Layout Kernel) — requires `engine-elk` feature.
+    Elk,
+    /// COSE (Compound Spring Embedder) — not yet available.
+    Cose,
+}
+
+impl LayoutEngineId {
+    /// Parse a string into a typed engine ID (case-insensitive).
+    ///
+    /// Returns an error for unrecognized engine names.
+    pub fn parse(s: &str) -> Result<Self, RenderError> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "dagre" => Ok(LayoutEngineId::Dagre),
+            "elk" => Ok(LayoutEngineId::Elk),
+            "cose" | "cose-bilkent" => Ok(LayoutEngineId::Cose),
+            _ => Err(RenderError {
+                message: format!("unknown layout engine: {s:?}"),
+            }),
+        }
+    }
+
+    /// Check whether this engine is available at runtime.
+    ///
+    /// Returns `Ok(())` if available, or an actionable error explaining
+    /// how to enable the engine (e.g., feature flag).
+    pub fn check_available(&self) -> Result<(), RenderError> {
+        match self {
+            LayoutEngineId::Dagre => Ok(()),
+            LayoutEngineId::Elk => {
+                #[cfg(feature = "engine-elk")]
+                {
+                    Ok(())
+                }
+                #[cfg(not(feature = "engine-elk"))]
+                {
+                    Err(RenderError {
+                        message: "ELK engine is not available; rebuild with the `engine-elk` feature flag enabled".to_string(),
+                    })
+                }
+            }
+            LayoutEngineId::Cose => Err(RenderError {
+                message: "COSE engine is not yet implemented".to_string(),
+            }),
+        }
+    }
+}
+
+impl std::fmt::Display for LayoutEngineId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LayoutEngineId::Dagre => write!(f, "dagre"),
+            LayoutEngineId::Elk => write!(f, "elk"),
+            LayoutEngineId::Cose => write!(f, "cose"),
+        }
+    }
+}
+
 /// Engine-specific configuration envelope.
 ///
 /// Wraps engine-specific layout parameters. Phase 2 supports Dagre only;
@@ -138,6 +203,28 @@ pub struct EngineCapabilities {
     pub supports_subgraphs: bool,
     /// Whether the engine supports direction overrides per subgraph.
     pub supports_direction_overrides: bool,
+}
+
+/// Routing mode determined by engine capabilities.
+///
+/// Controls how the rendering pipeline processes edge paths after layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoutingMode {
+    /// Engine provides only node positions; run full edge routing.
+    FullCompute,
+    /// Engine provides routed edge paths; apply clipping and spacing only.
+    PassThroughClip,
+}
+
+impl RoutingMode {
+    /// Determine routing mode from engine capabilities.
+    pub fn for_capabilities(caps: &EngineCapabilities) -> Self {
+        if caps.routes_edges {
+            RoutingMode::PassThroughClip
+        } else {
+            RoutingMode::FullCompute
+        }
+    }
 }
 
 /// Synchronous graph layout engine trait.

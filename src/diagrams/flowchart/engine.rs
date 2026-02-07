@@ -61,30 +61,50 @@ impl GraphLayoutEngine for DagreLayoutEngine {
     }
 }
 
+/// Result of engine selection: geometry output + routing mode.
+///
+/// Fields are read in tests and will be consumed by the rendering pipeline
+/// once full engine integration is complete.
+#[derive(Debug)]
+#[allow(dead_code)]
+pub(crate) struct EngineLayoutResult {
+    pub geometry: GraphGeometry,
+    pub routing_mode: crate::diagram::RoutingMode,
+}
+
 /// Resolve the configured flowchart layout engine and execute it.
 ///
-/// Phase 2 only supports Dagre. This function centralizes engine selection
-/// so runtime wiring uses the engine abstraction instead of ad-hoc string checks.
+/// Uses the `GraphEngineRegistry` for engine lookup. Dagre is the default
+/// when no engine is specified. Returns the layout geometry along with the
+/// routing mode determined by engine capabilities.
 pub(crate) fn layout_with_selected_engine(
     diagram: &Diagram,
     config: &RenderConfig,
-) -> Result<GraphGeometry, RenderError> {
-    let selected = config
-        .layout_engine
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .unwrap_or("dagre");
+) -> Result<EngineLayoutResult, RenderError> {
+    use crate::diagram::{LayoutEngineId, RoutingMode};
+    use crate::engines::graph::GraphEngineRegistry;
 
-    if !selected.eq_ignore_ascii_case("dagre") {
-        return Err(RenderError {
-            message: format!("unsupported layout engine: {selected:?}"),
-        });
-    }
+    let engine_id = match config.layout_engine.as_deref() {
+        None | Some("") => LayoutEngineId::Dagre,
+        Some(s) => LayoutEngineId::parse(s)?,
+    };
 
-    let engine = DagreLayoutEngine;
+    engine_id.check_available()?;
+
+    let registry = GraphEngineRegistry::default();
+    let engine = registry.get(engine_id).ok_or_else(|| RenderError {
+        message: format!("no adapter registered for engine: {engine_id}"),
+    })?;
+
+    let routing_mode = RoutingMode::for_capabilities(&engine.capabilities());
+
     let engine_config = EngineConfig::Dagre(config.layout.clone());
-    engine.layout(diagram, &engine_config)
+    let geometry = engine.layout(diagram, &engine_config)?;
+
+    Ok(EngineLayoutResult {
+        geometry,
+        routing_mode,
+    })
 }
 
 /// Build a flowchart LayoutConfig from dagre config parameters.
@@ -188,8 +208,12 @@ mod tests {
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
 
-        let geom = layout_with_selected_engine(&diagram, &RenderConfig::default()).unwrap();
-        assert_eq!(geom.nodes.len(), 2);
+        let result = layout_with_selected_engine(&diagram, &RenderConfig::default()).unwrap();
+        assert_eq!(result.geometry.nodes.len(), 2);
+        assert_eq!(
+            result.routing_mode,
+            crate::diagram::RoutingMode::FullCompute
+        );
     }
 
     #[test]
@@ -202,12 +226,17 @@ mod tests {
             ..RenderConfig::default()
         };
 
-        let geom = layout_with_selected_engine(&diagram, &config).unwrap();
-        assert_eq!(geom.edges.len(), 1);
+        let result = layout_with_selected_engine(&diagram, &config).unwrap();
+        assert_eq!(result.geometry.edges.len(), 1);
+        assert_eq!(
+            result.routing_mode,
+            crate::diagram::RoutingMode::FullCompute
+        );
     }
 
+    #[cfg(not(feature = "engine-elk"))]
     #[test]
-    fn selected_engine_rejects_unknown_engine() {
+    fn selected_engine_rejects_unavailable_engine() {
         let input = "graph TD\nA-->B";
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
@@ -217,6 +246,28 @@ mod tests {
         };
 
         let err = layout_with_selected_engine(&diagram, &config).unwrap_err();
-        assert!(err.message.contains("unsupported layout engine"));
+        assert!(
+            err.message.contains("engine-elk") || err.message.contains("not available"),
+            "error should be actionable: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn selected_engine_rejects_unknown_engine() {
+        let input = "graph TD\nA-->B";
+        let flowchart = crate::parser::parse_flowchart(input).unwrap();
+        let diagram = crate::graph::build_diagram(&flowchart);
+        let config = RenderConfig {
+            layout_engine: Some("nonexistent".to_string()),
+            ..RenderConfig::default()
+        };
+
+        let err = layout_with_selected_engine(&diagram, &config).unwrap_err();
+        assert!(
+            err.message.contains("unknown layout engine"),
+            "error should mention unknown: {}",
+            err.message
+        );
     }
 }

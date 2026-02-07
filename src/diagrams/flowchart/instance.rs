@@ -52,7 +52,9 @@ impl DiagramInstance for FlowchartInstance {
         // Route runtime selection through the engine abstraction.
         // Rendering still uses the mature phase-0/1 pipelines; this preflight ensures
         // the selected engine can produce geometry for the current input/config.
-        let _geometry = super::engine::layout_with_selected_engine(diagram, config)?;
+        // The routing mode is determined by engine capabilities but not yet used
+        // in the rendering pipeline (dagre's full-compute path is always used).
+        let _engine_result = super::engine::layout_with_selected_engine(diagram, config)?;
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;

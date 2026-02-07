@@ -172,6 +172,57 @@ fn cli_packet_renders_with_header() {
 }
 
 // =============================================================================
+// Engine Selection Tests
+// =============================================================================
+
+#[test]
+fn cli_layout_engine_dagre_matches_default() {
+    let default_assert = mmdflux().write_stdin("graph TD\nA-->B").assert().success();
+    let default_out = String::from_utf8_lossy(&default_assert.get_output().stdout).to_string();
+
+    let dagre_assert = mmdflux()
+        .args(["--layout-engine", "dagre"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+    let dagre_out = String::from_utf8_lossy(&dagre_assert.get_output().stdout).to_string();
+
+    assert_eq!(default_out, dagre_out);
+}
+
+#[test]
+fn cli_layout_engine_unknown_fails_cleanly() {
+    mmdflux()
+        .args(["--layout-engine", "nonexistent"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown layout engine"));
+}
+
+#[test]
+fn cli_layout_engine_unavailable_fails_cleanly() {
+    // Without engine-elk feature compiled, this should fail with actionable error
+    #[cfg(not(feature = "engine-elk"))]
+    mmdflux()
+        .args(["--layout-engine", "elk"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("engine-elk"));
+}
+
+#[test]
+fn cli_layout_engine_cose_not_implemented() {
+    mmdflux()
+        .args(["--layout-engine", "cose"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not yet implemented"));
+}
+
+// =============================================================================
 // All-Fixtures Smoke Test
 // =============================================================================
 

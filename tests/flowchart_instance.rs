@@ -202,8 +202,9 @@ fn engine_selection_explicit_dagre_matches_default() {
     assert_eq!(default_output, dagre_output);
 }
 
+#[cfg(not(feature = "engine-elk"))]
 #[test]
-fn engine_selection_unknown_engine_errors() {
+fn engine_selection_unavailable_engine_errors() {
     let mut instance = FlowchartInstance::new();
     instance.parse("graph TD\nA-->B").unwrap();
 
@@ -213,9 +214,30 @@ fn engine_selection_unknown_engine_errors() {
     };
     let result = instance.render(OutputFormat::Text, &config);
     assert!(result.is_err());
+    let err = result.unwrap_err();
     assert!(
-        result.unwrap_err().message.contains("unsupported"),
-        "error should mention unsupported engine"
+        err.message.contains("engine-elk") || err.message.contains("not available"),
+        "error should be actionable: {}",
+        err.message
+    );
+}
+
+#[test]
+fn engine_selection_unknown_engine_errors() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some("nonexistent".to_string()),
+        ..Default::default()
+    };
+    let result = instance.render(OutputFormat::Text, &config);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(
+        err.message.contains("unknown layout engine"),
+        "error should mention unknown engine: {}",
+        err.message
     );
 }
 

@@ -138,6 +138,86 @@ fn regression_engine_selection_via_registry() {
     assert!(err.is_err());
 }
 
+// =============================================================================
+// Dagre stability: high-risk fixtures that exercise complex layout paths
+// =============================================================================
+
+#[test]
+fn dagre_stability_double_skip() {
+    let input =
+        std::fs::read_to_string("tests/fixtures/double_skip.mmd").expect("double_skip.mmd fixture");
+    compare_outputs(&input, false);
+}
+
+#[test]
+fn dagre_stability_skip_edge_collision() {
+    let input = std::fs::read_to_string("tests/fixtures/skip_edge_collision.mmd")
+        .expect("skip_edge_collision.mmd fixture");
+    compare_outputs(&input, false);
+}
+
+#[test]
+fn dagre_stability_simple_cycle() {
+    let input =
+        std::fs::read_to_string("tests/fixtures/simple_cycle.mmd").expect("simple_cycle.mmd");
+    compare_outputs(&input, false);
+}
+
+#[test]
+fn dagre_stability_multiple_cycles() {
+    let input =
+        std::fs::read_to_string("tests/fixtures/multiple_cycles.mmd").expect("multiple_cycles.mmd");
+    compare_outputs(&input, false);
+}
+
+#[test]
+fn dagre_stability_nested_subgraph() {
+    let input = std::fs::read_to_string("tests/fixtures/nested_subgraph.mmd")
+        .expect("nested_subgraph.mmd fixture");
+    compare_outputs(&input, false);
+}
+
+// =============================================================================
+// Engine selection stability
+// =============================================================================
+
+#[test]
+fn dagre_stability_engine_selection_consistent() {
+    // Verify that explicit dagre selection produces same output as default
+    // for all high-risk fixtures
+    let fixtures = [
+        "tests/fixtures/double_skip.mmd",
+        "tests/fixtures/skip_edge_collision.mmd",
+        "tests/fixtures/simple_cycle.mmd",
+    ];
+
+    for path in &fixtures {
+        let input = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("{path}: {e}"));
+
+        let registry = default_registry();
+        let mut instance = registry.create("flowchart").unwrap();
+        instance.parse(&input).unwrap();
+
+        let default_out = instance
+            .render(OutputFormat::Text, &RenderConfig::default())
+            .unwrap();
+        let dagre_out = instance
+            .render(
+                OutputFormat::Text,
+                &RenderConfig {
+                    layout_engine: Some("dagre".to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        assert_eq!(
+            default_out, dagre_out,
+            "Engine selection changed output for {path}"
+        );
+    }
+}
+
 // Test all existing fixtures
 #[test]
 fn regression_all_fixtures() {

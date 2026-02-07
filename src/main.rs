@@ -85,6 +85,10 @@ struct Cli {
     /// SVG diagram padding (px)
     #[arg(long)]
     svg_diagram_padding: Option<f64>,
+
+    /// Layout engine (dagre, elk)
+    #[arg(long)]
+    layout_engine: Option<String>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -184,7 +188,7 @@ fn main() -> io::Result<()> {
             ranker: cli.ranker.into(),
             ..LayoutConfig::default()
         },
-        layout_engine: None,
+        layout_engine: cli.layout_engine.clone(),
         cluster_ranksep: cli.cluster_ranksep,
         padding: cli.padding,
         svg_scale: cli.svg_scale,
