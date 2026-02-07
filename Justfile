@@ -33,7 +33,7 @@ fix *args:
 
 # Format code
 fmt:
-    cargo fmt
+    cargo +nightly fmt
 
 # Run the CLI
 run *args:
