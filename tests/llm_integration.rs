@@ -152,7 +152,7 @@ fn json_unsupported_diagram_type() {
         .write_stdin("pie title Pets\n\"Dogs\" : 36\n\"Cats\" : 64\n")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("do not support json"));
+        .stderr(predicate::str::contains("do not support mmds"));
 }
 
 // =========================================================================

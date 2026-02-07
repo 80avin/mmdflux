@@ -1,6 +1,6 @@
 //! MMDS JSON contract tests.
 //!
-//! Verifies that `--format json` output matches the MMDS specification:
+//! Verifies that `--format mmds` output (with `json` alias) matches the MMDS specification:
 //! - Default output is `geometry_level: "layout"` with no edge geometry.
 //! - Routed output is explicit opt-in with edge paths and bounds.
 
@@ -34,10 +34,10 @@ fn render_json_with_level(input: &str, level: GeometryLevel) -> String {
 // -----------------------------------------------------------------------
 
 #[test]
-fn mmds_default_has_version_2() {
+fn mmds_default_has_version_1() {
     let json = render_json("graph TD\nA-->B");
     let output: MmdsOutput = serde_json::from_str(&json).unwrap();
-    assert_eq!(output.version, 2);
+    assert_eq!(output.version, 1);
 }
 
 #[test]
@@ -253,7 +253,7 @@ fn mmds_class_diagram_produces_json() {
     let output = instance.render(OutputFormat::Json, &config).unwrap();
     let parsed: MmdsOutput = serde_json::from_str(&output).unwrap();
 
-    assert_eq!(parsed.version, 2);
+    assert_eq!(parsed.version, 1);
     assert_eq!(parsed.geometry_level, "layout");
     assert_eq!(parsed.metadata.diagram_type, "class");
     assert!(!output.contains("\"path\""));

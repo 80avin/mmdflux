@@ -8,7 +8,7 @@ MMDS supports two geometry levels that control how much spatial detail is includ
 
 ### Layout (default)
 
-The default `--format json` output. Includes:
+The default `--format mmds` output. (`--format json` is an alias.) Includes:
 
 - **Node geometry**: position (center x, y) and size (width, height) in layout float space
 - **Edge topology**: source, target, label, stroke style, arrow types
@@ -17,7 +17,7 @@ The default `--format json` output. Includes:
 Does **not** include edge paths, waypoints, ports, or routing metadata.
 
 ```bash
-mmdflux --format json diagram.mmd
+mmdflux --format mmds diagram.mmd
 ```
 
 ### Routed (opt-in)
@@ -30,14 +30,14 @@ Explicit opt-in via `--geometry-level routed`. Includes everything from layout p
 - **Subgraph bounds**: width and height of each subgraph
 
 ```bash
-mmdflux --format json --geometry-level routed diagram.mmd
+mmdflux --format mmds --geometry-level routed diagram.mmd
 ```
 
 ## Output Envelope
 
 ```json
 {
-  "version": 2,
+  "version": 1,
   "geometry_level": "layout",
   "metadata": {
     "diagram_type": "flowchart",
@@ -53,7 +53,7 @@ mmdflux --format json --geometry-level routed diagram.mmd
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | `2` | Schema version |
+| `version` | `1` | Schema version |
 | `geometry_level` | `"layout"` or `"routed"` | Geometry detail level |
 | `metadata.diagram_type` | string | `"flowchart"` or `"class"` |
 | `metadata.direction` | string | `"TD"`, `"BT"`, `"LR"`, or `"RL"` |

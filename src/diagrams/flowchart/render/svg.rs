@@ -132,10 +132,6 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     // From this point on, rendering reads from `geom` instead of `layout`.
     let geom = geometry::from_dagre_layout(&layout, diagram);
 
-    // Route through the routing stage to produce Layer-2 RoutedGraphGeometry.
-    let _routed =
-        super::super::routing::route_graph_geometry(diagram, &geom, RoutingMode::FullCompute);
-
     let override_nodes = svg_router::build_override_node_map(diagram);
 
     render_svg_with_geometry_context(diagram, options, &geom, &rerouted_edges, &override_nodes)

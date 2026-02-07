@@ -1,6 +1,6 @@
 # mmdflux
 
-Parse and render Mermaid flowchart diagrams to text or SVG.
+Parse and render Mermaid diagrams to text, SVG, and MMDS JSON for machine-mediated workflows.
 
 ## Installation
 
@@ -347,13 +347,13 @@ mmdflux produces structured JSON using the MMDS (Machine-Mediated Diagram Specif
 
 ```bash
 # Layout level (default): node geometry + edge topology, no edge paths
-mmdflux --format json diagram.mmd
+mmdflux --format mmds diagram.mmd
 
 # Routed level: includes edge paths, bounds, and routing metadata
-mmdflux --format json --geometry-level routed diagram.mmd
+mmdflux --format mmds --geometry-level routed diagram.mmd
 ```
 
-JSON output is supported for flowchart and class diagrams. See [`docs/mmds.md`](docs/mmds.md) for the full specification and [`docs/mmds.schema.json`](docs/mmds.schema.json) for the JSON Schema. Adapter examples for React Flow, Cytoscape.js, and D3 are in [`examples/mmds/`](examples/mmds/).
+MMDS output is supported for flowchart and class diagrams (`--format json` remains an alias). See [`docs/mmds.md`](docs/mmds.md) for the full specification and [`docs/mmds.schema.json`](docs/mmds.schema.json) for the JSON Schema. Adapter examples for React Flow, Cytoscape.js, and D3 are in [`examples/mmds/`](examples/mmds/).
 
 ## Library Usage
 

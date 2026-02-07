@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://mmdflux.dev/mmds/v2",
+  "$id": "https://mmdflux.dev/mmds/v1",
   "title": "MMDS — Machine-Mediated Diagram Specification",
   "description": "Structured JSON output for graph-family Mermaid diagrams produced by mmdflux.",
   "type": "object",
   "required": ["version", "geometry_level", "metadata", "nodes", "edges", "subgraphs"],
   "properties": {
     "version": {
-      "const": 2,
-      "description": "Schema version. Always 2 for MMDS."
+      "const": 1,
+      "description": "Schema version. Always 1 for MMDS."
     },
     "geometry_level": {
       "enum": ["layout", "routed"],

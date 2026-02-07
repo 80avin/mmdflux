@@ -119,3 +119,19 @@ fn class_instance_unknown_engine_errors() {
     let err = result.unwrap_err();
     assert!(err.message.contains("unknown layout engine"));
 }
+
+#[test]
+fn class_instance_known_non_dagre_engine_errors_cleanly() {
+    let mut instance = ClassInstance::new();
+    instance.parse("classDiagram\nA --> B").unwrap();
+    let result = instance.render(
+        OutputFormat::Text,
+        &RenderConfig {
+            layout_engine: Some("cose".to_string()),
+            ..RenderConfig::default()
+        },
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.message.contains("not yet implemented"));
+}

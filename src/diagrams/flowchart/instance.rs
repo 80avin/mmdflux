@@ -1,7 +1,7 @@
 //! Flowchart diagram instance implementation.
 
 use super::routing;
-use crate::diagram::{LayoutEngineId, OutputFormat, RenderConfig, RenderError};
+use crate::diagram::{GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig, RenderError};
 use crate::graph::{Diagram, build_diagram};
 use crate::mmds::to_mmds_json;
 use crate::parser::parse_flowchart;
@@ -53,26 +53,33 @@ impl DiagramInstance for FlowchartInstance {
         // Route runtime selection through the engine abstraction.
         let engine_result = super::engine::layout_with_selected_engine(diagram, config)?;
 
-        // Produce routed geometry through the routing stage (Layer-2 contract).
-        let routed = routing::route_graph_geometry(
-            diagram,
-            &engine_result.geometry,
-            engine_result.routing_mode,
-        );
-
         let mut options: RenderOptions = config.into();
         options.output_format = format;
 
         if matches!(format, OutputFormat::Json) {
-            return Ok(to_mmds_json(
+            let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
+                Some(routing::route_graph_geometry(
+                    diagram,
+                    &engine_result.geometry,
+                    engine_result.routing_mode,
+                ))
+            } else {
+                None
+            };
+            return to_mmds_json(
                 diagram,
                 &engine_result.geometry,
-                Some(&routed),
+                routed.as_ref(),
                 config.geometry_level,
-            ));
+            );
         }
 
         if matches!(format, OutputFormat::Svg) && engine_result.engine_id != LayoutEngineId::Dagre {
+            let routed = routing::route_graph_geometry(
+                diagram,
+                &engine_result.geometry,
+                engine_result.routing_mode,
+            );
             // Non-dagre SVG: inject routed paths into geometry for rendering.
             let geom = inject_routed_paths(&engine_result.geometry, &routed);
             return Ok(render_svg_from_geometry(

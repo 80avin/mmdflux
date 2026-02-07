@@ -270,11 +270,11 @@ fn cli_layout_engine_cose_not_implemented() {
 #[test]
 fn cli_json_output_is_mmds_layout_by_default() {
     mmdflux()
-        .args(["--format", "json"])
+        .args(["--format", "mmds"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"version\": 2"))
+        .stdout(predicate::str::contains("\"version\": 1"))
         .stdout(predicate::str::contains("\"geometry_level\": \"layout\""))
         .stdout(predicate::str::contains("\"metadata\""))
         .stdout(predicate::str::contains("\"nodes\""))
@@ -286,7 +286,7 @@ fn cli_json_output_is_mmds_layout_by_default() {
 #[test]
 fn cli_json_routed_level_includes_paths() {
     mmdflux()
-        .args(["--format", "json", "--geometry-level", "routed"])
+        .args(["--format", "mmds", "--geometry-level", "routed"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success()
@@ -298,11 +298,11 @@ fn cli_json_routed_level_includes_paths() {
 #[test]
 fn cli_json_class_diagram_produces_mmds() {
     mmdflux()
-        .args(["--format", "json"])
+        .args(["--format", "mmds"])
         .write_stdin("classDiagram\nA --> B")
         .assert()
         .success()
-        .stdout(predicate::str::contains("\"version\": 2"))
+        .stdout(predicate::str::contains("\"version\": 1"))
         .stdout(predicate::str::contains("\"geometry_level\": \"layout\""))
         .stdout(predicate::str::contains("\"diagram_type\": \"class\""));
 }
@@ -310,11 +310,21 @@ fn cli_json_class_diagram_produces_mmds() {
 #[test]
 fn cli_json_errors_for_unsupported_type() {
     mmdflux()
-        .args(["--format", "json"])
+        .args(["--format", "mmds"])
         .write_stdin("sequenceDiagram\nA->>B: hello")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("do not support json"));
+        .stderr(predicate::str::contains("do not support mmds"));
+}
+
+#[test]
+fn cli_json_alias_maps_to_mmds() {
+    mmdflux()
+        .args(["--format", "json"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"geometry_level\": \"layout\""));
 }
 
 // =============================================================================

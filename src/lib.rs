@@ -41,7 +41,6 @@ pub mod diagram;
 pub mod diagrams;
 pub mod engines;
 pub mod graph;
-pub mod json;
 pub mod lint;
 pub mod mmds;
 pub mod parser;

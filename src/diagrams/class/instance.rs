@@ -2,13 +2,14 @@
 
 use super::compiler;
 use super::parser::parse_class_diagram;
-use crate::diagram::{LayoutEngineId, OutputFormat, RenderConfig, RenderError};
+use crate::diagram::{GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig, RenderError};
 use crate::diagrams::flowchart::engine::layout_with_selected_engine;
+use crate::diagrams::flowchart::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::diagrams::flowchart::routing;
 use crate::graph::Diagram;
 use crate::mmds::to_mmds_json_typed;
 use crate::registry::DiagramInstance;
-use crate::render::{RenderOptions, render};
+use crate::render::{RenderOptions, render, render_svg_from_geometry};
 
 /// Class diagram instance.
 ///
@@ -43,33 +44,66 @@ impl DiagramInstance for ClassInstance {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
 
+        let selected_engine = match config
+            .layout_engine
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            Some(engine) => {
+                let id = LayoutEngineId::parse(engine)?;
+                id.check_available()?;
+                id
+            }
+            None => LayoutEngineId::Dagre,
+        };
+
+        let mut options: RenderOptions = config.into();
+        options.output_format = format;
+
         if matches!(format, OutputFormat::Json) {
+            let engine_result = layout_with_selected_engine(diagram, config)?;
+            let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
+                Some(routing::route_graph_geometry(
+                    diagram,
+                    &engine_result.geometry,
+                    engine_result.routing_mode,
+                ))
+            } else {
+                None
+            };
+            return to_mmds_json_typed(
+                "class",
+                diagram,
+                &engine_result.geometry,
+                routed.as_ref(),
+                config.geometry_level,
+            );
+        }
+
+        if matches!(format, OutputFormat::Svg) && selected_engine != LayoutEngineId::Dagre {
             let engine_result = layout_with_selected_engine(diagram, config)?;
             let routed = routing::route_graph_geometry(
                 diagram,
                 &engine_result.geometry,
                 engine_result.routing_mode,
             );
-            return Ok(to_mmds_json_typed(
-                "class",
+            let geom = inject_routed_paths(&engine_result.geometry, &routed);
+            return Ok(render_svg_from_geometry(
                 diagram,
-                &engine_result.geometry,
-                Some(&routed),
-                config.geometry_level,
+                &options,
+                &geom,
+                engine_result.routing_mode,
             ));
         }
 
-        if let Some(engine) = config
-            .layout_engine
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
-            let engine_id = LayoutEngineId::parse(engine)?;
-            engine_id.check_available()?;
+        if selected_engine != LayoutEngineId::Dagre {
+            return Err(RenderError {
+                message: format!(
+                    "{} engine is currently supported only for svg and json output",
+                    selected_engine
+                ),
+            });
         }
-
-        let mut options: RenderOptions = config.into();
-        options.output_format = format;
 
         Ok(render(diagram, &options))
     }
@@ -80,4 +114,18 @@ impl DiagramInstance for ClassInstance {
             OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
         )
     }
+}
+
+fn inject_routed_paths(geom: &GraphGeometry, routed: &RoutedGraphGeometry) -> GraphGeometry {
+    let mut result = geom.clone();
+    for routed_edge in &routed.edges {
+        if let Some(layout_edge) = result
+            .edges
+            .iter_mut()
+            .find(|e| e.index == routed_edge.index)
+        {
+            layout_edge.layout_path_hint = Some(routed_edge.path.clone());
+        }
+    }
+    result
 }

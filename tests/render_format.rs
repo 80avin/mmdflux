@@ -18,5 +18,5 @@ fn output_format_debug() {
 
 #[test]
 fn output_format_json_display() {
-    assert_eq!(format!("{}", OutputFormat::Json), "json");
+    assert_eq!(format!("{}", OutputFormat::Json), "mmds");
 }

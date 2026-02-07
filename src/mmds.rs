@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::diagram::GeometryLevel;
+use crate::diagram::{GeometryLevel, RenderError};
 use crate::diagrams::flowchart::geometry::{GraphGeometry, PositionedNode, RoutedGraphGeometry};
 use crate::graph::{Arrow, Diagram, Direction, Shape, Stroke};
 
@@ -57,7 +57,7 @@ pub fn to_mmds_json(
     geometry: &GraphGeometry,
     routed: Option<&RoutedGraphGeometry>,
     level: GeometryLevel,
-) -> String {
+) -> Result<String, RenderError> {
     to_mmds_json_typed("flowchart", diagram, geometry, routed, level)
 }
 
@@ -68,14 +68,22 @@ pub fn to_mmds_json_typed(
     geometry: &GraphGeometry,
     routed: Option<&RoutedGraphGeometry>,
     level: GeometryLevel,
-) -> String {
+) -> Result<String, RenderError> {
     match level {
-        GeometryLevel::Layout => to_mmds_layout_typed(diagram_type, diagram, geometry),
+        GeometryLevel::Layout => Ok(to_mmds_layout_typed(diagram_type, diagram, geometry)),
         GeometryLevel::Routed => {
             if let Some(routed) = routed {
-                to_mmds_routed_typed(diagram_type, diagram, geometry, routed)
+                Ok(to_mmds_routed_typed(
+                    diagram_type,
+                    diagram,
+                    geometry,
+                    routed,
+                ))
             } else {
-                to_mmds_layout_typed(diagram_type, diagram, geometry)
+                Err(RenderError {
+                    message: "routed MMDS output requested but routed geometry was not provided"
+                        .to_string(),
+                })
             }
         }
     }
@@ -175,7 +183,7 @@ fn build_mmds_output(
     subgraphs.sort_by(|a, b| a.id.cmp(&b.id));
 
     MmdsOutput {
-        version: 2,
+        version: 1,
         geometry_level: level.to_string(),
         metadata,
         nodes,
@@ -265,7 +273,7 @@ fn arrow_str(arrow: Arrow) -> &'static str {
 /// Top-level MMDS output envelope.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MmdsOutput {
-    /// Schema version (2 for MMDS).
+    /// Schema version (1 for MMDS).
     pub version: u32,
     /// Geometry level: "layout" or "routed".
     pub geometry_level: String,
@@ -411,7 +419,7 @@ mod tests {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
         let json = to_mmds_layout(&diagram, &geom);
         let output: MmdsOutput = serde_json::from_str(&json).unwrap();
-        assert_eq!(output.version, 2);
+        assert_eq!(output.version, 1);
         assert_eq!(output.geometry_level, "layout");
     }
 
@@ -507,7 +515,7 @@ mod tests {
         let routed = routed_geometry(&diagram, &geom);
         let json = to_mmds_routed(&diagram, &geom, &routed);
         let output: MmdsOutput = serde_json::from_str(&json).unwrap();
-        assert_eq!(output.version, 2);
+        assert_eq!(output.version, 1);
         assert_eq!(output.geometry_level, "routed");
     }
 
@@ -556,10 +564,19 @@ mod tests {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
         let routed = routed_geometry(&diagram, &geom);
 
-        let layout_json = to_mmds_json(&diagram, &geom, Some(&routed), GeometryLevel::Layout);
+        let layout_json =
+            to_mmds_json(&diagram, &geom, Some(&routed), GeometryLevel::Layout).unwrap();
         assert!(!layout_json.contains("\"path\""));
 
-        let routed_json = to_mmds_json(&diagram, &geom, Some(&routed), GeometryLevel::Routed);
+        let routed_json =
+            to_mmds_json(&diagram, &geom, Some(&routed), GeometryLevel::Routed).unwrap();
         assert!(routed_json.contains("\"path\""));
+    }
+
+    #[test]
+    fn to_mmds_json_routed_requires_routed_geometry() {
+        let (diagram, geom) = layout_geometry("graph TD\nA-->B");
+        let err = to_mmds_json(&diagram, &geom, None, GeometryLevel::Routed).unwrap_err();
+        assert!(err.message.contains("routed MMDS output requested"));
     }
 }

@@ -48,7 +48,7 @@ impl std::fmt::Display for OutputFormat {
             OutputFormat::Text => write!(f, "text"),
             OutputFormat::Ascii => write!(f, "ascii"),
             OutputFormat::Svg => write!(f, "svg"),
-            OutputFormat::Json => write!(f, "json"),
+            OutputFormat::Json => write!(f, "mmds"),
         }
     }
 }
