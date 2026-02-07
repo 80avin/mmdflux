@@ -8,9 +8,6 @@ default-run = "mmdflux"
 clap = { version = "4", features = ["derive"] }
 pest = "2.7"
 pest_derive = "2.7"
-petgraph = { version = "0.6", default-features = false, features = [
-    "stable_graph",
-] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"

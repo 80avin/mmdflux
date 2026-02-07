@@ -2,8 +2,6 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use petgraph::stable_graph::StableDiGraph;
-
 use super::normalize::{DummyChain, DummyNode};
 use super::types::{NodeId, Point, SelfEdge};
 
@@ -379,26 +377,6 @@ impl LayoutGraph {
         }
     }
 
-    /// Convert to petgraph StableDiGraph for algorithm use.
-    #[allow(dead_code)] // May be used for future algorithm improvements
-    pub fn to_petgraph(&self) -> StableDiGraph<usize, usize> {
-        let mut pg = StableDiGraph::new();
-
-        // Add nodes (using index as weight)
-        let node_indices: Vec<_> = (0..self.node_ids.len()).map(|i| pg.add_node(i)).collect();
-
-        // Add edges (using edge index as weight), respecting reversals
-        for (edge_idx, &(from, to, _)) in self.edges.iter().enumerate() {
-            if self.reversed_edges.contains(&edge_idx) {
-                pg.add_edge(node_indices[to], node_indices[from], edge_idx);
-            } else {
-                pg.add_edge(node_indices[from], node_indices[to], edge_idx);
-            }
-        }
-
-        pg
-    }
-
     /// Get effective edges (with reversals applied).
     pub fn effective_edges(&self) -> Vec<(usize, usize)> {
         self.edges
@@ -599,22 +577,6 @@ mod tests {
         assert_eq!(lg.edges.len(), 2, "Both edges should be preserved");
         assert_eq!(lg.edge_weights[0], 1.0);
         assert_eq!(lg.edge_weights[1], 0.5);
-    }
-
-    #[test]
-    fn test_layout_graph_to_petgraph() {
-        let mut graph: DiGraph<()> = DiGraph::new();
-        graph.add_node("A", ());
-        graph.add_node("B", ());
-        graph.add_node("C", ());
-        graph.add_edge("A", "B");
-        graph.add_edge("B", "C");
-
-        let lg = LayoutGraph::from_digraph(&graph, |_, _| (10.0, 10.0));
-        let pg = lg.to_petgraph();
-
-        assert_eq!(pg.node_count(), 3);
-        assert_eq!(pg.edge_count(), 2);
     }
 
     #[test]
