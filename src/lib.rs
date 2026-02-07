@@ -43,14 +43,15 @@ pub mod engines;
 pub mod graph;
 pub mod json;
 pub mod lint;
+pub mod mmds;
 pub mod parser;
 pub mod registry;
 pub mod render;
 
 // Re-export commonly used types for convenience
 pub use diagram::{
-    EngineCapabilities, EngineConfig, GraphLayoutEngine, LayoutEngineId, OutputFormat,
-    RenderConfig, RenderError, RoutingMode,
+    EngineCapabilities, EngineConfig, GeometryLevel, GraphLayoutEngine, LayoutEngineId,
+    OutputFormat, RenderConfig, RenderError, RoutingMode,
 };
 pub use graph::{Diagram, Direction, Edge, Node, Shape, build_diagram};
 pub use parser::{DiagramType, Flowchart, ParseError, detect_diagram_type, parse_flowchart};

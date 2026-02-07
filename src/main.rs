@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use mmdflux::dagre::Ranker;
-use mmdflux::diagram::{LayoutConfig, OutputFormat, RenderConfig, SvgEdgeCurve};
+use mmdflux::diagram::{GeometryLevel, LayoutConfig, OutputFormat, RenderConfig, SvgEdgeCurve};
 use mmdflux::registry::default_registry;
 
 #[derive(Parser)]
@@ -89,6 +89,10 @@ struct Cli {
     /// Layout engine (dagre, elk)
     #[arg(long)]
     layout_engine: Option<String>,
+
+    /// MMDS geometry level for JSON output (layout or routed)
+    #[arg(long, value_enum)]
+    geometry_level: Option<GeometryLevelArg>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -146,6 +150,23 @@ impl From<EdgeCurveArg> for SvgEdgeCurve {
     }
 }
 
+#[derive(Clone, Copy, ValueEnum, Debug)]
+enum GeometryLevelArg {
+    /// Node geometry + edge topology only (default)
+    Layout,
+    /// Full geometry including routed edge paths
+    Routed,
+}
+
+impl From<GeometryLevelArg> for GeometryLevel {
+    fn from(arg: GeometryLevelArg) -> Self {
+        match arg {
+            GeometryLevelArg::Layout => GeometryLevel::Layout,
+            GeometryLevelArg::Routed => GeometryLevel::Routed,
+        }
+    }
+}
+
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
@@ -198,6 +219,7 @@ fn main() -> io::Result<()> {
         svg_edge_curve_radius: cli.svg_edge_curve_radius,
         svg_diagram_padding: cli.svg_diagram_padding,
         show_ids: cli.show_ids,
+        geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
     };
 
     // Use registry for detection and rendering

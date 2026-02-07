@@ -66,7 +66,7 @@ impl GraphLayoutEngine for DagreLayoutEngine {
 /// Fields are read in tests and will be consumed by the rendering pipeline
 /// once full engine integration is complete.
 #[derive(Debug)]
-pub(crate) struct EngineLayoutResult {
+pub struct EngineLayoutResult {
     pub engine_id: LayoutEngineId,
     pub geometry: GraphGeometry,
     pub routing_mode: crate::diagram::RoutingMode,
@@ -77,7 +77,7 @@ pub(crate) struct EngineLayoutResult {
 /// Uses the `GraphEngineRegistry` for engine lookup. Dagre is the default
 /// when no engine is specified. Returns the layout geometry along with the
 /// routing mode determined by engine capabilities.
-pub(crate) fn layout_with_selected_engine(
+pub fn layout_with_selected_engine(
     diagram: &Diagram,
     config: &RenderConfig,
 ) -> Result<EngineLayoutResult, RenderError> {

@@ -3,7 +3,10 @@
 use super::compiler;
 use super::parser::parse_class_diagram;
 use crate::diagram::{LayoutEngineId, OutputFormat, RenderConfig, RenderError};
+use crate::diagrams::flowchart::engine::layout_with_selected_engine;
+use crate::diagrams::flowchart::routing;
 use crate::graph::Diagram;
+use crate::mmds::to_mmds_json_typed;
 use crate::registry::DiagramInstance;
 use crate::render::{RenderOptions, render};
 
@@ -40,6 +43,22 @@ impl DiagramInstance for ClassInstance {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
 
+        if matches!(format, OutputFormat::Json) {
+            let engine_result = layout_with_selected_engine(diagram, config)?;
+            let routed = routing::route_graph_geometry(
+                diagram,
+                &engine_result.geometry,
+                engine_result.routing_mode,
+            );
+            return Ok(to_mmds_json_typed(
+                "class",
+                diagram,
+                &engine_result.geometry,
+                Some(&routed),
+                config.geometry_level,
+            ));
+        }
+
         if let Some(engine) = config
             .layout_engine
             .as_deref()
@@ -58,7 +77,7 @@ impl DiagramInstance for ClassInstance {
     fn supports_format(&self, format: OutputFormat) -> bool {
         matches!(
             format,
-            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg
+            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
         )
     }
 }
