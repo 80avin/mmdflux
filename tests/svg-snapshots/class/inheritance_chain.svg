@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 277.69 278.00" style="max-width: 277.69px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+    <marker id="crosshead" viewBox="0 0 11.00 11.00" refX="12.00" refY="5.20" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 1,1 l 9,9 M 10,1 l -9,9" stroke="#333" stroke-width="2" />
+    </marker>
+    <marker id="circlehead" viewBox="0 0 10.00 10.00" refX="11.00" refY="5.00" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="5" stroke="#333" stroke-width="1" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(0.00,0.00)">
+    <g class="edgePaths">
+      <path d="M77.53,166.00 L77.53,169.33 C77.53,172.67 77.53,179.33 77.89,183.14 C78.26,186.94 78.98,187.89 79.65,189.21 C80.32,190.54 80.95,192.25 85.73,196.38 C90.52,200.52 99.47,207.08 103.95,210.36 L108.42,213.64" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M219.46,166.00 L219.46,169.33 C219.46,172.67 219.46,179.33 219.09,183.14 C218.73,186.94 218.01,187.89 217.34,189.21 C216.66,190.54 216.04,192.25 211.26,196.38 C206.47,200.52 197.52,207.08 193.04,210.36 L188.57,213.64" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M77.53,62.00 L77.53,66.17 C77.53,70.33 77.53,78.67 77.53,86.33 C77.53,94.00 77.53,101.00 77.53,104.50 L77.53,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="35.84" y="112.00" width="83.39" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.53" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Car</text>
+      <rect x="8.00" y="8.00" width="139.07" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="77.53" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">ElectricCar</text>
+      <rect x="169.23" y="112.00" width="100.46" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="219.46" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Truck</text>
+      <rect x="92.32" y="216.00" width="112.34" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="148.49" y="243.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Vehicle</text>
+    </g>
+  </g>
+</svg>

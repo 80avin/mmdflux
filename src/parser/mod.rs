@@ -16,6 +16,7 @@ pub use pie::parse_pie;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagramType {
     Flowchart,
+    Class,
     Pie,
     Info,
     Packet,
@@ -35,6 +36,7 @@ pub fn detect_diagram_type(input: &str) -> Option<DiagramType> {
 
     match first_word.to_lowercase().as_str() {
         "graph" | "flowchart" => Some(DiagramType::Flowchart),
+        "classdiagram" => Some(DiagramType::Class),
         "pie" => Some(DiagramType::Pie),
         "info" => Some(DiagramType::Info),
         "packet" | "packet-beta" => Some(DiagramType::Packet),
@@ -107,6 +109,22 @@ mod tests {
         assert_eq!(
             detect_diagram_type("%% comment\ngraph TD\nA-->B\n"),
             Some(DiagramType::Flowchart)
+        );
+    }
+
+    #[test]
+    fn test_detect_class_diagram() {
+        assert_eq!(
+            detect_diagram_type("classDiagram\nclass User"),
+            Some(DiagramType::Class)
+        );
+    }
+
+    #[test]
+    fn test_detect_class_diagram_case_insensitive() {
+        assert_eq!(
+            detect_diagram_type("CLASSDIAGRAM\nclass User"),
+            Some(DiagramType::Class)
         );
     }
 

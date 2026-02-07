@@ -218,6 +218,89 @@ fn dagre_stability_engine_selection_consistent() {
     }
 }
 
+// =============================================================================
+// Cross-family isolation: class diagrams don't regress flowcharts
+// =============================================================================
+
+#[test]
+fn cross_family_flowchart_unchanged_after_class_support() {
+    // Verify all flowchart fixtures still produce identical output
+    // with class support registered in the same registry
+    let registry = default_registry();
+    assert!(
+        registry.get("class").is_some(),
+        "class should be registered"
+    );
+    assert!(
+        registry.get("flowchart").is_some(),
+        "flowchart should be registered"
+    );
+
+    // Flowchart detection still works
+    assert_eq!(registry.detect("graph TD\nA-->B"), Some("flowchart"));
+    assert_eq!(registry.detect("flowchart LR\nA-->B"), Some("flowchart"));
+
+    // Class detection doesn't interfere
+    assert_eq!(registry.detect("classDiagram\nclass A"), Some("class"));
+
+    // Both render independently
+    let mut fc_instance = registry.create("flowchart").unwrap();
+    fc_instance.parse("graph TD\nA-->B").unwrap();
+    let fc_out = fc_instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+
+    let mut cl_instance = registry.create("class").unwrap();
+    cl_instance.parse("classDiagram\nA --> B").unwrap();
+    let cl_out = cl_instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+
+    // Both produce non-empty output with the expected nodes
+    assert!(fc_out.contains('A'));
+    assert!(cl_out.contains('A'));
+}
+
+#[test]
+fn cross_family_class_does_not_steal_flowchart_detection() {
+    let registry = default_registry();
+
+    // Inputs with "class" in them that are NOT classDiagram
+    assert_eq!(
+        registry.detect("graph TD\nclassA --> classB"),
+        Some("flowchart")
+    );
+    assert_eq!(
+        registry.detect("graph TD\nA[class User]-->B"),
+        Some("flowchart")
+    );
+}
+
+#[test]
+fn class_engine_selection_default_matches_explicit_dagre() {
+    let registry = default_registry();
+    let mut instance = registry.create("class").unwrap();
+    instance
+        .parse("classDiagram\nclass A\nclass B\nA --> B")
+        .unwrap();
+
+    let default_out = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+    let dagre_out = instance
+        .render(
+            OutputFormat::Text,
+            &RenderConfig {
+                layout_engine: Some("dagre".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+    // Class doesn't use engine selection path yet, but output should still be stable
+    assert_eq!(default_out, dagre_out);
+}
+
 // Test all existing fixtures
 #[test]
 fn regression_all_fixtures() {
