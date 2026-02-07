@@ -17,6 +17,7 @@ pub use pie::parse_pie;
 pub enum DiagramType {
     Flowchart,
     Class,
+    Sequence,
     Pie,
     Info,
     Packet,
@@ -37,6 +38,7 @@ pub fn detect_diagram_type(input: &str) -> Option<DiagramType> {
     match first_word.to_lowercase().as_str() {
         "graph" | "flowchart" => Some(DiagramType::Flowchart),
         "classdiagram" => Some(DiagramType::Class),
+        "sequencediagram" => Some(DiagramType::Sequence),
         "pie" => Some(DiagramType::Pie),
         "info" => Some(DiagramType::Info),
         "packet" | "packet-beta" => Some(DiagramType::Packet),
@@ -129,7 +131,24 @@ mod tests {
     }
 
     #[test]
+    fn test_detect_sequence_diagram() {
+        assert_eq!(
+            detect_diagram_type("sequenceDiagram\nparticipant A"),
+            Some(DiagramType::Sequence)
+        );
+    }
+
+    #[test]
+    fn test_detect_sequence_diagram_case_insensitive() {
+        assert_eq!(
+            detect_diagram_type("SEQUENCEDIAGRAM\nparticipant A"),
+            Some(DiagramType::Sequence)
+        );
+    }
+
+    #[test]
     fn test_detect_unknown() {
+        // "sequence" alone is not a valid diagram keyword
         assert_eq!(detect_diagram_type("sequence\nA->>B: hello\n"), None);
     }
 

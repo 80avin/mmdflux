@@ -8,3 +8,4 @@ pub mod flowchart;
 pub mod info;
 pub mod packet;
 pub mod pie;
+pub mod sequence;

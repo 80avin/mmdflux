@@ -354,6 +354,8 @@ pub fn from_dagre_layout(result: &dagre::LayoutResult, diagram: &Diagram) -> Gra
 /// Graph geometry with fully-routed edge paths.
 ///
 /// Produced by the routing stage, consumed by renderers.
+/// Currently unused — will be wired when routing migrates to the IR pipeline.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RoutedGraphGeometry {
     /// Same positioned nodes as input.
@@ -371,6 +373,7 @@ pub struct RoutedGraphGeometry {
 }
 
 /// A fully-routed edge with polyline path.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RoutedEdgeGeometry {
     pub index: usize,
@@ -385,6 +388,7 @@ pub struct RoutedEdgeGeometry {
 }
 
 /// A routed self-edge loop.
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RoutedSelfEdge {
     pub node_id: String,

@@ -301,6 +301,51 @@ fn class_engine_selection_default_matches_explicit_dagre() {
     assert_eq!(default_out, dagre_out);
 }
 
+// =============================================================================
+// Cross-family isolation: sequence diagrams don't regress flowcharts/class
+// =============================================================================
+
+#[test]
+fn cross_family_flowchart_unchanged_after_sequence_support() {
+    let registry = default_registry();
+    assert!(
+        registry.get("sequence").is_some(),
+        "sequence should be registered"
+    );
+    assert!(
+        registry.get("flowchart").is_some(),
+        "flowchart should be registered"
+    );
+
+    // Flowchart detection still works
+    assert_eq!(registry.detect("graph TD\nA-->B"), Some("flowchart"));
+
+    // Sequence detection doesn't interfere
+    assert_eq!(
+        registry.detect("sequenceDiagram\nA->>B: hi"),
+        Some("sequence")
+    );
+}
+
+#[test]
+fn cross_family_sequence_does_not_steal_flowchart_detection() {
+    let registry = default_registry();
+    // "sequence" in node names should not trigger sequence detector
+    assert_eq!(
+        registry.detect("graph TD\nsequence-->end_seq"),
+        Some("flowchart")
+    );
+}
+
+#[test]
+fn cross_family_sequence_does_not_steal_class_detection() {
+    let registry = default_registry();
+    assert_eq!(
+        registry.detect("classDiagram\nclass Sequence"),
+        Some("class")
+    );
+}
+
 // Test all existing fixtures
 #[test]
 fn regression_all_fixtures() {

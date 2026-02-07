@@ -50,6 +50,28 @@ fn default_registry_class_is_graph_family() {
 }
 
 #[test]
+fn default_registry_detects_sequence() {
+    let registry = default_registry();
+    assert_eq!(
+        registry.detect("sequenceDiagram\nparticipant A"),
+        Some("sequence")
+    );
+}
+
+#[test]
+fn default_registry_includes_sequence_definition() {
+    let registry = default_registry();
+    assert!(registry.get("sequence").is_some());
+}
+
+#[test]
+fn default_registry_sequence_is_timeline_family() {
+    let registry = default_registry();
+    let def = registry.get("sequence").unwrap();
+    assert_eq!(def.family, mmdflux::diagram::DiagramFamily::Timeline);
+}
+
+#[test]
 fn default_registry_flowchart_first() {
     // Flowchart should be checked before other graph-like patterns
     let registry = default_registry();

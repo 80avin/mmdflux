@@ -122,7 +122,7 @@ pub trait DiagramInstance: Send + Sync {
 /// Registration order determines detection priority. Flowchart is
 /// registered first as the most common diagram type.
 pub fn default_registry() -> DiagramRegistry {
-    use crate::diagrams::{class, flowchart, info, packet, pie};
+    use crate::diagrams::{class, flowchart, info, packet, pie, sequence};
 
     let mut registry = DiagramRegistry::new();
 
@@ -131,6 +131,9 @@ pub fn default_registry() -> DiagramRegistry {
 
     // Graph-family diagrams
     registry.register(class::definition());
+
+    // Timeline-family diagrams
+    registry.register(sequence::definition());
 
     // Simple diagrams (shims)
     registry.register(pie::definition());

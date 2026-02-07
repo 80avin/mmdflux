@@ -1,4 +1,4 @@
-use mmdflux::diagrams::{class, flowchart};
+use mmdflux::diagrams::{class, flowchart, sequence};
 
 #[test]
 fn flowchart_module_exports_definition() {
@@ -65,4 +65,42 @@ fn flowchart_not_detected_as_class() {
 #[test]
 fn class_not_detected_as_flowchart() {
     assert!(!flowchart::detect("classDiagram\nclass User"));
+}
+
+// --- Sequence diagram module ---
+
+#[test]
+fn sequence_module_exports_definition() {
+    let def = sequence::definition();
+    assert_eq!(def.id, "sequence");
+}
+
+#[test]
+fn sequence_detector_works() {
+    assert!(sequence::detect("sequenceDiagram\nparticipant A"));
+    assert!(!sequence::detect("graph TD\nA-->B"));
+    assert!(!sequence::detect("classDiagram\nclass User"));
+}
+
+#[test]
+fn sequence_detector_case_insensitive() {
+    assert!(sequence::detect("SEQUENCEDIAGRAM\nparticipant A"));
+    assert!(sequence::detect("SequenceDiagram\nparticipant A"));
+}
+
+#[test]
+fn sequence_detector_skips_comments() {
+    assert!(sequence::detect(
+        "%% comment\nsequenceDiagram\nparticipant A"
+    ));
+}
+
+#[test]
+fn sequence_not_detected_as_flowchart() {
+    assert!(!flowchart::detect("sequenceDiagram\nparticipant A"));
+}
+
+#[test]
+fn sequence_not_detected_as_class() {
+    assert!(!class::detect("sequenceDiagram\nparticipant A"));
 }

@@ -132,10 +132,29 @@ fn cli_renders_ascii_mode() {
 #[test]
 fn cli_unknown_diagram_type_errors() {
     mmdflux()
-        .write_stdin("sequenceDiagram\nA->>B: hello")
+        .write_stdin("unknownDiagram\nA->>B: hello")
         .assert()
         .failure()
         .stderr(predicate::str::contains("Unknown diagram type"));
+}
+
+#[test]
+fn cli_sequence_diagram_renders() {
+    mmdflux()
+        .write_stdin("sequenceDiagram\nparticipant A\nparticipant B\nA->>B: hello")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("hello"));
+}
+
+#[test]
+fn cli_sequence_svg_errors() {
+    mmdflux()
+        .args(["--format", "svg"])
+        .write_stdin("sequenceDiagram\nA->>B: hello")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("do not support svg"));
 }
 
 // =============================================================================
