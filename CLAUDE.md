@@ -8,22 +8,24 @@ mmdflux is a Rust CLI tool and library that parses Mermaid flowchart diagrams an
 
 ## Common Commands
 
+Use `just` (see `Justfile`) for day-to-day work. Tests use `cargo-nextest` for parallel execution.
+
 ```bash
-cargo build                    # Debug build
-cargo build --release          # Release build
-cargo test                     # Run all tests
-cargo test --test integration  # Integration tests only
-cargo test test_name           # Run specific test
+just test                      # Run all tests (nextest, parallel)
+just test-file integration     # Run a specific test file
+just test -E 'test(test_name)' # Run a specific test (nextest filter)
+just lint                      # clippy + fmt check
+just check                     # lint + test
+just build                     # Debug build
+just release                   # Release build
+just run diagram.mmd           # Run the CLI
+just fmt                       # Format code
 
 # Run CLI directly
 cargo run -- diagram.mmd
 cargo run -- --debug diagram.mmd
 cargo run -- --ascii diagram.mmd
 echo 'graph LR\nA-->B' | cargo run
-
-# Linting
-cargo clippy
-cargo fmt
 ```
 
 ## Architecture
