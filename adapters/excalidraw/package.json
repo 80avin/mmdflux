@@ -5,11 +5,11 @@
   "description": "Convert MMDS JSON to Excalidraw format with polyline edge routing",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsup",
+    "build": "tsc",
     "start": "node dist/index.js"
   },
   "devDependencies": {
-    "tsup": "^8.0.0",
+    "@types/node": "^25.2.1",
     "typescript": "^5.7.0"
   },
   "license": "MIT"
