@@ -8,7 +8,7 @@
   "properties": {
     "version": {
       "const": 1,
-      "description": "Schema version. Always 1 for MMDS."
+      "description": "Integer schema version. Incremented on breaking MMDS changes."
     },
     "defaults": {
       "$ref": "#/$defs/Defaults",
@@ -89,7 +89,7 @@
         },
         "bounds": {
           "$ref": "#/$defs/Bounds",
-          "description": "Overall diagram bounds in MMDS layout space."
+          "description": "Overall diagram canvas extents in MMDS layout space. Not guaranteed to be a tight content bounding box."
         }
       }
     },
@@ -107,7 +107,7 @@
         "parent": { "type": "string", "description": "Parent subgraph ID, if any." },
         "position": {
           "$ref": "#/$defs/Position",
-          "description": "Center position in unitless MMDS layout space."
+          "description": "Node center position in unitless MMDS layout space (not top-left anchor)."
         },
         "size": {
           "$ref": "#/$defs/Size",
@@ -200,7 +200,7 @@
       "required": ["width", "height"],
       "properties": {
         "width": { "type": "number", "description": "Overall width in unitless MMDS layout space." },
-        "height": { "type": "number", "description": "Overall height in unitless MMDS layout space." }
+        "height": { "type": "number", "description": "Overall height in unitless MMDS layout space. Consumers should preserve width/height aspect ratio when scaling." }
       }
     }
   }

@@ -58,12 +58,12 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | `1` | Schema version |
+| `version` | `1` | Integer schema version. Increment only for breaking MMDS changes. |
 | `defaults` | object | Document-level defaults for omitted node/edge fields |
 | `geometry_level` | `"layout"` or `"routed"` | Geometry detail level |
 | `metadata.diagram_type` | string | `"flowchart"` or `"class"` |
 | `metadata.direction` | string | `"TD"`, `"BT"`, `"LR"`, or `"RL"` |
-| `metadata.bounds` | object | Overall diagram bounds (`width`, `height`) |
+| `metadata.bounds` | object | Overall diagram canvas extents (`width`, `height`) in MMDS layout space |
 | `subgraphs` | array | Subgraph inventory (omitted when empty) |
 
 ### Node
@@ -74,7 +74,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | `label` | string | both | Display label |
 | `shape` | string | both | Shape name (snake_case), omitted when equal to `defaults.node.shape` |
 | `parent` | string? | both | Parent subgraph ID |
-| `position` | `{x, y}` | both | Center position |
+| `position` | `{x, y}` | both | Center position (not top-left) |
 | `size` | `{width, height}` | both | Bounding box |
 
 ### Edge
@@ -110,12 +110,18 @@ The formal JSON Schema is available at [`docs/mmds.schema.json`](./mmds.schema.j
 
 MMDS coordinates are unitless layout-space values.
 
-- `position.x` and `position.y` are node centers in layout space.
+- `position.x` and `position.y` are node centers in layout space (not top-left anchors).
 - `size.width` and `size.height` use the same layout-space units.
-- `metadata.bounds.width` and `metadata.bounds.height` define the full diagram extents in the same space.
+- `metadata.bounds.width` and `metadata.bounds.height` define full document extents in the same space.
+- `metadata.bounds` is a canvas extent, not guaranteed to be a tight content bounding box.
+- Current graph-family engines may include outer margin in `metadata.bounds`.
 - Routed `path` points and `label_position` values also use this same coordinate space.
 
 Consumers may scale these values to pixels, character cells, or any target render space.
+Consumers SHOULD scale uniformly (same factor on both axes) to preserve the aspect ratio implied by `metadata.bounds`.
+Consumers rendering top-left-anchored primitives should convert node placement as:
+- `left = position.x - size.width / 2`
+- `top = position.y - size.height / 2`
 
 ## Defaults and Omission
 
