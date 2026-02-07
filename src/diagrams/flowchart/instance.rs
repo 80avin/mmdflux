@@ -3,13 +3,10 @@
 use super::routing;
 use crate::diagram::{LayoutEngineId, OutputFormat, RenderConfig, RenderError};
 use crate::graph::{Diagram, build_diagram};
-use crate::json::to_json;
+use crate::mmds::to_mmds_json;
 use crate::parser::parse_flowchart;
 use crate::registry::DiagramInstance;
-use crate::render::{
-    RenderOptions, compute_layout_direct, layout_config_for_diagram, render,
-    render_svg_from_geometry,
-};
+use crate::render::{RenderOptions, render, render_svg_from_geometry};
 
 /// Flowchart diagram instance.
 ///
@@ -67,17 +64,12 @@ impl DiagramInstance for FlowchartInstance {
         options.output_format = format;
 
         if matches!(format, OutputFormat::Json) {
-            if engine_result.engine_id != LayoutEngineId::Dagre {
-                return Err(RenderError {
-                    message: format!(
-                        "{} engine is currently supported only for svg output",
-                        engine_result.engine_id
-                    ),
-                });
-            }
-            let layout_config = layout_config_for_diagram(diagram, &options);
-            let layout = compute_layout_direct(diagram, &layout_config);
-            return Ok(to_json(diagram, Some(&layout)));
+            return Ok(to_mmds_json(
+                diagram,
+                &engine_result.geometry,
+                Some(&routed),
+                config.geometry_level,
+            ));
         }
 
         if matches!(format, OutputFormat::Svg) && engine_result.engine_id != LayoutEngineId::Dagre {

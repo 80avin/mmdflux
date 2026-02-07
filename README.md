@@ -341,6 +341,20 @@ edges to/from subgraph IDs are supported.
 
 Lines starting with `%%` are treated as comments.
 
+## JSON Output (MMDS)
+
+mmdflux produces structured JSON using the MMDS (Machine-Mediated Diagram Specification) format, designed for machine consumption in LLM pipelines, adapter libraries, and agentic workflows.
+
+```bash
+# Layout level (default): node geometry + edge topology, no edge paths
+mmdflux --format json diagram.mmd
+
+# Routed level: includes edge paths, bounds, and routing metadata
+mmdflux --format json --geometry-level routed diagram.mmd
+```
+
+JSON output is supported for flowchart and class diagrams. See [`docs/mmds.md`](docs/mmds.md) for the full specification and [`docs/mmds.schema.json`](docs/mmds.schema.json) for the JSON Schema. Adapter examples for React Flow, Cytoscape.js, and D3 are in [`examples/mmds/`](examples/mmds/).
+
 ## Library Usage
 
 ```rust

@@ -252,6 +252,16 @@ pub trait GraphLayoutEngine: Send + Sync {
     ) -> Result<Self::Output, RenderError>;
 }
 
+/// MMDS geometry level for JSON output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum GeometryLevel {
+    /// Node geometry + edge topology only (no edge paths).
+    #[default]
+    Layout,
+    /// Full geometry including routed edge paths.
+    Routed,
+}
+
 /// Configuration for rendering.
 #[derive(Debug, Clone, Default)]
 pub struct RenderConfig {
@@ -281,6 +291,8 @@ pub struct RenderConfig {
     pub svg_node_padding_y: Option<f64>,
     /// Show node IDs alongside labels (e.g., "A: Start").
     pub show_ids: bool,
+    /// MMDS geometry level for JSON output.
+    pub geometry_level: GeometryLevel,
 }
 
 /// Error type for rendering failures.

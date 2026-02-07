@@ -25,6 +25,11 @@ pub fn definition() -> DiagramDefinition {
         family: DiagramFamily::Graph,
         detector: detect as DiagramDetector,
         factory: || Box::new(ClassInstance::default()),
-        supported_formats: &[OutputFormat::Text, OutputFormat::Ascii, OutputFormat::Svg],
+        supported_formats: &[
+            OutputFormat::Text,
+            OutputFormat::Ascii,
+            OutputFormat::Svg,
+            OutputFormat::Json,
+        ],
     }
 }

@@ -264,6 +264,60 @@ fn cli_layout_engine_cose_not_implemented() {
 }
 
 // =============================================================================
+// MMDS JSON Output Tests
+// =============================================================================
+
+#[test]
+fn cli_json_output_is_mmds_layout_by_default() {
+    mmdflux()
+        .args(["--format", "json"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"version\": 2"))
+        .stdout(predicate::str::contains("\"geometry_level\": \"layout\""))
+        .stdout(predicate::str::contains("\"metadata\""))
+        .stdout(predicate::str::contains("\"nodes\""))
+        .stdout(predicate::str::contains("\"position\""))
+        .stdout(predicate::str::contains("\"size\""))
+        .stdout(predicate::str::contains("\"path\"").not());
+}
+
+#[test]
+fn cli_json_routed_level_includes_paths() {
+    mmdflux()
+        .args(["--format", "json", "--geometry-level", "routed"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"geometry_level\": \"routed\""))
+        .stdout(predicate::str::contains("\"path\""))
+        .stdout(predicate::str::contains("\"is_backward\""));
+}
+
+#[test]
+fn cli_json_class_diagram_produces_mmds() {
+    mmdflux()
+        .args(["--format", "json"])
+        .write_stdin("classDiagram\nA --> B")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"version\": 2"))
+        .stdout(predicate::str::contains("\"geometry_level\": \"layout\""))
+        .stdout(predicate::str::contains("\"diagram_type\": \"class\""));
+}
+
+#[test]
+fn cli_json_errors_for_unsupported_type() {
+    mmdflux()
+        .args(["--format", "json"])
+        .write_stdin("sequenceDiagram\nA->>B: hello")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("do not support json"));
+}
+
+// =============================================================================
 // All-Fixtures Smoke Test
 // =============================================================================
 

@@ -73,7 +73,8 @@ fn flowchart_instance_render_json() {
         .unwrap();
 
     let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
-    assert_eq!(parsed["version"], 1);
+    assert_eq!(parsed["version"], 2);
+    assert_eq!(parsed["geometry_level"], "layout");
     assert_eq!(parsed["nodes"].as_array().unwrap().len(), 2);
     assert_eq!(parsed["edges"].as_array().unwrap().len(), 1);
 
@@ -84,7 +85,12 @@ fn flowchart_instance_render_json() {
             "Node should have position: {}",
             node
         );
+        assert!(node["size"].is_object(), "Node should have size: {}", node);
     }
+
+    // Layout level: no edge geometry
+    assert!(!output.contains("\"path\""));
+    assert!(!output.contains("\"is_backward\""));
 }
 
 #[test]

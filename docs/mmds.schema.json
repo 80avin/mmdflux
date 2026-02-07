@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mmdflux.dev/mmds/v2",
+  "title": "MMDS — Machine-Mediated Diagram Specification",
+  "description": "Structured JSON output for graph-family Mermaid diagrams produced by mmdflux.",
+  "type": "object",
+  "required": ["version", "geometry_level", "metadata", "nodes", "edges", "subgraphs"],
+  "properties": {
+    "version": {
+      "const": 2,
+      "description": "Schema version. Always 2 for MMDS."
+    },
+    "geometry_level": {
+      "enum": ["layout", "routed"],
+      "description": "Geometry detail level. 'layout' includes node geometry + edge topology only. 'routed' adds edge paths, bounds, and routing metadata."
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "nodes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Node" },
+      "description": "Node inventory, sorted by ID."
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Edge" },
+      "description": "Edge inventory in declaration order."
+    },
+    "subgraphs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Subgraph" },
+      "description": "Subgraph inventory, sorted by ID."
+    }
+  },
+  "$defs": {
+    "Metadata": {
+      "type": "object",
+      "required": ["diagram_type", "direction"],
+      "properties": {
+        "diagram_type": {
+          "type": "string",
+          "description": "Diagram type identifier (e.g., 'flowchart', 'class')."
+        },
+        "direction": {
+          "enum": ["TD", "BT", "LR", "RL"],
+          "description": "Layout direction."
+        },
+        "bounds": {
+          "$ref": "#/$defs/Bounds",
+          "description": "Overall layout bounding box. Present only at routed level."
+        }
+      }
+    },
+    "Node": {
+      "type": "object",
+      "required": ["id", "label", "shape", "position", "size"],
+      "properties": {
+        "id": { "type": "string", "description": "Node identifier from Mermaid source." },
+        "label": { "type": "string", "description": "Display label." },
+        "shape": { "type": "string", "description": "Shape name in snake_case." },
+        "parent": { "type": "string", "description": "Parent subgraph ID, if any." },
+        "position": {
+          "$ref": "#/$defs/Position",
+          "description": "Center position in layout float space."
+        },
+        "size": {
+          "$ref": "#/$defs/Size",
+          "description": "Node bounding box dimensions."
+        }
+      }
+    },
+    "Edge": {
+      "type": "object",
+      "required": ["source", "target", "stroke", "arrow_start", "arrow_end"],
+      "properties": {
+        "source": { "type": "string", "description": "Source node ID." },
+        "target": { "type": "string", "description": "Target node ID." },
+        "label": { "type": "string", "description": "Edge label text." },
+        "stroke": {
+          "enum": ["solid", "dotted", "thick", "invisible"],
+          "description": "Stroke style."
+        },
+        "arrow_start": {
+          "enum": ["none", "normal", "cross", "circle"],
+          "description": "Arrow at source end."
+        },
+        "arrow_end": {
+          "enum": ["none", "normal", "cross", "circle"],
+          "description": "Arrow at target end."
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "description": "Routed edge path as [x, y] coordinate pairs. Routed level only."
+        },
+        "label_position": {
+          "$ref": "#/$defs/Position",
+          "description": "Label center position. Routed level only."
+        },
+        "is_backward": {
+          "type": "boolean",
+          "description": "Whether this edge flows backward in the layout direction. Routed level only."
+        }
+      }
+    },
+    "Subgraph": {
+      "type": "object",
+      "required": ["id", "title", "children"],
+      "properties": {
+        "id": { "type": "string", "description": "Subgraph identifier." },
+        "title": { "type": "string", "description": "Display title." },
+        "children": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of nodes directly in this subgraph."
+        },
+        "parent": { "type": "string", "description": "Parent subgraph ID, if nested." },
+        "bounds": {
+          "$ref": "#/$defs/Bounds",
+          "description": "Subgraph bounding box. Routed level only."
+        }
+      }
+    },
+    "Position": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "Size": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "number" },
+        "height": { "type": "number" }
+      }
+    },
+    "Bounds": {
+      "type": "object",
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "number" },
+        "height": { "type": "number" }
+      }
+    }
+  }
+}
