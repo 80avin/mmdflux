@@ -1,0 +1,16 @@
+{
+  "name": "@mmdflux/excalidraw-adapter",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Convert MMDS JSON to Excalidraw format with polyline edge routing",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsup",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  },
+  "license": "MIT"
+}

@@ -1,5 +1,8 @@
-// Convert MMDS layout-level JSON to Excalidraw format.
+// Convert MMDS layout-level JSON to Excalidraw format (zero-dependency example).
 // Usage: mmdflux --format mmds diagram.mmd | node excalidraw.js > diagram.excalidraw
+//
+// For the full-featured TypeScript version with polyline edge routing,
+// see adapters/excalidraw/ in the project root.
 //
 // The output is a valid .excalidraw JSON file that can be opened directly
 // in Excalidraw (https://excalidraw.com) or any compatible viewer.
