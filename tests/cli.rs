@@ -329,6 +329,31 @@ fn cli_json_alias_maps_to_mmds() {
         .stdout(predicate::str::contains("\"geometry_level\": \"layout\""));
 }
 
+#[test]
+fn cli_mmds_compact_omits_default_edge_fields() {
+    mmdflux()
+        .args(["--format", "mmds", "--mmds-compact"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"id\": \"e0\""))
+        .stdout(predicate::str::contains("\"stroke\"").not())
+        .stdout(predicate::str::contains("\"arrow_start\"").not())
+        .stdout(predicate::str::contains("\"arrow_end\"").not())
+        .stdout(predicate::str::contains("\"subgraphs\"").not());
+}
+
+#[test]
+fn cli_mmds_compact_keeps_non_default_edge_fields() {
+    mmdflux()
+        .args(["--format", "mmds", "--mmds-compact"])
+        .write_stdin("graph TD\nA -.-> B\nC --x D")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"stroke\": \"dotted\""))
+        .stdout(predicate::str::contains("\"arrow_end\": \"cross\""));
+}
+
 // =============================================================================
 // All-Fixtures Smoke Test
 // =============================================================================

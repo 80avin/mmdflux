@@ -293,6 +293,8 @@ pub struct RenderConfig {
     pub show_ids: bool,
     /// MMDS geometry level for JSON output.
     pub geometry_level: GeometryLevel,
+    /// MMDS compact mode: omit default-valued edge fields.
+    pub mmds_compact: bool,
 }
 
 /// Error type for rendering failures.

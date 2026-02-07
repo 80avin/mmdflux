@@ -96,6 +96,27 @@ fn flowchart_instance_render_json() {
 }
 
 #[test]
+fn flowchart_instance_render_json_compact() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+    let output = instance
+        .render(
+            OutputFormat::Json,
+            &RenderConfig {
+                mmds_compact: true,
+                ..RenderConfig::default()
+            },
+        )
+        .unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+    assert_eq!(parsed["edges"][0]["id"], "e0");
+    assert!(parsed["edges"][0]["stroke"].is_null());
+    assert!(parsed["edges"][0]["arrow_start"].is_null());
+    assert!(parsed["edges"][0]["arrow_end"].is_null());
+}
+
+#[test]
 fn test_show_ids_annotates_labels() {
     let mut instance = FlowchartInstance::new();
     instance.parse("graph TD\nA[Start] --> B[End]\n").unwrap();

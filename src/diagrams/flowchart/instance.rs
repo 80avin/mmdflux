@@ -3,7 +3,7 @@
 use super::routing;
 use crate::diagram::{GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig, RenderError};
 use crate::graph::{Diagram, build_diagram};
-use crate::mmds::to_mmds_json;
+use crate::mmds::to_mmds_json_with_options;
 use crate::parser::parse_flowchart;
 use crate::registry::DiagramInstance;
 use crate::render::{RenderOptions, render, render_svg_from_geometry};
@@ -66,11 +66,12 @@ impl DiagramInstance for FlowchartInstance {
             } else {
                 None
             };
-            return to_mmds_json(
+            return to_mmds_json_with_options(
                 diagram,
                 &engine_result.geometry,
                 routed.as_ref(),
                 config.geometry_level,
+                config.mmds_compact,
             );
         }
 

@@ -12,6 +12,7 @@ fn render_config_default() {
     assert!(config.svg_edge_curve_radius.is_none());
     assert!(config.svg_diagram_padding.is_none());
     assert!(!config.show_ids);
+    assert!(!config.mmds_compact);
 }
 
 #[test]

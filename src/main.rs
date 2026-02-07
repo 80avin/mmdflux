@@ -9,7 +9,7 @@ use mmdflux::registry::default_registry;
 
 #[derive(Parser)]
 #[command(name = "mmdflux")]
-#[command(about = "Convert Mermaid diagrams to text or SVG")]
+#[command(about = "Convert Mermaid diagrams to text, SVG, or MMDS JSON")]
 struct Cli {
     /// Input file (reads from stdin if not provided)
     input: Option<PathBuf>,
@@ -93,6 +93,10 @@ struct Cli {
     /// MMDS geometry level for JSON output (layout or routed)
     #[arg(long, value_enum)]
     geometry_level: Option<GeometryLevelArg>,
+
+    /// MMDS compact mode (omit default edge fields)
+    #[arg(long)]
+    mmds_compact: bool,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -221,6 +225,7 @@ fn main() -> io::Result<()> {
         svg_diagram_padding: cli.svg_diagram_padding,
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
+        mmds_compact: cli.mmds_compact,
     };
 
     // Use registry for detection and rendering

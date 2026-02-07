@@ -7,7 +7,7 @@ use crate::diagrams::flowchart::engine::layout_with_selected_engine;
 use crate::diagrams::flowchart::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::diagrams::flowchart::routing;
 use crate::graph::Diagram;
-use crate::mmds::to_mmds_json_typed;
+use crate::mmds::to_mmds_json_typed_with_options;
 use crate::registry::DiagramInstance;
 use crate::render::{RenderOptions, render, render_svg_from_geometry};
 
@@ -71,12 +71,13 @@ impl DiagramInstance for ClassInstance {
             } else {
                 None
             };
-            return to_mmds_json_typed(
+            return to_mmds_json_typed_with_options(
                 "class",
                 diagram,
                 &engine_result.geometry,
                 routed.as_ref(),
                 config.geometry_level,
+                config.mmds_compact,
             );
         }
 

@@ -33,6 +33,22 @@ Explicit opt-in via `--geometry-level routed`. Includes everything from layout p
 mmdflux --format mmds --geometry-level routed diagram.mmd
 ```
 
+### Compact mode (opt-in)
+
+Use `--mmds-compact` to omit default-valued edge style fields:
+
+- `stroke: "solid"`
+- `arrow_start: "none"`
+- `arrow_end: "normal"`
+- `shape: "rectangle"` on nodes
+- `subgraphs` when the array would be empty
+
+This can reduce token count significantly for typical flowcharts while preserving full semantics.
+
+```bash
+mmdflux --format mmds --mmds-compact diagram.mmd
+```
+
 ## Output Envelope
 
 ```json
@@ -59,6 +75,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | `metadata.diagram_type` | string | `"flowchart"` or `"class"` |
 | `metadata.direction` | string | `"TD"`, `"BT"`, `"LR"`, or `"RL"` |
 | `metadata.bounds` | object | Overall diagram bounds (`width`, `height`) |
+| `subgraphs` | array | Subgraph inventory (may be omitted in compact mode when empty) |
 
 ### Node
 
@@ -66,7 +83,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 |-------|------|-------|-------------|
 | `id` | string | both | Node identifier |
 | `label` | string | both | Display label |
-| `shape` | string | both | Shape name (snake_case) |
+| `shape` | string | both | Shape name (snake_case), default `"rectangle"` (may be omitted in compact mode) |
 | `parent` | string? | both | Parent subgraph ID |
 | `position` | `{x, y}` | both | Center position |
 | `size` | `{width, height}` | both | Bounding box |
@@ -79,9 +96,9 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | `target` | string | both | Target node ID |
 | `id` | string | both | Deterministic edge ID (`e{declaration_index}`) |
 | `label` | string? | both | Edge label |
-| `stroke` | string | both | `"solid"`, `"dotted"`, `"thick"`, `"invisible"` |
-| `arrow_start` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"` |
-| `arrow_end` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"` |
+| `stroke` | string | both | `"solid"`, `"dotted"`, `"thick"`, `"invisible"` (default `"solid"`, may be omitted in compact mode) |
+| `arrow_start` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"` (default `"none"`, may be omitted in compact mode) |
+| `arrow_end` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"` (default `"normal"`, may be omitted in compact mode) |
 | `path` | `[[x,y],...]` | routed | Polyline path coordinates |
 | `label_position` | `{x, y}` | routed | Label center |
 | `is_backward` | boolean | routed | Flows backward in layout |
