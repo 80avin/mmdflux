@@ -354,7 +354,7 @@ pub fn from_dagre_layout(result: &dagre::LayoutResult, diagram: &Diagram) -> Gra
 /// Graph geometry with fully-routed edge paths.
 ///
 /// Produced by the routing stage, consumed by renderers.
-/// Currently unused — will be wired when routing migrates to the IR pipeline.
+/// Currently a staged contract; kept to preserve the intended Layer-2 shape.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct RoutedGraphGeometry {

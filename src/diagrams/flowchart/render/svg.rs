@@ -1,6 +1,6 @@
 //! SVG rendering for flowchart diagrams.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use super::super::geometry::{self, GraphGeometry};
@@ -11,7 +11,7 @@ use super::layout::{
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use crate::dagre::{LayoutResult, Point, Rect};
-use crate::diagram::SvgEdgeCurve;
+use crate::diagram::{RoutingMode, SvgEdgeCurve};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 use crate::render::{RenderOptions, layout_config_for_diagram};
 
@@ -22,7 +22,6 @@ const TEXT_COLOR: &str = "#333";
 
 pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let svg_options = &options.svg;
-    let scale = svg_options.scale;
     let metrics = SvgTextMetrics::new(
         svg_options.font_size,
         svg_options.node_padding_x,
@@ -129,14 +128,49 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let mut rerouted_edges = rerouted_edges;
     rerouted_edges.extend(sg_node_rerouted);
 
-    let override_nodes = svg_router::build_override_node_map(diagram);
-
     // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
     // From this point on, rendering reads from `geom` instead of `layout`.
     let geom = geometry::from_dagre_layout(&layout, diagram);
+    let override_nodes = svg_router::build_override_node_map(diagram);
 
-    let self_edge_paths = compute_self_edge_paths(diagram, &geom, &metrics);
-    let bounds = compute_svg_bounds(diagram, &geom, &metrics, &self_edge_paths);
+    render_svg_with_geometry_context(diagram, options, &geom, &rerouted_edges, &override_nodes)
+}
+
+/// Render SVG directly from precomputed graph geometry.
+///
+/// This is used by runtime-selected engines that already produce `GraphGeometry`.
+pub fn render_svg_from_geometry(
+    diagram: &Diagram,
+    options: &RenderOptions,
+    geom: &GraphGeometry,
+    routing_mode: RoutingMode,
+) -> String {
+    let rerouted_edges: HashSet<usize> = if routing_mode == RoutingMode::PassThroughClip {
+        geom.edges.iter().map(|e| e.index).collect()
+    } else {
+        HashSet::new()
+    };
+    let override_nodes = svg_router::build_override_node_map(diagram);
+    render_svg_with_geometry_context(diagram, options, geom, &rerouted_edges, &override_nodes)
+}
+
+fn render_svg_with_geometry_context(
+    diagram: &Diagram,
+    options: &RenderOptions,
+    geom: &GraphGeometry,
+    rerouted_edges: &HashSet<usize>,
+    override_nodes: &HashMap<String, String>,
+) -> String {
+    let svg_options = &options.svg;
+    let scale = svg_options.scale;
+    let metrics = SvgTextMetrics::new(
+        svg_options.font_size,
+        svg_options.node_padding_x,
+        svg_options.node_padding_y,
+    );
+
+    let self_edge_paths = compute_self_edge_paths(diagram, geom, &metrics);
+    let bounds = compute_svg_bounds(diagram, geom, &metrics, &self_edge_paths);
     let padding = svg_options.diagram_padding;
     let (min_x, min_y, max_x, max_y) = bounds.finalize(geom.bounds.width, geom.bounds.height);
     let width = (max_x - min_x + padding * 2.0) * scale;
@@ -154,13 +188,13 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 
     render_defs(&mut writer, scale);
     writer.start_group_transform(offset_x, offset_y);
-    render_subgraphs(&mut writer, diagram, &geom, &metrics, scale);
+    render_subgraphs(&mut writer, diagram, geom, &metrics, scale);
     render_edges(
         &mut writer,
         diagram,
-        &geom,
+        geom,
         &self_edge_paths,
-        &rerouted_edges,
+        rerouted_edges,
         svg_options.edge_curve,
         svg_options.edge_curve_radius,
         scale,
@@ -168,13 +202,13 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     render_edge_labels(
         &mut writer,
         diagram,
-        &geom,
+        geom,
         &self_edge_paths,
-        &override_nodes,
+        override_nodes,
         &metrics,
         scale,
     );
-    render_nodes(&mut writer, diagram, &geom, &metrics, scale);
+    render_nodes(&mut writer, diagram, geom, &metrics, scale);
     writer.end_group();
 
     writer.end_svg();

@@ -24,7 +24,7 @@ pub use crate::diagrams::flowchart::render::router::{
 };
 pub use crate::diagrams::flowchart::render::shape::{NodeBounds, node_dimensions, render_node};
 use crate::diagrams::flowchart::render::subgraph;
-pub use crate::diagrams::flowchart::render::svg::render_svg;
+pub use crate::diagrams::flowchart::render::svg::{render_svg, render_svg_from_geometry};
 use crate::diagrams::flowchart::render::svg_metrics::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
 use crate::graph::{Diagram, Direction};
 

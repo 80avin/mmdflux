@@ -4,7 +4,7 @@ use super::model::SequenceModel;
 use super::parser::parse_sequence;
 use super::render::text;
 use super::{compiler, layout};
-use crate::diagram::{OutputFormat, RenderConfig, RenderError};
+use crate::diagram::{LayoutEngineId, OutputFormat, RenderConfig, RenderError};
 use crate::registry::DiagramInstance;
 use crate::render::chars::CharSet;
 
@@ -36,10 +36,22 @@ impl DiagramInstance for SequenceInstance {
         Ok(())
     }
 
-    fn render(&self, format: OutputFormat, _config: &RenderConfig) -> Result<String, RenderError> {
+    fn render(&self, format: OutputFormat, config: &RenderConfig) -> Result<String, RenderError> {
         let model = self.model.as_ref().ok_or_else(|| RenderError {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
+
+        if let Some(engine) = config
+            .layout_engine
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            let _engine_id = LayoutEngineId::parse(engine)?;
+            return Err(RenderError {
+                message: "layout engine selection is not supported for sequence diagrams"
+                    .to_string(),
+            });
+        }
 
         if !self.supports_format(format) {
             return Err(RenderError {

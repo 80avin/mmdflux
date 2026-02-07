@@ -269,7 +269,8 @@ fn parse_elk_output(output: &str, diagram: &Diagram) -> Result<GraphGeometry, Re
     // Parse edges
     let mut edges = Vec::new();
     if let Some(elk_edges) = root["edges"].as_array() {
-        for (idx, edge) in elk_edges.iter().enumerate() {
+        for edge in elk_edges {
+            let idx = parse_elk_edge_index(edge)?;
             let from = edge["sources"]
                 .as_array()
                 .and_then(|a| a.first())
@@ -368,6 +369,18 @@ fn parse_elk_output(output: &str, diagram: &Diagram) -> Result<GraphGeometry, Re
     })
 }
 
+fn parse_elk_edge_index(edge: &serde_json::Value) -> Result<usize, RenderError> {
+    let id = edge["id"]
+        .as_str()
+        .ok_or_else(|| RenderError::from("ELK edge missing 'id'"))?;
+    let numeric = id
+        .strip_prefix('e')
+        .ok_or_else(|| RenderError::from(format!("ELK edge id must start with 'e': {id:?}")))?;
+    numeric
+        .parse::<usize>()
+        .map_err(|_| RenderError::from(format!("ELK edge id has invalid index: {id:?}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -464,6 +477,35 @@ mod tests {
         // ELK top-left (0,0) with size (40,30) → center (20,15)
         assert_eq!(a.rect.x, 20.0);
         assert_eq!(a.rect.y, 15.0);
+    }
+
+    #[test]
+    fn parse_elk_output_uses_edge_ids_for_indices() {
+        let input = "graph TD\nA-->B\nB-->C";
+        let flowchart = crate::parser::parse_flowchart(input).unwrap();
+        let diagram = crate::graph::build_diagram(&flowchart);
+
+        let elk_output = r#"{
+            "id": "root",
+            "children": [
+                { "id": "A", "x": 10, "y": 10, "width": 40, "height": 30 },
+                { "id": "B", "x": 10, "y": 80, "width": 40, "height": 30 },
+                { "id": "C", "x": 10, "y": 150, "width": 40, "height": 30 }
+            ],
+            "edges": [
+                { "id": "e1", "sources": ["B"], "targets": ["C"], "sections": [] },
+                { "id": "e0", "sources": ["A"], "targets": ["B"], "sections": [] }
+            ]
+        }"#;
+
+        let geom = parse_elk_output(elk_output, &diagram).unwrap();
+        assert_eq!(geom.edges.len(), 2);
+        assert_eq!(geom.edges[0].index, 1);
+        assert_eq!(geom.edges[0].from, "B");
+        assert_eq!(geom.edges[0].to, "C");
+        assert_eq!(geom.edges[1].index, 0);
+        assert_eq!(geom.edges[1].from, "A");
+        assert_eq!(geom.edges[1].to, "B");
     }
 
     #[test]

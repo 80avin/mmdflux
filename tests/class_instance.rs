@@ -103,3 +103,19 @@ fn class_instance_via_registry() {
     assert!(out.contains("User"));
     assert!(out.contains("Order"));
 }
+
+#[test]
+fn class_instance_unknown_engine_errors() {
+    let mut instance = ClassInstance::new();
+    instance.parse("classDiagram\nA --> B").unwrap();
+    let result = instance.render(
+        OutputFormat::Text,
+        &RenderConfig {
+            layout_engine: Some("nonexistent".to_string()),
+            ..RenderConfig::default()
+        },
+    );
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.message.contains("unknown layout engine"));
+}

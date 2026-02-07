@@ -2,7 +2,7 @@
 
 use super::compiler;
 use super::parser::parse_class_diagram;
-use crate::diagram::{OutputFormat, RenderConfig, RenderError};
+use crate::diagram::{LayoutEngineId, OutputFormat, RenderConfig, RenderError};
 use crate::graph::Diagram;
 use crate::registry::DiagramInstance;
 use crate::render::{RenderOptions, render};
@@ -39,6 +39,15 @@ impl DiagramInstance for ClassInstance {
         let diagram = self.diagram.as_ref().ok_or_else(|| RenderError {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
+
+        if let Some(engine) = config
+            .layout_engine
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+        {
+            let engine_id = LayoutEngineId::parse(engine)?;
+            engine_id.check_available()?;
+        }
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;

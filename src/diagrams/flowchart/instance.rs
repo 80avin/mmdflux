@@ -1,11 +1,14 @@
 //! Flowchart diagram instance implementation.
 
-use crate::diagram::{OutputFormat, RenderConfig, RenderError};
+use crate::diagram::{LayoutEngineId, OutputFormat, RenderConfig, RenderError};
 use crate::graph::{Diagram, build_diagram};
 use crate::json::to_json;
 use crate::parser::parse_flowchart;
 use crate::registry::DiagramInstance;
-use crate::render::{RenderOptions, compute_layout_direct, layout_config_for_diagram, render};
+use crate::render::{
+    RenderOptions, compute_layout_direct, layout_config_for_diagram, render,
+    render_svg_from_geometry,
+};
 
 /// Flowchart diagram instance.
 ///
@@ -50,19 +53,41 @@ impl DiagramInstance for FlowchartInstance {
         };
 
         // Route runtime selection through the engine abstraction.
-        // Rendering still uses the mature phase-0/1 pipelines; this preflight ensures
-        // the selected engine can produce geometry for the current input/config.
-        // The routing mode is determined by engine capabilities but not yet used
-        // in the rendering pipeline (dagre's full-compute path is always used).
-        let _engine_result = super::engine::layout_with_selected_engine(diagram, config)?;
+        let engine_result = super::engine::layout_with_selected_engine(diagram, config)?;
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;
 
         if matches!(format, OutputFormat::Json) {
+            if engine_result.engine_id != LayoutEngineId::Dagre {
+                return Err(RenderError {
+                    message: format!(
+                        "{} engine is currently supported only for svg output",
+                        engine_result.engine_id
+                    ),
+                });
+            }
             let layout_config = layout_config_for_diagram(diagram, &options);
             let layout = compute_layout_direct(diagram, &layout_config);
             return Ok(to_json(diagram, Some(&layout)));
+        }
+
+        if matches!(format, OutputFormat::Svg) && engine_result.engine_id != LayoutEngineId::Dagre {
+            return Ok(render_svg_from_geometry(
+                diagram,
+                &options,
+                &engine_result.geometry,
+                engine_result.routing_mode,
+            ));
+        }
+
+        if engine_result.engine_id != LayoutEngineId::Dagre {
+            return Err(RenderError {
+                message: format!(
+                    "{} engine is currently supported only for svg output",
+                    engine_result.engine_id
+                ),
+            });
         }
 
         Ok(render(diagram, &options))

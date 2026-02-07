@@ -220,6 +220,28 @@ fn cli_layout_engine_unknown_fails_cleanly() {
 }
 
 #[test]
+fn cli_layout_engine_unknown_fails_for_class() {
+    mmdflux()
+        .args(["--layout-engine", "nonexistent"])
+        .write_stdin("classDiagram\nA --> B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown layout engine"));
+}
+
+#[test]
+fn cli_layout_engine_rejected_for_sequence() {
+    mmdflux()
+        .args(["--layout-engine", "dagre"])
+        .write_stdin("sequenceDiagram\nA->>B: hello")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "layout engine selection is not supported for sequence diagrams",
+        ));
+}
+
+#[test]
 fn cli_layout_engine_unavailable_fails_cleanly() {
     // Without engine-elk feature compiled, this should fail with actionable error
     #[cfg(not(feature = "engine-elk"))]

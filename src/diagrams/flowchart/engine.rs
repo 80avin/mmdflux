@@ -6,7 +6,7 @@
 use super::geometry::{self, GraphGeometry};
 use super::render::layout::build_dagre_layout;
 use crate::diagram::{
-    EngineCapabilities, EngineConfig, GraphLayoutEngine, RenderConfig, RenderError,
+    EngineCapabilities, EngineConfig, GraphLayoutEngine, LayoutEngineId, RenderConfig, RenderError,
 };
 use crate::graph::Diagram;
 
@@ -66,8 +66,8 @@ impl GraphLayoutEngine for DagreLayoutEngine {
 /// Fields are read in tests and will be consumed by the rendering pipeline
 /// once full engine integration is complete.
 #[derive(Debug)]
-#[allow(dead_code)]
 pub(crate) struct EngineLayoutResult {
+    pub engine_id: LayoutEngineId,
     pub geometry: GraphGeometry,
     pub routing_mode: crate::diagram::RoutingMode,
 }
@@ -81,7 +81,7 @@ pub(crate) fn layout_with_selected_engine(
     diagram: &Diagram,
     config: &RenderConfig,
 ) -> Result<EngineLayoutResult, RenderError> {
-    use crate::diagram::{LayoutEngineId, RoutingMode};
+    use crate::diagram::RoutingMode;
     use crate::engines::graph::GraphEngineRegistry;
 
     let engine_id = match config.layout_engine.as_deref() {
@@ -102,6 +102,7 @@ pub(crate) fn layout_with_selected_engine(
     let geometry = engine.layout(diagram, &engine_config)?;
 
     Ok(EngineLayoutResult {
+        engine_id,
         geometry,
         routing_mode,
     })
