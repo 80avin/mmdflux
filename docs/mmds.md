@@ -13,7 +13,7 @@ The default `--format mmds` output. (`--format json` is an alias.) Includes:
 - **Node geometry**: position (center x, y) and size (width, height) in unitless layout space
 - **Edge topology**: source, target, label, stroke style, arrow types
 - **Diagram bounds**: overall width and height in the same layout coordinate space
-- **Subgraph structure**: id, title, direct children, parent
+- **Subgraph structure**: id, title, direct children, parent, direction override
 
 Does **not** include edge paths, waypoints, ports, or routing metadata.
 
@@ -40,7 +40,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
   "version": 1,
   "defaults": {
     "node": { "shape": "rectangle" },
-    "edge": { "stroke": "solid", "arrow_start": "none", "arrow_end": "normal" }
+    "edge": { "stroke": "solid", "arrow_start": "none", "arrow_end": "normal", "minlen": 1 }
   },
   "geometry_level": "layout",
   "metadata": {
@@ -88,6 +88,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | `stroke` | string | both | `"solid"`, `"dotted"`, `"thick"`, `"invisible"`; omitted when equal to `defaults.edge.stroke` |
 | `arrow_start` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"`; omitted when equal to `defaults.edge.arrow_start` |
 | `arrow_end` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"`; omitted when equal to `defaults.edge.arrow_end` |
+| `minlen` | integer | both | Minimum rank separation; omitted when equal to `defaults.edge.minlen` |
 | `path` | `[[x,y],...]` | routed | Polyline path coordinates |
 | `label_position` | `{x, y}` | routed | Label center |
 | `is_backward` | boolean | routed | Flows backward in layout |
@@ -100,6 +101,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | `title` | string | both | Display title |
 | `children` | string[] | both | Direct child node IDs |
 | `parent` | string? | both | Parent subgraph ID |
+| `direction` | string? | both | Direction override: `"TD"`, `"BT"`, `"LR"`, or `"RL"` |
 | `bounds` | `{width, height}` | routed | Bounding box dimensions |
 
 ## Schema
@@ -128,7 +130,7 @@ Consumers rendering top-left-anchored primitives should convert node placement a
 MMDS has a single JSON shape. Fields that match document defaults may be omitted.
 
 - `defaults.node.shape` defines the implicit node shape when `node.shape` is absent.
-- `defaults.edge.stroke`, `defaults.edge.arrow_start`, and `defaults.edge.arrow_end` define implicit edge style when those fields are absent.
+- `defaults.edge.stroke`, `defaults.edge.arrow_start`, `defaults.edge.arrow_end`, and `defaults.edge.minlen` define implicit edge semantics when those fields are absent.
 - `subgraphs` is omitted when there are no subgraphs.
 
 Consumers should apply defaults before processing if they require explicit values.

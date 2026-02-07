@@ -263,6 +263,20 @@ fn convert_shape(shape_spec: &ShapeSpec) -> Shape {
 
 fn convert_edge(edge_spec: &EdgeSpec) -> Edge {
     let (stroke, mut arrow_start, mut arrow_end, label) = convert_connector(&edge_spec.connector);
+    let no_arrows =
+        edge_spec.connector.left == ArrowHead::None && edge_spec.connector.right == ArrowHead::None;
+    // Parser length is style-token length, not normalized minlen.
+    // For solid/thick open links, baseline syntax has one extra token
+    // ("---", "==="), so normalize it back to minlen=1.
+    let minlen = if no_arrows
+        && matches!(
+            edge_spec.connector.stroke,
+            StrokeSpec::Solid | StrokeSpec::Thick
+        ) {
+        (edge_spec.connector.length.saturating_sub(1)).max(1) as i32
+    } else {
+        edge_spec.connector.length as i32
+    };
 
     let (from, to) = if arrow_start != Arrow::None && arrow_end == Arrow::None {
         // If only the left arrow is present, treat it as a reversed edge.
@@ -274,7 +288,8 @@ fn convert_edge(edge_spec: &EdgeSpec) -> Edge {
 
     let mut edge = Edge::new(from, to)
         .with_stroke(stroke)
-        .with_arrows(arrow_start, arrow_end);
+        .with_arrows(arrow_start, arrow_end)
+        .with_minlen(minlen);
     edge.label = label;
     edge
 }
@@ -467,6 +482,23 @@ mod tests {
         assert_eq!(diagram.edges[0].stroke, Stroke::Invisible);
         assert_eq!(diagram.edges[0].arrow_start, Arrow::None);
         assert_eq!(diagram.edges[0].arrow_end, Arrow::None);
+        assert_eq!(diagram.edges[0].minlen, 1);
+    }
+
+    #[test]
+    fn test_build_diagram_variable_length_edge_sets_minlen() {
+        let flowchart = parse_flowchart("graph TD\nA ----> B\n").unwrap();
+        let diagram = build_diagram(&flowchart);
+        assert_eq!(diagram.edges.len(), 1);
+        assert!(diagram.edges[0].minlen > 1);
+    }
+
+    #[test]
+    fn test_build_diagram_open_solid_edge_default_minlen() {
+        let flowchart = parse_flowchart("graph TD\nA --- B\n").unwrap();
+        let diagram = build_diagram(&flowchart);
+        assert_eq!(diagram.edges.len(), 1);
+        assert_eq!(diagram.edges[0].minlen, 1);
     }
 
     #[test]

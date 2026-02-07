@@ -343,10 +343,12 @@ fn cli_mmds_includes_defaults_block_and_omits_default_edge_fields() {
     assert_eq!(parsed["defaults"]["edge"]["stroke"], "solid");
     assert_eq!(parsed["defaults"]["edge"]["arrow_start"], "none");
     assert_eq!(parsed["defaults"]["edge"]["arrow_end"], "normal");
+    assert_eq!(parsed["defaults"]["edge"]["minlen"], 1);
     let edge = &parsed["edges"][0];
     assert!(edge.get("stroke").is_none());
     assert!(edge.get("arrow_start").is_none());
     assert!(edge.get("arrow_end").is_none());
+    assert!(edge.get("minlen").is_none());
     assert!(parsed.get("subgraphs").is_none());
 }
 
@@ -354,11 +356,12 @@ fn cli_mmds_includes_defaults_block_and_omits_default_edge_fields() {
 fn cli_mmds_keeps_non_default_edge_fields() {
     mmdflux()
         .args(["--format", "mmds"])
-        .write_stdin("graph TD\nA -.-> B\nC --x D")
+        .write_stdin("graph TD\nA -.-> B\nC --x D\nE ----> F")
         .assert()
         .success()
         .stdout(predicate::str::contains("\"stroke\": \"dotted\""))
-        .stdout(predicate::str::contains("\"arrow_end\": \"cross\""));
+        .stdout(predicate::str::contains("\"arrow_end\": \"cross\""))
+        .stdout(predicate::str::contains("\"minlen\": 3"));
 }
 
 // =============================================================================

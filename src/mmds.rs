@@ -127,6 +127,7 @@ fn build_mmds_output(
                 stroke: stroke_str(edge.stroke).to_string(),
                 arrow_start: arrow_str(edge.arrow_start).to_string(),
                 arrow_end: arrow_str(edge.arrow_end).to_string(),
+                minlen: edge.minlen,
                 path: None,
                 label_position: None,
                 is_backward: None,
@@ -176,6 +177,7 @@ fn build_mmds_output(
                 title: sg.title.clone(),
                 children: direct_children,
                 parent: sg.parent.clone(),
+                direction: sg.dir.map(|d| direction_str(d).to_string()),
                 bounds,
             }
         })
@@ -322,6 +324,8 @@ pub struct MmdsEdgeDefaults {
     pub arrow_start: String,
     #[serde(default = "default_arrow_end")]
     pub arrow_end: String,
+    #[serde(default = "default_minlen")]
+    pub minlen: i32,
 }
 
 impl Default for MmdsEdgeDefaults {
@@ -330,6 +334,7 @@ impl Default for MmdsEdgeDefaults {
             stroke: default_stroke(),
             arrow_start: default_arrow_start(),
             arrow_end: default_arrow_end(),
+            minlen: default_minlen(),
         }
     }
 }
@@ -417,6 +422,9 @@ pub struct MmdsEdge {
         skip_serializing_if = "is_default_arrow_end"
     )]
     pub arrow_end: String,
+    /// Minimum rank separation.
+    #[serde(default = "default_minlen", skip_serializing_if = "is_default_minlen")]
+    pub minlen: i32,
     /// Routed edge path (routed level only).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -444,6 +452,10 @@ pub struct MmdsSubgraph {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub parent: Option<String>,
+    /// Subgraph direction override ("TD", "BT", "LR", "RL"), if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub direction: Option<String>,
     /// Subgraph bounding box (routed level only).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
@@ -466,6 +478,10 @@ fn default_arrow_end() -> String {
     "normal".to_string()
 }
 
+fn default_minlen() -> i32 {
+    1
+}
+
 fn is_default_node_shape(value: &String) -> bool {
     value == "rectangle"
 }
@@ -480,6 +496,10 @@ fn is_default_arrow_start(value: &String) -> bool {
 
 fn is_default_arrow_end(value: &String) -> bool {
     value == "normal"
+}
+
+fn is_default_minlen(value: &i32) -> bool {
+    *value == 1
 }
 
 #[cfg(test)]
@@ -524,6 +544,7 @@ mod tests {
         assert_eq!(output.defaults.edge.stroke, "solid");
         assert_eq!(output.defaults.edge.arrow_start, "none");
         assert_eq!(output.defaults.edge.arrow_end, "normal");
+        assert_eq!(output.defaults.edge.minlen, 1);
         assert_eq!(output.metadata.diagram_type, "flowchart");
         assert_eq!(output.metadata.direction, "TD");
         assert!(output.metadata.bounds.width > 0.0);
@@ -572,6 +593,7 @@ mod tests {
         assert_eq!(edge.stroke, "dotted");
         assert_eq!(edge.label, Some("label".to_string()));
         assert_eq!(edge.arrow_end, "normal");
+        assert_eq!(edge.minlen, 1);
     }
 
     #[test]
@@ -583,16 +605,18 @@ mod tests {
         assert!(edge.get("stroke").is_none());
         assert!(edge.get("arrow_start").is_none());
         assert!(edge.get("arrow_end").is_none());
+        assert!(edge.get("minlen").is_none());
     }
 
     #[test]
     fn layout_keeps_non_default_edge_fields() {
-        let (diagram, geom) = layout_geometry("graph TD\nA -.-> B\nC --x D");
+        let (diagram, geom) = layout_geometry("graph TD\nA -.-> B\nC --x D\nE ----> F");
         let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         let edges = value["edges"].as_array().unwrap();
         assert_eq!(edges[0]["stroke"], "dotted");
         assert_eq!(edges[1]["arrow_end"], "cross");
+        assert!(edges[2]["minlen"].as_i64().unwrap() > 1);
     }
 
     #[test]
@@ -622,6 +646,7 @@ mod tests {
         assert_eq!(output.edges[0].stroke, "solid");
         assert_eq!(output.edges[0].arrow_start, "none");
         assert_eq!(output.edges[0].arrow_end, "normal");
+        assert_eq!(output.edges[0].minlen, 1);
         assert!(output.subgraphs.is_empty());
     }
 
@@ -634,7 +659,17 @@ mod tests {
         assert_eq!(output.subgraphs.len(), 1);
         assert_eq!(output.subgraphs[0].id, "sg1");
         assert_eq!(output.subgraphs[0].title, "Group");
+        assert_eq!(output.subgraphs[0].direction, None);
         assert!(output.subgraphs[0].bounds.is_none());
+    }
+
+    #[test]
+    fn layout_json_subgraph_direction_override() {
+        let (diagram, geom) =
+            layout_geometry("graph TD\nsubgraph sg1[Group]\ndirection LR\nA-->B\nend");
+        let json = to_mmds_layout(&diagram, &geom);
+        let output: MmdsOutput = serde_json::from_str(&json).unwrap();
+        assert_eq!(output.subgraphs[0].direction.as_deref(), Some("LR"));
     }
 
     #[test]

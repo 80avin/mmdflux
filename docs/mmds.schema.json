@@ -59,7 +59,7 @@
     },
     "EdgeDefaults": {
       "type": "object",
-      "required": ["stroke", "arrow_start", "arrow_end"],
+      "required": ["stroke", "arrow_start", "arrow_end", "minlen"],
       "properties": {
         "stroke": {
           "enum": ["solid", "dotted", "thick", "invisible"],
@@ -72,6 +72,10 @@
         "arrow_end": {
           "enum": ["none", "normal", "cross", "circle"],
           "description": "Default target-end marker used when an edge omits arrow_end."
+        },
+        "minlen": {
+          "type": "integer",
+          "description": "Default minimum rank separation used when an edge omits minlen."
         }
       }
     },
@@ -141,6 +145,11 @@
           "default": "normal",
           "description": "Arrow at target end. If omitted, consumers should use defaults.edge.arrow_end."
         },
+        "minlen": {
+          "type": "integer",
+          "default": 1,
+          "description": "Minimum rank separation. If omitted, consumers should use defaults.edge.minlen."
+        },
         "path": {
           "type": "array",
           "items": {
@@ -173,6 +182,10 @@
           "description": "IDs of nodes directly in this subgraph."
         },
         "parent": { "type": "string", "description": "Parent subgraph ID, if nested." },
+        "direction": {
+          "enum": ["TD", "BT", "LR", "RL"],
+          "description": "Subgraph direction override."
+        },
         "bounds": {
           "$ref": "#/$defs/Bounds",
           "description": "Subgraph bounding box. Routed level only."

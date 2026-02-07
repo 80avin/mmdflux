@@ -106,10 +106,12 @@ fn flowchart_instance_render_json_uses_defaults_omission() {
 
     assert_eq!(parsed["defaults"]["node"]["shape"], "rectangle");
     assert_eq!(parsed["defaults"]["edge"]["stroke"], "solid");
+    assert_eq!(parsed["defaults"]["edge"]["minlen"], 1);
     assert_eq!(parsed["edges"][0]["id"], "e0");
     assert!(parsed["edges"][0]["stroke"].is_null());
     assert!(parsed["edges"][0]["arrow_start"].is_null());
     assert!(parsed["edges"][0]["arrow_end"].is_null());
+    assert!(parsed["edges"][0]["minlen"].is_null());
 }
 
 #[test]

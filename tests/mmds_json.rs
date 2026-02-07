@@ -169,7 +169,15 @@ fn mmds_layout_subgraphs() {
     assert_eq!(output.subgraphs.len(), 1);
     assert_eq!(output.subgraphs[0].id, "sg1");
     assert_eq!(output.subgraphs[0].title, "Group");
+    assert!(output.subgraphs[0].direction.is_none());
     assert!(output.subgraphs[0].bounds.is_none());
+}
+
+#[test]
+fn mmds_layout_subgraph_direction_override() {
+    let json = render_json("graph TD\nsubgraph sg1[Group]\ndirection LR\nA-->B\nend");
+    let output: MmdsOutput = serde_json::from_str(&json).unwrap();
+    assert_eq!(output.subgraphs[0].direction.as_deref(), Some("LR"));
 }
 
 // -----------------------------------------------------------------------
@@ -238,6 +246,7 @@ fn mmds_includes_defaults_block() {
     assert_eq!(value["defaults"]["edge"]["stroke"], "solid");
     assert_eq!(value["defaults"]["edge"]["arrow_start"], "none");
     assert_eq!(value["defaults"]["edge"]["arrow_end"], "normal");
+    assert_eq!(value["defaults"]["edge"]["minlen"], 1);
 }
 
 #[test]
@@ -248,15 +257,17 @@ fn mmds_omits_default_edge_fields() {
     assert!(edge.get("stroke").is_none());
     assert!(edge.get("arrow_start").is_none());
     assert!(edge.get("arrow_end").is_none());
+    assert!(edge.get("minlen").is_none());
 }
 
 #[test]
 fn mmds_keeps_non_default_edge_fields() {
-    let json = render_json("graph TD\nA -.-> B\nC --x D");
+    let json = render_json("graph TD\nA -.-> B\nC --x D\nE ----> F");
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     let edges = value["edges"].as_array().unwrap();
     assert_eq!(edges[0]["stroke"], "dotted");
     assert_eq!(edges[1]["arrow_end"], "cross");
+    assert!(edges[2]["minlen"].as_i64().unwrap() > 1);
 }
 
 #[test]
@@ -298,6 +309,7 @@ fn mmds_deserializes_with_defaults() {
     assert_eq!(output.edges[0].stroke, "solid");
     assert_eq!(output.edges[0].arrow_start, "none");
     assert_eq!(output.edges[0].arrow_end, "normal");
+    assert_eq!(output.edges[0].minlen, 1);
     assert!(output.subgraphs.is_empty());
 }
 
