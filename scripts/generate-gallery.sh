@@ -11,9 +11,9 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-FIXTURES="$REPO/tests/fixtures"
-TEXT_SNAPSHOTS="$REPO/tests/snapshots"
-SVG_SNAPSHOTS="$REPO/tests/svg-snapshots"
+FIXTURES="$REPO/tests/fixtures/flowchart"
+TEXT_SNAPSHOTS="$REPO/tests/snapshots/flowchart"
+SVG_SNAPSHOTS="$REPO/tests/svg-snapshots/flowchart"
 OUTFILE="$REPO/docs/gallery.md"
 
 usage() {
@@ -88,8 +88,8 @@ commit_sha="$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "unknown
   echo
   echo "_Generated from commit \`$commit_sha\` — ${#files[@]} fixtures_"
   echo
-  echo "This gallery is generated from test fixtures in \`tests/fixtures\`,"
-  echo "text snapshots in \`tests/snapshots\`, and SVG snapshots in \`tests/svg-snapshots\`."
+  echo "This gallery is generated from test fixtures in \`tests/fixtures/flowchart\`,"
+  echo "text snapshots in \`tests/snapshots/flowchart\`, and SVG snapshots in \`tests/svg-snapshots/flowchart\`."
   echo
 } > "$OUTFILE"
 
@@ -103,7 +103,7 @@ for f in "${files[@]}"; do
 
   echo "## $name" >> "$OUTFILE"
   echo >> "$OUTFILE"
-  echo "\`tests/fixtures/${name}.mmd\`" >> "$OUTFILE"
+  echo "\`tests/fixtures/flowchart/${name}.mmd\`" >> "$OUTFILE"
   echo >> "$OUTFILE"
 
   if [[ -f "$text" ]]; then
@@ -113,7 +113,7 @@ for f in "${files[@]}"; do
     cat "$text" >> "$OUTFILE"
     printf '\n```\n\n' >> "$OUTFILE"
   else
-    echo "> Missing text snapshot: \`tests/snapshots/${name}.txt\`" >> "$OUTFILE"
+    echo "> Missing text snapshot: \`tests/snapshots/flowchart/${name}.txt\`" >> "$OUTFILE"
     echo >> "$OUTFILE"
     missing_text=$((missing_text + 1))
   fi
@@ -125,7 +125,7 @@ for f in "${files[@]}"; do
     echo "![${name} svg](${svg_rel})" >> "$OUTFILE"
     echo >> "$OUTFILE"
   else
-    echo "> Missing SVG snapshot: \`tests/svg-snapshots/${name}.svg\`" >> "$OUTFILE"
+    echo "> Missing SVG snapshot: \`tests/svg-snapshots/flowchart/${name}.svg\`" >> "$OUTFILE"
     echo >> "$OUTFILE"
     missing_svg=$((missing_svg + 1))
   fi

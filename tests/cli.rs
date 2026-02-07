@@ -368,11 +368,12 @@ fn cli_mmds_keeps_non_default_edge_fields() {
 // All-Fixtures Smoke Test
 // =============================================================================
 
-/// Discover all flowchart fixture files from tests/fixtures/.
+/// Discover all flowchart fixture files from tests/fixtures/flowchart/.
 fn discover_flowchart_fixtures() -> Vec<std::path::PathBuf> {
     let fixtures_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
-        .join("fixtures");
+        .join("fixtures")
+        .join("flowchart");
     let mut fixtures: Vec<_> = std::fs::read_dir(&fixtures_dir)
         .expect("fixtures directory should exist")
         .filter_map(|entry| {
@@ -399,7 +400,8 @@ fn cli_renders_all_flowchart_fixtures_successfully() {
 
     let snapshots_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
-        .join("snapshots");
+        .join("snapshots")
+        .join("flowchart");
 
     for fixture_path in &fixtures {
         let fixture_name = fixture_path.file_stem().unwrap().to_str().unwrap();

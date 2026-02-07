@@ -188,7 +188,7 @@ mod tests {
     fn subgraph_parse_order_is_postorder() {
         use crate::graph::builder::build_diagram;
         use crate::parser::parse_flowchart;
-        let input = include_str!("../../tests/fixtures/external_node_subgraph.mmd");
+        let input = include_str!("../../tests/fixtures/flowchart/external_node_subgraph.mmd");
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
 

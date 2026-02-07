@@ -27,7 +27,7 @@ done
 set -- "${args[@]+"${args[@]}"}"
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-FIXTURES="$REPO/tests/fixtures"
+FIXTURES="$REPO/tests/fixtures/flowchart"
 OUTDIR="/tmp/mmdflux-compare"
 MMDFLUX="$REPO/target/debug/mmdflux"
 
@@ -238,7 +238,7 @@ for f in "${files[@]}"; do
     cat >> "$OUTDIR/index.html" <<FIXTURE
 <div class="fixture">
   <h2>$name</h2>
-  <div class="filename">tests/fixtures/${name}.mmd</div>
+  <div class="filename">tests/fixtures/flowchart/${name}.mmd</div>
   <div class="compare">
     <div class="panel">
       <h3>mmdflux (Text)</h3>

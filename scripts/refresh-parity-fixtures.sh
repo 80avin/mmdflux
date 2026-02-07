@@ -41,7 +41,7 @@ FIXTURES=(
 )
 
 PARITY_DIR="$REPO_ROOT/tests/parity-fixtures"
-FIXTURE_DIR="$REPO_ROOT/tests/fixtures"
+FIXTURE_DIR="$REPO_ROOT/tests/fixtures/flowchart"
 
 for fixture in "${FIXTURES[@]}"; do
   echo "Processing $fixture..."

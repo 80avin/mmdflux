@@ -80,7 +80,8 @@ fn render_svg_subgraphs_and_self_edges() {
 fn render_svg_direction_override_lr_node_positions() {
     // subgraph_direction_lr.mmd: TD graph with LR subgraph containing Step 1 -> Step 2 -> Step 3
     // After direction override, these nodes should be arranged horizontally (increasing x).
-    let input = std::fs::read_to_string("tests/fixtures/subgraph_direction_lr.mmd").unwrap();
+    let input =
+        std::fs::read_to_string("tests/fixtures/flowchart/subgraph_direction_lr.mmd").unwrap();
     let flowchart = parse_flowchart(&input).unwrap();
     let diagram = build_diagram(&flowchart);
     let svg = render_svg(&diagram, &RenderOptions::default_svg());
@@ -100,7 +101,8 @@ fn render_svg_direction_override_lr_node_positions() {
 fn render_svg_direction_override_cross_boundary() {
     // subgraph_direction_cross_boundary.mmd: TD graph with LR subgraph, cross-boundary edges
     let input =
-        std::fs::read_to_string("tests/fixtures/subgraph_direction_cross_boundary.mmd").unwrap();
+        std::fs::read_to_string("tests/fixtures/flowchart/subgraph_direction_cross_boundary.mmd")
+            .unwrap();
     let flowchart = parse_flowchart(&input).unwrap();
     let diagram = build_diagram(&flowchart);
     let svg = render_svg(&diagram, &RenderOptions::default_svg());
@@ -122,7 +124,8 @@ fn render_svg_direction_override_cross_boundary() {
 #[test]
 fn render_svg_direction_override_mixed() {
     // subgraph_direction_mixed.mmd: Two subgraphs with different direction overrides
-    let input = std::fs::read_to_string("tests/fixtures/subgraph_direction_mixed.mmd").unwrap();
+    let input =
+        std::fs::read_to_string("tests/fixtures/flowchart/subgraph_direction_mixed.mmd").unwrap();
     let flowchart = parse_flowchart(&input).unwrap();
     let diagram = build_diagram(&flowchart);
     let svg = render_svg(&diagram, &RenderOptions::default_svg());
@@ -148,7 +151,8 @@ fn render_svg_direction_override_mixed() {
 #[test]
 fn render_svg_direction_override_nested() {
     // subgraph_direction_nested.mmd: Outer (no override) with inner LR subgraph
-    let input = std::fs::read_to_string("tests/fixtures/subgraph_direction_nested.mmd").unwrap();
+    let input =
+        std::fs::read_to_string("tests/fixtures/flowchart/subgraph_direction_nested.mmd").unwrap();
     let flowchart = parse_flowchart(&input).unwrap();
     let diagram = build_diagram(&flowchart);
     let svg = render_svg(&diagram, &RenderOptions::default_svg());
@@ -171,7 +175,8 @@ fn render_svg_direction_override_nested() {
 fn render_svg_direction_override_nested_both() {
     // subgraph_direction_nested_both.mmd: Outer LR with inner BT
     let input =
-        std::fs::read_to_string("tests/fixtures/subgraph_direction_nested_both.mmd").unwrap();
+        std::fs::read_to_string("tests/fixtures/flowchart/subgraph_direction_nested_both.mmd")
+            .unwrap();
     let flowchart = parse_flowchart(&input).unwrap();
     let diagram = build_diagram(&flowchart);
     let svg = render_svg(&diagram, &RenderOptions::default_svg());
@@ -203,7 +208,7 @@ fn render_svg_all_direction_override_fixtures_valid() {
         "subgraph_direction_nested_both.mmd",
     ];
     for fixture in &fixtures {
-        let path = format!("tests/fixtures/{fixture}");
+        let path = format!("tests/fixtures/flowchart/{fixture}");
         let input =
             std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read {path}: {e}"));
         let flowchart =

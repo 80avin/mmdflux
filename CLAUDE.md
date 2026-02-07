@@ -83,7 +83,13 @@ Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram → Dag
 
 ## Testing
 
-Test fixtures live in `tests/fixtures/` with `.mmd` files covering various patterns:
+Test fixtures are organized by diagram type:
+
+- `tests/fixtures/flowchart/*.mmd` — flowchart fixtures (70 files)
+- `tests/fixtures/class/*.mmd` — class diagram fixtures
+- `tests/fixtures/sequence/*.mmd` — sequence diagram fixtures
+
+Flowchart fixture categories:
 
 - **Basic flows**: `simple.mmd`, `chain.mmd`, `ampersand.mmd`
 - **Node shapes**: `decision.mmd`, `shapes.mmd`, `diamond_fan.mmd`
@@ -93,6 +99,8 @@ Test fixtures live in `tests/fixtures/` with `.mmd` files covering various patte
 - **Fan patterns**: `fan_in.mmd`, `fan_out.mmd`, `fan_in_lr.mmd`, `five_fan_in.mmd`, `narrow_fan_in.mmd`, `stacked_fan_in.mmd`
 - **Long edges**: `double_skip.mmd`, `skip_edge_collision.mmd`
 - **Complex examples**: `complex.mmd`, `http_request.mmd`, `ci_pipeline.mmd`, `git_workflow.mmd`
+
+Snapshots follow the same structure: `tests/snapshots/flowchart/*.txt`, `tests/svg-snapshots/flowchart/*.svg`.
 
 Integration tests in `tests/integration.rs` verify parsing, building, and rendering.
 

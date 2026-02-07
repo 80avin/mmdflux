@@ -7,7 +7,8 @@ use mmdflux::{build_diagram, parse_flowchart};
 fn list_fixtures() -> Vec<String> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
-        .join("fixtures");
+        .join("fixtures")
+        .join("flowchart");
     let mut fixtures: Vec<String> = fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("Failed to read fixtures dir: {e}"))
         .filter_map(|entry| {
@@ -27,6 +28,7 @@ fn load_fixture(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
+        .join("flowchart")
         .join(name);
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read fixture {name}: {e}"))
 }
@@ -42,6 +44,7 @@ fn snapshot_path(stem: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("svg-snapshots")
+        .join("flowchart")
         .join(format!("{stem}.svg"))
 }
 

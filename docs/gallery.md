@@ -1,13 +1,13 @@
 # mmdflux gallery
 
-_Generated from commit `a361584` — 70 fixtures_
+_Generated from commit `bdae5c6` — 70 fixtures_
 
-This gallery is generated from test fixtures in `tests/fixtures`,
-text snapshots in `tests/snapshots`, and SVG snapshots in `tests/svg-snapshots`.
+This gallery is generated from test fixtures in `tests/fixtures/flowchart`,
+text snapshots in `tests/snapshots/flowchart`, and SVG snapshots in `tests/svg-snapshots/flowchart`.
 
 ## ampersand
 
-`tests/fixtures/ampersand.mmd`
+`tests/fixtures/flowchart/ampersand.mmd`
 
 **Text**
 
@@ -31,7 +31,7 @@ text snapshots in `tests/snapshots`, and SVG snapshots in `tests/svg-snapshots`.
 
 **SVG**
 
-![ampersand svg](../tests/svg-snapshots/ampersand.svg)
+![ampersand svg](../tests/svg-snapshots/flowchart/ampersand.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -47,7 +47,7 @@ graph TD
 
 ## backward_in_subgraph
 
-`tests/fixtures/backward_in_subgraph.mmd`
+`tests/fixtures/flowchart/backward_in_subgraph.mmd`
 
 **Text**
 
@@ -67,7 +67,7 @@ graph TD
 
 **SVG**
 
-![backward_in_subgraph svg](../tests/svg-snapshots/backward_in_subgraph.svg)
+![backward_in_subgraph svg](../tests/svg-snapshots/flowchart/backward_in_subgraph.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -85,7 +85,7 @@ end
 
 ## bidirectional_arrows
 
-`tests/fixtures/bidirectional_arrows.mmd`
+`tests/fixtures/flowchart/bidirectional_arrows.mmd`
 
 **Text**
 
@@ -115,7 +115,7 @@ end
 
 **SVG**
 
-![bidirectional_arrows svg](../tests/svg-snapshots/bidirectional_arrows.svg)
+![bidirectional_arrows svg](../tests/svg-snapshots/flowchart/bidirectional_arrows.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -132,7 +132,7 @@ graph TD
 
 ## bidirectional
 
-`tests/fixtures/bidirectional.mmd`
+`tests/fixtures/flowchart/bidirectional.mmd`
 
 **Text**
 
@@ -162,7 +162,7 @@ graph TD
 
 **SVG**
 
-![bidirectional svg](../tests/svg-snapshots/bidirectional.svg)
+![bidirectional svg](../tests/svg-snapshots/flowchart/bidirectional.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -179,7 +179,7 @@ graph TD
 
 ## bottom_top
 
-`tests/fixtures/bottom_top.mmd`
+`tests/fixtures/flowchart/bottom_top.mmd`
 
 **Text**
 
@@ -203,7 +203,7 @@ graph TD
 
 **SVG**
 
-![bottom_top svg](../tests/svg-snapshots/bottom_top.svg)
+![bottom_top svg](../tests/svg-snapshots/flowchart/bottom_top.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -219,7 +219,7 @@ graph BT
 
 ## chain
 
-`tests/fixtures/chain.mmd`
+`tests/fixtures/flowchart/chain.mmd`
 
 **Text**
 
@@ -249,7 +249,7 @@ graph BT
 
 **SVG**
 
-![chain svg](../tests/svg-snapshots/chain.svg)
+![chain svg](../tests/svg-snapshots/flowchart/chain.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -264,7 +264,7 @@ graph TD
 
 ## ci_pipeline
 
-`tests/fixtures/ci_pipeline.mmd`
+`tests/fixtures/flowchart/ci_pipeline.mmd`
 
 **Text**
 
@@ -282,7 +282,7 @@ graph TD
 
 **SVG**
 
-![ci_pipeline svg](../tests/svg-snapshots/ci_pipeline.svg)
+![ci_pipeline svg](../tests/svg-snapshots/flowchart/ci_pipeline.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -302,7 +302,7 @@ graph LR
 
 ## compat_class_annotation
 
-`tests/fixtures/compat_class_annotation.mmd`
+`tests/fixtures/flowchart/compat_class_annotation.mmd`
 
 **Text**
 
@@ -330,7 +330,7 @@ graph LR
 
 **SVG**
 
-![compat_class_annotation svg](../tests/svg-snapshots/compat_class_annotation.svg)
+![compat_class_annotation svg](../tests/svg-snapshots/flowchart/compat_class_annotation.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -350,7 +350,7 @@ graph TD
 
 ## compat_directive
 
-`tests/fixtures/compat_directive.mmd`
+`tests/fixtures/flowchart/compat_directive.mmd`
 
 **Text**
 
@@ -378,7 +378,7 @@ graph TD
 
 **SVG**
 
-![compat_directive svg](../tests/svg-snapshots/compat_directive.svg)
+![compat_directive svg](../tests/svg-snapshots/flowchart/compat_directive.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -396,7 +396,7 @@ graph TD
 
 ## compat_frontmatter
 
-`tests/fixtures/compat_frontmatter.mmd`
+`tests/fixtures/flowchart/compat_frontmatter.mmd`
 
 **Text**
 
@@ -420,7 +420,7 @@ graph TD
 
 **SVG**
 
-![compat_frontmatter svg](../tests/svg-snapshots/compat_frontmatter.svg)
+![compat_frontmatter svg](../tests/svg-snapshots/flowchart/compat_frontmatter.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -439,7 +439,7 @@ graph TD
 
 ## compat_hyphenated_ids
 
-`tests/fixtures/compat_hyphenated_ids.mmd`
+`tests/fixtures/flowchart/compat_hyphenated_ids.mmd`
 
 **Text**
 
@@ -469,7 +469,7 @@ graph TD
 
 **SVG**
 
-![compat_hyphenated_ids svg](../tests/svg-snapshots/compat_hyphenated_ids.svg)
+![compat_hyphenated_ids svg](../tests/svg-snapshots/flowchart/compat_hyphenated_ids.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -486,7 +486,7 @@ graph TD
 
 ## compat_invisible_edge
 
-`tests/fixtures/compat_invisible_edge.mmd`
+`tests/fixtures/flowchart/compat_invisible_edge.mmd`
 
 **Text**
 
@@ -510,7 +510,7 @@ graph TD
 
 **SVG**
 
-![compat_invisible_edge svg](../tests/svg-snapshots/compat_invisible_edge.svg)
+![compat_invisible_edge svg](../tests/svg-snapshots/flowchart/compat_invisible_edge.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -527,7 +527,7 @@ graph TD
 
 ## compat_kitchen_sink
 
-`tests/fixtures/compat_kitchen_sink.mmd`
+`tests/fixtures/flowchart/compat_kitchen_sink.mmd`
 
 **Text**
 
@@ -563,7 +563,7 @@ graph TD
 
 **SVG**
 
-![compat_kitchen_sink svg](../tests/svg-snapshots/compat_kitchen_sink.svg)
+![compat_kitchen_sink svg](../tests/svg-snapshots/flowchart/compat_kitchen_sink.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -590,7 +590,7 @@ graph TD
 
 ## compat_no_direction
 
-`tests/fixtures/compat_no_direction.mmd`
+`tests/fixtures/flowchart/compat_no_direction.mmd`
 
 **Text**
 
@@ -608,7 +608,7 @@ graph TD
 
 **SVG**
 
-![compat_no_direction svg](../tests/svg-snapshots/compat_no_direction.svg)
+![compat_no_direction svg](../tests/svg-snapshots/flowchart/compat_no_direction.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -623,7 +623,7 @@ graph
 
 ## compat_numeric_ids
 
-`tests/fixtures/compat_numeric_ids.mmd`
+`tests/fixtures/flowchart/compat_numeric_ids.mmd`
 
 **Text**
 
@@ -635,7 +635,7 @@ graph
 
 **SVG**
 
-![compat_numeric_ids svg](../tests/svg-snapshots/compat_numeric_ids.svg)
+![compat_numeric_ids svg](../tests/svg-snapshots/flowchart/compat_numeric_ids.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -651,7 +651,7 @@ graph LR
 
 ## complex
 
-`tests/fixtures/complex.mmd`
+`tests/fixtures/flowchart/complex.mmd`
 
 **Text**
 
@@ -703,7 +703,7 @@ graph LR
 
 **SVG**
 
-![complex svg](../tests/svg-snapshots/complex.svg)
+![complex svg](../tests/svg-snapshots/flowchart/complex.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -728,7 +728,7 @@ graph TD
 
 ## cross_circle_arrows
 
-`tests/fixtures/cross_circle_arrows.mmd`
+`tests/fixtures/flowchart/cross_circle_arrows.mmd`
 
 **Text**
 
@@ -764,7 +764,7 @@ graph TD
 
 **SVG**
 
-![cross_circle_arrows svg](../tests/svg-snapshots/cross_circle_arrows.svg)
+![cross_circle_arrows svg](../tests/svg-snapshots/flowchart/cross_circle_arrows.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -782,7 +782,7 @@ graph TD
 
 ## decision
 
-`tests/fixtures/decision.mmd`
+`tests/fixtures/flowchart/decision.mmd`
 
 **Text**
 
@@ -810,7 +810,7 @@ graph TD
 
 **SVG**
 
-![decision svg](../tests/svg-snapshots/decision.svg)
+![decision svg](../tests/svg-snapshots/flowchart/decision.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -828,7 +828,7 @@ graph TD
 
 ## diamond_fan
 
-`tests/fixtures/diamond_fan.mmd`
+`tests/fixtures/flowchart/diamond_fan.mmd`
 
 **Text**
 
@@ -852,7 +852,7 @@ graph TD
 
 **SVG**
 
-![diamond_fan svg](../tests/svg-snapshots/diamond_fan.svg)
+![diamond_fan svg](../tests/svg-snapshots/flowchart/diamond_fan.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -870,7 +870,7 @@ graph TD
 
 ## direction_override
 
-`tests/fixtures/direction_override.mmd`
+`tests/fixtures/flowchart/direction_override.mmd`
 
 **Text**
 
@@ -912,7 +912,7 @@ graph TD
 
 **SVG**
 
-![direction_override svg](../tests/svg-snapshots/direction_override.svg)
+![direction_override svg](../tests/svg-snapshots/flowchart/direction_override.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -932,7 +932,7 @@ graph TD
 
 ## double_skip
 
-`tests/fixtures/double_skip.mmd`
+`tests/fixtures/flowchart/double_skip.mmd`
 
 **Text**
 
@@ -962,7 +962,7 @@ graph TD
 
 **SVG**
 
-![double_skip svg](../tests/svg-snapshots/double_skip.svg)
+![double_skip svg](../tests/svg-snapshots/flowchart/double_skip.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -981,7 +981,7 @@ graph TD
 
 ## edge_styles
 
-`tests/fixtures/edge_styles.mmd`
+`tests/fixtures/flowchart/edge_styles.mmd`
 
 **Text**
 
@@ -999,7 +999,7 @@ graph TD
 
 **SVG**
 
-![edge_styles svg](../tests/svg-snapshots/edge_styles.svg)
+![edge_styles svg](../tests/svg-snapshots/flowchart/edge_styles.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1017,7 +1017,7 @@ graph TD
 
 ## external_node_subgraph
 
-`tests/fixtures/external_node_subgraph.mmd`
+`tests/fixtures/flowchart/external_node_subgraph.mmd`
 
 **Text**
 
@@ -1051,7 +1051,7 @@ graph TD
 
 **SVG**
 
-![external_node_subgraph svg](../tests/svg-snapshots/external_node_subgraph.svg)
+![external_node_subgraph svg](../tests/svg-snapshots/flowchart/external_node_subgraph.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1075,7 +1075,7 @@ graph TD
 
 ## fan_in_lr
 
-`tests/fixtures/fan_in_lr.mmd`
+`tests/fixtures/flowchart/fan_in_lr.mmd`
 
 **Text**
 
@@ -1099,7 +1099,7 @@ graph TD
 
 **SVG**
 
-![fan_in_lr svg](../tests/svg-snapshots/fan_in_lr.svg)
+![fan_in_lr svg](../tests/svg-snapshots/flowchart/fan_in_lr.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1116,7 +1116,7 @@ graph LR
 
 ## fan_in
 
-`tests/fixtures/fan_in.mmd`
+`tests/fixtures/flowchart/fan_in.mmd`
 
 **Text**
 
@@ -1134,7 +1134,7 @@ graph LR
 
 **SVG**
 
-![fan_in svg](../tests/svg-snapshots/fan_in.svg)
+![fan_in svg](../tests/svg-snapshots/flowchart/fan_in.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1151,7 +1151,7 @@ graph TD
 
 ## fan_out
 
-`tests/fixtures/fan_out.mmd`
+`tests/fixtures/flowchart/fan_out.mmd`
 
 **Text**
 
@@ -1169,7 +1169,7 @@ graph TD
 
 **SVG**
 
-![fan_out svg](../tests/svg-snapshots/fan_out.svg)
+![fan_out svg](../tests/svg-snapshots/flowchart/fan_out.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1186,7 +1186,7 @@ graph TD
 
 ## five_fan_in
 
-`tests/fixtures/five_fan_in.mmd`
+`tests/fixtures/flowchart/five_fan_in.mmd`
 
 **Text**
 
@@ -1204,7 +1204,7 @@ graph TD
 
 **SVG**
 
-![five_fan_in svg](../tests/svg-snapshots/five_fan_in.svg)
+![five_fan_in svg](../tests/svg-snapshots/flowchart/five_fan_in.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1223,7 +1223,7 @@ graph TD
 
 ## git_workflow
 
-`tests/fixtures/git_workflow.mmd`
+`tests/fixtures/flowchart/git_workflow.mmd`
 
 **Text**
 
@@ -1238,7 +1238,7 @@ graph TD
 
 **SVG**
 
-![git_workflow svg](../tests/svg-snapshots/git_workflow.svg)
+![git_workflow svg](../tests/svg-snapshots/flowchart/git_workflow.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1257,7 +1257,7 @@ graph LR
 
 ## http_request
 
-`tests/fixtures/http_request.mmd`
+`tests/fixtures/flowchart/http_request.mmd`
 
 **Text**
 
@@ -1302,7 +1302,7 @@ graph LR
 
 **SVG**
 
-![http_request svg](../tests/svg-snapshots/http_request.svg)
+![http_request svg](../tests/svg-snapshots/flowchart/http_request.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1323,7 +1323,7 @@ graph TD
 
 ## inline_edge_labels
 
-`tests/fixtures/inline_edge_labels.mmd`
+`tests/fixtures/flowchart/inline_edge_labels.mmd`
 
 **Text**
 
@@ -1360,7 +1360,7 @@ final step
 
 **SVG**
 
-![inline_edge_labels svg](../tests/svg-snapshots/inline_edge_labels.svg)
+![inline_edge_labels svg](../tests/svg-snapshots/flowchart/inline_edge_labels.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1378,7 +1378,7 @@ graph TD
 
 ## inline_label_flowchart
 
-`tests/fixtures/inline_label_flowchart.mmd`
+`tests/fixtures/flowchart/inline_label_flowchart.mmd`
 
 **Text**
 
@@ -1487,7 +1487,7 @@ graph TD
 
 **SVG**
 
-![inline_label_flowchart svg](../tests/svg-snapshots/inline_label_flowchart.svg)
+![inline_label_flowchart svg](../tests/svg-snapshots/flowchart/inline_label_flowchart.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1536,7 +1536,7 @@ flowchart TD
 
 ## label_spacing
 
-`tests/fixtures/label_spacing.mmd`
+`tests/fixtures/flowchart/label_spacing.mmd`
 
 **Text**
 
@@ -1556,7 +1556,7 @@ valid          invalid
 
 **SVG**
 
-![label_spacing svg](../tests/svg-snapshots/label_spacing.svg)
+![label_spacing svg](../tests/svg-snapshots/flowchart/label_spacing.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1574,7 +1574,7 @@ graph TD
 
 ## labeled_edges
 
-`tests/fixtures/labeled_edges.mmd`
+`tests/fixtures/flowchart/labeled_edges.mmd`
 
 **Text**
 
@@ -1611,7 +1611,7 @@ graph TD
 
 **SVG**
 
-![labeled_edges svg](../tests/svg-snapshots/labeled_edges.svg)
+![labeled_edges svg](../tests/svg-snapshots/flowchart/labeled_edges.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1630,7 +1630,7 @@ graph TD
 
 ## left_right
 
-`tests/fixtures/left_right.mmd`
+`tests/fixtures/flowchart/left_right.mmd`
 
 **Text**
 
@@ -1642,7 +1642,7 @@ graph TD
 
 **SVG**
 
-![left_right svg](../tests/svg-snapshots/left_right.svg)
+![left_right svg](../tests/svg-snapshots/flowchart/left_right.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1658,7 +1658,7 @@ graph LR
 
 ## multi_edge_labeled
 
-`tests/fixtures/multi_edge_labeled.mmd`
+`tests/fixtures/flowchart/multi_edge_labeled.mmd`
 
 **Text**
 
@@ -1686,7 +1686,7 @@ path 1  │
 
 **SVG**
 
-![multi_edge_labeled svg](../tests/svg-snapshots/multi_edge_labeled.svg)
+![multi_edge_labeled svg](../tests/svg-snapshots/flowchart/multi_edge_labeled.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1703,7 +1703,7 @@ graph TD
 
 ## multi_edge
 
-`tests/fixtures/multi_edge.mmd`
+`tests/fixtures/flowchart/multi_edge.mmd`
 
 **Text**
 
@@ -1721,7 +1721,7 @@ graph TD
 
 **SVG**
 
-![multi_edge svg](../tests/svg-snapshots/multi_edge.svg)
+![multi_edge svg](../tests/svg-snapshots/flowchart/multi_edge.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1737,7 +1737,7 @@ graph TD
 
 ## multi_subgraph
 
-`tests/fixtures/multi_subgraph.mmd`
+`tests/fixtures/flowchart/multi_subgraph.mmd`
 
 **Text**
 
@@ -1753,7 +1753,7 @@ graph TD
 
 **SVG**
 
-![multi_subgraph svg](../tests/svg-snapshots/multi_subgraph.svg)
+![multi_subgraph svg](../tests/svg-snapshots/flowchart/multi_subgraph.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1774,7 +1774,7 @@ B --> C
 
 ## multiple_cycles
 
-`tests/fixtures/multiple_cycles.mmd`
+`tests/fixtures/flowchart/multiple_cycles.mmd`
 
 **Text**
 
@@ -1798,7 +1798,7 @@ B --> C
 
 **SVG**
 
-![multiple_cycles svg](../tests/svg-snapshots/multiple_cycles.svg)
+![multiple_cycles svg](../tests/svg-snapshots/flowchart/multiple_cycles.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1816,7 +1816,7 @@ graph TD
 
 ## narrow_fan_in
 
-`tests/fixtures/narrow_fan_in.mmd`
+`tests/fixtures/flowchart/narrow_fan_in.mmd`
 
 **Text**
 
@@ -1834,7 +1834,7 @@ graph TD
 
 **SVG**
 
-![narrow_fan_in svg](../tests/svg-snapshots/narrow_fan_in.svg)
+![narrow_fan_in svg](../tests/svg-snapshots/flowchart/narrow_fan_in.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1851,7 +1851,7 @@ graph TD
 
 ## nested_subgraph_edge
 
-`tests/fixtures/nested_subgraph_edge.mmd`
+`tests/fixtures/flowchart/nested_subgraph_edge.mmd`
 
 **Text**
 
@@ -1887,7 +1887,7 @@ graph TD
 
 **SVG**
 
-![nested_subgraph_edge svg](../tests/svg-snapshots/nested_subgraph_edge.svg)
+![nested_subgraph_edge svg](../tests/svg-snapshots/flowchart/nested_subgraph_edge.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1909,7 +1909,7 @@ graph TD
 
 ## nested_subgraph_only
 
-`tests/fixtures/nested_subgraph_only.mmd`
+`tests/fixtures/flowchart/nested_subgraph_only.mmd`
 
 **Text**
 
@@ -1935,7 +1935,7 @@ graph TD
 
 **SVG**
 
-![nested_subgraph_only svg](../tests/svg-snapshots/nested_subgraph_only.svg)
+![nested_subgraph_only svg](../tests/svg-snapshots/flowchart/nested_subgraph_only.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -1954,7 +1954,7 @@ end
 
 ## nested_subgraph
 
-`tests/fixtures/nested_subgraph.mmd`
+`tests/fixtures/flowchart/nested_subgraph.mmd`
 
 **Text**
 
@@ -1985,7 +1985,7 @@ end
 
 **SVG**
 
-![nested_subgraph svg](../tests/svg-snapshots/nested_subgraph.svg)
+![nested_subgraph svg](../tests/svg-snapshots/flowchart/nested_subgraph.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2006,7 +2006,7 @@ A --> B
 
 ## nested_with_siblings
 
-`tests/fixtures/nested_with_siblings.mmd`
+`tests/fixtures/flowchart/nested_with_siblings.mmd`
 
 **Text**
 
@@ -2026,7 +2026,7 @@ A --> B
 
 **SVG**
 
-![nested_with_siblings svg](../tests/svg-snapshots/nested_with_siblings.svg)
+![nested_with_siblings svg](../tests/svg-snapshots/flowchart/nested_with_siblings.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2049,7 +2049,7 @@ B --> C
 
 ## right_left
 
-`tests/fixtures/right_left.mmd`
+`tests/fixtures/flowchart/right_left.mmd`
 
 **Text**
 
@@ -2061,7 +2061,7 @@ B --> C
 
 **SVG**
 
-![right_left svg](../tests/svg-snapshots/right_left.svg)
+![right_left svg](../tests/svg-snapshots/flowchart/right_left.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2077,7 +2077,7 @@ graph RL
 
 ## self_loop_labeled
 
-`tests/fixtures/self_loop_labeled.mmd`
+`tests/fixtures/flowchart/self_loop_labeled.mmd`
 
 **Text**
 
@@ -2105,7 +2105,7 @@ graph RL
 
 **SVG**
 
-![self_loop_labeled svg](../tests/svg-snapshots/self_loop_labeled.svg)
+![self_loop_labeled svg](../tests/svg-snapshots/flowchart/self_loop_labeled.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2122,7 +2122,7 @@ graph TD
 
 ## self_loop_with_others
 
-`tests/fixtures/self_loop_with_others.mmd`
+`tests/fixtures/flowchart/self_loop_with_others.mmd`
 
 **Text**
 
@@ -2146,7 +2146,7 @@ graph TD
 
 **SVG**
 
-![self_loop_with_others svg](../tests/svg-snapshots/self_loop_with_others.svg)
+![self_loop_with_others svg](../tests/svg-snapshots/flowchart/self_loop_with_others.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2163,7 +2163,7 @@ graph TD
 
 ## self_loop
 
-`tests/fixtures/self_loop.mmd`
+`tests/fixtures/flowchart/self_loop.mmd`
 
 **Text**
 
@@ -2175,7 +2175,7 @@ graph TD
 
 **SVG**
 
-![self_loop svg](../tests/svg-snapshots/self_loop.svg)
+![self_loop svg](../tests/svg-snapshots/flowchart/self_loop.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2190,7 +2190,7 @@ graph TD
 
 ## shapes_basic
 
-`tests/fixtures/shapes_basic.mmd`
+`tests/fixtures/flowchart/shapes_basic.mmd`
 
 **Text**
 
@@ -2238,7 +2238,7 @@ graph TD
 
 **SVG**
 
-![shapes_basic svg](../tests/svg-snapshots/shapes_basic.svg)
+![shapes_basic svg](../tests/svg-snapshots/flowchart/shapes_basic.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2260,7 +2260,7 @@ graph TD
 
 ## shapes_degenerate
 
-`tests/fixtures/shapes_degenerate.mmd`
+`tests/fixtures/flowchart/shapes_degenerate.mmd`
 
 **Text**
 
@@ -2314,7 +2314,7 @@ graph TD
 
 **SVG**
 
-![shapes_degenerate svg](../tests/svg-snapshots/shapes_degenerate.svg)
+![shapes_degenerate svg](../tests/svg-snapshots/flowchart/shapes_degenerate.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2337,7 +2337,7 @@ graph TD
 
 ## shapes_document
 
-`tests/fixtures/shapes_document.mmd`
+`tests/fixtures/flowchart/shapes_document.mmd`
 
 **Text**
 
@@ -2373,7 +2373,7 @@ graph TD
 
 **SVG**
 
-![shapes_document svg](../tests/svg-snapshots/shapes_document.svg)
+![shapes_document svg](../tests/svg-snapshots/flowchart/shapes_document.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2393,7 +2393,7 @@ graph TD
 
 ## shapes_junction
 
-`tests/fixtures/shapes_junction.mmd`
+`tests/fixtures/flowchart/shapes_junction.mmd`
 
 **Text**
 
@@ -2403,7 +2403,7 @@ graph TD
 
 **SVG**
 
-![shapes_junction svg](../tests/svg-snapshots/shapes_junction.svg)
+![shapes_junction svg](../tests/svg-snapshots/flowchart/shapes_junction.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2421,7 +2421,7 @@ graph LR
 
 ## shapes_special
 
-`tests/fixtures/shapes_special.mmd`
+`tests/fixtures/flowchart/shapes_special.mmd`
 
 **Text**
 
@@ -2434,7 +2434,7 @@ graph LR
 
 **SVG**
 
-![shapes_special svg](../tests/svg-snapshots/shapes_special.svg)
+![shapes_special svg](../tests/svg-snapshots/flowchart/shapes_special.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2451,7 +2451,7 @@ graph LR
 
 ## shapes
 
-`tests/fixtures/shapes.mmd`
+`tests/fixtures/flowchart/shapes.mmd`
 
 **Text**
 
@@ -2475,7 +2475,7 @@ graph LR
 
 **SVG**
 
-![shapes svg](../tests/svg-snapshots/shapes.svg)
+![shapes svg](../tests/svg-snapshots/flowchart/shapes.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2493,7 +2493,7 @@ graph TD
 
 ## simple_cycle
 
-`tests/fixtures/simple_cycle.mmd`
+`tests/fixtures/flowchart/simple_cycle.mmd`
 
 **Text**
 
@@ -2517,7 +2517,7 @@ graph TD
 
 **SVG**
 
-![simple_cycle svg](../tests/svg-snapshots/simple_cycle.svg)
+![simple_cycle svg](../tests/svg-snapshots/flowchart/simple_cycle.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2534,7 +2534,7 @@ graph TD
 
 ## simple_subgraph
 
-`tests/fixtures/simple_subgraph.mmd`
+`tests/fixtures/flowchart/simple_subgraph.mmd`
 
 **Text**
 
@@ -2562,7 +2562,7 @@ graph TD
 
 **SVG**
 
-![simple_subgraph svg](../tests/svg-snapshots/simple_subgraph.svg)
+![simple_subgraph svg](../tests/svg-snapshots/flowchart/simple_subgraph.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2580,7 +2580,7 @@ B --> C[End]
 
 ## simple
 
-`tests/fixtures/simple.mmd`
+`tests/fixtures/flowchart/simple.mmd`
 
 **Text**
 
@@ -2598,7 +2598,7 @@ B --> C[End]
 
 **SVG**
 
-![simple svg](../tests/svg-snapshots/simple.svg)
+![simple svg](../tests/svg-snapshots/flowchart/simple.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2613,7 +2613,7 @@ graph TD
 
 ## skip_edge_collision
 
-`tests/fixtures/skip_edge_collision.mmd`
+`tests/fixtures/flowchart/skip_edge_collision.mmd`
 
 **Text**
 
@@ -2643,7 +2643,7 @@ graph TD
 
 **SVG**
 
-![skip_edge_collision svg](../tests/svg-snapshots/skip_edge_collision.svg)
+![skip_edge_collision svg](../tests/svg-snapshots/flowchart/skip_edge_collision.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2661,7 +2661,7 @@ graph TD
 
 ## stacked_fan_in
 
-`tests/fixtures/stacked_fan_in.mmd`
+`tests/fixtures/flowchart/stacked_fan_in.mmd`
 
 **Text**
 
@@ -2685,7 +2685,7 @@ graph TD
 
 **SVG**
 
-![stacked_fan_in svg](../tests/svg-snapshots/stacked_fan_in.svg)
+![stacked_fan_in svg](../tests/svg-snapshots/flowchart/stacked_fan_in.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2702,7 +2702,7 @@ graph TD
 
 ## subgraph_as_node_edge
 
-`tests/fixtures/subgraph_as_node_edge.mmd`
+`tests/fixtures/flowchart/subgraph_as_node_edge.mmd`
 
 **Text**
 
@@ -2738,7 +2738,7 @@ graph TD
 
 **SVG**
 
-![subgraph_as_node_edge svg](../tests/svg-snapshots/subgraph_as_node_edge.svg)
+![subgraph_as_node_edge svg](../tests/svg-snapshots/flowchart/subgraph_as_node_edge.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2759,7 +2759,7 @@ graph TD
 
 ## subgraph_direction_cross_boundary
 
-`tests/fixtures/subgraph_direction_cross_boundary.mmd`
+`tests/fixtures/flowchart/subgraph_direction_cross_boundary.mmd`
 
 **Text**
 
@@ -2816,7 +2816,7 @@ graph TD
 
 **SVG**
 
-![subgraph_direction_cross_boundary svg](../tests/svg-snapshots/subgraph_direction_cross_boundary.svg)
+![subgraph_direction_cross_boundary svg](../tests/svg-snapshots/flowchart/subgraph_direction_cross_boundary.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2838,7 +2838,7 @@ graph TD
 
 ## subgraph_direction_lr
 
-`tests/fixtures/subgraph_direction_lr.mmd`
+`tests/fixtures/flowchart/subgraph_direction_lr.mmd`
 
 **Text**
 
@@ -2880,7 +2880,7 @@ graph TD
 
 **SVG**
 
-![subgraph_direction_lr svg](../tests/svg-snapshots/subgraph_direction_lr.svg)
+![subgraph_direction_lr svg](../tests/svg-snapshots/flowchart/subgraph_direction_lr.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2900,7 +2900,7 @@ graph TD
 
 ## subgraph_direction_mixed
 
-`tests/fixtures/subgraph_direction_mixed.mmd`
+`tests/fixtures/flowchart/subgraph_direction_mixed.mmd`
 
 **Text**
 
@@ -2938,7 +2938,7 @@ graph TD
 
 **SVG**
 
-![subgraph_direction_mixed svg](../tests/svg-snapshots/subgraph_direction_mixed.svg)
+![subgraph_direction_mixed svg](../tests/svg-snapshots/flowchart/subgraph_direction_mixed.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -2961,7 +2961,7 @@ graph TD
 
 ## subgraph_direction_nested_both
 
-`tests/fixtures/subgraph_direction_nested_both.mmd`
+`tests/fixtures/flowchart/subgraph_direction_nested_both.mmd`
 
 **Text**
 
@@ -3000,7 +3000,7 @@ graph TD
 
 **SVG**
 
-![subgraph_direction_nested_both svg](../tests/svg-snapshots/subgraph_direction_nested_both.svg)
+![subgraph_direction_nested_both svg](../tests/svg-snapshots/flowchart/subgraph_direction_nested_both.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -3023,7 +3023,7 @@ graph TD
 
 ## subgraph_direction_nested
 
-`tests/fixtures/subgraph_direction_nested.mmd`
+`tests/fixtures/flowchart/subgraph_direction_nested.mmd`
 
 **Text**
 
@@ -3060,7 +3060,7 @@ graph TD
 
 **SVG**
 
-![subgraph_direction_nested svg](../tests/svg-snapshots/subgraph_direction_nested.svg)
+![subgraph_direction_nested svg](../tests/svg-snapshots/flowchart/subgraph_direction_nested.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -3081,7 +3081,7 @@ graph TD
 
 ## subgraph_edges_bottom_top
 
-`tests/fixtures/subgraph_edges_bottom_top.mmd`
+`tests/fixtures/flowchart/subgraph_edges_bottom_top.mmd`
 
 **Text**
 
@@ -3107,7 +3107,7 @@ graph TD
 
 **SVG**
 
-![subgraph_edges_bottom_top svg](../tests/svg-snapshots/subgraph_edges_bottom_top.svg)
+![subgraph_edges_bottom_top svg](../tests/svg-snapshots/flowchart/subgraph_edges_bottom_top.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -3131,7 +3131,7 @@ B --> D
 
 ## subgraph_edges
 
-`tests/fixtures/subgraph_edges.mmd`
+`tests/fixtures/flowchart/subgraph_edges.mmd`
 
 **Text**
 
@@ -3157,7 +3157,7 @@ B --> D
 
 **SVG**
 
-![subgraph_edges svg](../tests/svg-snapshots/subgraph_edges.svg)
+![subgraph_edges svg](../tests/svg-snapshots/flowchart/subgraph_edges.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -3181,7 +3181,7 @@ B --> D
 
 ## subgraph_multi_word_title
 
-`tests/fixtures/subgraph_multi_word_title.mmd`
+`tests/fixtures/flowchart/subgraph_multi_word_title.mmd`
 
 **Text**
 
@@ -3223,7 +3223,7 @@ B --> D
 
 **SVG**
 
-![subgraph_multi_word_title svg](../tests/svg-snapshots/subgraph_multi_word_title.svg)
+![subgraph_multi_word_title svg](../tests/svg-snapshots/flowchart/subgraph_multi_word_title.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -3242,7 +3242,7 @@ graph TD
 
 ## subgraph_numeric_id
 
-`tests/fixtures/subgraph_numeric_id.mmd`
+`tests/fixtures/flowchart/subgraph_numeric_id.mmd`
 
 **Text**
 
@@ -3280,7 +3280,7 @@ graph TD
 
 **SVG**
 
-![subgraph_numeric_id svg](../tests/svg-snapshots/subgraph_numeric_id.svg)
+![subgraph_numeric_id svg](../tests/svg-snapshots/flowchart/subgraph_numeric_id.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -3301,7 +3301,7 @@ graph TD
 
 ## subgraph_to_subgraph_edge
 
-`tests/fixtures/subgraph_to_subgraph_edge.mmd`
+`tests/fixtures/flowchart/subgraph_to_subgraph_edge.mmd`
 
 **Text**
 
@@ -3339,7 +3339,7 @@ graph TD
 
 **SVG**
 
-![subgraph_to_subgraph_edge svg](../tests/svg-snapshots/subgraph_to_subgraph_edge.svg)
+![subgraph_to_subgraph_edge svg](../tests/svg-snapshots/flowchart/subgraph_to_subgraph_edge.svg)
 
 <details>
 <summary>Mermaid source</summary>
@@ -3364,7 +3364,7 @@ graph TD
 
 ## very_narrow_fan_in
 
-`tests/fixtures/very_narrow_fan_in.mmd`
+`tests/fixtures/flowchart/very_narrow_fan_in.mmd`
 
 **Text**
 
@@ -3382,7 +3382,7 @@ graph TD
 
 **SVG**
 
-![very_narrow_fan_in svg](../tests/svg-snapshots/very_narrow_fan_in.svg)
+![very_narrow_fan_in svg](../tests/svg-snapshots/flowchart/very_narrow_fan_in.svg)
 
 <details>
 <summary>Mermaid source</summary>

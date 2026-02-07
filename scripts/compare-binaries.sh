@@ -4,7 +4,7 @@
 
 BINARY1="${BINARY1:-$HOME/src/mmdflux/target/debug/mmdflux}"
 BINARY2="${BINARY2:-$HOME/src/mmdflux-4a-brandes-kopf/target/debug/mmdflux}"
-FIXTURES_DIR="${FIXTURES_DIR:-$HOME/src/mmdflux/tests/fixtures}"
+FIXTURES_DIR="${FIXTURES_DIR:-$HOME/src/mmdflux/tests/fixtures/flowchart}"
 
 # Colors for output
 RED='\033[0;31m'

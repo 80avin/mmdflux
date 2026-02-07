@@ -144,35 +144,35 @@ fn regression_engine_selection_via_registry() {
 
 #[test]
 fn dagre_stability_double_skip() {
-    let input =
-        std::fs::read_to_string("tests/fixtures/double_skip.mmd").expect("double_skip.mmd fixture");
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/double_skip.mmd")
+        .expect("double_skip.mmd fixture");
     compare_outputs(&input, false);
 }
 
 #[test]
 fn dagre_stability_skip_edge_collision() {
-    let input = std::fs::read_to_string("tests/fixtures/skip_edge_collision.mmd")
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/skip_edge_collision.mmd")
         .expect("skip_edge_collision.mmd fixture");
     compare_outputs(&input, false);
 }
 
 #[test]
 fn dagre_stability_simple_cycle() {
-    let input =
-        std::fs::read_to_string("tests/fixtures/simple_cycle.mmd").expect("simple_cycle.mmd");
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/simple_cycle.mmd")
+        .expect("simple_cycle.mmd");
     compare_outputs(&input, false);
 }
 
 #[test]
 fn dagre_stability_multiple_cycles() {
-    let input =
-        std::fs::read_to_string("tests/fixtures/multiple_cycles.mmd").expect("multiple_cycles.mmd");
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/multiple_cycles.mmd")
+        .expect("multiple_cycles.mmd");
     compare_outputs(&input, false);
 }
 
 #[test]
 fn dagre_stability_nested_subgraph() {
-    let input = std::fs::read_to_string("tests/fixtures/nested_subgraph.mmd")
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/nested_subgraph.mmd")
         .expect("nested_subgraph.mmd fixture");
     compare_outputs(&input, false);
 }
@@ -186,9 +186,9 @@ fn dagre_stability_engine_selection_consistent() {
     // Verify that explicit dagre selection produces same output as default
     // for all high-risk fixtures
     let fixtures = [
-        "tests/fixtures/double_skip.mmd",
-        "tests/fixtures/skip_edge_collision.mmd",
-        "tests/fixtures/simple_cycle.mmd",
+        "tests/fixtures/flowchart/double_skip.mmd",
+        "tests/fixtures/flowchart/skip_edge_collision.mmd",
+        "tests/fixtures/flowchart/simple_cycle.mmd",
     ];
 
     for path in &fixtures {
@@ -351,20 +351,12 @@ fn cross_family_sequence_does_not_steal_class_detection() {
 fn regression_all_fixtures() {
     use std::fs;
 
-    let fixtures_dir = std::path::Path::new("tests/fixtures");
+    let fixtures_dir = std::path::Path::new("tests/fixtures/flowchart");
     for entry in fs::read_dir(fixtures_dir).expect("fixtures dir") {
         let entry = entry.expect("fixture entry");
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "mmd") {
             let input = fs::read_to_string(&path).expect("read fixture");
-
-            // Skip non-flowchart fixtures
-            if !input.trim_start().starts_with("graph")
-                && !input.trim_start().starts_with("flowchart")
-            {
-                continue;
-            }
-
             compare_outputs(&input, false);
         }
     }

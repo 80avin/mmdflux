@@ -12,11 +12,12 @@ use mmdflux::render::{
 };
 use mmdflux::{Diagram, Direction, Shape, build_diagram, parse_flowchart};
 
-/// Load a fixture file by name from `tests/fixtures/`.
+/// Load a fixture file by name from `tests/fixtures/flowchart/`.
 fn load_fixture(name: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
+        .join("flowchart")
         .join(name);
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read fixture {}: {}", name, e))
 }
@@ -903,10 +904,12 @@ mod snapshots {
     fn generate_baseline_snapshots() {
         let fixture_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
-            .join("fixtures");
+            .join("fixtures")
+            .join("flowchart");
         let snapshot_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
-            .join("snapshots");
+            .join("snapshots")
+            .join("flowchart");
         fs::create_dir_all(&snapshot_dir).unwrap();
         let regenerate = std::env::var("GENERATE_TEXT_SNAPSHOTS").is_ok();
 

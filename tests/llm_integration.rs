@@ -18,7 +18,7 @@ fn mmdflux() -> Command {
 #[test]
 fn json_from_file() {
     mmdflux()
-        .args(["-f", "json", "tests/fixtures/simple.mmd"])
+        .args(["-f", "json", "tests/fixtures/flowchart/simple.mmd"])
         .assert()
         .success()
         .stdout(predicate::str::contains("\"version\":"));
@@ -83,7 +83,7 @@ fn json_edge_labels() {
 #[test]
 fn lint_from_file() {
     mmdflux()
-        .args(["--lint", "tests/fixtures/simple.mmd"])
+        .args(["--lint", "tests/fixtures/flowchart/simple.mmd"])
         .assert()
         .success();
 }
@@ -162,7 +162,7 @@ fn json_unsupported_diagram_type() {
 
 #[test]
 fn json_all_fixtures_produce_valid_json() {
-    let fixture_dir = std::path::Path::new("tests/fixtures");
+    let fixture_dir = std::path::Path::new("tests/fixtures/flowchart");
     for entry in std::fs::read_dir(fixture_dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
