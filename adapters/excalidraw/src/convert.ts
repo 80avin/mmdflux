@@ -8,12 +8,23 @@
 const SCALE = Number(process.env.SCALE) || 3;
 
 // Edge style: "sharp" (straight segments), "curved" (spline), or "elbow" (orthogonal).
-// Excalidraw interprets the same waypoints differently based on roundness + elbowed.
+// Controls Excalidraw's roundness + elbowed properties.
 type EdgeStyle = "sharp" | "curved" | "elbow";
 const EDGE_STYLE: EdgeStyle = (() => {
 	const v = (process.env.EDGE_STYLE || "curved").toLowerCase();
 	if (v === "sharp" || v === "curved" || v === "elbow") return v;
 	return "curved";
+})();
+
+// Path detail: how many anchor points to pass to Excalidraw.
+//   "endpoints"  — start + end only (2 points)
+//   "simplified" — start + midpoint + end (3 points)
+//   "full"       — all routed waypoints
+type PathDetail = "endpoints" | "simplified" | "full";
+const PATH_DETAIL: PathDetail = (() => {
+	const v = (process.env.PATH_DETAIL || "full").toLowerCase();
+	if (v === "endpoints" || v === "simplified" || v === "full") return v;
+	return "full";
 })();
 
 // Font sizes (px)
@@ -423,11 +434,10 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 			];
 		}
 
-		// Simplify waypoints based on edge style.
-		// Sharp: start + end only. Curved: start + midpoint + end. Elbow: all.
-		if (EDGE_STYLE === "sharp" && points.length > 2) {
+		// Reduce waypoints based on PATH_DETAIL.
+		if (PATH_DETAIL === "endpoints" && points.length > 2) {
 			points = [points[0], points[points.length - 1]];
-		} else if (EDGE_STYLE === "curved" && points.length > 3) {
+		} else if (PATH_DETAIL === "simplified" && points.length > 3) {
 			const mid = points[Math.floor(points.length / 2)];
 			points = [points[0], mid, points[points.length - 1]];
 		}
