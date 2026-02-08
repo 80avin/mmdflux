@@ -69,7 +69,7 @@ fn flowchart_instance_render_json() {
     let mut instance = FlowchartInstance::new();
     instance.parse("graph TD\nA[Start] --> B[End]").unwrap();
     let output = instance
-        .render(OutputFormat::Json, &RenderConfig::default())
+        .render(OutputFormat::Mmds, &RenderConfig::default())
         .unwrap();
 
     let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
@@ -100,7 +100,7 @@ fn flowchart_instance_render_json_uses_defaults_omission() {
     let mut instance = FlowchartInstance::new();
     instance.parse("graph TD\nA-->B").unwrap();
     let output = instance
-        .render(OutputFormat::Json, &RenderConfig::default())
+        .render(OutputFormat::Mmds, &RenderConfig::default())
         .unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
 
@@ -176,7 +176,7 @@ fn test_json_with_show_ids() {
         show_ids: true,
         ..Default::default()
     };
-    let output = instance.render(OutputFormat::Json, &config).unwrap();
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
 
     let nodes = parsed["nodes"].as_array().unwrap();
@@ -189,7 +189,7 @@ fn test_json_without_show_ids() {
     let mut instance = FlowchartInstance::new();
     instance.parse("graph TD\nA[Start] --> B[End]\n").unwrap();
     let output = instance
-        .render(OutputFormat::Json, &RenderConfig::default())
+        .render(OutputFormat::Mmds, &RenderConfig::default())
         .unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
 

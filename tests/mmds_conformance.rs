@@ -426,7 +426,7 @@ fn run_flowchart_conformance(name: &str) -> ConformanceReport {
         let mut instance = FlowchartInstance::new();
         instance.parse(&input).unwrap();
         let json = instance
-            .render(OutputFormat::Json, &RenderConfig::default())
+            .render(OutputFormat::Mmds, &RenderConfig::default())
             .unwrap();
         from_mmds_str(&json).unwrap()
     };
@@ -457,7 +457,7 @@ fn run_class_conformance(name: &str) -> ConformanceReport {
         let mut instance = ClassInstance::new();
         instance.parse(&input).unwrap();
         let json = instance
-            .render(OutputFormat::Json, &RenderConfig::default())
+            .render(OutputFormat::Mmds, &RenderConfig::default())
             .unwrap();
         from_mmds_str(&json).unwrap()
     };

@@ -116,7 +116,7 @@ impl From<FormatArg> for OutputFormat {
             FormatArg::Text => OutputFormat::Text,
             FormatArg::Ascii => OutputFormat::Ascii,
             FormatArg::Svg => OutputFormat::Svg,
-            FormatArg::Mmds => OutputFormat::Json,
+            FormatArg::Mmds => OutputFormat::Mmds,
             FormatArg::Mermaid => OutputFormat::Mermaid,
         }
     }
@@ -189,7 +189,7 @@ fn main() -> io::Result<()> {
     if cli.lint {
         let result = mmdflux::lint::lint(&input);
 
-        if matches!(format, OutputFormat::Json) {
+        if matches!(format, OutputFormat::Mmds) {
             println!("{}", result.to_json());
         } else {
             for diag in &result.errors {

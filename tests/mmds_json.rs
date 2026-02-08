@@ -26,7 +26,7 @@ fn render_json(input: &str) -> String {
     let mut instance = FlowchartInstance::new();
     instance.parse(input).unwrap();
     instance
-        .render(OutputFormat::Json, &RenderConfig::default())
+        .render(OutputFormat::Mmds, &RenderConfig::default())
         .unwrap()
 }
 
@@ -37,7 +37,7 @@ fn render_json_with_level(input: &str, level: GeometryLevel) -> String {
         geometry_level: level,
         ..RenderConfig::default()
     };
-    instance.render(OutputFormat::Json, &config).unwrap()
+    instance.render(OutputFormat::Mmds, &config).unwrap()
 }
 
 fn mmds_fixture(path: &str) -> Value {
@@ -432,7 +432,7 @@ fn mmds_class_diagram_produces_json() {
     instance.parse("classDiagram\nA --> B").unwrap();
 
     let config = RenderConfig::default();
-    let output = instance.render(OutputFormat::Json, &config).unwrap();
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
     let parsed: MmdsOutput = serde_json::from_str(&output).unwrap();
 
     assert_eq!(parsed.version, 1);
@@ -452,7 +452,7 @@ fn mmds_class_diagram_routed_level() {
         geometry_level: GeometryLevel::Routed,
         ..RenderConfig::default()
     };
-    let output = instance.render(OutputFormat::Json, &config).unwrap();
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
     let parsed: MmdsOutput = serde_json::from_str(&output).unwrap();
 
     assert_eq!(parsed.geometry_level, "routed");

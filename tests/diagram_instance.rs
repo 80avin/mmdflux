@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::{DiagramFamily, OutputFormat, RenderConfig, RenderError};
+use mmdflux::diagram::{DiagramFamily, GeometryLevel, OutputFormat, RenderConfig, RenderError};
 use mmdflux::registry::{DiagramDefinition, DiagramInstance, DiagramRegistry};
 
 struct MockDiagram {
@@ -34,7 +34,7 @@ impl DiagramInstance for MockDiagram {
         match format {
             OutputFormat::Text => Ok(format!("[TEXT] {}", content)),
             OutputFormat::Ascii => Ok(format!("[ASCII] {}", content)),
-            OutputFormat::Svg | OutputFormat::Json | OutputFormat::Mermaid => {
+            OutputFormat::Svg | OutputFormat::Mmds | OutputFormat::Mermaid => {
                 Err("Not supported".into())
             }
         }
@@ -146,16 +146,50 @@ fn mmds_routed_geometry_level_uses_direct_svg_path() {
 }
 
 #[test]
-fn mmds_routed_geometry_level_rejects_text_output() {
+fn mmds_routed_geometry_level_renders_text_by_ignoring_paths() {
     let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
     let input = mmds_fixture("positioned/routed-basic.json");
     instance.parse(&input).expect("parse should succeed");
 
-    let err = instance
+    let rendered = instance
         .render(OutputFormat::Text, &RenderConfig::default())
-        .expect_err("routed MMDS text output should be rejected");
-    assert!(
-        err.to_string()
-            .contains("positioned MMDS text output is unsupported")
-    );
+        .expect("routed MMDS should render text by ignoring paths");
+    assert!(rendered.contains("Start"));
+}
+
+#[test]
+fn mmds_routed_json_output_at_layout_level_strips_paths() {
+    let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
+    let input = mmds_fixture("positioned/routed-basic.json");
+    instance.parse(&input).expect("parse should succeed");
+
+    // Default geometry_level is Layout, so routed input should be downgraded.
+    let json = instance
+        .render(OutputFormat::Mmds, &RenderConfig::default())
+        .expect("routed MMDS should render JSON at layout level");
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(value["geometry_level"], "layout");
+    // Routed-only fields should be stripped.
+    let edge = &value["edges"][0];
+    assert!(edge.get("path").is_none());
+    assert!(edge.get("label_position").is_none());
+    assert!(edge.get("is_backward").is_none());
+}
+
+#[test]
+fn mmds_routed_json_output_at_routed_level_preserves_paths() {
+    let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
+    let input = mmds_fixture("positioned/routed-basic.json");
+    instance.parse(&input).expect("parse should succeed");
+
+    let config = RenderConfig {
+        geometry_level: GeometryLevel::Routed,
+        ..Default::default()
+    };
+    let json = instance
+        .render(OutputFormat::Mmds, &config)
+        .expect("routed MMDS should pass through at routed level");
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(value["geometry_level"], "routed");
+    assert!(value["edges"][0].get("path").is_some());
 }

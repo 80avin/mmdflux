@@ -287,7 +287,7 @@ fn arrow_str(arrow: Arrow) -> &'static str {
 // ---------------------------------------------------------------------------
 
 /// Top-level MMDS output envelope.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MmdsOutput {
     /// Schema version (1 for MMDS).
     pub version: u32,
@@ -316,14 +316,14 @@ pub struct MmdsOutput {
 }
 
 /// Default values for omitted fields in nodes and edges.
-#[derive(Debug, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MmdsDefaults {
     pub node: MmdsNodeDefaults,
     pub edge: MmdsEdgeDefaults,
 }
 
 /// Node-level default values.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MmdsNodeDefaults {
     #[serde(default = "default_node_shape")]
     pub shape: String,
@@ -338,7 +338,7 @@ impl Default for MmdsNodeDefaults {
 }
 
 /// Edge-level default values.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MmdsEdgeDefaults {
     #[serde(default = "default_stroke")]
     pub stroke: String,
@@ -362,7 +362,7 @@ impl Default for MmdsEdgeDefaults {
 }
 
 /// Diagram-level metadata.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MmdsMetadata {
     /// Diagram type (e.g., "flowchart", "class").
     pub diagram_type: String,
@@ -373,14 +373,14 @@ pub struct MmdsMetadata {
 }
 
 /// Bounding box dimensions.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MmdsBounds {
     pub width: f64,
     pub height: f64,
 }
 
 /// A node in MMDS output.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MmdsNode {
     /// Node identifier.
     pub id: String,
@@ -403,21 +403,21 @@ pub struct MmdsNode {
 }
 
 /// Float-precision position.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MmdsPosition {
     pub x: f64,
     pub y: f64,
 }
 
 /// Float-precision dimensions.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MmdsSize {
     pub width: f64,
     pub height: f64,
 }
 
 /// An edge in MMDS output.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MmdsEdge {
     /// Deterministic edge identifier ("e{declaration_index}").
     pub id: String,
@@ -470,7 +470,7 @@ pub struct MmdsEdge {
 }
 
 /// A subgraph in MMDS output.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MmdsSubgraph {
     /// Subgraph identifier.
     pub id: String,

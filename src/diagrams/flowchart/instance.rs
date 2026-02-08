@@ -56,7 +56,7 @@ impl DiagramInstance for FlowchartInstance {
         let mut options: RenderOptions = config.into();
         options.output_format = format;
 
-        if matches!(format, OutputFormat::Json) {
+        if matches!(format, OutputFormat::Mmds) {
             let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
                 Some(routing::route_graph_geometry(
                     diagram,
@@ -105,7 +105,7 @@ impl DiagramInstance for FlowchartInstance {
     fn supports_format(&self, format: OutputFormat) -> bool {
         matches!(
             format,
-            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
+            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Mmds
         )
     }
 }

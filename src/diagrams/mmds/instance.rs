@@ -4,7 +4,7 @@ use super::{
     MmdsProfileNegotiation, evaluate_mmds_profiles_for_output, from_mmds_output,
     hydrate_graph_geometry_from_output_with_diagram, parse_mmds_input,
 };
-use crate::diagram::{OutputFormat, RenderConfig, RenderError, RoutingMode};
+use crate::diagram::{GeometryLevel, OutputFormat, RenderConfig, RenderError, RoutingMode};
 use crate::mmds::{MmdsOutput, generate_mermaid_from_mmds};
 use crate::registry::DiagramInstance;
 use crate::render::{RenderOptions, render, render_svg_from_geometry};
@@ -27,39 +27,9 @@ impl MmdsInstance {
         self.parsed_payload.as_ref()
     }
 
-    fn positioned_text_unsupported_error(format: OutputFormat) -> RenderError {
-        let format_name = match format {
-            OutputFormat::Ascii => "ascii",
-            _ => "text",
-        };
-        RenderError {
-            message: format!(
-                "positioned MMDS {format_name} output is unsupported; use --format svg for positioned MMDS payloads"
-            ),
-        }
-    }
-
     /// Access profile negotiation for the last parsed payload.
     pub fn profile_negotiation(&self) -> Option<&MmdsProfileNegotiation> {
         self.profile_negotiation.as_ref()
-    }
-
-    fn supports_format_for_payload(payload: &MmdsOutput, format: OutputFormat) -> bool {
-        match payload.geometry_level.as_str() {
-            "layout" => matches!(
-                format,
-                OutputFormat::Text
-                    | OutputFormat::Ascii
-                    | OutputFormat::Svg
-                    | OutputFormat::Json
-                    | OutputFormat::Mermaid
-            ),
-            "routed" => matches!(
-                format,
-                OutputFormat::Svg | OutputFormat::Json | OutputFormat::Mermaid
-            ),
-            _ => false,
-        }
     }
 }
 
@@ -85,12 +55,15 @@ impl DiagramInstance for MmdsInstance {
             });
         }
 
-        if !Self::supports_format_for_payload(payload, format) {
-            return Err(Self::positioned_text_unsupported_error(format));
-        }
-
-        if matches!(format, OutputFormat::Json) {
-            let json = serde_json::to_string_pretty(payload).map_err(|err| RenderError {
+        if matches!(format, OutputFormat::Mmds) {
+            let output = if payload.geometry_level == "routed"
+                && config.geometry_level == GeometryLevel::Layout
+            {
+                strip_routed_fields(payload)
+            } else {
+                payload.clone()
+            };
+            let json = serde_json::to_string_pretty(&output).map_err(|err| RenderError {
                 message: format!("MMDS serialization error: {err}"),
             })?;
             return Ok(json);
@@ -109,7 +82,7 @@ impl DiagramInstance for MmdsInstance {
         let mut options: RenderOptions = config.into();
         options.output_format = format;
 
-        if payload.geometry_level == "routed" {
+        if payload.geometry_level == "routed" && matches!(format, OutputFormat::Svg) {
             let geometry = hydrate_graph_geometry_from_output_with_diagram(payload, &diagram)
                 .map_err(|err| RenderError {
                     message: err.to_string(),
@@ -131,8 +104,24 @@ impl DiagramInstance for MmdsInstance {
             OutputFormat::Text
                 | OutputFormat::Ascii
                 | OutputFormat::Svg
-                | OutputFormat::Json
+                | OutputFormat::Mmds
                 | OutputFormat::Mermaid
         )
     }
+}
+
+/// Produce a layout-level copy of a routed MMDS payload by stripping
+/// edge paths, label positions, backward flags, and subgraph bounds.
+fn strip_routed_fields(payload: &MmdsOutput) -> MmdsOutput {
+    let mut output = payload.clone();
+    output.geometry_level = "layout".to_string();
+    for edge in &mut output.edges {
+        edge.path = None;
+        edge.label_position = None;
+        edge.is_backward = None;
+    }
+    for sg in &mut output.subgraphs {
+        sg.bounds = None;
+    }
+    output
 }

@@ -19,22 +19,21 @@ fn output_format_debug() {
 
 #[test]
 fn output_format_json_display() {
-    assert_eq!(format!("{}", OutputFormat::Json), "mmds");
+    assert_eq!(format!("{}", OutputFormat::Mmds), "mmds");
 }
 
 #[test]
-fn mmds_positioned_payload_rejects_text_formats_with_actionable_error() {
+fn mmds_routed_payload_renders_text_and_ascii_by_ignoring_paths() {
     let input =
         std::fs::read_to_string("tests/fixtures/mmds/positioned/routed-basic.json").unwrap();
     let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
     instance.parse(&input).unwrap();
 
     for format in [OutputFormat::Text, OutputFormat::Ascii] {
-        let err = instance
+        let output = instance
             .render(format, &mmdflux::diagram::RenderConfig::default())
-            .unwrap_err();
-        assert!(err.to_string().contains("positioned MMDS"));
-        assert!(err.to_string().contains("use --format svg"));
+            .expect("routed MMDS should render text/ascii by ignoring paths");
+        assert!(output.contains("Start"));
     }
 }
 
@@ -52,7 +51,7 @@ fn mmds_capability_matrix_matches_geometry_level_contract() {
         OutputFormat::Text,
         OutputFormat::Ascii,
         OutputFormat::Svg,
-        OutputFormat::Json,
+        OutputFormat::Mmds,
     ] {
         assert!(
             layout_instance
@@ -66,26 +65,17 @@ fn mmds_capability_matrix_matches_geometry_level_contract() {
     routed_instance
         .parse(&mmds_fixture("positioned/routed-basic.json"))
         .unwrap();
-    for format in [OutputFormat::Text, OutputFormat::Ascii] {
-        let err = routed_instance
-            .render(format, &mmdflux::diagram::RenderConfig::default())
-            .expect_err("routed payload should reject text/ascii");
-        assert!(err.to_string().contains("positioned MMDS"));
+    for format in [
+        OutputFormat::Text,
+        OutputFormat::Ascii,
+        OutputFormat::Svg,
+        OutputFormat::Mmds,
+    ] {
+        assert!(
+            routed_instance
+                .render(format, &mmdflux::diagram::RenderConfig::default())
+                .is_ok(),
+            "routed payload should support {format}"
+        );
     }
-    assert!(
-        routed_instance
-            .render(
-                OutputFormat::Svg,
-                &mmdflux::diagram::RenderConfig::default()
-            )
-            .is_ok()
-    );
-    assert!(
-        routed_instance
-            .render(
-                OutputFormat::Json,
-                &mmdflux::diagram::RenderConfig::default()
-            )
-            .is_ok()
-    );
 }

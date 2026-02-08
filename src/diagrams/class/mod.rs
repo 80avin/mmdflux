@@ -29,7 +29,7 @@ pub fn definition() -> DiagramDefinition {
             OutputFormat::Text,
             OutputFormat::Ascii,
             OutputFormat::Svg,
-            OutputFormat::Json,
+            OutputFormat::Mmds,
         ],
     }
 }

@@ -30,8 +30,8 @@ pub enum OutputFormat {
     Ascii,
     /// SVG vector graphics.
     Svg,
-    /// JSON structured output.
-    Json,
+    /// MMDS structured JSON output.
+    Mmds,
     /// Mermaid syntax output (from MMDS input).
     Mermaid,
 }
@@ -50,7 +50,7 @@ impl std::fmt::Display for OutputFormat {
             OutputFormat::Text => write!(f, "text"),
             OutputFormat::Ascii => write!(f, "ascii"),
             OutputFormat::Svg => write!(f, "svg"),
-            OutputFormat::Json => write!(f, "mmds"),
+            OutputFormat::Mmds => write!(f, "mmds"),
             OutputFormat::Mermaid => write!(f, "mermaid"),
         }
     }

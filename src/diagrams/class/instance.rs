@@ -60,7 +60,7 @@ impl DiagramInstance for ClassInstance {
         let mut options: RenderOptions = config.into();
         options.output_format = format;
 
-        if matches!(format, OutputFormat::Json) {
+        if matches!(format, OutputFormat::Mmds) {
             let engine_result = layout_with_selected_engine(diagram, config)?;
             let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
                 Some(routing::route_graph_geometry(
@@ -111,7 +111,7 @@ impl DiagramInstance for ClassInstance {
     fn supports_format(&self, format: OutputFormat) -> bool {
         matches!(
             format,
-            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
+            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Mmds
         )
     }
 }
