@@ -1,6 +1,6 @@
 # mmdflux
 
-Convert Mermaid syntax and Machine-Mediated Diagram Specification (MMDS) JSON to Unicode text diagrams, SVG diagrams, MMDS representations, and back again to Mermaid syntax.
+Render Mermaid diagrams as Unicode text, ASCII, or SVG. Includes a structured JSON interchange format (MMDS) for tooling integration.
 
 ## Installation
 
