@@ -22,6 +22,50 @@ For routed/positioned payloads, text/ascii requests fail with actionable guidanc
 
 `positioned MMDS text output is unsupported; use --format svg for positioned MMDS payloads`
 
+## MMDS -> Mermaid Generation Contract
+
+mmdflux provides deterministic Mermaid generation for graph-family MMDS payloads:
+
+- `mmdflux::generate_mermaid_from_mmds_str(input: &str) -> Result<String, MmdsGenerationError>`
+- `mmdflux::generate_mermaid_from_mmds(output: &MmdsOutput) -> Result<String, MmdsGenerationError>`
+
+### Canonical Output Rules
+
+Generated Mermaid is canonicalized as:
+
+1. Header first: `flowchart {direction}`
+2. Subgraphs emitted in deterministic ID order, with nested `subgraph ... end` blocks and optional `direction` lines
+3. Nodes emitted in deterministic ID order within each scope
+4. Edges emitted in deterministic edge-ID order (`e{number}` before non-numeric IDs)
+5. Output always ends with a trailing newline (`\n`)
+
+### Identifier and Label Policy
+
+- Node and subgraph identifiers are normalized to Mermaid-safe tokens:
+  - keep `[A-Za-z0-9_]`
+  - replace other characters with `_`
+  - collapse repeated `_`, trim outer `_`
+  - prefix with `node_` / `subgraph_` if empty or digit-leading
+  - resolve collisions deterministically with suffixes (`_2`, `_3`, ...)
+- Labels are quoted when needed for parser safety (for example spaces or `|`), with `\\` and `\"` escaping.
+- Edge labels use pipe syntax (`A -->|label| B`) and escape `|` as `&#124;`.
+
+Example (validated by tests):
+
+- Input node ID `node 1` and label `A | B`
+- Generated Mermaid node: `node_1["A | B"]`
+
+### Connector / minlen Policy
+
+`edge.minlen` is preserved by emitting connector length variants (`-->`, `--->`, `==>`, `===>`, `---`, `----`, etc.) so parse-back semantics stay stable.
+
+### Known Non-Goals / Caveats
+
+- Generation preserves semantics, not source formatting. Comments, original statement ordering, quoting style, and alias spellings are not reconstructed.
+- Non-graph payloads (for example `diagram_type: "sequence"`) are rejected with `MmdsGenerationError`.
+- IDs that are not Mermaid-safe are normalized; exact original ID text is not retained in generated Mermaid.
+- Style/class/link directives are out of scope for MMDS semantic generation.
+
 ## MMDS Input Validation Contract
 
 Hydration follows a **strict-core / permissive-extensions** policy:

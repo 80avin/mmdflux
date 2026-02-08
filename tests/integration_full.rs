@@ -10,7 +10,7 @@ use mmdflux::diagram::{OutputFormat, RenderConfig};
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::registry::default_registry;
 use mmdflux::render::{RenderOptions, render_svg};
-use mmdflux::{build_diagram, parse_flowchart};
+use mmdflux::{build_diagram, generate_mermaid_from_mmds_str, parse_flowchart};
 
 fn render_with_registry(input: &str, format: OutputFormat) -> String {
     let registry = default_registry();
@@ -191,6 +191,15 @@ fn registry_render_smoke() {
 
     let svg = render_with_registry("graph TD\nA-->B", OutputFormat::Svg);
     assert!(svg.starts_with("<svg"));
+}
+
+#[test]
+fn generated_mermaid_from_mmds_renders_through_registry() {
+    let payload = include_str!("fixtures/mmds/generation/basic-flow.json");
+    let mermaid = generate_mermaid_from_mmds_str(payload).expect("should generate Mermaid");
+    let rendered = render_with_registry(&mermaid, OutputFormat::Text);
+    assert!(rendered.contains("Start"));
+    assert!(rendered.contains("End"));
 }
 
 #[test]

@@ -13,6 +13,12 @@ use crate::diagram::{GeometryLevel, RenderError};
 use crate::diagrams::flowchart::geometry::{GraphGeometry, PositionedNode, RoutedGraphGeometry};
 use crate::graph::{Arrow, Diagram, Direction, Shape, Stroke};
 
+mod generate;
+
+pub use generate::{
+    MmdsGenerationError, generate_mermaid_from_mmds, generate_mermaid_from_mmds_str,
+};
+
 /// Serialize a graph-family diagram to MMDS JSON at layout level.
 ///
 /// Uses `GraphGeometry` for node positions and `Diagram` for edge semantics.

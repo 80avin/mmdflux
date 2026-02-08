@@ -53,5 +53,6 @@ pub use diagram::{
     OutputFormat, RenderConfig, RenderError, RoutingMode,
 };
 pub use graph::{Diagram, Direction, Edge, Node, Shape, build_diagram};
+pub use mmds::{MmdsGenerationError, generate_mermaid_from_mmds, generate_mermaid_from_mmds_str};
 pub use parser::{DiagramType, Flowchart, ParseError, detect_diagram_type, parse_flowchart};
 pub use registry::default_registry;

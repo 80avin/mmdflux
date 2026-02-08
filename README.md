@@ -369,6 +369,20 @@ MMDS governance fields are `profiles` and namespaced `extensions`. The initial p
 
 See [`docs/mmds.md`](docs/mmds.md) for the full capability matrix and detailed accepted/rejected/tolerated MMDS input behavior.
 
+### MMDS -> Mermaid Generation (Library)
+
+For graph-family payloads, mmdflux can generate canonical Mermaid from MMDS:
+
+```rust
+use mmdflux::generate_mermaid_from_mmds_str;
+
+let mmds_json = std::fs::read_to_string("diagram.mmds.json").unwrap();
+let mermaid = generate_mermaid_from_mmds_str(&mmds_json).unwrap();
+println!("{mermaid}");
+```
+
+Generation is deterministic (stable ordering, escaping policy, trailing newline) and intended for semantic roundtrip workflows. See [MMDS -> Mermaid generation contract](docs/mmds.md#mmds---mermaid-generation-contract) for the full policy and caveats.
+
 ## Library Usage
 
 ```rust
