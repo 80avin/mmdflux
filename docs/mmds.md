@@ -279,6 +279,38 @@ MMDS has a single JSON shape. Fields that match document defaults may be omitted
 
 Consumers should apply defaults before processing if they require explicit values.
 
+## Conformance Tiers
+
+MMDS roundtrip quality is measured across three conformance tiers, comparing the direct render pipeline (Mermaid text → Diagram → render) against the MMDS roundtrip pipeline (Mermaid text → MMDS JSON → hydrate → render).
+
+### Semantic parity
+
+Graph structure equivalence: nodes, edges, subgraphs, direction, labels, strokes, arrows, and minlen all survive the roundtrip. Subgraph child lists are normalized to direct children for comparison (the parser includes all descendants; MMDS uses direct children only).
+
+### Layout parity
+
+Geometry equivalence: both pipelines produce the same dagre layout — identical node positions, sizes, edge counts, and bounds within float tolerance (0.01).
+
+### Visual parity
+
+Rendered output equivalence: both text and SVG output are byte-identical between direct and roundtrip paths.
+
+### Current status
+
+| Tier | Flowchart | Class |
+|------|-----------|-------|
+| Semantic | 29/29 fixtures | 1/1 fixtures |
+| Layout | 29/29 fixtures | 1/1 fixtures |
+| Visual | 29/31 fixtures | 1/1 fixtures |
+
+Two nested subgraph fixtures (`nested_subgraph_only.mmd`, `external_node_subgraph.mmd`) have known visual divergence due to the descendant-vs-direct-children difference affecting dagre's compound layout.
+
+### Running conformance checks
+
+```bash
+just conformance
+```
+
 ## Supported Diagram Types
 
 | Type | `diagram_type` | Status |

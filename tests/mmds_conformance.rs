@@ -690,6 +690,31 @@ fn class_simple_all_tiers_pass() {
 }
 
 // ---------------------------------------------------------------------------
+// Documentation assertions
+// ---------------------------------------------------------------------------
+
+#[test]
+fn docs_define_semantic_layout_visual_conformance_tiers() {
+    let docs = std::fs::read_to_string("docs/mmds.md").unwrap();
+    assert!(
+        docs.contains("Semantic parity"),
+        "docs should define semantic parity tier"
+    );
+    assert!(
+        docs.contains("Layout parity"),
+        "docs should define layout parity tier"
+    );
+    assert!(
+        docs.contains("Visual parity"),
+        "docs should define visual parity tier"
+    );
+    assert!(
+        docs.contains("just conformance"),
+        "docs should reference the conformance command"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Fixture matrix: broad coverage across flowchart fixtures
 // ---------------------------------------------------------------------------
 
