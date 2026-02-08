@@ -106,6 +106,8 @@ enum FormatArg {
     /// MMDS structured output (`json` is an alias)
     #[value(name = "mmds", alias = "json")]
     Mmds,
+    /// Mermaid syntax output (from MMDS input)
+    Mermaid,
 }
 
 impl From<FormatArg> for OutputFormat {
@@ -115,6 +117,7 @@ impl From<FormatArg> for OutputFormat {
             FormatArg::Ascii => OutputFormat::Ascii,
             FormatArg::Svg => OutputFormat::Svg,
             FormatArg::Mmds => OutputFormat::Json,
+            FormatArg::Mermaid => OutputFormat::Mermaid,
         }
     }
 }

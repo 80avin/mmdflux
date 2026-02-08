@@ -34,7 +34,9 @@ impl DiagramInstance for MockDiagram {
         match format {
             OutputFormat::Text => Ok(format!("[TEXT] {}", content)),
             OutputFormat::Ascii => Ok(format!("[ASCII] {}", content)),
-            OutputFormat::Svg | OutputFormat::Json => Err("Not supported".into()),
+            OutputFormat::Svg | OutputFormat::Json | OutputFormat::Mermaid => {
+                Err("Not supported".into())
+            }
         }
     }
 

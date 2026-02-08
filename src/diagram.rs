@@ -32,6 +32,8 @@ pub enum OutputFormat {
     Svg,
     /// JSON structured output.
     Json,
+    /// Mermaid syntax output (from MMDS input).
+    Mermaid,
 }
 
 /// SVG edge curve style.
@@ -49,6 +51,7 @@ impl std::fmt::Display for OutputFormat {
             OutputFormat::Ascii => write!(f, "ascii"),
             OutputFormat::Svg => write!(f, "svg"),
             OutputFormat::Json => write!(f, "mmds"),
+            OutputFormat::Mermaid => write!(f, "mermaid"),
         }
     }
 }

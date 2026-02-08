@@ -5,7 +5,7 @@ use super::{
     hydrate_graph_geometry_from_output_with_diagram, parse_mmds_input,
 };
 use crate::diagram::{OutputFormat, RenderConfig, RenderError, RoutingMode};
-use crate::mmds::MmdsOutput;
+use crate::mmds::{MmdsOutput, generate_mermaid_from_mmds};
 use crate::registry::DiagramInstance;
 use crate::render::{RenderOptions, render, render_svg_from_geometry};
 
@@ -48,9 +48,16 @@ impl MmdsInstance {
         match payload.geometry_level.as_str() {
             "layout" => matches!(
                 format,
-                OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
+                OutputFormat::Text
+                    | OutputFormat::Ascii
+                    | OutputFormat::Svg
+                    | OutputFormat::Json
+                    | OutputFormat::Mermaid
             ),
-            "routed" => matches!(format, OutputFormat::Svg | OutputFormat::Json),
+            "routed" => matches!(
+                format,
+                OutputFormat::Svg | OutputFormat::Json | OutputFormat::Mermaid
+            ),
             _ => false,
         }
     }
@@ -89,6 +96,12 @@ impl DiagramInstance for MmdsInstance {
             return Ok(json);
         }
 
+        if matches!(format, OutputFormat::Mermaid) {
+            return generate_mermaid_from_mmds(payload).map_err(|err| RenderError {
+                message: err.to_string(),
+            });
+        }
+
         let diagram = from_mmds_output(payload).map_err(|err| RenderError {
             message: err.to_string(),
         })?;
@@ -115,7 +128,11 @@ impl DiagramInstance for MmdsInstance {
     fn supports_format(&self, format: OutputFormat) -> bool {
         matches!(
             format,
-            OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
+            OutputFormat::Text
+                | OutputFormat::Ascii
+                | OutputFormat::Svg
+                | OutputFormat::Json
+                | OutputFormat::Mermaid
         )
     }
 }

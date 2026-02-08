@@ -47,6 +47,7 @@ pub fn definition() -> DiagramDefinition {
             OutputFormat::Ascii,
             OutputFormat::Svg,
             OutputFormat::Json,
+            OutputFormat::Mermaid,
         ],
     }
 }

@@ -1,6 +1,6 @@
 # mmdflux
 
-Parse and render Mermaid diagrams to text, SVG, and MMDS JSON for machine-mediated workflows.
+Convert Mermaid syntax and Machine-Mediated Diagram Specification (MMDS) JSON to Unicode text diagrams, SVG diagrams, MMDS representations, and back again to Mermaid syntax.
 
 ## Installation
 
@@ -292,7 +292,7 @@ echo 'graph LR\nA-->B-->C' | mmdflux --format ascii
 | `A{text}`       | Diamond                 |
 | `A{{text}}`     | Hexagon                 |
 | `A((text))`     | Circle                  |
-| `A(((text)))`   | Double circle            |
+| `A(((text)))`   | Double circle           |
 | `A>text]`       | Asymmetric (flag)       |
 | `A[/text\]`     | Trapezoid               |
 | `A[\text/]`     | Inverse trapezoid       |
@@ -300,17 +300,17 @@ echo 'graph LR\nA-->B-->C' | mmdflux --format ascii
 
 ### Edge Types
 
-| Syntax         | Description              |
-| -------------- | ------------------------ |
-| `-->`          | Solid arrow              |
-| `-->\|label\|` | Solid arrow with label   |
-| `---`          | Open line (no arrow)     |
-| `-.->`         | Dotted arrow             |
-| `==>`          | Thick arrow              |
-| `~~~`          | Invisible (layout only)  |
-| `--x`          | Cross arrow              |
-| `--o`          | Circle arrow             |
-| `<-->`         | Bidirectional arrow      |
+| Syntax         | Description             |
+| -------------- | ----------------------- |
+| `-->`          | Solid arrow             |
+| `-->\|label\|` | Solid arrow with label  |
+| `---`          | Open line (no arrow)    |
+| `-.->`         | Dotted arrow            |
+| `==>`          | Thick arrow             |
+| `~~~`          | Invisible (layout only) |
+| `--x`          | Cross arrow             |
+| `--o`          | Circle arrow            |
+| `<-->`         | Bidirectional arrow     |
 
 ### Chains and Groups
 
@@ -382,6 +382,20 @@ println!("{mermaid}");
 ```
 
 Generation is deterministic (stable ordering, escaping policy, trailing newline) and intended for semantic roundtrip workflows. See [MMDS -> Mermaid generation contract](docs/mmds.md#mmds---mermaid-generation-contract) for the full policy and caveats.
+
+### MMDS -> Mermaid Generation (CLI)
+
+Convert MMDS JSON back to Mermaid syntax using `--format mermaid`:
+
+```bash
+# Convert MMDS file to Mermaid
+mmdflux --format mermaid diagram.mmds.json
+
+# Roundtrip: Mermaid -> MMDS -> Mermaid
+mmdflux --format mmds diagram.mmd | mmdflux --format mermaid
+```
+
+This is useful for editing diagrams in MMDS-native tools, then exporting back to Mermaid for use with other renderers.
 
 ## Library Usage
 

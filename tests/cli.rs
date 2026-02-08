@@ -455,3 +455,48 @@ fn cli_renders_all_flowchart_fixtures_successfully() {
         }
     }
 }
+
+#[test]
+fn cli_mermaid_format_generates_mermaid_from_mmds_input() {
+    mmdflux()
+        .args(["--format", "mermaid"])
+        .write_stdin(include_str!("fixtures/mmds/positioned/routed-basic.json"))
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with("flowchart"))
+        .stdout(predicate::str::contains("-->"));
+}
+
+#[test]
+fn cli_mermaid_format_roundtrip_preserves_topology() {
+    // Generate MMDS from Mermaid
+    let mmds_output = mmdflux()
+        .args(["--format", "mmds"])
+        .write_stdin("flowchart TD\nA[Start] --> B[End]")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    // Convert MMDS back to Mermaid
+    mmdflux()
+        .args(["--format", "mermaid"])
+        .write_stdin(mmds_output)
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with("flowchart TD"))
+        .stdout(predicate::str::contains("A[Start]"))
+        .stdout(predicate::str::contains("B[End]"))
+        .stdout(predicate::str::contains("A --> B"));
+}
+
+#[test]
+fn cli_mermaid_format_errors_for_non_mmds_input() {
+    mmdflux()
+        .args(["--format", "mermaid"])
+        .write_stdin("flowchart TD\nA --> B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("do not support mermaid"));
+}
