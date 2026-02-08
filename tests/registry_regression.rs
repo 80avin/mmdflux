@@ -378,8 +378,9 @@ fn mmds_dispatch_path_reaches_mmds_instance() {
         .expect("registry should create MMDS instance");
     instance.parse(&input).expect("MMDS parse should succeed");
 
-    let err = instance
+    let rendered = instance
         .render(OutputFormat::Text, &RenderConfig::default())
-        .unwrap_err();
-    assert!(err.to_string().contains("MMDS input scaffold"));
+        .expect("layout MMDS payload should render through registry dispatch");
+    assert!(rendered.contains("Start"));
+    assert!(rendered.contains("End"));
 }

@@ -330,14 +330,27 @@ fn cli_json_alias_maps_to_mmds() {
 }
 
 #[test]
-fn cli_reports_mmds_scaffold_limitation() {
+fn cli_reports_positioned_mmds_text_limitation_with_actionable_guidance() {
     mmdflux()
-        .write_stdin(include_str!("fixtures/mmds/minimal-layout.json"))
+        .write_stdin(include_str!("fixtures/mmds/positioned/routed-basic.json"))
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            "MMDS input scaffold: hydration/render pipeline is not implemented yet",
+            "positioned MMDS text output is unsupported",
+        ))
+        .stderr(predicate::str::contains(
+            "use --format svg for positioned MMDS payloads",
         ));
+}
+
+#[test]
+fn cli_renders_positioned_mmds_to_svg() {
+    mmdflux()
+        .args(["--format", "svg"])
+        .write_stdin(include_str!("fixtures/mmds/positioned/routed-basic.json"))
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with("<svg"));
 }
 
 #[test]

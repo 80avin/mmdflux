@@ -1,7 +1,10 @@
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagrams::mmds::{MmdsHydrationError, from_mmds_str};
+use mmdflux::diagrams::mmds::{
+    MmdsHydrationError, from_mmds_str, hydrate_graph_geometry_from_mmds,
+    hydrate_routed_geometry_from_mmds,
+};
 use mmdflux::graph::{Arrow, Stroke};
 use mmdflux::{Direction, Shape};
 
@@ -12,6 +15,10 @@ fn fixture(name: &str) -> String {
         .join("mmds")
         .join(name);
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()))
+}
+
+fn positioned_fixture(name: &str) -> String {
+    fixture(&format!("positioned/{name}"))
 }
 
 #[test]
@@ -113,6 +120,28 @@ fn hydration_preserves_deterministic_edge_order_by_edge_id() {
 fn hydration_ignores_unknown_extension_namespace() {
     let payload = fixture("layout-with-unknown-extension.json");
     assert!(from_mmds_str(&payload).is_ok());
+}
+
+#[test]
+fn routed_mmds_hydrates_node_sizes_paths_and_label_positions() {
+    let payload = positioned_fixture("routed-basic.json");
+    let geom = hydrate_routed_geometry_from_mmds(&payload).expect("routed geometry should hydrate");
+
+    assert_eq!(geom.nodes["A"].rect.width, 120.0);
+    assert_eq!(geom.edges[0].path.len(), 3);
+    assert_eq!(geom.edges[0].label_position.unwrap().x, 80.0);
+    assert_eq!(geom.subgraphs["sg1"].rect.width, 180.0);
+}
+
+#[test]
+fn layout_geometry_level_builds_graph_geometry_without_edge_paths() {
+    let payload = positioned_fixture("layout-basic.json");
+    let geom = hydrate_graph_geometry_from_mmds(&payload).expect("layout geometry should hydrate");
+
+    assert_eq!(geom.nodes["A"].rect.width, 120.0);
+    assert!(geom.edges[0].layout_path_hint.is_none());
+    assert!(geom.edges[0].label_position.is_none());
+    assert!(geom.subgraphs.contains_key("sg1"));
 }
 
 #[test]

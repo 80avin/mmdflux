@@ -4,7 +4,9 @@ mod hydrate;
 mod instance;
 
 pub use hydrate::{
-    MmdsHydrationError, MmdsParseError, from_mmds_output, from_mmds_str, parse_mmds_input,
+    MmdsHydrationError, MmdsParseError, from_mmds_output, from_mmds_str,
+    hydrate_graph_geometry_from_mmds, hydrate_graph_geometry_from_output,
+    hydrate_routed_geometry_from_mmds, hydrate_routed_geometry_from_output, parse_mmds_input,
     stub_hydrate,
 };
 pub use instance::MmdsInstance;

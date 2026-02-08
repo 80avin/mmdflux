@@ -18,5 +18,6 @@ engine-elk = []
 
 [dev-dependencies]
 assert_cmd = "2"
+jsonschema = "0.41"
 predicates = "3"
 regex = "1.12.2"

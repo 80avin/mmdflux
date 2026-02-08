@@ -1,11 +1,19 @@
 //! MMDS hydration and validation.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 
 use serde_json::{Map, Value};
 
+use crate::diagram::RoutingMode;
+use crate::diagrams::flowchart::geometry::{
+    FPoint, FRect, GraphGeometry, LayoutEdge, PositionedNode, RoutedGraphGeometry,
+    SelfEdgeGeometry, SubgraphGeometry,
+};
+use crate::diagrams::flowchart::render::route_policy::build_node_directions;
+use crate::diagrams::flowchart::routing::route_graph_geometry;
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke, Subgraph};
 use crate::mmds::{MmdsEdge, MmdsOutput};
 
@@ -219,6 +227,250 @@ pub fn from_mmds_output(output: &MmdsOutput) -> Result<Diagram, MmdsHydrationErr
     }
 
     Ok(diagram)
+}
+
+/// Hydrate graph geometry IR from MMDS JSON text.
+pub fn hydrate_graph_geometry_from_mmds(input: &str) -> Result<GraphGeometry, MmdsHydrationError> {
+    let output = parse_mmds_input(input).map_err(|err| MmdsHydrationError::Parse {
+        message: err.to_string(),
+    })?;
+    hydrate_graph_geometry_from_output(&output)
+}
+
+/// Hydrate graph geometry IR from parsed MMDS output.
+pub fn hydrate_graph_geometry_from_output(
+    output: &MmdsOutput,
+) -> Result<GraphGeometry, MmdsHydrationError> {
+    let (diagram, geometry) = hydrate_geometry_parts(output)?;
+    let _ = diagram;
+    Ok(geometry)
+}
+
+/// Hydrate routed geometry IR from MMDS JSON text.
+pub fn hydrate_routed_geometry_from_mmds(
+    input: &str,
+) -> Result<RoutedGraphGeometry, MmdsHydrationError> {
+    let output = parse_mmds_input(input).map_err(|err| MmdsHydrationError::Parse {
+        message: err.to_string(),
+    })?;
+    hydrate_routed_geometry_from_output(&output)
+}
+
+/// Hydrate routed geometry IR from parsed MMDS output.
+pub fn hydrate_routed_geometry_from_output(
+    output: &MmdsOutput,
+) -> Result<RoutedGraphGeometry, MmdsHydrationError> {
+    let (diagram, geometry) = hydrate_geometry_parts(output)?;
+    let routing_mode = if output.geometry_level == "routed" {
+        RoutingMode::PassThroughClip
+    } else {
+        RoutingMode::FullCompute
+    };
+    Ok(route_graph_geometry(&diagram, &geometry, routing_mode))
+}
+
+fn hydrate_geometry_parts(
+    output: &MmdsOutput,
+) -> Result<(Diagram, GraphGeometry), MmdsHydrationError> {
+    let diagram = from_mmds_output(output)?;
+    let geometry = build_graph_geometry(output, &diagram);
+    Ok((diagram, geometry))
+}
+
+fn build_graph_geometry(output: &MmdsOutput, diagram: &Diagram) -> GraphGeometry {
+    let nodes = build_positioned_nodes(output, diagram);
+    let (edges, self_edges, reversed_edges) = build_layout_edges(output);
+    let subgraphs = build_subgraph_geometry(output, diagram, &nodes);
+
+    GraphGeometry {
+        nodes,
+        edges,
+        subgraphs,
+        self_edges,
+        direction: diagram.direction,
+        node_directions: build_node_directions(diagram),
+        bounds: FRect::new(
+            0.0,
+            0.0,
+            output.metadata.bounds.width,
+            output.metadata.bounds.height,
+        ),
+        reversed_edges,
+        engine_hints: None,
+    }
+}
+
+fn build_positioned_nodes(
+    output: &MmdsOutput,
+    diagram: &Diagram,
+) -> HashMap<String, PositionedNode> {
+    output
+        .nodes
+        .iter()
+        .map(|node| {
+            let hydrated = diagram
+                .nodes
+                .get(&node.id)
+                .unwrap_or_else(|| panic!("validated node {} should exist in diagram", node.id));
+            (
+                node.id.clone(),
+                PositionedNode {
+                    id: node.id.clone(),
+                    rect: FRect::new(
+                        node.position.x,
+                        node.position.y,
+                        node.size.width,
+                        node.size.height,
+                    ),
+                    shape: hydrated.shape,
+                    label: hydrated.label.clone(),
+                    parent: hydrated.parent.clone(),
+                },
+            )
+        })
+        .collect()
+}
+
+fn build_layout_edges(output: &MmdsOutput) -> (Vec<LayoutEdge>, Vec<SelfEdgeGeometry>, Vec<usize>) {
+    let routed_level = output.geometry_level == "routed";
+    let mut edges: Vec<(usize, &MmdsEdge)> = output.edges.iter().enumerate().collect();
+    edges.sort_by(|(left_index, left), (right_index, right)| {
+        compare_edge_ids(&left.id, &right.id).then(left_index.cmp(right_index))
+    });
+
+    let mut layout_edges = Vec::with_capacity(edges.len());
+    let mut self_edges = Vec::new();
+    let mut reversed_edges = Vec::new();
+
+    for (index, (_, edge)) in edges.into_iter().enumerate() {
+        let mut path = routed_level
+            .then(|| parse_path_points(edge.path.as_deref()))
+            .flatten();
+        if edge.source == edge.target
+            && let Some(points) = path.take()
+        {
+            self_edges.push(SelfEdgeGeometry {
+                node_id: edge.source.clone(),
+                edge_index: index,
+                points,
+            });
+        }
+
+        if routed_level && edge.is_backward.unwrap_or(false) {
+            reversed_edges.push(index);
+        }
+
+        let label_position = if routed_level {
+            edge.label_position
+                .as_ref()
+                .map(|position| FPoint::new(position.x, position.y))
+        } else {
+            None
+        };
+
+        layout_edges.push(LayoutEdge {
+            index,
+            from: edge.source.clone(),
+            to: edge.target.clone(),
+            waypoints: Vec::new(),
+            label_position,
+            from_subgraph: edge.from_subgraph.clone(),
+            to_subgraph: edge.to_subgraph.clone(),
+            layout_path_hint: path,
+        });
+    }
+
+    (layout_edges, self_edges, reversed_edges)
+}
+
+fn parse_path_points(path: Option<&[[f64; 2]]>) -> Option<Vec<FPoint>> {
+    path.map(|points| points.iter().map(|[x, y]| FPoint::new(*x, *y)).collect())
+}
+
+fn build_subgraph_geometry(
+    output: &MmdsOutput,
+    diagram: &Diagram,
+    nodes: &HashMap<String, PositionedNode>,
+) -> HashMap<String, SubgraphGeometry> {
+    output
+        .subgraphs
+        .iter()
+        .map(|subgraph| {
+            let (center_x, center_y, fallback_width, fallback_height) =
+                derive_subgraph_center_and_extent(&subgraph.id, diagram, nodes);
+
+            let width = subgraph
+                .bounds
+                .as_ref()
+                .map_or(fallback_width, |bounds| bounds.width);
+            let height = subgraph
+                .bounds
+                .as_ref()
+                .map_or(fallback_height, |bounds| bounds.height);
+
+            (
+                subgraph.id.clone(),
+                SubgraphGeometry {
+                    id: subgraph.id.clone(),
+                    rect: FRect::new(center_x, center_y, width, height),
+                    title: subgraph.title.clone(),
+                    depth: diagram.subgraph_depth(&subgraph.id),
+                },
+            )
+        })
+        .collect()
+}
+
+fn derive_subgraph_center_and_extent(
+    subgraph_id: &str,
+    diagram: &Diagram,
+    nodes: &HashMap<String, PositionedNode>,
+) -> (f64, f64, f64, f64) {
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+
+    for node in diagram.nodes.values() {
+        if !node_is_within_subgraph(node, subgraph_id, diagram) {
+            continue;
+        }
+        let Some(placed) = nodes.get(&node.id) else {
+            continue;
+        };
+        let left = placed.rect.x - placed.rect.width / 2.0;
+        let right = placed.rect.x + placed.rect.width / 2.0;
+        let top = placed.rect.y - placed.rect.height / 2.0;
+        let bottom = placed.rect.y + placed.rect.height / 2.0;
+        min_x = min_x.min(left);
+        max_x = max_x.max(right);
+        min_y = min_y.min(top);
+        max_y = max_y.max(bottom);
+    }
+
+    if min_x.is_finite() && min_y.is_finite() && max_x.is_finite() && max_y.is_finite() {
+        let width = (max_x - min_x).max(0.0);
+        let height = (max_y - min_y).max(0.0);
+        let center_x = min_x + width / 2.0;
+        let center_y = min_y + height / 2.0;
+        (center_x, center_y, width, height)
+    } else {
+        (0.0, 0.0, 0.0, 0.0)
+    }
+}
+
+fn node_is_within_subgraph(node: &Node, subgraph_id: &str, diagram: &Diagram) -> bool {
+    let mut current = node.parent.as_deref();
+    while let Some(parent) = current {
+        if parent == subgraph_id {
+            return true;
+        }
+        current = diagram
+            .subgraphs
+            .get(parent)
+            .and_then(|subgraph| subgraph.parent.as_deref());
+    }
+    false
 }
 
 fn validate_output(output: &MmdsOutput) -> Result<(), MmdsHydrationError> {

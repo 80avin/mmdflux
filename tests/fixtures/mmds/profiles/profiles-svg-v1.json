@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "defaults": {
+    "node": { "shape": "rectangle" },
+    "edge": {
+      "stroke": "solid",
+      "arrow_start": "none",
+      "arrow_end": "normal",
+      "minlen": 1
+    }
+  },
+  "geometry_level": "layout",
+  "metadata": {
+    "diagram_type": "flowchart",
+    "direction": "TD",
+    "bounds": { "width": 120.0, "height": 80.0 }
+  },
+  "profiles": ["mmds-core-v1", "mmdflux-svg-v1"],
+  "extensions": {
+    "org.mmdflux.render.svg.v1": {
+      "node_padding_x": 14,
+      "node_padding_y": 14
+    }
+  },
+  "nodes": [
+    {
+      "id": "A",
+      "label": "Start",
+      "position": { "x": 30.0, "y": 20.0 },
+      "size": { "width": 40.0, "height": 20.0 }
+    },
+    {
+      "id": "B",
+      "label": "End",
+      "position": { "x": 90.0, "y": 60.0 },
+      "size": { "width": 40.0, "height": 20.0 }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "source": "A",
+      "target": "B"
+    }
+  ]
+}

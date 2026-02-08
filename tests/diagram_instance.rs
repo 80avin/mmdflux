@@ -118,16 +118,42 @@ fn mmds_instance_parse_rejects_invalid_json_with_stable_message() {
 }
 
 #[test]
-fn mmds_scaffold_render_returns_explicit_not_implemented_error() {
+fn mmds_layout_payload_renders_text() {
     let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
     let input = mmds_fixture("minimal-layout.json");
     instance.parse(&input).expect("parse should succeed");
 
+    let rendered = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .expect("layout payload should render text");
+    assert!(rendered.contains("Start"));
+    assert!(rendered.contains("End"));
+}
+
+#[test]
+fn mmds_routed_geometry_level_uses_direct_svg_path() {
+    let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
+    let input = mmds_fixture("positioned/routed-basic.json");
+    instance.parse(&input).expect("parse should succeed");
+
+    let svg = instance
+        .render(OutputFormat::Svg, &RenderConfig::default())
+        .expect("routed MMDS should render SVG");
+    assert!(svg.starts_with("<svg"));
+    assert!(svg.contains("Start"));
+}
+
+#[test]
+fn mmds_routed_geometry_level_rejects_text_output() {
+    let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
+    let input = mmds_fixture("positioned/routed-basic.json");
+    instance.parse(&input).expect("parse should succeed");
+
     let err = instance
         .render(OutputFormat::Text, &RenderConfig::default())
-        .unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "MMDS input scaffold: hydration/render pipeline is not implemented yet"
+        .expect_err("routed MMDS text output should be rejected");
+    assert!(
+        err.to_string()
+            .contains("positioned MMDS text output is unsupported")
     );
 }

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use mmdflux::diagram::{OutputFormat, RenderConfig};
+use mmdflux::registry::DiagramInstance;
 use mmdflux::render::{RenderOptions, render_svg};
 use mmdflux::{build_diagram, parse_flowchart};
 
@@ -256,4 +258,22 @@ fn render_svg_direction_override_backward_edge() {
 
     assert!(!svg.contains("NaN"), "SVG should not contain NaN");
     assert!(svg.contains("<path"), "SVG should have edge paths");
+}
+
+#[test]
+fn render_svg_positioned_mmds_routed_basic_includes_paths_and_subgraph() {
+    let input = std::fs::read_to_string("tests/fixtures/mmds/positioned/routed-basic.json")
+        .expect("positioned fixture should exist");
+    let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
+    instance.parse(&input).expect("MMDS parse should succeed");
+
+    let svg = instance
+        .render(OutputFormat::Svg, &RenderConfig::default())
+        .expect("routed MMDS should render SVG");
+
+    assert!(svg.starts_with("<svg"));
+    assert!(svg.contains("class=\"subgraph\""));
+    assert!(svg.contains("<path"));
+    assert!(svg.contains("Start"));
+    assert!(svg.contains("Group"));
 }
