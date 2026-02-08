@@ -15,6 +15,8 @@ use std::path::Path;
 
 use mmdflux::diagram::{OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
+use mmdflux::diagrams::flowchart::engine::layout_with_selected_engine;
+use mmdflux::diagrams::flowchart::geometry::GraphGeometry;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::graph::{Diagram, Subgraph};
 use mmdflux::registry::DiagramInstance;
@@ -189,14 +191,118 @@ fn check_visual(direct: &Diagram, roundtrip: &Diagram) -> TierResult {
     }
 }
 
-/// Layout tier placeholder — deferred to task 2.1.
-fn check_layout(_direct: &Diagram, _roundtrip: &Diagram) -> TierResult {
-    // Layout comparison requires explicit geometry extraction.
-    // Implemented in task 2.1.
+/// Float tolerance for geometry comparison.
+const GEOMETRY_TOLERANCE: f64 = 0.01;
+
+fn floats_eq(a: f64, b: f64) -> bool {
+    (a - b).abs() < GEOMETRY_TOLERANCE
+}
+
+/// Compare layout geometry for equivalence.
+///
+/// Runs dagre layout on both diagrams and compares node positions/sizes,
+/// edge count, and overall bounds.
+fn check_layout(direct: &Diagram, roundtrip: &Diagram) -> TierResult {
+    let config = RenderConfig::default();
+
+    let direct_geom = match layout_with_selected_engine(direct, &config) {
+        Ok(result) => result.geometry,
+        Err(e) => {
+            return TierResult {
+                tier: "layout",
+                status: TierStatus::Fail(format!("direct layout failed: {e}")),
+            };
+        }
+    };
+
+    let roundtrip_geom = match layout_with_selected_engine(roundtrip, &config) {
+        Ok(result) => result.geometry,
+        Err(e) => {
+            return TierResult {
+                tier: "layout",
+                status: TierStatus::Fail(format!("roundtrip layout failed: {e}")),
+            };
+        }
+    };
+
+    let mismatches = compare_geometry(&direct_geom, &roundtrip_geom);
+
     TierResult {
         tier: "layout",
-        status: TierStatus::Pass,
+        status: if mismatches.is_empty() {
+            TierStatus::Pass
+        } else {
+            TierStatus::Fail(mismatches.join("; "))
+        },
     }
+}
+
+fn compare_geometry(direct: &GraphGeometry, roundtrip: &GraphGeometry) -> Vec<String> {
+    let mut mismatches = Vec::new();
+
+    // Compare node count
+    if direct.nodes.len() != roundtrip.nodes.len() {
+        mismatches.push(format!(
+            "node count: {} vs {}",
+            direct.nodes.len(),
+            roundtrip.nodes.len()
+        ));
+        return mismatches;
+    }
+
+    // Compare node positions and sizes
+    let mut direct_nodes: Vec<_> = direct.nodes.iter().collect();
+    direct_nodes.sort_by_key(|(id, _)| (*id).clone());
+    for (id, d_node) in &direct_nodes {
+        match roundtrip.nodes.get(*id) {
+            None => mismatches.push(format!("node {id} missing in roundtrip geometry")),
+            Some(r_node) => {
+                if !floats_eq(d_node.rect.x, r_node.rect.x)
+                    || !floats_eq(d_node.rect.y, r_node.rect.y)
+                {
+                    mismatches.push(format!(
+                        "node {id} position: ({:.1},{:.1}) vs ({:.1},{:.1})",
+                        d_node.rect.x, d_node.rect.y, r_node.rect.x, r_node.rect.y
+                    ));
+                }
+                if !floats_eq(d_node.rect.width, r_node.rect.width)
+                    || !floats_eq(d_node.rect.height, r_node.rect.height)
+                {
+                    mismatches.push(format!(
+                        "node {id} size: ({:.1}x{:.1}) vs ({:.1}x{:.1})",
+                        d_node.rect.width,
+                        d_node.rect.height,
+                        r_node.rect.width,
+                        r_node.rect.height
+                    ));
+                }
+            }
+        }
+    }
+
+    // Compare edge count
+    if direct.edges.len() != roundtrip.edges.len() {
+        mismatches.push(format!(
+            "edge count: {} vs {}",
+            direct.edges.len(),
+            roundtrip.edges.len()
+        ));
+    }
+
+    // Compare bounds
+    if !floats_eq(direct.bounds.width, roundtrip.bounds.width)
+        || !floats_eq(direct.bounds.height, roundtrip.bounds.height)
+    {
+        mismatches.push(format!(
+            "bounds: ({:.1}x{:.1}) vs ({:.1}x{:.1})",
+            direct.bounds.width,
+            direct.bounds.height,
+            roundtrip.bounds.width,
+            roundtrip.bounds.height
+        ));
+    }
+
+    mismatches
 }
 
 /// Run a full conformance case for a flowchart fixture.
@@ -528,5 +634,84 @@ fn class_simple_all_tiers_pass() {
         report.visual.status.is_pass(),
         "visual: {:?}",
         report.visual.status
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Fixture matrix: broad coverage across flowchart fixtures
+// ---------------------------------------------------------------------------
+
+/// Flowchart fixtures expected to pass all three conformance tiers.
+const FLOWCHART_CONFORMANCE_MATRIX: &[&str] = &[
+    "simple.mmd",
+    "chain.mmd",
+    "decision.mmd",
+    "shapes.mmd",
+    "edge_styles.mmd",
+    "labeled_edges.mmd",
+    "left_right.mmd",
+    "right_left.mmd",
+    "bottom_top.mmd",
+    "fan_in.mmd",
+    "fan_out.mmd",
+    "simple_cycle.mmd",
+    "multiple_cycles.mmd",
+    "simple_subgraph.mmd",
+    "subgraph_edges.mmd",
+    "nested_subgraph.mmd",
+    "multi_subgraph.mmd",
+    "complex.mmd",
+    "ampersand.mmd",
+    "diamond_fan.mmd",
+    "self_loop.mmd",
+    "bidirectional.mmd",
+    "cross_circle_arrows.mmd",
+];
+
+#[test]
+fn flowchart_matrix_semantic_tier() {
+    let mut failures = Vec::new();
+    for fixture in FLOWCHART_CONFORMANCE_MATRIX {
+        let report = run_flowchart_conformance(fixture);
+        if !report.semantic.status.is_pass() {
+            failures.push(format!("{}: {:?}", fixture, report.semantic.status));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "semantic tier failures:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn flowchart_matrix_layout_tier() {
+    let mut failures = Vec::new();
+    for fixture in FLOWCHART_CONFORMANCE_MATRIX {
+        let report = run_flowchart_conformance(fixture);
+        if !report.layout.status.is_pass() {
+            failures.push(format!("{}: {:?}", fixture, report.layout.status));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "layout tier failures:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn flowchart_matrix_visual_tier() {
+    let mut failures = Vec::new();
+    for fixture in FLOWCHART_CONFORMANCE_MATRIX {
+        let report = run_flowchart_conformance(fixture);
+        if !report.visual.status.is_pass() {
+            failures.push(format!("{}: {:?}", fixture, report.visual.status));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "visual tier failures:\n{}",
+        failures.join("\n")
     );
 }
