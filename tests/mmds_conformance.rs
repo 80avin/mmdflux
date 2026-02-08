@@ -633,6 +633,44 @@ fn flowchart_shapes_all_tiers_pass() {
 }
 
 // ---------------------------------------------------------------------------
+// Conformance summary (for CI log output)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn conformance_summary_reports_tier_counts() {
+    let mut pass_counts = [0usize; 3]; // semantic, layout, visual
+    let mut total = 0;
+
+    for fixture in FLOWCHART_CONFORMANCE_MATRIX {
+        let report = run_flowchart_conformance(fixture);
+        total += 1;
+        if report.semantic.status.is_pass() {
+            pass_counts[0] += 1;
+        }
+        if report.layout.status.is_pass() {
+            pass_counts[1] += 1;
+        }
+        if report.visual.status.is_pass() {
+            pass_counts[2] += 1;
+        }
+    }
+
+    // All fixtures in the main matrix should pass all tiers
+    assert_eq!(
+        pass_counts[0], total,
+        "semantic tier should have 100% pass rate"
+    );
+    assert_eq!(
+        pass_counts[1], total,
+        "layout tier should have 100% pass rate"
+    );
+    assert_eq!(
+        pass_counts[2], total,
+        "visual tier should have 100% pass rate"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Class diagram conformance
 // ---------------------------------------------------------------------------
 

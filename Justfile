@@ -39,5 +39,9 @@ fmt:
 run *args:
     cargo run -- {{ args }}
 
+# Run MMDS conformance checks (semantic/layout/visual tiers)
+conformance *args:
+    cargo nextest run --test mmds_conformance {{ args }}
+
 # Check that everything compiles, passes lint, and tests
 check: lint test
