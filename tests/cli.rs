@@ -330,6 +330,17 @@ fn cli_json_alias_maps_to_mmds() {
 }
 
 #[test]
+fn cli_reports_mmds_scaffold_limitation() {
+    mmdflux()
+        .write_stdin(include_str!("fixtures/mmds/minimal-layout.json"))
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "MMDS input scaffold: hydration/render pipeline is not implemented yet",
+        ));
+}
+
+#[test]
 fn cli_mmds_includes_defaults_block_and_omits_default_edge_fields() {
     let assert = mmdflux()
         .args(["--format", "mmds"])

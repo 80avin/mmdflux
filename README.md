@@ -355,6 +355,12 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 
 MMDS output is supported for flowchart and class diagrams (`--format json` remains an alias). The output includes a top-level `defaults` block and omits per-node/per-edge fields when they match those defaults. See [`docs/mmds.md`](docs/mmds.md) for the full specification and [`docs/mmds.schema.json`](docs/mmds.schema.json) for the JSON Schema. Adapter examples for React Flow, Cytoscape.js, and D3 are in [`examples/mmds/`](examples/mmds/).
 
+MMDS input detection is wired in the registry path, and hydration enforces a strict-core/permissive-extensions validation contract (see [MMDS input validation contract](docs/mmds.md#mmds-input-validation-contract)). If you pass MMDS JSON to CLI rendering today, mmdflux will parse and detect it as `mmds`, then currently return:
+
+`MMDS input scaffold: hydration/render pipeline is not implemented yet`
+
+See [`docs/mmds.md`](docs/mmds.md) for detailed accepted/rejected/tolerated MMDS input behavior.
+
 ## Library Usage
 
 ```rust

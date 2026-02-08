@@ -2,6 +2,45 @@
 
 MMDS is the structured JSON output format for graph-family diagrams produced by mmdflux. It is designed for machine consumption in LLM pipelines, adapter libraries, and agentic workflows.
 
+## Input Status
+
+MMDS input support is in active ingestion rollout:
+
+- The registry detects MMDS JSON input and dispatches to the `mmds` diagram type.
+- Parse-time envelope validation is active (`MMDS parse error: ...` on invalid JSON/envelope).
+- MMDS core hydration/validation contract is implemented (`MMDS validation error: ...` on invalid core payloads).
+- Render runtime is still scaffolded and currently returns:
+  - `MMDS input scaffold: hydration/render pipeline is not implemented yet`
+
+This means MMDS is stable as an output contract and hydration contract today, while direct MMDS-to-render behavior is finishing in follow-on phases.
+
+## MMDS Input Validation Contract
+
+Hydration follows a **strict-core / permissive-extensions** policy:
+
+- **Strict core** (rejected):
+  - unsupported `version`
+  - invalid core enum values (`geometry_level`, directions, shapes, strokes, arrows)
+  - missing required identifiers (`node.id`, `edge.id`, `subgraph.id`, edge endpoints)
+  - dangling references (edge source/target, node parent, subgraph parent/children)
+  - cyclic subgraph parent chains
+- **Permissive extensions** (tolerated):
+  - unknown `profiles` values
+  - unknown namespaces under `extensions`
+
+Hydration also expands omitted node/edge fields from the document `defaults` block before mapping to internal graph types.
+
+### Deterministic Ordering
+
+Hydrated edge insertion order is deterministic:
+
+1. sort by explicit edge ID when it matches `e{number}`
+2. fallback to declaration order for ties/non-numeric IDs
+
+### Canonical Error Example
+
+`MMDS validation error: edge e0 target 'X' not found`
+
 ## Geometry Levels
 
 MMDS supports two geometry levels that control how much spatial detail is included:

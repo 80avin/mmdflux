@@ -1,8 +1,20 @@
+use std::fs;
+use std::path::Path;
+
 use mmdflux::diagram::{DiagramFamily, OutputFormat, RenderConfig, RenderError};
 use mmdflux::registry::{DiagramDefinition, DiagramInstance, DiagramRegistry};
 
 struct MockDiagram {
     parsed: Option<String>,
+}
+
+fn mmds_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("mmds")
+        .join(name);
+    fs::read_to_string(&path).unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()))
 }
 
 impl MockDiagram {
@@ -82,4 +94,40 @@ fn registry_create_returns_instance() {
 fn registry_create_unknown_returns_none() {
     let registry = DiagramRegistry::new();
     assert!(registry.create("unknown").is_none());
+}
+
+#[test]
+fn mmds_module_exports_instance_type() {
+    let _ = mmdflux::diagrams::mmds::MmdsInstance::default();
+}
+
+#[test]
+fn mmds_instance_parse_accepts_minimal_layout_payload() {
+    let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
+    let input = mmds_fixture("minimal-layout.json");
+
+    instance.parse(&input).expect("parse should succeed");
+    assert!(instance.has_parsed_payload());
+}
+
+#[test]
+fn mmds_instance_parse_rejects_invalid_json_with_stable_message() {
+    let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
+    let err = instance.parse("not json").unwrap_err();
+    assert!(err.to_string().starts_with("MMDS parse error:"));
+}
+
+#[test]
+fn mmds_scaffold_render_returns_explicit_not_implemented_error() {
+    let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
+    let input = mmds_fixture("minimal-layout.json");
+    instance.parse(&input).expect("parse should succeed");
+
+    let err = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "MMDS input scaffold: hydration/render pipeline is not implemented yet"
+    );
 }

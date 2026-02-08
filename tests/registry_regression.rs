@@ -361,3 +361,25 @@ fn regression_all_fixtures() {
         }
     }
 }
+
+#[test]
+fn mmds_dispatch_path_reaches_mmds_instance() {
+    let input = std::fs::read_to_string("tests/fixtures/mmds/minimal-layout.json")
+        .expect("minimal-layout fixture should exist");
+    let registry = default_registry();
+
+    let diagram_id = registry
+        .detect(&input)
+        .expect("registry should detect MMDS");
+    assert_eq!(diagram_id, "mmds");
+
+    let mut instance = registry
+        .create(diagram_id)
+        .expect("registry should create MMDS instance");
+    instance.parse(&input).expect("MMDS parse should succeed");
+
+    let err = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap_err();
+    assert!(err.to_string().contains("MMDS input scaffold"));
+}

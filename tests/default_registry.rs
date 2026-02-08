@@ -72,6 +72,33 @@ fn default_registry_sequence_is_timeline_family() {
 }
 
 #[test]
+fn default_registry_detects_mmds_json_before_mermaid() {
+    let registry = default_registry();
+    let input = r#"{
+  "version": 1,
+  "geometry_level": "layout",
+  "metadata": {
+    "diagram_type": "flowchart",
+    "direction": "TD",
+    "bounds": {"width": 100.0, "height": 50.0}
+  },
+  "defaults": {
+    "node": {"shape": "rectangle"},
+    "edge": {"stroke": "solid", "arrow_start": "none", "arrow_end": "normal", "minlen": 1}
+  },
+  "nodes": [],
+  "edges": []
+}"#;
+    assert_eq!(registry.detect(input), Some("mmds"));
+}
+
+#[test]
+fn default_registry_includes_mmds_definition() {
+    let registry = default_registry();
+    assert!(registry.get("mmds").is_some());
+}
+
+#[test]
 fn default_registry_flowchart_first() {
     // Flowchart should be checked before other graph-like patterns
     let registry = default_registry();

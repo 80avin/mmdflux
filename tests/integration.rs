@@ -7,10 +7,11 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::diagram::OutputFormat;
+use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::render::{
     Layout, LayoutConfig, RenderOptions, compute_layout_direct, render, route_all_edges,
 };
-use mmdflux::{Diagram, Direction, Shape, build_diagram, parse_flowchart};
+use mmdflux::{Diagram, Direction, Shape, build_diagram, default_registry, parse_flowchart};
 
 /// Load a fixture file by name from `tests/fixtures/flowchart/`.
 fn load_fixture(name: &str) -> String {
@@ -18,6 +19,16 @@ fn load_fixture(name: &str) -> String {
         .join("tests")
         .join("fixtures")
         .join("flowchart")
+        .join(name);
+    fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read fixture {}: {}", name, e))
+}
+
+/// Load an MMDS fixture file by name from `tests/fixtures/mmds/`.
+fn load_mmds_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("mmds")
         .join(name);
     fs::read_to_string(&path).unwrap_or_else(|e| panic!("Failed to read fixture {}: {}", name, e))
 }
@@ -2658,4 +2669,50 @@ fn test_render_subgraph_direction_cross_boundary() {
     assert!(output.contains("B"), "Should render node B");
     assert!(output.contains("C"), "Should render node C");
     assert!(output.contains("D"), "Should render node D");
+}
+
+#[test]
+fn registry_entrypoint_dispatches_mmds_input_to_mmds_instance() {
+    let input = load_mmds_fixture("minimal-layout.json");
+    let registry = default_registry();
+    let diagram_id = registry
+        .detect(&input)
+        .expect("registry should detect MMDS fixture");
+    assert_eq!(diagram_id, "mmds");
+
+    let mut instance = registry
+        .create(diagram_id)
+        .expect("registry should create mmds instance");
+    instance.parse(&input).expect("MMDS parse should succeed");
+
+    let err = instance
+        .render(
+            OutputFormat::Text,
+            &mmdflux::diagram::RenderConfig::default(),
+        )
+        .unwrap_err();
+    assert!(err.to_string().contains("MMDS input scaffold"));
+}
+
+#[test]
+fn mmds_integration_fixture_matrix() {
+    let cases = [
+        ("layout-valid-flowchart.json", true),
+        ("layout-valid-class.json", true),
+        ("invalid/dangling-edge-target.json", false),
+        ("invalid/dangling-subgraph-parent.json", false),
+        ("invalid/invalid-shape.json", false),
+        ("invalid/unsupported-version.json", false),
+    ];
+
+    for (fixture_name, should_pass) in cases {
+        let payload = load_mmds_fixture(fixture_name);
+        assert_eq!(
+            from_mmds_str(&payload).is_ok(),
+            should_pass,
+            "fixture {} expected pass={}",
+            fixture_name,
+            should_pass
+        );
+    }
 }
