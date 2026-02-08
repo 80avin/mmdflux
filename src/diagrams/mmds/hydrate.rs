@@ -358,12 +358,11 @@ fn build_positioned_nodes(
         .nodes
         .iter()
         .map(|node| {
-            let hydrated = diagram
-                .nodes
-                .get(&node.id)
-                .ok_or_else(|| MmdsHydrationError::MissingGeometryNode {
+            let hydrated = diagram.nodes.get(&node.id).ok_or_else(|| {
+                MmdsHydrationError::MissingGeometryNode {
                     node_id: node.id.clone(),
-                })?;
+                }
+            })?;
             Ok((
                 node.id.clone(),
                 PositionedNode {
