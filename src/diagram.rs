@@ -255,6 +255,47 @@ pub trait GraphLayoutEngine: Send + Sync {
     ) -> Result<Self::Output, RenderError>;
 }
 
+/// Path detail level for edge waypoints in MMDS and SVG output.
+///
+/// Controls how many anchor points are included in edge paths.
+/// Ignored for text/ASCII output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PathDetail {
+    /// All routed waypoints (default).
+    #[default]
+    Full,
+    /// Start, midpoint, and end only (3 points).
+    Simplified,
+    /// Start and end only (2 points).
+    Endpoints,
+}
+
+impl PathDetail {
+    /// Simplify a path according to the detail level.
+    ///
+    /// Returns a new vec with the appropriate number of points:
+    /// - `Full` — all points unchanged
+    /// - `Simplified` — first, middle, last (3 points max)
+    /// - `Endpoints` — first and last only (2 points max)
+    pub fn simplify<T: Clone>(&self, points: &[T]) -> Vec<T> {
+        match self {
+            PathDetail::Full => points.to_vec(),
+            PathDetail::Simplified if points.len() > 3 => {
+                let mid = points.len() / 2;
+                vec![
+                    points[0].clone(),
+                    points[mid].clone(),
+                    points[points.len() - 1].clone(),
+                ]
+            }
+            PathDetail::Endpoints if points.len() > 2 => {
+                vec![points[0].clone(), points[points.len() - 1].clone()]
+            }
+            _ => points.to_vec(),
+        }
+    }
+}
+
 /// MMDS geometry level for JSON output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum GeometryLevel {
@@ -296,6 +337,8 @@ pub struct RenderConfig {
     pub show_ids: bool,
     /// MMDS geometry level for JSON output.
     pub geometry_level: GeometryLevel,
+    /// Path detail level for edge waypoints (MMDS and SVG).
+    pub path_detail: PathDetail,
 }
 
 /// Error type for rendering failures.

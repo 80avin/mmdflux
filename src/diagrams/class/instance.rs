@@ -77,6 +77,7 @@ impl DiagramInstance for ClassInstance {
                 &engine_result.geometry,
                 routed.as_ref(),
                 config.geometry_level,
+                config.path_detail,
             );
         }
 

@@ -12,7 +12,7 @@ pub use canvas::Canvas;
 use canvas::{Cell, Connections};
 pub use chars::CharSet;
 
-use crate::diagram::{OutputFormat, RenderConfig, SvgEdgeCurve};
+use crate::diagram::{OutputFormat, PathDetail, RenderConfig, SvgEdgeCurve};
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
 };
@@ -60,6 +60,7 @@ impl From<&RenderConfig> for RenderOptions {
             margin: Some(config.layout.margin),
             cluster_ranksep: config.cluster_ranksep,
             padding: config.padding,
+            path_detail: config.path_detail,
         }
     }
 }
@@ -114,6 +115,8 @@ pub struct RenderOptions {
     pub cluster_ranksep: Option<f64>,
     /// ASCII padding around the diagram (diagramPadding analog).
     pub padding: Option<usize>,
+    /// Edge path detail level (MMDS and SVG only).
+    pub path_detail: PathDetail,
 }
 
 impl Default for RenderOptions {
@@ -128,6 +131,7 @@ impl Default for RenderOptions {
             margin: None,
             cluster_ranksep: None,
             padding: None,
+            path_detail: PathDetail::Full,
         }
     }
 }

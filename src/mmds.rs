@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::diagram::{GeometryLevel, RenderError};
+use crate::diagram::{GeometryLevel, PathDetail, RenderError};
 use crate::diagrams::flowchart::geometry::{GraphGeometry, PositionedNode, RoutedGraphGeometry};
 use crate::graph::{Arrow, Diagram, Direction, Shape, Stroke};
 
@@ -33,7 +33,7 @@ pub fn to_mmds_layout_typed(
     diagram: &Diagram,
     geometry: &GraphGeometry,
 ) -> String {
-    let output = build_mmds_output(diagram_type, diagram, geometry, None);
+    let output = build_mmds_output(diagram_type, diagram, geometry, None, PathDetail::Full);
     serialize_mmds_output(&output)
 }
 
@@ -56,7 +56,13 @@ pub fn to_mmds_routed_typed(
     geometry: &GraphGeometry,
     routed: &RoutedGraphGeometry,
 ) -> String {
-    let output = build_mmds_output(diagram_type, diagram, geometry, Some(routed));
+    let output = build_mmds_output(
+        diagram_type,
+        diagram,
+        geometry,
+        Some(routed),
+        PathDetail::Full,
+    );
     serialize_mmds_output(&output)
 }
 
@@ -66,8 +72,9 @@ pub fn to_mmds_json(
     geometry: &GraphGeometry,
     routed: Option<&RoutedGraphGeometry>,
     level: GeometryLevel,
+    path_detail: PathDetail,
 ) -> Result<String, RenderError> {
-    to_mmds_json_typed("flowchart", diagram, geometry, routed, level)
+    to_mmds_json_typed("flowchart", diagram, geometry, routed, level, path_detail)
 }
 
 /// Serialize a diagram to MMDS JSON at the specified geometry level with explicit type.
@@ -77,15 +84,17 @@ pub fn to_mmds_json_typed(
     geometry: &GraphGeometry,
     routed: Option<&RoutedGraphGeometry>,
     level: GeometryLevel,
+    path_detail: PathDetail,
 ) -> Result<String, RenderError> {
     match level {
         GeometryLevel::Layout => {
-            let output = build_mmds_output(diagram_type, diagram, geometry, None);
+            let output = build_mmds_output(diagram_type, diagram, geometry, None, path_detail);
             Ok(serialize_mmds_output(&output))
         }
         GeometryLevel::Routed => {
             if let Some(routed) = routed {
-                let output = build_mmds_output(diagram_type, diagram, geometry, Some(routed));
+                let output =
+                    build_mmds_output(diagram_type, diagram, geometry, Some(routed), path_detail);
                 Ok(serialize_mmds_output(&output))
             } else {
                 Err(RenderError {
@@ -106,6 +115,7 @@ fn build_mmds_output(
     diagram: &Diagram,
     geometry: &GraphGeometry,
     routed: Option<&RoutedGraphGeometry>,
+    path_detail: PathDetail,
 ) -> MmdsOutput {
     let level = if routed.is_some() { "routed" } else { "layout" };
 
@@ -148,7 +158,8 @@ fn build_mmds_output(
             if let Some(routed) = routed
                 && let Some(re) = routed.edges.iter().find(|e| e.index == i)
             {
-                mmds_edge.path = Some(re.path.iter().map(|p| [p.x, p.y]).collect());
+                let full_path: Vec<[f64; 2]> = re.path.iter().map(|p| [p.x, p.y]).collect();
+                mmds_edge.path = Some(path_detail.simplify(&full_path));
                 mmds_edge.label_position =
                     re.label_position.map(|p| MmdsPosition { x: p.x, y: p.y });
                 mmds_edge.is_backward = Some(re.is_backward);
@@ -629,7 +640,14 @@ mod tests {
     #[test]
     fn layout_omits_default_edge_fields() {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
-        let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
+        let json = to_mmds_json(
+            &diagram,
+            &geom,
+            None,
+            GeometryLevel::Layout,
+            PathDetail::Full,
+        )
+        .unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         let edge = &value["edges"][0];
         assert!(edge.get("stroke").is_none());
@@ -641,7 +659,14 @@ mod tests {
     #[test]
     fn layout_keeps_non_default_edge_fields() {
         let (diagram, geom) = layout_geometry("graph TD\nA -.-> B\nC --x D\nE ----> F");
-        let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
+        let json = to_mmds_json(
+            &diagram,
+            &geom,
+            None,
+            GeometryLevel::Layout,
+            PathDetail::Full,
+        )
+        .unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         let edges = value["edges"].as_array().unwrap();
         assert_eq!(edges[0]["stroke"], "dotted");
@@ -652,7 +677,14 @@ mod tests {
     #[test]
     fn layout_omits_default_node_shape() {
         let (diagram, geom) = layout_geometry("graph TD\nA[Rect]\nB(Round)");
-        let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
+        let json = to_mmds_json(
+            &diagram,
+            &geom,
+            None,
+            GeometryLevel::Layout,
+            PathDetail::Full,
+        )
+        .unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         let nodes = value["nodes"].as_array().unwrap();
         assert!(nodes[0].get("shape").is_none());
@@ -662,7 +694,14 @@ mod tests {
     #[test]
     fn layout_omits_empty_subgraphs_key() {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
-        let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
+        let json = to_mmds_json(
+            &diagram,
+            &geom,
+            None,
+            GeometryLevel::Layout,
+            PathDetail::Full,
+        )
+        .unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(value.get("subgraphs").is_none());
     }
@@ -670,7 +709,14 @@ mod tests {
     #[test]
     fn layout_deserializes_with_defaults() {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
-        let json = to_mmds_json(&diagram, &geom, None, GeometryLevel::Layout).unwrap();
+        let json = to_mmds_json(
+            &diagram,
+            &geom,
+            None,
+            GeometryLevel::Layout,
+            PathDetail::Full,
+        )
+        .unwrap();
         let output: MmdsOutput = serde_json::from_str(&json).unwrap();
         assert_eq!(output.nodes[0].shape, "rectangle");
         assert_eq!(output.edges[0].stroke, "solid");
@@ -778,19 +824,38 @@ mod tests {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
         let routed = routed_geometry(&diagram, &geom);
 
-        let layout_json =
-            to_mmds_json(&diagram, &geom, Some(&routed), GeometryLevel::Layout).unwrap();
+        let layout_json = to_mmds_json(
+            &diagram,
+            &geom,
+            Some(&routed),
+            GeometryLevel::Layout,
+            PathDetail::Full,
+        )
+        .unwrap();
         assert!(!layout_json.contains("\"path\""));
 
-        let routed_json =
-            to_mmds_json(&diagram, &geom, Some(&routed), GeometryLevel::Routed).unwrap();
+        let routed_json = to_mmds_json(
+            &diagram,
+            &geom,
+            Some(&routed),
+            GeometryLevel::Routed,
+            PathDetail::Full,
+        )
+        .unwrap();
         assert!(routed_json.contains("\"path\""));
     }
 
     #[test]
     fn to_mmds_json_routed_requires_routed_geometry() {
         let (diagram, geom) = layout_geometry("graph TD\nA-->B");
-        let err = to_mmds_json(&diagram, &geom, None, GeometryLevel::Routed).unwrap_err();
+        let err = to_mmds_json(
+            &diagram,
+            &geom,
+            None,
+            GeometryLevel::Routed,
+            PathDetail::Full,
+        )
+        .unwrap_err();
         assert!(err.message.contains("routed MMDS output requested"));
     }
 }

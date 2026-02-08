@@ -11,7 +11,7 @@ use super::layout::{
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use crate::dagre::{LayoutResult, Point, Rect};
-use crate::diagram::{RoutingMode, SvgEdgeCurve};
+use crate::diagram::{PathDetail, RoutingMode, SvgEdgeCurve};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 use crate::render::{RenderOptions, layout_config_for_diagram};
 
@@ -199,6 +199,7 @@ fn render_svg_with_geometry_context(
         svg_options.edge_curve,
         svg_options.edge_curve_radius,
         scale,
+        options.path_detail,
     );
     render_edge_labels(
         &mut writer,
@@ -675,16 +676,18 @@ fn render_edges(
     edge_curve: SvgEdgeCurve,
     edge_curve_radius: f64,
     scale: f64,
+    path_detail: PathDetail,
 ) {
     let mut edge_paths: Vec<(usize, Vec<Point>)> = geom
         .edges
         .iter()
         .map(|edge| {
-            let points = edge
+            let points: Vec<Point> = edge
                 .layout_path_hint
                 .as_ref()
                 .map(|ps| ps.iter().map(|p| (*p).into()).collect())
                 .unwrap_or_default();
+            let points = path_detail.simplify(&points);
             (edge.index, points)
         })
         .collect();
