@@ -175,18 +175,32 @@ fn check_semantic(direct: &Diagram, roundtrip: &Diagram) -> TierResult {
     }
 }
 
-/// Compare rendered text output for visual equivalence.
+/// Compare rendered output for visual equivalence (text and SVG).
 fn check_visual(direct: &Diagram, roundtrip: &Diagram) -> TierResult {
-    let options = RenderOptions::default();
-    let direct_text = render(direct, &options);
-    let roundtrip_text = render(roundtrip, &options);
+    let mut mismatches = Vec::new();
+
+    // Text comparison
+    let text_options = RenderOptions::default();
+    let direct_text = render(direct, &text_options);
+    let roundtrip_text = render(roundtrip, &text_options);
+    if direct_text != roundtrip_text {
+        mismatches.push("text output differs".to_string());
+    }
+
+    // SVG comparison
+    let svg_options = RenderOptions::default_svg();
+    let direct_svg = render(direct, &svg_options);
+    let roundtrip_svg = render(roundtrip, &svg_options);
+    if direct_svg != roundtrip_svg {
+        mismatches.push("svg output differs".to_string());
+    }
 
     TierResult {
         tier: "visual",
-        status: if direct_text == roundtrip_text {
+        status: if mismatches.is_empty() {
             TierStatus::Pass
         } else {
-            TierStatus::Fail("rendered text differs".into())
+            TierStatus::Fail(mismatches.join("; "))
         },
     }
 }
@@ -666,7 +680,37 @@ const FLOWCHART_CONFORMANCE_MATRIX: &[&str] = &[
     "self_loop.mmd",
     "bidirectional.mmd",
     "cross_circle_arrows.mmd",
+    "subgraph_as_node_edge.mmd",
+    "subgraph_to_subgraph_edge.mmd",
+    "inline_edge_labels.mmd",
+    "fan_in_lr.mmd",
+    "double_skip.mmd",
+    "http_request.mmd",
+    "ci_pipeline.mmd",
 ];
+
+/// Fixtures with known visual divergence.
+///
+/// These pass semantic tier (after normalization) but fail visual parity
+/// because nested subgraph node lists differ between the parser (all
+/// descendants) and MMDS hydration (direct children only), which changes
+/// dagre's compound layout.
+const FLOWCHART_KNOWN_VISUAL_DIVERGENCE: &[&str] =
+    &["nested_subgraph_only.mmd", "external_node_subgraph.mmd"];
+
+#[test]
+fn flowchart_known_divergence_semantic_passes_but_visual_may_differ() {
+    for fixture in FLOWCHART_KNOWN_VISUAL_DIVERGENCE {
+        let report = run_flowchart_conformance(fixture);
+        assert!(
+            report.semantic.status.is_pass(),
+            "{fixture} semantic should still pass: {:?}",
+            report.semantic.status
+        );
+        // Visual may or may not pass — these are known divergences.
+        // The important contract is that semantic parity holds.
+    }
+}
 
 #[test]
 fn flowchart_matrix_semantic_tier() {
