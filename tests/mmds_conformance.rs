@@ -453,6 +453,24 @@ fn run_class_conformance(name: &str) -> ConformanceReport {
     }
 }
 
+fn assert_all_tiers_pass_for_fixture(fixture: &str, report: &ConformanceReport) {
+    assert!(
+        report.semantic.status.is_pass(),
+        "{fixture} semantic: {:?}",
+        report.semantic.status
+    );
+    assert!(
+        report.layout.status.is_pass(),
+        "{fixture} layout: {:?}",
+        report.layout.status
+    );
+    assert!(
+        report.visual.status.is_pass(),
+        "{fixture} visual: {:?}",
+        report.visual.status
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Conformance report assertions
 // ---------------------------------------------------------------------------
@@ -654,6 +672,20 @@ fn flowchart_nested_subgraph_all_tiers_pass() {
     );
 }
 
+#[test]
+fn flowchart_nested_subgraph_only_all_tiers_pass_after_hardening() {
+    let fixture = "nested_subgraph_only.mmd";
+    let report = run_flowchart_conformance(fixture);
+    assert_all_tiers_pass_for_fixture(fixture, &report);
+}
+
+#[test]
+fn flowchart_external_node_subgraph_all_tiers_pass_after_hardening() {
+    let fixture = "external_node_subgraph.mmd";
+    let report = run_flowchart_conformance(fixture);
+    assert_all_tiers_pass_for_fixture(fixture, &report);
+}
+
 // ---------------------------------------------------------------------------
 // Flowchart conformance: cycles and backward edges
 // ---------------------------------------------------------------------------
@@ -848,6 +880,13 @@ fn docs_define_semantic_layout_visual_conformance_tiers() {
         docs.contains("just conformance"),
         "docs should reference the conformance command"
     );
+}
+
+#[test]
+fn docs_define_nested_subgraph_membership_parity_strategy() {
+    let docs = std::fs::read_to_string("docs/mmds.md").unwrap();
+    assert!(docs.contains("Nested subgraph membership parity strategy"));
+    assert!(docs.contains("compound layout membership"));
 }
 
 // ---------------------------------------------------------------------------

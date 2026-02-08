@@ -287,6 +287,17 @@ MMDS roundtrip quality is measured across three conformance tiers, comparing the
 
 Graph structure equivalence: nodes, edges, subgraphs, direction, labels, strokes, arrows, and minlen all survive the roundtrip. Subgraph child lists are normalized to direct children for comparison (the parser includes all descendants; MMDS uses direct children only).
 
+### Nested subgraph membership parity strategy
+
+MMDS keeps `subgraph.children` as direct children at the interchange boundary. This remains the canonical payload contract for validation, hydration, and downstream adapters.
+
+For runtime/layout internals, mmdflux deterministically reconstructs any additional compound layout membership needed by dagre from parent links and subgraph topology. In other words:
+
+- MMDS payload contract: direct children only.
+- Runtime compound layout membership: reconstructed descendants as needed for compound layout membership parity with direct Mermaid parsing behavior.
+
+This split preserves a stable external schema while allowing internal layout behavior to stay parity-aligned.
+
 ### Layout parity
 
 Geometry equivalence: both pipelines produce the same dagre layout — identical node positions, sizes, edge endpoints, waypoints, label positions, subgraph bounds, and overall bounds within float tolerance (0.01).
@@ -303,7 +314,7 @@ Rendered output equivalence: both text and SVG output are byte-identical between
 | Layout | 30/30 fixtures | 1/1 fixtures |
 | Visual | 30/32 fixtures | 1/1 fixtures |
 
-Two nested subgraph fixtures (`nested_subgraph_only.mmd`, `external_node_subgraph.mmd`) have known visual divergence due to the descendant-vs-direct-children difference affecting dagre's compound layout.
+Two nested subgraph fixtures (`nested_subgraph_only.mmd`, `external_node_subgraph.mmd`) currently have known visual divergence while runtime compound layout membership reconstruction is being hardened. The MMDS contract remains direct children only; runtime parity work reconstructs descendant membership for layout internals.
 
 ### Running conformance checks
 
