@@ -7,6 +7,15 @@
 // edge lengths short while text-based sizing ensures nodes fit their labels.
 const SCALE = Number(process.env.SCALE) || 3;
 
+// Edge style: "sharp" (straight segments), "curved" (spline), or "elbow" (orthogonal).
+// Excalidraw interprets the same waypoints differently based on roundness + elbowed.
+type EdgeStyle = "sharp" | "curved" | "elbow";
+const EDGE_STYLE: EdgeStyle = (() => {
+	const v = (process.env.EDGE_STYLE || "curved").toLowerCase();
+	if (v === "sharp" || v === "curved" || v === "elbow") return v;
+	return "curved";
+})();
+
 // Font sizes (px)
 const NODE_FONT_SIZE = 20;
 const EDGE_FONT_SIZE = 20;
@@ -444,8 +453,8 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 			},
 			startArrowhead: mapArrowhead(arrowStart),
 			endArrowhead: mapArrowhead(arrowEnd),
-			roundness: { type: 2 },
-			elbowed: false,
+			roundness: EDGE_STYLE === "curved" ? { type: 2 } : null,
+			elbowed: EDGE_STYLE === "elbow",
 		};
 
 		if (nodeBound.has(e.source))
