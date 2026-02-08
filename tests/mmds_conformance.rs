@@ -797,15 +797,6 @@ fn conformance_summary_reports_tier_counts() {
         usize::from(class_report.visual.status.is_pass()),
     ];
 
-    // Known divergence summary
-    let mut known_div_semantic_pass = 0usize;
-    for fixture in FLOWCHART_KNOWN_VISUAL_DIVERGENCE {
-        let report = run_flowchart_conformance(fixture);
-        if report.semantic.status.is_pass() {
-            known_div_semantic_pass += 1;
-        }
-    }
-
     // Print structured summary for CI
     let tiers = ["Semantic", "Layout", "Visual"];
     eprintln!();
@@ -825,12 +816,6 @@ fn conformance_summary_reports_tier_counts() {
             class_pass[i] * 100,
         );
     }
-    eprintln!("╟──────────┼───────────────┼───────────────────╢");
-    eprintln!(
-        "║ Known divergence: {}/{} semantic pass          ║",
-        known_div_semantic_pass,
-        FLOWCHART_KNOWN_VISUAL_DIVERGENCE.len()
-    );
     eprintln!("╚══════════════════════════════════════════════╝");
 
     if !fc_failures.is_empty() {
@@ -906,6 +891,13 @@ fn docs_define_nested_subgraph_membership_parity_strategy() {
     assert!(docs.contains("compound layout membership"));
 }
 
+#[test]
+fn docs_reflect_resolved_nested_subgraph_conformance_divergence() {
+    let docs = std::fs::read_to_string("docs/mmds.md").unwrap();
+    assert!(docs.contains("| Visual | 32/32 fixtures | 1/1 fixtures |"));
+    assert!(!docs.contains("known visual divergence"));
+}
+
 // ---------------------------------------------------------------------------
 // Fixture matrix: broad coverage across flowchart fixtures
 // ---------------------------------------------------------------------------
@@ -937,35 +929,14 @@ const FLOWCHART_CONFORMANCE_MATRIX: &[&str] = &[
     "cross_circle_arrows.mmd",
     "subgraph_as_node_edge.mmd",
     "subgraph_to_subgraph_edge.mmd",
+    "nested_subgraph_only.mmd",
+    "external_node_subgraph.mmd",
     "inline_edge_labels.mmd",
     "fan_in_lr.mmd",
     "double_skip.mmd",
     "http_request.mmd",
     "ci_pipeline.mmd",
 ];
-
-/// Fixtures with known visual divergence.
-///
-/// These pass semantic tier (after normalization) but fail visual parity
-/// because nested subgraph node lists differ between the parser (all
-/// descendants) and MMDS hydration (direct children only), which changes
-/// dagre's compound layout.
-const FLOWCHART_KNOWN_VISUAL_DIVERGENCE: &[&str] =
-    &["nested_subgraph_only.mmd", "external_node_subgraph.mmd"];
-
-#[test]
-fn flowchart_known_divergence_semantic_passes_but_visual_may_differ() {
-    for fixture in FLOWCHART_KNOWN_VISUAL_DIVERGENCE {
-        let report = run_flowchart_conformance(fixture);
-        assert!(
-            report.semantic.status.is_pass(),
-            "{fixture} semantic should still pass: {:?}",
-            report.semantic.status
-        );
-        // Visual may or may not pass — these are known divergences.
-        // The important contract is that semantic parity holds.
-    }
-}
 
 #[test]
 fn flowchart_matrix_semantic_tier() {

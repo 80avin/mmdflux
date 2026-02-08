@@ -52,7 +52,10 @@ fn hydration_reconstructs_compound_membership_for_nested_subgraphs() {
     let payload = fixture("layout-with-subgraphs.json");
     let diagram = from_mmds_str(&payload).expect("valid hydration");
 
-    assert_eq!(diagram.subgraphs["sg1"].nodes, vec!["B".to_string(), "C".to_string()]);
+    assert_eq!(
+        diagram.subgraphs["sg1"].nodes,
+        vec!["B".to_string(), "C".to_string()]
+    );
     assert_eq!(diagram.subgraphs["sg2"].nodes, vec!["C".to_string()]);
 }
 

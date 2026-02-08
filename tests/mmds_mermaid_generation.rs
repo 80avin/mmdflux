@@ -16,6 +16,13 @@ fn normalize_line_endings(value: &str) -> String {
     value.replace("\r\n", "\n")
 }
 
+fn assert_contains_connector(mermaid: &str, connector: &str) {
+    assert!(
+        mermaid.contains(connector),
+        "expected connector '{connector}' in generated Mermaid:\n{mermaid}"
+    );
+}
+
 #[test]
 fn generator_emits_canonical_mermaid_for_basic_graph() {
     let mmds = fixture("generation/basic-flow.json");
@@ -71,6 +78,16 @@ fn generator_output_is_stable_across_repeated_runs() {
     let second = generate_mermaid_from_mmds_str(&mmds).unwrap();
 
     assert_eq!(first, second);
+}
+
+#[test]
+fn generator_emits_minlen_connector_variants_across_styles() {
+    let mmds = fixture("generation/minlen-style-matrix.json");
+    let mermaid = generate_mermaid_from_mmds_str(&mmds).unwrap();
+
+    assert_contains_connector(&mermaid, "A ---> B");
+    assert_contains_connector(&mermaid, "B -..-> C");
+    assert_contains_connector(&mermaid, "C ===> D");
 }
 
 #[test]

@@ -65,6 +65,7 @@ fn mmds_mermaid_roundtrip_is_semantically_equivalent() {
 fn mmds_roundtrip_fixture_matrix_is_semantically_equivalent() {
     let fixtures = [
         "generation/basic-flow.json",
+        "generation/minlen-style-matrix.json",
         "generation/shapes-and-strokes.json",
         "generation/subgraph-hierarchy.json",
         "generation/nested-membership-roundtrip.json",

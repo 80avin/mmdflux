@@ -310,11 +310,11 @@ Rendered output equivalence: both text and SVG output are byte-identical between
 
 | Tier | Flowchart | Class |
 |------|-----------|-------|
-| Semantic | 30/30 fixtures | 1/1 fixtures |
-| Layout | 30/30 fixtures | 1/1 fixtures |
-| Visual | 30/32 fixtures | 1/1 fixtures |
+| Semantic | 32/32 fixtures | 1/1 fixtures |
+| Layout | 32/32 fixtures | 1/1 fixtures |
+| Visual | 32/32 fixtures | 1/1 fixtures |
 
-Two nested subgraph fixtures (`nested_subgraph_only.mmd`, `external_node_subgraph.mmd`) currently have known visual divergence while runtime compound layout membership reconstruction is being hardened. The MMDS contract remains direct children only; runtime parity work reconstructs descendant membership for layout internals.
+Nested subgraph fixtures now pass visual parity after runtime compound-membership reconstruction. The MMDS contract remains direct children only, while runtime layout internals reconstruct descendants as needed for parity.
 
 ### Running conformance checks
 
