@@ -4,15 +4,23 @@ MMDS is the structured JSON output format for graph-family diagrams produced by 
 
 ## Input Status
 
-MMDS input support is in active ingestion rollout:
+MMDS input support is active:
 
 - The registry detects MMDS JSON input and dispatches to the `mmds` diagram type.
 - Parse-time envelope validation is active (`MMDS parse error: ...` on invalid JSON/envelope).
 - MMDS core hydration/validation contract is implemented (`MMDS validation error: ...` on invalid core payloads).
-- Render runtime is still scaffolded and currently returns:
-  - `MMDS input scaffold: hydration/render pipeline is not implemented yet`
+- Render runtime dispatches by `geometry_level` with an explicit capability matrix.
 
-This means MMDS is stable as an output contract and hydration contract today, while direct MMDS-to-render behavior is finishing in follow-on phases.
+### MMDS Input Render Capability Matrix
+
+| `geometry_level` | text | ascii | svg | mmds/json |
+|------------------|------|-------|-----|-----------|
+| `layout` | ✅ | ✅ | ✅ | ✅ |
+| `routed` (positioned) | ❌ | ❌ | ✅ | ✅ |
+
+For routed/positioned payloads, text/ascii requests fail with actionable guidance:
+
+`positioned MMDS text output is unsupported; use --format svg for positioned MMDS payloads`
 
 ## MMDS Input Validation Contract
 
@@ -22,7 +30,7 @@ Hydration follows a **strict-core / permissive-extensions** policy:
   - unsupported `version`
   - invalid core enum values (`geometry_level`, directions, shapes, strokes, arrows)
   - missing required identifiers (`node.id`, `edge.id`, `subgraph.id`, edge endpoints)
-  - dangling references (edge source/target, node parent, subgraph parent/children)
+  - dangling references (edge source/target, node parent, subgraph parent/children, endpoint-intent subgraph IDs)
   - cyclic subgraph parent chains
 - **Permissive extensions** (tolerated):
   - unknown `profiles` values
@@ -40,6 +48,17 @@ Hydrated edge insertion order is deterministic:
 ### Canonical Error Example
 
 `MMDS validation error: edge e0 target 'X' not found`
+
+### Endpoint Intent Compatibility
+
+MMDS edges may include optional endpoint intent fields:
+
+- `from_subgraph`
+- `to_subgraph`
+
+When present, hydration preserves these into internal edge state and renderers can reproduce subgraph-as-endpoint behavior deterministically.
+
+When absent (older payloads), hydration falls back to node-only endpoint semantics (`source`/`target`), which remains valid but may diverge from direct Mermaid replay in subgraph-edge cases.
 
 ## Geometry Levels
 
@@ -124,6 +143,8 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | `target` | string | both | Target node ID |
 | `id` | string | both | Deterministic edge ID (`e{declaration_index}`) |
 | `label` | string? | both | Edge label |
+| `from_subgraph` | string? | both | Optional source subgraph endpoint intent (for subgraph-as-source edges) |
+| `to_subgraph` | string? | both | Optional target subgraph endpoint intent (for subgraph-as-target edges) |
 | `stroke` | string | both | `"solid"`, `"dotted"`, `"thick"`, `"invisible"`; omitted when equal to `defaults.edge.stroke` |
 | `arrow_start` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"`; omitted when equal to `defaults.edge.arrow_start` |
 | `arrow_end` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"`; omitted when equal to `defaults.edge.arrow_end` |

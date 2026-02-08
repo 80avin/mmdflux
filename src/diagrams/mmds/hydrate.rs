@@ -171,6 +171,22 @@ pub fn from_mmds_output(output: &MmdsOutput) -> Result<Diagram, MmdsHydrationErr
                 target: edge.target.clone(),
             });
         }
+        if let Some(from_subgraph) = &edge.from_subgraph
+            && !diagram.subgraphs.contains_key(from_subgraph)
+        {
+            return Err(MmdsHydrationError::DanglingEdgeFromSubgraphIntent {
+                edge_id: edge.id.clone(),
+                subgraph: from_subgraph.clone(),
+            });
+        }
+        if let Some(to_subgraph) = &edge.to_subgraph
+            && !diagram.subgraphs.contains_key(to_subgraph)
+        {
+            return Err(MmdsHydrationError::DanglingEdgeToSubgraphIntent {
+                edge_id: edge.id.clone(),
+                subgraph: to_subgraph.clone(),
+            });
+        }
 
         let stroke =
             parse_stroke(&edge.stroke).ok_or_else(|| MmdsHydrationError::InvalidStroke {
@@ -197,6 +213,8 @@ pub fn from_mmds_output(output: &MmdsOutput) -> Result<Diagram, MmdsHydrationErr
         if let Some(label) = &edge.label {
             hydrated = hydrated.with_label(label.clone());
         }
+        hydrated.from_subgraph = edge.from_subgraph.clone();
+        hydrated.to_subgraph = edge.to_subgraph.clone();
         diagram.add_edge(hydrated);
     }
 
@@ -447,6 +465,14 @@ pub enum MmdsHydrationError {
         edge_id: String,
         target: String,
     },
+    DanglingEdgeFromSubgraphIntent {
+        edge_id: String,
+        subgraph: String,
+    },
+    DanglingEdgeToSubgraphIntent {
+        edge_id: String,
+        subgraph: String,
+    },
     DanglingNodeParent {
         node_id: String,
         parent: String,
@@ -531,6 +557,14 @@ impl fmt::Display for MmdsHydrationError {
             MmdsHydrationError::DanglingEdgeTarget { edge_id, target } => write!(
                 f,
                 "MMDS validation error: edge {edge_id} target '{target}' not found"
+            ),
+            MmdsHydrationError::DanglingEdgeFromSubgraphIntent { edge_id, subgraph } => write!(
+                f,
+                "MMDS validation error: edge {edge_id} from_subgraph '{subgraph}' not found"
+            ),
+            MmdsHydrationError::DanglingEdgeToSubgraphIntent { edge_id, subgraph } => write!(
+                f,
+                "MMDS validation error: edge {edge_id} to_subgraph '{subgraph}' not found"
             ),
             MmdsHydrationError::DanglingNodeParent { node_id, parent } => write!(
                 f,

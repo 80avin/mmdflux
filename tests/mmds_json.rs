@@ -10,6 +10,17 @@ use mmdflux::diagram::{GeometryLevel, OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::mmds::MmdsOutput;
 use mmdflux::registry::DiagramInstance;
+use serde_json::Value;
+
+fn flowchart_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join(name);
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read flowchart fixture {}: {e}", path.display()))
+}
 
 fn render_json(input: &str) -> String {
     let mut instance = FlowchartInstance::new();
@@ -27,6 +38,52 @@ fn render_json_with_level(input: &str, level: GeometryLevel) -> String {
         ..RenderConfig::default()
     };
     instance.render(OutputFormat::Json, &config).unwrap()
+}
+
+fn mmds_fixture(path: &str) -> Value {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("mmds")
+        .join(path);
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|err| panic!("failed to read fixture: {err}"));
+    serde_json::from_str(&raw).unwrap_or_else(|err| panic!("invalid fixture JSON: {err}"))
+}
+
+fn mmds_schema_validator() -> jsonschema::Validator {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("docs")
+        .join("mmds.schema.json");
+    let raw =
+        std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("failed to read schema: {err}"));
+    let schema: Value =
+        serde_json::from_str(&raw).unwrap_or_else(|err| panic!("invalid schema JSON: {err}"));
+    jsonschema::validator_for(&schema).expect("schema should compile")
+}
+
+fn assert_schema_valid(payload: Value) {
+    let validator = mmds_schema_validator();
+    let errors: Vec<String> = validator
+        .iter_errors(&payload)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "expected schema-valid payload; errors: {errors:?}"
+    );
+}
+
+fn assert_schema_invalid(payload: Value) {
+    let validator = mmds_schema_validator();
+    let errors: Vec<String> = validator
+        .iter_errors(&payload)
+        .map(|error| error.to_string())
+        .collect();
+    assert!(
+        !errors.is_empty(),
+        "expected schema-invalid payload but it validated"
+    );
 }
 
 // -----------------------------------------------------------------------
@@ -147,6 +204,41 @@ fn mmds_layout_edges_have_topology() {
     assert_eq!(edge.label, Some("label".to_string()));
     assert_eq!(edge.arrow_start, "none");
     assert_eq!(edge.arrow_end, "normal");
+}
+
+#[test]
+fn mmds_edge_serializes_optional_subgraph_endpoint_intent_for_subgraph_as_node_edges() {
+    let input = flowchart_fixture("subgraph_as_node_edge.mmd");
+    let json = render_json(&input);
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let edges = value["edges"].as_array().unwrap();
+
+    let into_subgraph = edges
+        .iter()
+        .find(|edge| edge["source"] == "Client" && edge["target"] == "API")
+        .expect("client -> api edge should exist");
+    assert_eq!(into_subgraph["to_subgraph"], "sg1");
+
+    let from_subgraph = edges
+        .iter()
+        .find(|edge| edge["source"] == "DB" && edge["target"] == "Logs")
+        .expect("db -> logs edge should exist");
+    assert_eq!(from_subgraph["from_subgraph"], "sg1");
+}
+
+#[test]
+fn mmds_edge_serializes_optional_subgraph_endpoint_intent_for_subgraph_to_subgraph_edges() {
+    let input = flowchart_fixture("subgraph_to_subgraph_edge.mmd");
+    let json = render_json(&input);
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+    let edges = value["edges"].as_array().unwrap();
+
+    let edge = edges
+        .iter()
+        .find(|edge| edge["source"] == "State" && edge["target"] == "API")
+        .expect("state -> api edge should exist");
+    assert_eq!(edge["from_subgraph"], "frontend");
+    assert_eq!(edge["to_subgraph"], "backend");
 }
 
 #[test]
@@ -310,6 +402,8 @@ fn mmds_deserializes_with_defaults() {
     assert_eq!(output.edges[0].arrow_start, "none");
     assert_eq!(output.edges[0].arrow_end, "normal");
     assert_eq!(output.edges[0].minlen, 1);
+    assert!(output.edges[0].from_subgraph.is_none());
+    assert!(output.edges[0].to_subgraph.is_none());
     assert!(output.subgraphs.is_empty());
 }
 
@@ -378,6 +472,20 @@ fn mmds_schema_exists_and_has_required_fields() {
     assert!(schema.contains("\"geometry_level\""));
     assert!(schema.contains("\"layout\""));
     assert!(schema.contains("\"routed\""));
+    assert!(schema.contains("\"from_subgraph\""));
+    assert!(schema.contains("\"to_subgraph\""));
+}
+
+#[test]
+fn schema_accepts_profiles_and_namespaced_extensions() {
+    let payload = mmds_fixture("profiles/profiles-svg-v1.json");
+    assert_schema_valid(payload);
+}
+
+#[test]
+fn schema_rejects_invalid_extension_namespace_shape() {
+    let payload = mmds_fixture("invalid/extensions-not-object.json");
+    assert_schema_invalid(payload);
 }
 
 #[test]

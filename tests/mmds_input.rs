@@ -49,6 +49,17 @@ fn hydration_rejects_dangling_edge_reference() {
 }
 
 #[test]
+fn hydration_rejects_dangling_subgraph_endpoint_intent_reference() {
+    let payload = fixture("invalid/dangling-endpoint-intent-subgraph.json");
+    let err = from_mmds_str(&payload).unwrap_err();
+
+    assert!(matches!(
+        err,
+        MmdsHydrationError::DanglingEdgeToSubgraphIntent { .. }
+    ));
+}
+
+#[test]
 fn hydration_rejects_missing_required_id() {
     let payload = fixture("invalid/missing-node-id.json");
     let err = from_mmds_str(&payload).unwrap_err();
@@ -105,11 +116,73 @@ fn hydration_ignores_unknown_extension_namespace() {
 }
 
 #[test]
+fn hydration_populates_edge_subgraph_endpoint_intent_when_present() {
+    let payload = fixture("subgraph-endpoint-intent-present.json");
+    let diagram = from_mmds_str(&payload).expect("valid hydration");
+
+    let into_subgraph = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Client" && edge.to == "API")
+        .expect("client -> api edge should exist");
+    assert_eq!(into_subgraph.to_subgraph.as_deref(), Some("sg1"));
+    assert!(into_subgraph.from_subgraph.is_none());
+
+    let from_subgraph = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "DB" && edge.to == "Logs")
+        .expect("db -> logs edge should exist");
+    assert_eq!(from_subgraph.from_subgraph.as_deref(), Some("sg1"));
+    assert!(from_subgraph.to_subgraph.is_none());
+}
+
+#[test]
+fn hydration_preserves_subgraph_endpoint_fallback_when_intent_is_omitted() {
+    let payload = fixture("subgraph-endpoint-intent-missing.json");
+    let diagram = from_mmds_str(&payload).expect("valid hydration");
+
+    assert!(
+        diagram
+            .edges
+            .iter()
+            .all(|edge| edge.from_subgraph.is_none() && edge.to_subgraph.is_none())
+    );
+}
+
+#[test]
+fn endpoint_intent_absent_payload_uses_documented_fallback_behavior() {
+    let payload = fixture("subgraph-endpoint-intent-missing.json");
+    let diagram = from_mmds_str(&payload).expect("valid hydration");
+
+    let into_backend = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Client" && edge.to == "API")
+        .expect("client -> api edge should exist");
+    let from_backend = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "DB" && edge.to == "Logs")
+        .expect("db -> logs edge should exist");
+
+    // Backward-compatible fallback for old payloads:
+    // resolve edge endpoints as plain node-to-node edges.
+    assert!(into_backend.to_subgraph.is_none());
+    assert!(from_backend.from_subgraph.is_none());
+}
+
+#[test]
 fn mmds_fixture_matrix_covers_valid_and_invalid_payloads() {
     let cases = [
         ("layout-valid-flowchart.json", true),
         ("layout-valid-class.json", true),
+        ("subgraph-endpoint-intent-present.json", true),
+        ("subgraph-endpoint-intent-missing.json", true),
+        ("subgraph-endpoint-subgraph-to-subgraph-present.json", true),
+        ("subgraph-endpoint-subgraph-to-subgraph-missing.json", true),
         ("invalid/dangling-edge-target.json", false),
+        ("invalid/dangling-endpoint-intent-subgraph.json", false),
         ("invalid/dangling-subgraph-parent.json", false),
         ("invalid/invalid-shape.json", false),
         ("invalid/unsupported-version.json", false),

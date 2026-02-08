@@ -31,6 +31,20 @@
       "items": { "$ref": "#/$defs/Edge" },
       "description": "Edge inventory in declaration order."
     },
+    "profiles": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Optional profile identifiers. Unknown profile values are tolerated."
+    },
+    "extensions": {
+      "type": "object",
+      "default": {},
+      "additionalProperties": {
+        "type": "object"
+      },
+      "description": "Optional namespaced extension payloads. Unknown namespaces are tolerated; each namespace value must be an object."
+    },
     "subgraphs": {
       "type": "array",
       "items": { "$ref": "#/$defs/Subgraph" },
@@ -129,6 +143,14 @@
         },
         "source": { "type": "string", "description": "Source node ID." },
         "target": { "type": "string", "description": "Target node ID." },
+        "from_subgraph": {
+          "type": "string",
+          "description": "Original source subgraph ID when this edge represented a subgraph-as-source endpoint intent."
+        },
+        "to_subgraph": {
+          "type": "string",
+          "description": "Original target subgraph ID when this edge represented a subgraph-as-target endpoint intent."
+        },
         "label": { "type": "string", "description": "Edge label text." },
         "stroke": {
           "enum": ["solid", "dotted", "thick", "invisible"],

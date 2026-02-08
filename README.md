@@ -355,11 +355,15 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 
 MMDS output is supported for flowchart and class diagrams (`--format json` remains an alias). The output includes a top-level `defaults` block and omits per-node/per-edge fields when they match those defaults. See [`docs/mmds.md`](docs/mmds.md) for the full specification and [`docs/mmds.schema.json`](docs/mmds.schema.json) for the JSON Schema. Adapter examples for React Flow, Cytoscape.js, and D3 are in [`examples/mmds/`](examples/mmds/).
 
-MMDS input detection is wired in the registry path, and hydration enforces a strict-core/permissive-extensions validation contract (see [MMDS input validation contract](docs/mmds.md#mmds-input-validation-contract)). If you pass MMDS JSON to CLI rendering today, mmdflux will parse and detect it as `mmds`, then currently return:
+For subgraph-as-endpoint parity, MMDS edges may include optional `from_subgraph` / `to_subgraph` intent metadata. Producers should emit these when available; consumers should tolerate payloads where they are absent and fall back to `source`/`target` node semantics.
 
-`MMDS input scaffold: hydration/render pipeline is not implemented yet`
+MMDS input detection is wired in the registry path, and hydration enforces a strict-core/permissive-extensions validation contract (see [MMDS input validation contract](docs/mmds.md#mmds-input-validation-contract)).
 
-See [`docs/mmds.md`](docs/mmds.md) for detailed accepted/rejected/tolerated MMDS input behavior.
+Render support for MMDS input is geometry-level aware:
+- `layout` payloads support `text`, `ascii`, `svg`, and `mmds/json`.
+- `routed` (positioned) payloads support `svg` and `mmds/json`; `text`/`ascii` are intentionally rejected with guidance to use SVG.
+
+See [`docs/mmds.md`](docs/mmds.md) for the full capability matrix and detailed accepted/rejected/tolerated MMDS input behavior.
 
 ## Library Usage
 

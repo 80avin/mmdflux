@@ -3,8 +3,14 @@
 //! These tests validate that registry detection, parsing, and rendering work
 //! together across diagram types and output formats.
 
+use std::fs;
+use std::path::Path;
+
 use mmdflux::diagram::{OutputFormat, RenderConfig};
+use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::registry::default_registry;
+use mmdflux::render::{RenderOptions, render_svg};
+use mmdflux::{build_diagram, parse_flowchart};
 
 fn render_with_registry(input: &str, format: OutputFormat) -> String {
     let registry = default_registry();
@@ -27,6 +33,53 @@ fn render_flowchart_svg(input: &str) -> String {
     instance
         .render(OutputFormat::Svg, &RenderConfig::default())
         .expect("should render svg")
+}
+
+fn render_flowchart_svg_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join(name);
+    let input = fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
+    let flowchart = parse_flowchart(&input).expect("flowchart fixture should parse");
+    let diagram = build_diagram(&flowchart);
+    render_svg(&diagram, &RenderOptions::default_svg())
+}
+
+fn render_mmds_svg_fixture(name: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("mmds")
+        .join(name);
+    let payload = fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read MMDS fixture {}: {e}", path.display()));
+    let diagram = from_mmds_str(&payload).expect("MMDS fixture should hydrate");
+    render_svg(&diagram, &RenderOptions::default_svg())
+}
+
+fn assert_direct_vs_mmds_svg_parity(case: &str) {
+    let (flowchart_fixture, mmds_fixture) = match case {
+        "subgraph_as_node_edge" => (
+            "subgraph_as_node_edge.mmd",
+            "subgraph-endpoint-intent-present.json",
+        ),
+        "subgraph_to_subgraph_edge" => (
+            "subgraph_to_subgraph_edge.mmd",
+            "subgraph-endpoint-subgraph-to-subgraph-present.json",
+        ),
+        _ => panic!("unknown parity case: {case}"),
+    };
+
+    let direct_svg = render_flowchart_svg_fixture(flowchart_fixture);
+    let replay_svg = render_mmds_svg_fixture(mmds_fixture);
+
+    assert_eq!(
+        replay_svg, direct_svg,
+        "direct vs MMDS replay parity mismatch for case {case}"
+    );
 }
 
 #[test]
@@ -138,4 +191,11 @@ fn registry_render_smoke() {
 
     let svg = render_with_registry("graph TD\nA-->B", OutputFormat::Svg);
     assert!(svg.starts_with("<svg"));
+}
+
+#[test]
+fn direct_and_mmds_replay_match_for_subgraph_endpoint_fixture_set() {
+    for case in ["subgraph_as_node_edge", "subgraph_to_subgraph_edge"] {
+        assert_direct_vs_mmds_svg_parity(case);
+    }
 }

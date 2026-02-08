@@ -123,6 +123,8 @@ fn build_mmds_output(
                 id: format!("e{i}"),
                 source: edge.from.clone(),
                 target: edge.to.clone(),
+                from_subgraph: edge.from_subgraph.clone(),
+                to_subgraph: edge.to_subgraph.clone(),
                 label: edge.label.clone(),
                 stroke: stroke_str(edge.stroke).to_string(),
                 arrow_start: arrow_str(edge.arrow_start).to_string(),
@@ -403,6 +405,14 @@ pub struct MmdsEdge {
     pub source: String,
     /// Target node ID.
     pub target: String,
+    /// Original source subgraph ID when this edge targeted a subgraph as source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub from_subgraph: Option<String>,
+    /// Original target subgraph ID when this edge targeted a subgraph as target.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub to_subgraph: Option<String>,
     /// Edge label, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
