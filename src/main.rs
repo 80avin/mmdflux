@@ -78,7 +78,8 @@ struct Cli {
     #[arg(long, value_enum)]
     svg_edge_curve: Option<EdgeCurveArg>,
 
-    /// SVG edge curve radius (px) for rounded corners
+    /// SVG edge curve radius (px) for rounded corners.
+    /// Clamped to half the shortest adjacent segment length.
     #[arg(long)]
     svg_edge_curve_radius: Option<f64>,
 

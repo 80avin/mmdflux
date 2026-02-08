@@ -729,7 +729,11 @@ fn render_edges(
         } else {
             adjust_edge_points_for_shapes(diagram, geom, edge, &points)
         };
-        points = fix_corner_points(&points);
+        // Only densify corners for linear edges; basis and rounded
+        // handle smoothing natively from sparse waypoints.
+        if matches!(edge_curve, SvgEdgeCurve::Linear) {
+            points = fix_corner_points(&points);
+        }
         points = apply_marker_offsets(&points, edge);
         let d = path_from_points(&points, scale, edge_curve, edge_curve_radius);
         if d.is_empty() {
