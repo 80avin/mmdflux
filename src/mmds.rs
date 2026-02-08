@@ -4,7 +4,10 @@
 //! - `layout`: Node geometry + edge topology/semantics (no edge paths).
 //! - `routed`: Everything from layout + routed edge paths and bounds.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 
 use crate::diagram::{GeometryLevel, RenderError};
 use crate::diagrams::flowchart::geometry::{GraphGeometry, PositionedNode, RoutedGraphGeometry};
@@ -188,6 +191,8 @@ fn build_mmds_output(
 
     MmdsOutput {
         version: 1,
+        profiles: Vec::new(),
+        extensions: BTreeMap::new(),
         defaults: MmdsDefaults::default(),
         geometry_level: level.to_string(),
         metadata,
@@ -280,6 +285,15 @@ fn arrow_str(arrow: Arrow) -> &'static str {
 pub struct MmdsOutput {
     /// Schema version (1 for MMDS).
     pub version: u32,
+    /// Optional behavior bundle declarations for capability negotiation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profiles: Vec<String>,
+    /// Optional namespaced extension payloads keyed by versioned namespace IDs.
+    ///
+    /// Key format is governed by schema/docs (for example:
+    /// `org.mmdflux.render.svg.v1`), while values stay renderer-specific.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub extensions: BTreeMap<String, Map<String, Value>>,
     /// Document-level default values for omitted node/edge fields.
     pub defaults: MmdsDefaults,
     /// Geometry level: "layout" or "routed".

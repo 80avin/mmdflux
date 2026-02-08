@@ -20,6 +20,23 @@ graph LR
 
 Each stage has a clear responsibility and well-defined data structures that flow between them.
 
+## MMDS Governance
+
+MMDS uses a strict-core / permissive-extension contract:
+
+- Core fields are validated strictly (version, enums, references, structural integrity).
+- Output-specific controls are declared via top-level `profiles` and namespaced `extensions`.
+- Unknown profile names and unknown extension namespaces are tolerated for forward compatibility.
+- Unsupported MMDS core versions remain hard errors.
+
+Initial profile set:
+
+- `mmds-core-v1`
+- `mmdflux-svg-v1`
+- `mmdflux-text-v1`
+
+Extension namespace keys follow a versioned pattern such as `org.mmdflux.render.svg.v1`.
+
 ## Pipeline Stages
 
 ### Stage 1: Parsing

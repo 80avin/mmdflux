@@ -10,6 +10,24 @@
       "const": 1,
       "description": "Integer schema version. Incremented on breaking MMDS changes."
     },
+    "profiles": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Optional behavior bundles used for profile negotiation (for example 'mmds-core-v1', 'mmdflux-svg-v1')."
+    },
+    "extensions": {
+      "type": "object",
+      "default": {},
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*(?:\\.[a-z0-9]+(?:[.-][a-z0-9]+)*)*\\.v[0-9]+$",
+        "description": "Namespaced extension key ending with '.v{number}', for example 'org.mmdflux.render.svg.v1'."
+      },
+      "additionalProperties": {
+        "type": "object"
+      },
+      "description": "Optional namespaced extension payloads keyed by versioned namespace ID."
+    },
     "defaults": {
       "$ref": "#/$defs/Defaults",
       "description": "Document-level defaults for omitted node/edge fields."

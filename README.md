@@ -363,6 +363,10 @@ Render support for MMDS input is geometry-level aware:
 - `layout` payloads support `text`, `ascii`, `svg`, and `mmds/json`.
 - `routed` (positioned) payloads support `svg` and `mmds/json`; `text`/`ascii` are intentionally rejected with guidance to use SVG.
 
+MMDS governance fields are `profiles` and namespaced `extensions`. The initial profile vocabulary is `mmds-core-v1`, `mmdflux-svg-v1`, and `mmdflux-text-v1`. Canonical profile payload examples are:
+- [`examples/mmds/profile-mmdflux-svg-v1.json`](examples/mmds/profile-mmdflux-svg-v1.json)
+- [`examples/mmds/profile-mmdflux-text-v1.json`](examples/mmds/profile-mmdflux-text-v1.json)
+
 See [`docs/mmds.md`](docs/mmds.md) for the full capability matrix and detailed accepted/rejected/tolerated MMDS input behavior.
 
 ## Library Usage

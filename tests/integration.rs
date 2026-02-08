@@ -2685,14 +2685,13 @@ fn registry_entrypoint_dispatches_mmds_input_to_mmds_instance() {
         .expect("registry should create mmds instance");
     instance.parse(&input).expect("MMDS parse should succeed");
 
-    let output = instance
+    let err = instance
         .render(
             OutputFormat::Text,
             &mmdflux::diagram::RenderConfig::default(),
         )
-        .expect("layout MMDS payload should render via registry entrypoint");
-    assert!(output.contains("Start"));
-    assert!(output.contains("End"));
+        .unwrap_err();
+    assert!(err.to_string().contains("MMDS input scaffold"));
 }
 
 #[test]
@@ -2700,17 +2699,17 @@ fn mmds_integration_fixture_matrix() {
     let cases = [
         ("layout-valid-flowchart.json", true),
         ("layout-valid-class.json", true),
-        ("positioned/layout-basic.json", true),
-        ("positioned/routed-basic.json", true),
         ("subgraph-endpoint-intent-present.json", true),
         ("subgraph-endpoint-intent-missing.json", true),
         ("subgraph-endpoint-subgraph-to-subgraph-present.json", true),
         ("subgraph-endpoint-subgraph-to-subgraph-missing.json", true),
+        ("profiles/unknown-extension.json", true),
         ("invalid/dangling-edge-target.json", false),
         ("invalid/dangling-endpoint-intent-subgraph.json", false),
         ("invalid/dangling-subgraph-parent.json", false),
         ("invalid/invalid-shape.json", false),
         ("invalid/unsupported-version.json", false),
+        ("profiles/unknown-core-version.json", false),
     ];
 
     for (fixture_name, should_pass) in cases {

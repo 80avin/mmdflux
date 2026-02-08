@@ -2,7 +2,11 @@
   "version": 1,
   "profiles": ["mmds-core-v1", "mmdflux-text-v1"],
   "extensions": {
-    "org.mmdflux.render.text.v1": "tight"
+    "org.mmdflux.render.text.v1": {
+      "horizontal_spacing": 3,
+      "vertical_spacing": 1,
+      "label_compaction": "balanced"
+    }
   },
   "defaults": {
     "node": { "shape": "rectangle" },
@@ -17,20 +21,20 @@
   "metadata": {
     "diagram_type": "flowchart",
     "direction": "TD",
-    "bounds": { "width": 100.0, "height": 80.0 }
+    "bounds": { "width": 120.0, "height": 110.0 }
   },
   "nodes": [
     {
       "id": "A",
-      "label": "A",
-      "position": { "x": 20.0, "y": 20.0 },
-      "size": { "width": 40.0, "height": 20.0 }
+      "label": "Input",
+      "position": { "x": 60.0, "y": 25.0 },
+      "size": { "width": 50.0, "height": 20.0 }
     },
     {
       "id": "B",
-      "label": "B",
-      "position": { "x": 20.0, "y": 60.0 },
-      "size": { "width": 40.0, "height": 20.0 }
+      "label": "Output",
+      "position": { "x": 60.0, "y": 85.0 },
+      "size": { "width": 52.0, "height": 20.0 }
     }
   ],
   "edges": [

@@ -17,6 +17,8 @@ use crate::diagrams::flowchart::routing::route_graph_geometry;
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke, Subgraph};
 use crate::mmds::{MmdsEdge, MmdsOutput};
 
+const SUPPORTED_MMDS_PROFILES: &[&str] = &["mmds-core-v1", "mmdflux-svg-v1", "mmdflux-text-v1"];
+
 /// Placeholder hydration entrypoint for future MMDS input work.
 pub fn stub_hydrate() {}
 
@@ -42,6 +44,46 @@ pub fn from_mmds_str(input: &str) -> Result<Diagram, MmdsHydrationError> {
         message: err.to_string(),
     })?;
     from_mmds_output(&output)
+}
+
+/// Result of profile capability evaluation for a parsed MMDS payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MmdsProfileNegotiation {
+    /// Profiles recognized by the current runtime.
+    pub supported: Vec<String>,
+    /// Profiles declared by payload but unknown to this runtime.
+    pub unknown: Vec<String>,
+}
+
+/// Evaluate declared profiles against runtime-known profile vocabulary.
+///
+/// This helper is advisory. Hydration remains permissive with unknown profiles.
+pub fn evaluate_mmds_profiles(input: &str) -> Result<MmdsProfileNegotiation, MmdsParseError> {
+    let output = parse_mmds_input(input)?;
+    Ok(evaluate_mmds_profiles_for_output(&output))
+}
+
+/// Evaluate declared profiles for an already-parsed MMDS payload.
+pub fn evaluate_mmds_profiles_for_output(output: &MmdsOutput) -> MmdsProfileNegotiation {
+    let mut supported = Vec::new();
+    let mut unknown = Vec::new();
+    let mut seen_supported = std::collections::HashSet::new();
+    let mut seen_unknown = std::collections::HashSet::new();
+
+    for profile in &output.profiles {
+        if is_supported_profile(profile) {
+            if seen_supported.insert(profile.clone()) {
+                supported.push(profile.clone());
+            }
+            continue;
+        }
+
+        if seen_unknown.insert(profile.clone()) {
+            unknown.push(profile.clone());
+        }
+    }
+
+    MmdsProfileNegotiation { supported, unknown }
 }
 
 /// Hydrate a graph `Diagram` from a parsed MMDS envelope.
@@ -508,6 +550,10 @@ fn validate_output(output: &MmdsOutput) -> Result<(), MmdsHydrationError> {
     }
 
     Ok(())
+}
+
+fn is_supported_profile(profile: &str) -> bool {
+    SUPPORTED_MMDS_PROFILES.contains(&profile)
 }
 
 fn compare_edge_ids(left: &str, right: &str) -> Ordering {

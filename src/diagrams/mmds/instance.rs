@@ -1,6 +1,9 @@
 //! MMDS diagram instance.
 
-use super::{from_mmds_output, hydrate_graph_geometry_from_output_with_diagram, parse_mmds_input};
+use super::{
+    MmdsProfileNegotiation, evaluate_mmds_profiles_for_output, from_mmds_output,
+    hydrate_graph_geometry_from_output_with_diagram, parse_mmds_input,
+};
 use crate::diagram::{OutputFormat, RenderConfig, RenderError, RoutingMode};
 use crate::mmds::MmdsOutput;
 use crate::registry::DiagramInstance;
@@ -10,6 +13,7 @@ use crate::render::{RenderOptions, render, render_svg_from_geometry};
 #[derive(Default)]
 pub struct MmdsInstance {
     parsed_payload: Option<MmdsOutput>,
+    profile_negotiation: Option<MmdsProfileNegotiation>,
 }
 
 impl MmdsInstance {
@@ -35,6 +39,11 @@ impl MmdsInstance {
         }
     }
 
+    /// Access profile negotiation for the last parsed payload.
+    pub fn profile_negotiation(&self) -> Option<&MmdsProfileNegotiation> {
+        self.profile_negotiation.as_ref()
+    }
+
     fn supports_format_for_payload(payload: &MmdsOutput, format: OutputFormat) -> bool {
         match payload.geometry_level.as_str() {
             "layout" => matches!(
@@ -50,6 +59,7 @@ impl MmdsInstance {
 impl DiagramInstance for MmdsInstance {
     fn parse(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let payload = parse_mmds_input(input)?;
+        self.profile_negotiation = Some(evaluate_mmds_profiles_for_output(&payload));
         self.parsed_payload = Some(payload);
         Ok(())
     }

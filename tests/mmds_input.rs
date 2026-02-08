@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::diagrams::mmds::{
-    MmdsHydrationError, from_mmds_str, hydrate_graph_geometry_from_mmds,
+    MmdsHydrationError, evaluate_mmds_profiles, from_mmds_str, hydrate_graph_geometry_from_mmds,
     hydrate_routed_geometry_from_mmds,
 };
 use mmdflux::graph::{Arrow, Stroke};
@@ -202,6 +202,34 @@ fn endpoint_intent_absent_payload_uses_documented_fallback_behavior() {
 }
 
 #[test]
+fn hydration_accepts_unknown_extension_namespace_profiles_fixture() {
+    let payload = fixture("profiles/unknown-extension.json");
+    assert!(from_mmds_str(&payload).is_ok());
+}
+
+#[test]
+fn hydration_rejects_unknown_core_version_even_with_known_profiles() {
+    let payload = fixture("profiles/unknown-core-version.json");
+    let err = from_mmds_str(&payload).unwrap_err();
+    assert!(matches!(err, MmdsHydrationError::UnsupportedVersion { .. }));
+}
+
+#[test]
+fn profile_negotiation_reports_supported_and_unknown_profiles() {
+    let payload = fixture("profiles/mixed-known-unknown.json");
+    let result = evaluate_mmds_profiles(&payload).unwrap();
+
+    assert!(result.supported.contains(&"mmds-core-v1".to_string()));
+    assert!(result.supported.contains(&"mmdflux-svg-v1".to_string()));
+    assert!(result.supported.contains(&"mmdflux-text-v1".to_string()));
+    assert!(
+        result
+            .unknown
+            .contains(&"vendor.experimental-v9".to_string())
+    );
+}
+
+#[test]
 fn mmds_fixture_matrix_covers_valid_and_invalid_payloads() {
     let cases = [
         ("layout-valid-flowchart.json", true),
@@ -210,11 +238,13 @@ fn mmds_fixture_matrix_covers_valid_and_invalid_payloads() {
         ("subgraph-endpoint-intent-missing.json", true),
         ("subgraph-endpoint-subgraph-to-subgraph-present.json", true),
         ("subgraph-endpoint-subgraph-to-subgraph-missing.json", true),
+        ("profiles/unknown-extension.json", true),
         ("invalid/dangling-edge-target.json", false),
         ("invalid/dangling-endpoint-intent-subgraph.json", false),
         ("invalid/dangling-subgraph-parent.json", false),
         ("invalid/invalid-shape.json", false),
         ("invalid/unsupported-version.json", false),
+        ("profiles/unknown-core-version.json", false),
     ];
 
     for (path, should_pass) in cases {

@@ -47,7 +47,7 @@ fn mmds_fixture(path: &str) -> Value {
         .join("mmds")
         .join(path);
     let raw = std::fs::read_to_string(&path)
-        .unwrap_or_else(|err| panic!("failed to read fixture: {err}"));
+        .unwrap_or_else(|err| panic!("failed to read fixture {}: {err}", path.display()));
     serde_json::from_str(&raw).unwrap_or_else(|err| panic!("invalid fixture JSON: {err}"))
 }
 
@@ -55,8 +55,8 @@ fn mmds_schema_validator() -> jsonschema::Validator {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("docs")
         .join("mmds.schema.json");
-    let raw =
-        std::fs::read_to_string(&path).unwrap_or_else(|err| panic!("failed to read schema: {err}"));
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|err| panic!("failed to read schema {}: {err}", path.display()));
     let schema: Value =
         serde_json::from_str(&raw).unwrap_or_else(|err| panic!("invalid schema JSON: {err}"));
     jsonschema::validator_for(&schema).expect("schema should compile")
@@ -85,7 +85,6 @@ fn assert_schema_invalid(payload: Value) {
         "expected schema-invalid payload but it validated"
     );
 }
-
 // -----------------------------------------------------------------------
 // Contract: MMDS envelope
 // -----------------------------------------------------------------------
@@ -489,6 +488,24 @@ fn schema_rejects_invalid_extension_namespace_shape() {
 }
 
 #[test]
+fn mmds_profiles_and_extensions_roundtrip_through_serde() {
+    let payload = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join("mmds")
+            .join("profiles")
+            .join("profiles-svg-v1.json"),
+    )
+    .unwrap();
+    let parsed: MmdsOutput = serde_json::from_str(&payload).unwrap();
+    let json = serde_json::to_string(&parsed).unwrap();
+
+    assert!(json.contains("profiles"));
+    assert!(json.contains("org.mmdflux.render.svg.v1"));
+}
+
+#[test]
 fn mmds_spec_doc_exists() {
     assert!(Path::new("docs/mmds.md").exists());
 }
@@ -499,10 +516,35 @@ fn mmds_examples_exist() {
     assert!(Path::new("examples/mmds/cytoscape.js").exists());
     assert!(Path::new("examples/mmds/d3.js").exists());
     assert!(Path::new("examples/mmds/svg_passthrough.js").exists());
+    assert!(Path::new("examples/mmds/profile-mmdflux-svg-v1.json").exists());
+    assert!(Path::new("examples/mmds/profile-mmdflux-text-v1.json").exists());
 }
 
 #[test]
 fn readme_mentions_mmds() {
     let readme = std::fs::read_to_string("README.md").unwrap();
     assert!(readme.contains("MMDS"));
+}
+
+#[test]
+fn canonical_profile_examples_validate_against_schema() {
+    for path in [
+        "examples/mmds/profile-mmdflux-svg-v1.json",
+        "examples/mmds/profile-mmdflux-text-v1.json",
+    ] {
+        let absolute = Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
+        let raw = std::fs::read_to_string(&absolute)
+            .unwrap_or_else(|err| panic!("failed to read {}: {err}", absolute.display()));
+        let payload: Value = serde_json::from_str(&raw)
+            .unwrap_or_else(|err| panic!("invalid JSON {}: {err}", absolute.display()));
+        assert_schema_valid(payload);
+    }
+}
+
+#[test]
+fn docs_reference_initial_profile_set() {
+    let docs = std::fs::read_to_string("docs/mmds.md").unwrap();
+    assert!(docs.contains("mmds-core-v1"));
+    assert!(docs.contains("mmdflux-svg-v1"));
+    assert!(docs.contains("mmdflux-text-v1"));
 }

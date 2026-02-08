@@ -96,6 +96,13 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 ```json
 {
   "version": 1,
+  "profiles": ["mmds-core-v1", "mmdflux-svg-v1"],
+  "extensions": {
+    "org.mmdflux.render.svg.v1": {
+      "edge_curve": "basis",
+      "edge_curve_radius": 5
+    }
+  },
   "defaults": {
     "node": { "shape": "rectangle" },
     "edge": { "stroke": "solid", "arrow_start": "none", "arrow_end": "normal", "minlen": 1 }
@@ -117,12 +124,45 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | Field | Type | Description |
 |-------|------|-------------|
 | `version` | `1` | Integer schema version. Increment only for breaking MMDS changes. |
+| `profiles` | string[] | Optional behavior bundles for capability negotiation. |
+| `extensions` | object | Optional namespaced extension payloads keyed by versioned namespace ID (`*.v{number}`). |
 | `defaults` | object | Document-level defaults for omitted node/edge fields |
 | `geometry_level` | `"layout"` or `"routed"` | Geometry detail level |
 | `metadata.diagram_type` | string | `"flowchart"` or `"class"` |
 | `metadata.direction` | string | `"TD"`, `"BT"`, `"LR"`, or `"RL"` |
 | `metadata.bounds` | object | Overall diagram canvas extents (`width`, `height`) in MMDS layout space |
 | `subgraphs` | array | Subgraph inventory (omitted when empty) |
+
+## Profiles and Extensions Governance
+
+MMDS keeps core graph semantics compact while allowing renderer- or adapter-specific controls through explicit governance fields.
+
+### Initial Profile Vocabulary
+
+- `mmds-core-v1` — baseline MMDS core behavior contract.
+- `mmdflux-svg-v1` — SVG-oriented controls and expectations.
+- `mmdflux-text-v1` — text/ASCII-oriented controls and expectations.
+
+### Extension Namespace Rules
+
+- Extension keys live under `extensions` and must be namespaced + versioned.
+- Canonical namespace style: reverse-domain-like segments ending in `.v{number}`.
+- Example: `org.mmdflux.render.svg.v1`
+- Extension payload values must be JSON objects.
+
+### Compatibility Rules
+
+- Unknown `profiles` values are tolerated.
+- Unknown extension namespaces are tolerated.
+- Unsupported core `version` remains a hard validation error.
+
+### Adapter Negotiation Checklist
+
+1. Parse and validate MMDS core fields first.
+2. Evaluate `profiles` into `{supported, unknown}` sets.
+3. Apply only recognized extension namespaces.
+4. Ignore unknown profiles/extensions without mutating core semantics.
+5. If a required profile is missing, fall back deterministically or fail with a clear capability error.
 
 ### Node
 
