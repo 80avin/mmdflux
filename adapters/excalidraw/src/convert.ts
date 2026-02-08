@@ -423,6 +423,15 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 			];
 		}
 
+		// Simplify waypoints based on edge style.
+		// Sharp: start + end only. Curved: start + midpoint + end. Elbow: all.
+		if (EDGE_STYLE === "sharp" && points.length > 2) {
+			points = [points[0], points[points.length - 1]];
+		} else if (EDGE_STYLE === "curved" && points.length > 3) {
+			const mid = points[Math.floor(points.length / 2)];
+			points = [points[0], mid, points[points.length - 1]];
+		}
+
 		for (const p of points) {
 			trackBounds(x + p[0], y + p[1], 0, 0);
 		}
