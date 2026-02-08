@@ -8,3 +8,4 @@ AGENTS.local.md
 
 /.codex
 /worktrees
+/scripts/tests/out
