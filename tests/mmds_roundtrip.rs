@@ -49,6 +49,8 @@ struct SemanticEdge {
 struct SemanticSubgraph {
     id: String,
     title: String,
+    // Membership semantics are represented via node.parent + subgraph parent links.
+    // Subgraph.nodes list representation is intentionally ignored here.
     parent: Option<String>,
     direction: Option<Direction>,
 }
@@ -65,6 +67,7 @@ fn mmds_roundtrip_fixture_matrix_is_semantically_equivalent() {
         "generation/basic-flow.json",
         "generation/shapes-and-strokes.json",
         "generation/subgraph-hierarchy.json",
+        "generation/nested-membership-roundtrip.json",
         "generation/complex-roundtrip.json",
     ];
 
@@ -72,6 +75,12 @@ fn mmds_roundtrip_fixture_matrix_is_semantically_equivalent() {
         let mmds = fixture(fixture_path);
         assert_semantic_roundtrip(&mmds);
     }
+}
+
+#[test]
+fn nested_subgraph_membership_roundtrip_remains_semantically_equivalent() {
+    let mmds = fixture("generation/nested-membership-roundtrip.json");
+    assert_semantic_roundtrip(&mmds);
 }
 
 fn assert_semantic_roundtrip(mmds: &str) {

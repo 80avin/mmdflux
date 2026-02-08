@@ -125,10 +125,9 @@ fn check_semantic(direct: &Diagram, roundtrip: &Diagram) -> TierResult {
 
     // Compare subgraphs (sorted by ID).
     //
-    // Normalize node lists to direct children only. The Mermaid parser puts
-    // all descendants into each subgraph's node list, while MMDS correctly
-    // uses direct children. We filter the direct diagram's node lists to
-    // only those nodes whose parent matches the subgraph ID.
+    // Normalize node lists to direct children only on both sides. Runtime
+    // internals may carry descendant membership for compound layout parity,
+    // but semantic parity compares the contract-level direct-children view.
     let direct_sgs: BTreeMap<_, _> = direct.subgraphs.iter().collect();
     let roundtrip_sgs: BTreeMap<_, _> = roundtrip.subgraphs.iter().collect();
 
@@ -143,8 +142,7 @@ fn check_semantic(direct: &Diagram, roundtrip: &Diagram) -> TierResult {
             match roundtrip_sgs.get(id) {
                 None => mismatches.push(format!("subgraph {id} missing in roundtrip")),
                 Some(r_sg) => {
-                    // Normalize: filter direct diagram's node list to direct children
-                    let direct_children: Vec<String> = d_sg
+                    let mut direct_children: Vec<String> = d_sg
                         .nodes
                         .iter()
                         .filter(|node_id| {
@@ -153,11 +151,30 @@ fn check_semantic(direct: &Diagram, roundtrip: &Diagram) -> TierResult {
                         })
                         .cloned()
                         .collect();
+                    direct_children.sort();
+
+                    let mut roundtrip_children: Vec<String> = r_sg
+                        .nodes
+                        .iter()
+                        .filter(|node_id| {
+                            roundtrip
+                                .nodes
+                                .get(*node_id)
+                                .and_then(|n| n.parent.as_deref())
+                                == Some(&r_sg.id)
+                        })
+                        .cloned()
+                        .collect();
+                    roundtrip_children.sort();
                     let normalized_d = Subgraph {
                         nodes: direct_children,
                         ..(*d_sg).clone()
                     };
-                    if &normalized_d != *r_sg {
+                    let normalized_r = Subgraph {
+                        nodes: roundtrip_children,
+                        ..(*r_sg).clone()
+                    };
+                    if normalized_d != normalized_r {
                         mismatches.push(format!("subgraph {id} differs"));
                     }
                 }

@@ -48,6 +48,25 @@ fn hydration_maps_direction_subgraphs_and_minlen() {
 }
 
 #[test]
+fn hydration_reconstructs_compound_membership_for_nested_subgraphs() {
+    let payload = fixture("layout-with-subgraphs.json");
+    let diagram = from_mmds_str(&payload).expect("valid hydration");
+
+    assert_eq!(diagram.subgraphs["sg1"].nodes, vec!["B".to_string(), "C".to_string()]);
+    assert_eq!(diagram.subgraphs["sg2"].nodes, vec!["C".to_string()]);
+}
+
+#[test]
+fn hydration_compound_membership_order_is_deterministic() {
+    let payload = fixture("layout-with-subgraphs.json");
+    let first = from_mmds_str(&payload).expect("valid hydration");
+    let second = from_mmds_str(&payload).expect("valid hydration");
+
+    assert_eq!(first.subgraphs["sg1"].nodes, second.subgraphs["sg1"].nodes);
+    assert_eq!(first.subgraphs["sg2"].nodes, second.subgraphs["sg2"].nodes);
+}
+
+#[test]
 fn hydration_rejects_dangling_edge_reference() {
     let payload = fixture("invalid/dangling-edge-target.json");
     let err = from_mmds_str(&payload).unwrap_err();

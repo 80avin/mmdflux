@@ -189,6 +189,8 @@ pub fn from_mmds_output(output: &MmdsOutput) -> Result<Diagram, MmdsHydrationErr
         }
     }
 
+    reconstruct_compound_membership(&mut diagram);
+
     let edges = sorted_output_edges(output);
 
     for (index, edge) in edges {
@@ -266,6 +268,42 @@ pub fn from_mmds_output(output: &MmdsOutput) -> Result<Diagram, MmdsHydrationErr
     }
 
     Ok(diagram)
+}
+
+fn reconstruct_compound_membership(diagram: &mut Diagram) {
+    let mut node_ids: Vec<&String> = diagram.nodes.keys().collect();
+    node_ids.sort();
+
+    let memberships: Vec<(String, Vec<String>)> = node_ids
+        .into_iter()
+        .map(|node_id| {
+            let mut ancestors = Vec::new();
+            let mut current = diagram
+                .nodes
+                .get(node_id)
+                .and_then(|node| node.parent.as_deref());
+            while let Some(parent) = current {
+                ancestors.push(parent.to_string());
+                current = diagram
+                    .subgraphs
+                    .get(parent)
+                    .and_then(|subgraph| subgraph.parent.as_deref());
+            }
+            (node_id.clone(), ancestors)
+        })
+        .collect();
+
+    for subgraph in diagram.subgraphs.values_mut() {
+        subgraph.nodes.clear();
+    }
+
+    for (node_id, ancestors) in memberships {
+        for subgraph_id in ancestors {
+            if let Some(subgraph) = diagram.subgraphs.get_mut(&subgraph_id) {
+                subgraph.nodes.push(node_id.clone());
+            }
+        }
+    }
 }
 
 /// Hydrate graph geometry IR from MMDS JSON text.
@@ -909,3 +947,50 @@ impl fmt::Display for MmdsHydrationError {
 }
 
 impl Error for MmdsHydrationError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reconstruct_compound_membership_includes_descendants_for_ancestors() {
+        let mut diagram = Diagram::new(Direction::TopDown);
+
+        diagram.subgraphs.insert(
+            "outer".to_string(),
+            Subgraph {
+                id: "outer".to_string(),
+                title: "Outer".to_string(),
+                nodes: vec!["A".to_string()],
+                parent: None,
+                dir: None,
+            },
+        );
+        diagram.subgraphs.insert(
+            "inner".to_string(),
+            Subgraph {
+                id: "inner".to_string(),
+                title: "Inner".to_string(),
+                nodes: vec!["B".to_string()],
+                parent: Some("outer".to_string()),
+                dir: None,
+            },
+        );
+
+        let mut a = Node::new("A");
+        a.parent = Some("outer".to_string());
+        diagram.add_node(a);
+
+        let mut b = Node::new("B");
+        b.parent = Some("inner".to_string());
+        diagram.add_node(b);
+
+        reconstruct_compound_membership(&mut diagram);
+
+        assert_eq!(
+            diagram.subgraphs["outer"].nodes,
+            vec!["A".to_string(), "B".to_string()]
+        );
+        assert_eq!(diagram.subgraphs["inner"].nodes, vec!["B".to_string()]);
+    }
+}
