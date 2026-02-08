@@ -16,7 +16,7 @@ use std::path::Path;
 use mmdflux::diagram::{OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::flowchart::engine::layout_with_selected_engine;
-use mmdflux::diagrams::flowchart::geometry::GraphGeometry;
+use mmdflux::diagrams::flowchart::geometry::{GraphGeometry, LayoutEdge};
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::graph::{Diagram, Subgraph};
 use mmdflux::registry::DiagramInstance;
@@ -294,13 +294,88 @@ fn compare_geometry(direct: &GraphGeometry, roundtrip: &GraphGeometry) -> Vec<St
         }
     }
 
-    // Compare edge count
-    if direct.edges.len() != roundtrip.edges.len() {
+    // Compare edges (sorted by index for determinism).
+    //
+    // Filter to user-visible edges only. Dagre's compound graph pipeline creates
+    // internal border edges whose endpoints are synthetic nodes (_bt_*, _bb_*,
+    // _bl_*, _br_*, _tt_*). These may differ between direct and roundtrip paths
+    // due to the descendant-vs-direct-children difference without affecting the
+    // user-visible layout.
+    let is_user_edge =
+        |e: &LayoutEdge| direct.nodes.contains_key(&e.from) && direct.nodes.contains_key(&e.to);
+    let mut d_edges: Vec<_> = direct.edges.iter().filter(|e| is_user_edge(e)).collect();
+    let mut r_edges: Vec<_> = roundtrip.edges.iter().filter(|e| is_user_edge(e)).collect();
+    d_edges.sort_by_key(|e| e.index);
+    r_edges.sort_by_key(|e| e.index);
+
+    if d_edges.len() != r_edges.len() {
         mismatches.push(format!(
-            "edge count: {} vs {}",
-            direct.edges.len(),
-            roundtrip.edges.len()
+            "user edge count: {} vs {}",
+            d_edges.len(),
+            r_edges.len()
         ));
+    } else {
+        for (de, re) in d_edges.iter().zip(&r_edges) {
+            let idx = de.index;
+            if de.from != re.from || de.to != re.to {
+                mismatches.push(format!(
+                    "edge {idx} endpoints: {}->{} vs {}->{}",
+                    de.from, de.to, re.from, re.to
+                ));
+            }
+            if de.waypoints.len() != re.waypoints.len() {
+                mismatches.push(format!(
+                    "edge {idx} waypoint count: {} vs {}",
+                    de.waypoints.len(),
+                    re.waypoints.len()
+                ));
+            } else {
+                for (i, (dw, rw)) in de.waypoints.iter().zip(&re.waypoints).enumerate() {
+                    if !floats_eq(dw.x, rw.x) || !floats_eq(dw.y, rw.y) {
+                        mismatches.push(format!(
+                            "edge {idx} waypoint {i}: ({:.1},{:.1}) vs ({:.1},{:.1})",
+                            dw.x, dw.y, rw.x, rw.y
+                        ));
+                    }
+                }
+            }
+            match (&de.label_position, &re.label_position) {
+                (Some(dl), Some(rl)) => {
+                    if !floats_eq(dl.x, rl.x) || !floats_eq(dl.y, rl.y) {
+                        mismatches.push(format!(
+                            "edge {idx} label pos: ({:.1},{:.1}) vs ({:.1},{:.1})",
+                            dl.x, dl.y, rl.x, rl.y
+                        ));
+                    }
+                }
+                (None, None) => {}
+                _ => mismatches.push(format!("edge {idx} label_position presence mismatch")),
+            }
+        }
+    }
+
+    // Compare subgraph geometry
+    if direct.subgraphs.len() != roundtrip.subgraphs.len() {
+        mismatches.push(format!(
+            "subgraph geometry count: {} vs {}",
+            direct.subgraphs.len(),
+            roundtrip.subgraphs.len()
+        ));
+    } else {
+        for (id, d_sg) in &direct.subgraphs {
+            match roundtrip.subgraphs.get(id) {
+                None => mismatches.push(format!("subgraph {id} missing in roundtrip geometry")),
+                Some(r_sg) => {
+                    if !floats_eq(d_sg.rect.x, r_sg.rect.x)
+                        || !floats_eq(d_sg.rect.y, r_sg.rect.y)
+                        || !floats_eq(d_sg.rect.width, r_sg.rect.width)
+                        || !floats_eq(d_sg.rect.height, r_sg.rect.height)
+                    {
+                        mismatches.push(format!("subgraph {id} geometry differs"));
+                    }
+                }
+            }
+        }
     }
 
     // Compare bounds
@@ -638,34 +713,95 @@ fn flowchart_shapes_all_tiers_pass() {
 
 #[test]
 fn conformance_summary_reports_tier_counts() {
-    let mut pass_counts = [0usize; 3]; // semantic, layout, visual
-    let mut total = 0;
+    let mut fc_pass = [0usize; 3]; // semantic, layout, visual
+    let mut fc_total = 0;
+    let mut fc_failures: Vec<String> = Vec::new();
 
     for fixture in FLOWCHART_CONFORMANCE_MATRIX {
         let report = run_flowchart_conformance(fixture);
-        total += 1;
+        fc_total += 1;
         if report.semantic.status.is_pass() {
-            pass_counts[0] += 1;
+            fc_pass[0] += 1;
+        } else {
+            fc_failures.push(format!(
+                "  {fixture}: semantic {:?}",
+                report.semantic.status
+            ));
         }
         if report.layout.status.is_pass() {
-            pass_counts[1] += 1;
+            fc_pass[1] += 1;
+        } else {
+            fc_failures.push(format!("  {fixture}: layout {:?}", report.layout.status));
         }
         if report.visual.status.is_pass() {
-            pass_counts[2] += 1;
+            fc_pass[2] += 1;
+        } else {
+            fc_failures.push(format!("  {fixture}: visual {:?}", report.visual.status));
+        }
+    }
+
+    // Class fixtures
+    let class_report = run_class_conformance("simple.mmd");
+    let class_pass = [
+        usize::from(class_report.semantic.status.is_pass()),
+        usize::from(class_report.layout.status.is_pass()),
+        usize::from(class_report.visual.status.is_pass()),
+    ];
+
+    // Known divergence summary
+    let mut known_div_semantic_pass = 0usize;
+    for fixture in FLOWCHART_KNOWN_VISUAL_DIVERGENCE {
+        let report = run_flowchart_conformance(fixture);
+        if report.semantic.status.is_pass() {
+            known_div_semantic_pass += 1;
+        }
+    }
+
+    // Print structured summary for CI
+    let tiers = ["Semantic", "Layout", "Visual"];
+    eprintln!();
+    eprintln!("╔══════════════════════════════════════════════╗");
+    eprintln!("║        MMDS Conformance Summary              ║");
+    eprintln!("╠══════════════════════════════════════════════╣");
+    eprintln!("║ Tier     │ Flowchart     │ Class             ║");
+    eprintln!("╟──────────┼───────────────┼───────────────────╢");
+    for (i, tier) in tiers.iter().enumerate() {
+        eprintln!(
+            "║ {:<8} │ {:>2}/{:<2} ({:>3}%)  │ {}/1 ({:>3}%)          ║",
+            tier,
+            fc_pass[i],
+            fc_total,
+            fc_pass[i] * 100 / fc_total,
+            class_pass[i],
+            class_pass[i] * 100,
+        );
+    }
+    eprintln!("╟──────────┼───────────────┼───────────────────╢");
+    eprintln!(
+        "║ Known divergence: {}/{} semantic pass          ║",
+        known_div_semantic_pass,
+        FLOWCHART_KNOWN_VISUAL_DIVERGENCE.len()
+    );
+    eprintln!("╚══════════════════════════════════════════════╝");
+
+    if !fc_failures.is_empty() {
+        eprintln!("\nFailures:");
+        for f in &fc_failures {
+            eprintln!("{f}");
         }
     }
 
     // All fixtures in the main matrix should pass all tiers
     assert_eq!(
-        pass_counts[0], total,
+        fc_pass[0], fc_total,
         "semantic tier should have 100% pass rate"
     );
     assert_eq!(
-        pass_counts[1], total,
+        fc_pass[1], fc_total,
         "layout tier should have 100% pass rate"
     );
     assert_eq!(
-        pass_counts[2], total,
+        fc_pass[2], fc_total,
         "visual tier should have 100% pass rate"
     );
 }

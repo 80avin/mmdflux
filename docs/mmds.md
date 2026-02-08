@@ -289,7 +289,7 @@ Graph structure equivalence: nodes, edges, subgraphs, direction, labels, strokes
 
 ### Layout parity
 
-Geometry equivalence: both pipelines produce the same dagre layout — identical node positions, sizes, edge counts, and bounds within float tolerance (0.01).
+Geometry equivalence: both pipelines produce the same dagre layout — identical node positions, sizes, edge endpoints, waypoints, label positions, subgraph bounds, and overall bounds within float tolerance (0.01).
 
 ### Visual parity
 
@@ -299,9 +299,9 @@ Rendered output equivalence: both text and SVG output are byte-identical between
 
 | Tier | Flowchart | Class |
 |------|-----------|-------|
-| Semantic | 29/29 fixtures | 1/1 fixtures |
-| Layout | 29/29 fixtures | 1/1 fixtures |
-| Visual | 29/31 fixtures | 1/1 fixtures |
+| Semantic | 30/30 fixtures | 1/1 fixtures |
+| Layout | 30/30 fixtures | 1/1 fixtures |
+| Visual | 30/32 fixtures | 1/1 fixtures |
 
 Two nested subgraph fixtures (`nested_subgraph_only.mmd`, `external_node_subgraph.mmd`) have known visual divergence due to the descendant-vs-direct-children difference affecting dagre's compound layout.
 
