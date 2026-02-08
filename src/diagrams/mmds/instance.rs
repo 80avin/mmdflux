@@ -1,6 +1,6 @@
-//! MMDS diagram instance scaffold.
+//! MMDS diagram instance.
 
-use super::{from_mmds_output, hydrate_graph_geometry_from_output, parse_mmds_input};
+use super::{from_mmds_output, hydrate_graph_geometry_from_output_with_diagram, parse_mmds_input};
 use crate::diagram::{OutputFormat, RenderConfig, RenderError, RoutingMode};
 use crate::mmds::MmdsOutput;
 use crate::registry::DiagramInstance;
@@ -42,7 +42,7 @@ impl MmdsInstance {
                 OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Json
             ),
             "routed" => matches!(format, OutputFormat::Svg | OutputFormat::Json),
-            _ => true,
+            _ => false,
         }
     }
 }
@@ -54,16 +54,25 @@ impl DiagramInstance for MmdsInstance {
         Ok(())
     }
 
-    fn render(&self, _format: OutputFormat, _config: &RenderConfig) -> Result<String, RenderError> {
+    fn render(&self, format: OutputFormat, config: &RenderConfig) -> Result<String, RenderError> {
         let payload = self.parsed_payload.as_ref().ok_or_else(|| RenderError {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
 
-        if !Self::supports_format_for_payload(payload, _format) {
-            return Err(Self::positioned_text_unsupported_error(_format));
+        if !matches!(payload.geometry_level.as_str(), "layout" | "routed") {
+            return Err(RenderError {
+                message: format!(
+                    "MMDS validation error: invalid geometry_level '{}'",
+                    payload.geometry_level
+                ),
+            });
         }
 
-        if matches!(_format, OutputFormat::Json) {
+        if !Self::supports_format_for_payload(payload, format) {
+            return Err(Self::positioned_text_unsupported_error(format));
+        }
+
+        if matches!(format, OutputFormat::Json) {
             let json = serde_json::to_string_pretty(payload).map_err(|err| RenderError {
                 message: format!("MMDS serialization error: {err}"),
             })?;
@@ -74,12 +83,12 @@ impl DiagramInstance for MmdsInstance {
             message: err.to_string(),
         })?;
 
-        let mut options: RenderOptions = _config.into();
-        options.output_format = _format;
+        let mut options: RenderOptions = config.into();
+        options.output_format = format;
 
         if payload.geometry_level == "routed" {
-            let geometry =
-                hydrate_graph_geometry_from_output(payload).map_err(|err| RenderError {
+            let geometry = hydrate_graph_geometry_from_output_with_diagram(payload, &diagram)
+                .map_err(|err| RenderError {
                     message: err.to_string(),
                 })?;
             return Ok(render_svg_from_geometry(

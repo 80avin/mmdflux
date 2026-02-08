@@ -147,10 +147,7 @@ pub fn from_mmds_output(output: &MmdsOutput) -> Result<Diagram, MmdsHydrationErr
         }
     }
 
-    let mut edges: Vec<(usize, &MmdsEdge)> = output.edges.iter().enumerate().collect();
-    edges.sort_by(|(left_index, left), (right_index, right)| {
-        compare_edge_ids(&left.id, &right.id).then(left_index.cmp(right_index))
-    });
+    let edges = sorted_output_edges(output);
 
     for (index, edge) in edges {
         if edge.id.trim().is_empty() {
@@ -241,9 +238,17 @@ pub fn hydrate_graph_geometry_from_mmds(input: &str) -> Result<GraphGeometry, Mm
 pub fn hydrate_graph_geometry_from_output(
     output: &MmdsOutput,
 ) -> Result<GraphGeometry, MmdsHydrationError> {
-    let (diagram, geometry) = hydrate_geometry_parts(output)?;
-    let _ = diagram;
+    let (_, geometry) = hydrate_geometry_parts(output)?;
     Ok(geometry)
+}
+
+/// Hydrate graph geometry IR from parsed MMDS output, using a pre-built diagram.
+pub fn hydrate_graph_geometry_from_output_with_diagram(
+    output: &MmdsOutput,
+    diagram: &Diagram,
+) -> Result<GraphGeometry, MmdsHydrationError> {
+    validate_output(output)?;
+    build_graph_geometry(output, diagram)
 }
 
 /// Hydrate routed geometry IR from MMDS JSON text.
@@ -273,16 +278,19 @@ fn hydrate_geometry_parts(
     output: &MmdsOutput,
 ) -> Result<(Diagram, GraphGeometry), MmdsHydrationError> {
     let diagram = from_mmds_output(output)?;
-    let geometry = build_graph_geometry(output, &diagram);
+    let geometry = build_graph_geometry(output, &diagram)?;
     Ok((diagram, geometry))
 }
 
-fn build_graph_geometry(output: &MmdsOutput, diagram: &Diagram) -> GraphGeometry {
-    let nodes = build_positioned_nodes(output, diagram);
+fn build_graph_geometry(
+    output: &MmdsOutput,
+    diagram: &Diagram,
+) -> Result<GraphGeometry, MmdsHydrationError> {
+    let nodes = build_positioned_nodes(output, diagram)?;
     let (edges, self_edges, reversed_edges) = build_layout_edges(output);
     let subgraphs = build_subgraph_geometry(output, diagram, &nodes);
 
-    GraphGeometry {
+    Ok(GraphGeometry {
         nodes,
         edges,
         subgraphs,
@@ -297,13 +305,13 @@ fn build_graph_geometry(output: &MmdsOutput, diagram: &Diagram) -> GraphGeometry
         ),
         reversed_edges,
         engine_hints: None,
-    }
+    })
 }
 
 fn build_positioned_nodes(
     output: &MmdsOutput,
     diagram: &Diagram,
-) -> HashMap<String, PositionedNode> {
+) -> Result<HashMap<String, PositionedNode>, MmdsHydrationError> {
     output
         .nodes
         .iter()
@@ -311,8 +319,10 @@ fn build_positioned_nodes(
             let hydrated = diagram
                 .nodes
                 .get(&node.id)
-                .unwrap_or_else(|| panic!("validated node {} should exist in diagram", node.id));
-            (
+                .ok_or_else(|| MmdsHydrationError::MissingGeometryNode {
+                    node_id: node.id.clone(),
+                })?;
+            Ok((
                 node.id.clone(),
                 PositionedNode {
                     id: node.id.clone(),
@@ -326,17 +336,14 @@ fn build_positioned_nodes(
                     label: hydrated.label.clone(),
                     parent: hydrated.parent.clone(),
                 },
-            )
+            ))
         })
         .collect()
 }
 
 fn build_layout_edges(output: &MmdsOutput) -> (Vec<LayoutEdge>, Vec<SelfEdgeGeometry>, Vec<usize>) {
     let routed_level = output.geometry_level == "routed";
-    let mut edges: Vec<(usize, &MmdsEdge)> = output.edges.iter().enumerate().collect();
-    edges.sort_by(|(left_index, left), (right_index, right)| {
-        compare_edge_ids(&left.id, &right.id).then(left_index.cmp(right_index))
-    });
+    let edges = sorted_output_edges(output);
 
     let mut layout_edges = Vec::with_capacity(edges.len());
     let mut self_edges = Vec::new();
@@ -381,6 +388,14 @@ fn build_layout_edges(output: &MmdsOutput) -> (Vec<LayoutEdge>, Vec<SelfEdgeGeom
     }
 
     (layout_edges, self_edges, reversed_edges)
+}
+
+fn sorted_output_edges(output: &MmdsOutput) -> Vec<(usize, &MmdsEdge)> {
+    let mut edges: Vec<(usize, &MmdsEdge)> = output.edges.iter().enumerate().collect();
+    edges.sort_by(|(left_index, left), (right_index, right)| {
+        compare_edge_ids(&left.id, &right.id).then(left_index.cmp(right_index))
+    });
+    edges
 }
 
 fn parse_path_points(path: Option<&[[f64; 2]]>) -> Option<Vec<FPoint>> {
@@ -648,7 +663,7 @@ fn parse_arrow(value: &str) -> Option<Arrow> {
     }
 }
 
-/// Parse-time error for MMDS scaffolding input.
+/// Parse-time error for MMDS input.
 #[derive(Debug, Clone)]
 pub struct MmdsParseError {
     message: String,
@@ -696,6 +711,9 @@ pub enum MmdsHydrationError {
     },
     MissingNodeId {
         index: usize,
+    },
+    MissingGeometryNode {
+        node_id: String,
     },
     MissingSubgraphId {
         index: usize,
@@ -786,6 +804,10 @@ impl fmt::Display for MmdsHydrationError {
                     "MMDS validation error: node at index {index} is missing id"
                 )
             }
+            MmdsHydrationError::MissingGeometryNode { node_id } => write!(
+                f,
+                "MMDS validation error: geometry node '{node_id}' not found"
+            ),
             MmdsHydrationError::MissingSubgraphId { index } => write!(
                 f,
                 "MMDS validation error: subgraph at index {index} is missing id"
