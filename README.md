@@ -351,7 +351,21 @@ mmdflux --format mmds diagram.mmd
 
 # Routed level: includes edge paths, bounds, and routing metadata
 mmdflux --format mmds --geometry-level routed diagram.mmd
+
+# Reduce edge path detail (useful for token-conscious LLM consumers)
+mmdflux --format mmds --geometry-level routed --path-detail simplified diagram.mmd
+mmdflux --format mmds --geometry-level routed --path-detail endpoints diagram.mmd
 ```
+
+The `--path-detail` option controls how many waypoints are emitted on edge paths:
+
+| Value        | Waypoints kept                  |
+| ------------ | ------------------------------- |
+| `full`       | All routed waypoints (default)  |
+| `simplified` | Start, midpoint, and end only   |
+| `endpoints`  | Start and end only              |
+
+This applies to both MMDS and SVG output. Text/ASCII output ignores this setting.
 
 MMDS output is supported for flowchart and class diagrams (`--format json` remains an alias). The output includes a top-level `defaults` block and omits per-node/per-edge fields when they match those defaults. See [`docs/mmds.md`](docs/mmds.md) for the full specification and [`docs/mmds.schema.json`](docs/mmds.schema.json) for the JSON Schema. Adapter examples for React Flow, Cytoscape.js, and D3 are in [`examples/mmds/`](examples/mmds/).
 
