@@ -1,9 +1,11 @@
 # mmdflux gallery
 
-_Generated from commit `bdae5c6` — 70 fixtures_
+_Generated from commit `443d615` — 76 fixtures_
 
-This gallery is generated from test fixtures in `tests/fixtures/flowchart`,
-text snapshots in `tests/snapshots/flowchart`, and SVG snapshots in `tests/svg-snapshots/flowchart`.
+- [Flowchart](#flowchart) (70)
+- [Class](#class) (6)
+
+# Flowchart
 
 ## ampersand
 
@@ -29,9 +31,12 @@ text snapshots in `tests/snapshots/flowchart`, and SVG snapshots in `tests/svg-s
 └──────────┘    └──────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![ampersand svg](../tests/svg-snapshots/flowchart/ampersand.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -65,9 +70,12 @@ graph TD
 └───────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![backward_in_subgraph svg](../tests/svg-snapshots/flowchart/backward_in_subgraph.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -113,9 +121,12 @@ end
 └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![bidirectional_arrows svg](../tests/svg-snapshots/flowchart/bidirectional_arrows.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -160,9 +171,12 @@ graph TD
 └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![bidirectional svg](../tests/svg-snapshots/flowchart/bidirectional.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -201,9 +215,12 @@ graph TD
 └────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![bottom_top svg](../tests/svg-snapshots/flowchart/bottom_top.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -247,9 +264,12 @@ graph BT
 └────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![chain svg](../tests/svg-snapshots/flowchart/chain.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -280,9 +300,12 @@ graph TD
                                                                                                                                               └────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![ci_pipeline svg](../tests/svg-snapshots/flowchart/ci_pipeline.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -328,9 +351,12 @@ graph LR
 └───┘         └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![compat_class_annotation svg](../tests/svg-snapshots/flowchart/compat_class_annotation.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -376,9 +402,12 @@ graph TD
 └─────────┘       └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![compat_directive svg](../tests/svg-snapshots/flowchart/compat_directive.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -418,9 +447,12 @@ graph TD
 └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![compat_frontmatter svg](../tests/svg-snapshots/flowchart/compat_frontmatter.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -467,9 +499,12 @@ graph TD
   └──────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![compat_hyphenated_ids svg](../tests/svg-snapshots/flowchart/compat_hyphenated_ids.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -508,9 +543,12 @@ graph TD
    └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![compat_invisible_edge svg](../tests/svg-snapshots/flowchart/compat_invisible_edge.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -561,9 +599,12 @@ graph TD
              └──────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![compat_kitchen_sink svg](../tests/svg-snapshots/flowchart/compat_kitchen_sink.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -606,9 +647,12 @@ graph TD
  └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![compat_no_direction svg](../tests/svg-snapshots/flowchart/compat_no_direction.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -633,9 +677,12 @@ graph
 └───────┘    └────────┘     └───────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![compat_numeric_ids svg](../tests/svg-snapshots/flowchart/compat_numeric_ids.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -701,9 +748,12 @@ graph LR
                                  └────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![complex svg](../tests/svg-snapshots/flowchart/complex.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -762,9 +812,12 @@ graph TD
 └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![cross_circle_arrows svg](../tests/svg-snapshots/flowchart/cross_circle_arrows.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -808,9 +861,12 @@ graph TD
  └────────┘          └───────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![decision svg](../tests/svg-snapshots/flowchart/decision.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -850,9 +906,12 @@ graph TD
        └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![diamond_fan svg](../tests/svg-snapshots/flowchart/diamond_fan.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -910,9 +969,12 @@ graph TD
        └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![direction_override svg](../tests/svg-snapshots/flowchart/direction_override.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -960,9 +1022,12 @@ graph TD
            └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![double_skip svg](../tests/svg-snapshots/flowchart/double_skip.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -997,9 +1062,12 @@ graph TD
 └────────┘    └───────┘    └───────┘    └──────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![edge_styles svg](../tests/svg-snapshots/flowchart/edge_styles.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1049,9 +1117,12 @@ graph TD
 └────────────────────────────────────────────────────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![external_node_subgraph svg](../tests/svg-snapshots/flowchart/external_node_subgraph.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1097,9 +1168,12 @@ graph TD
 └───────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![fan_in_lr svg](../tests/svg-snapshots/flowchart/fan_in_lr.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1132,9 +1206,12 @@ graph LR
                 └────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![fan_in svg](../tests/svg-snapshots/flowchart/fan_in.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1167,9 +1244,12 @@ graph TD
 └──────────┘    └──────────┘    └──────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![fan_out svg](../tests/svg-snapshots/flowchart/fan_out.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1202,9 +1282,12 @@ graph TD
                  └────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![five_fan_in svg](../tests/svg-snapshots/flowchart/five_fan_in.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1236,9 +1319,12 @@ graph TD
                    └───────────────────────────────────git pull───────────────────────────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![git_workflow svg](../tests/svg-snapshots/flowchart/git_workflow.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1300,9 +1386,12 @@ graph LR
                          └───────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![http_request svg](../tests/svg-snapshots/flowchart/http_request.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1358,9 +1447,12 @@ final step
  └──────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![inline_edge_labels svg](../tests/svg-snapshots/flowchart/inline_edge_labels.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1485,9 +1577,12 @@ graph TD
                                                                                      ╰──────╯
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![inline_label_flowchart svg](../tests/svg-snapshots/flowchart/inline_label_flowchart.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1554,9 +1649,12 @@ valid          invalid
 └───┘           └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![label_spacing svg](../tests/svg-snapshots/flowchart/label_spacing.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1609,9 +1707,12 @@ graph TD
 └─────────┘       └──────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![labeled_edges svg](../tests/svg-snapshots/flowchart/labeled_edges.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1640,9 +1741,12 @@ graph TD
 └────────────┘      └──────────────┘     └────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![left_right svg](../tests/svg-snapshots/flowchart/left_right.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1684,9 +1788,12 @@ path 1  │
   └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![multi_edge_labeled svg](../tests/svg-snapshots/flowchart/multi_edge_labeled.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1719,9 +1826,12 @@ graph TD
 └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![multi_edge svg](../tests/svg-snapshots/flowchart/multi_edge.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1751,9 +1861,12 @@ graph TD
 └────────────────────────┘            └────────────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![multi_subgraph svg](../tests/svg-snapshots/flowchart/multi_subgraph.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1796,9 +1909,12 @@ B --> C
   └────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![multiple_cycles svg](../tests/svg-snapshots/flowchart/multiple_cycles.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1832,9 +1948,12 @@ graph TD
          └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![narrow_fan_in svg](../tests/svg-snapshots/flowchart/narrow_fan_in.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1885,9 +2004,12 @@ graph TD
                └────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![nested_subgraph_edge svg](../tests/svg-snapshots/flowchart/nested_subgraph_edge.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1933,9 +2055,12 @@ graph TD
 └─────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![nested_subgraph_only svg](../tests/svg-snapshots/flowchart/nested_subgraph_only.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -1983,9 +2108,12 @@ end
 └─────────────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![nested_subgraph svg](../tests/svg-snapshots/flowchart/nested_subgraph.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2024,9 +2152,12 @@ A --> B
 └──────────────────────────────────────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![nested_with_siblings svg](../tests/svg-snapshots/flowchart/nested_with_siblings.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2059,9 +2190,12 @@ B --> C
 └───────┘     └─────────┘    └────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![right_left svg](../tests/svg-snapshots/flowchart/right_left.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2103,9 +2237,12 @@ graph RL
   └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![self_loop_labeled svg](../tests/svg-snapshots/flowchart/self_loop_labeled.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2144,9 +2281,12 @@ graph TD
   └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![self_loop_with_others svg](../tests/svg-snapshots/flowchart/self_loop_with_others.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2173,9 +2313,12 @@ graph TD
 └─────────┘◄──┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![self_loop svg](../tests/svg-snapshots/flowchart/self_loop.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2236,9 +2379,12 @@ graph TD
   └─────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![shapes_basic svg](../tests/svg-snapshots/flowchart/shapes_basic.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2312,9 +2458,12 @@ graph TD
 └───────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![shapes_degenerate svg](../tests/svg-snapshots/flowchart/shapes_degenerate.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2371,9 +2520,12 @@ graph TD
   └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![shapes_document svg](../tests/svg-snapshots/flowchart/shapes_document.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2401,9 +2553,12 @@ graph TD
 ●  ───► ◉  ───► ⊗
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![shapes_junction svg](../tests/svg-snapshots/flowchart/shapes_junction.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2432,9 +2587,12 @@ graph LR
 ┃
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![shapes_special svg](../tests/svg-snapshots/flowchart/shapes_special.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2473,9 +2631,12 @@ graph LR
  └──────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![shapes svg](../tests/svg-snapshots/flowchart/shapes.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2515,9 +2676,12 @@ graph TD
        └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![simple_cycle svg](../tests/svg-snapshots/flowchart/simple_cycle.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2560,9 +2724,12 @@ graph TD
      └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![simple_subgraph svg](../tests/svg-snapshots/flowchart/simple_subgraph.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2596,9 +2763,12 @@ B --> C[End]
  └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![simple svg](../tests/svg-snapshots/flowchart/simple.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2641,9 +2811,12 @@ graph TD
        └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![skip_edge_collision svg](../tests/svg-snapshots/flowchart/skip_edge_collision.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2683,9 +2856,12 @@ graph TD
    └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![stacked_fan_in svg](../tests/svg-snapshots/flowchart/stacked_fan_in.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2736,9 +2912,12 @@ graph TD
       └──────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_as_node_edge svg](../tests/svg-snapshots/flowchart/subgraph_as_node_edge.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2814,9 +2993,12 @@ graph TD
               └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_direction_cross_boundary svg](../tests/svg-snapshots/flowchart/subgraph_direction_cross_boundary.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2878,9 +3060,12 @@ graph TD
        └─────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_direction_lr svg](../tests/svg-snapshots/flowchart/subgraph_direction_lr.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2936,9 +3121,12 @@ graph TD
 └─────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_direction_mixed svg](../tests/svg-snapshots/flowchart/subgraph_direction_mixed.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -2998,9 +3186,12 @@ graph TD
 └───────────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_direction_nested_both svg](../tests/svg-snapshots/flowchart/subgraph_direction_nested_both.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -3058,9 +3249,12 @@ graph TD
 └─────────────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_direction_nested svg](../tests/svg-snapshots/flowchart/subgraph_direction_nested.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -3105,9 +3299,12 @@ graph TD
   └──────────────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_edges_bottom_top svg](../tests/svg-snapshots/flowchart/subgraph_edges_bottom_top.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -3155,9 +3352,12 @@ B --> D
 └───────────────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_edges svg](../tests/svg-snapshots/flowchart/subgraph_edges.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -3221,9 +3421,12 @@ B --> D
        └──────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_multi_word_title svg](../tests/svg-snapshots/flowchart/subgraph_multi_word_title.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -3278,9 +3481,12 @@ graph TD
 └───────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_numeric_id svg](../tests/svg-snapshots/flowchart/subgraph_numeric_id.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -3337,9 +3543,12 @@ graph TD
  └──────────────────────┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![subgraph_to_subgraph_edge svg](../tests/svg-snapshots/flowchart/subgraph_to_subgraph_edge.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -3380,9 +3589,12 @@ graph TD
               └───┘
 ```
 
-**SVG**
+<details>
+<summary>SVG output</summary>
 
 ![very_narrow_fan_in svg](../tests/svg-snapshots/flowchart/very_narrow_fan_in.svg)
+
+</details>
 
 <details>
 <summary>Mermaid source</summary>
@@ -3393,6 +3605,314 @@ graph TD
     B[X] --> E
     C[X] --> E
     D[X] --> E
+
+```
+
+</details>
+
+# Class
+
+## all_relations
+
+`tests/fixtures/class/all_relations.mmd`
+
+**Text**
+
+```text
+ ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐
+ │ A │    │ C │    │ E │    │ G │    │ I │    │ K │    │ M │
+ └───┘    └───┘    └───┘    └───┘    └───┘    └───┘    └───┘
+   │    directed     △        ◆        ◇   dependency    ┆
+association │   inheritance   │   aggregation   ┆  directed dep
+   │        ▼        │   composition   │        ┆        ▼
+ ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐
+ │ B │    │ D │    │ F │    │ H │    │ J │    │ L │    │ N │
+ └───┘    └───┘    └───┘    └───┘    └───┘    └───┘    └───┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![all_relations svg](../tests/svg-snapshots/class/all_relations.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+classDiagram
+    A -- B : association
+    C --> D : directed
+    E <|-- F : inheritance
+    G *-- H : composition
+    I o-- J : aggregation
+    K .. L : dependency
+    M ..> N : directed dep
+
+```
+
+</details>
+
+## animal_hierarchy
+
+`tests/fixtures/class/animal_hierarchy.mmd`
+
+**Text**
+
+```text
+                         ┌────────────────┐
+                         │ Animal         │
+                         ├────────────────┤
+                         │ +int age       │
+                         │ +String gender │
+                         ├────────────────┤
+                         │ +isMammal()    │
+                         │ +mate()        │
+                         └────────────────┘
+                          △      △       △
+          ┌───────────────┘      └┐      └──────────────┐
+          │                       │                     │
+┌───────────────────┐             │                     │
+│ Duck              │    ┌─────────────────┐    ┌───────────────┐
+├───────────────────┤    │ Fish            │    │ Zebra         │
+│ +String beakColor │    ├─────────────────┤    ├───────────────┤
+├───────────────────┤    │ -int sizeInFeet │    │ +bool is_wild │
+│ +swim()           │    ├─────────────────┤    ├───────────────┤
+│ +quack()          │    │ -canEat()       │    │ +run()        │
+└───────────────────┘    └─────────────────┘    └───────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![animal_hierarchy svg](../tests/svg-snapshots/class/animal_hierarchy.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+classDiagram
+    Animal <|-- Duck
+    Animal <|-- Fish
+    Animal <|-- Zebra
+    Animal : +int age
+    Animal : +String gender
+    Animal: +isMammal()
+    Animal: +mate()
+    class Duck{
+      +String beakColor
+      +swim()
+      +quack()
+    }
+    class Fish{
+      -int sizeInFeet
+      -canEat()
+    }
+    class Zebra{
+      +bool is_wild
+      +run()
+    }
+
+```
+
+</details>
+
+## inheritance_chain
+
+`tests/fixtures/class/inheritance_chain.mmd`
+
+**Text**
+
+```text
+         ┌─────────┐
+         │ Vehicle │
+         └─────────┘
+          △       △
+       ┌──┘       └──┐
+       │             │
+    ┌─────┐      ┌───────┐
+    │ Car │      │ Truck │
+    └─────┘      └───────┘
+       △
+       │
+       │
+┌─────────────┐
+│ ElectricCar │
+└─────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![inheritance_chain svg](../tests/svg-snapshots/class/inheritance_chain.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+classDiagram
+    class Vehicle
+    class Car
+    class Truck
+    class ElectricCar
+    Vehicle <|-- Car
+    Vehicle <|-- Truck
+    Car <|-- ElectricCar
+
+```
+
+</details>
+
+## members
+
+`tests/fixtures/class/members.mmd`
+
+**Text**
+
+```text
+┌───────────────┐
+│ User          │
+├───────────────┤
+│ +String name  │
+│ +String email │
+├───────────────┤
+│ +login()      │
+│ +logout()     │
+└───────────────┘
+        │
+        │
+     creates
+        ▼
+┌───────────────┐
+│ Session       │
+├───────────────┤
+│ +String token │
+├───────────────┤
+│ +isValid()    │
+└───────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![members svg](../tests/svg-snapshots/class/members.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+classDiagram
+    class User {
+        +String name
+        +String email
+        +login()
+        +logout()
+    }
+    class Session {
+        +String token
+        +isValid()
+    }
+    User --> Session : creates
+
+```
+
+</details>
+
+## relationships
+
+`tests/fixtures/class/relationships.mmd`
+
+**Text**
+
+```text
+ ┌─────────┐
+ │ Service │
+ └─────────┘
+      ┆
+authenticates
+      ▼
+  ┌──────┐
+  │ User │
+  └──────┘
+      │
+   places
+      ▼
+  ┌───────┐
+  │ Order │
+  └───────┘
+      ◆
+contains
+      │
+      │
+ ┌─────────┐
+ │ Product │
+ └─────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![relationships svg](../tests/svg-snapshots/class/relationships.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+classDiagram
+    class User
+    class Order
+    class Product
+    class Service
+    User --> Order : places
+    Order *-- Product : contains
+    Service ..> User : authenticates
+
+```
+
+</details>
+
+## simple
+
+`tests/fixtures/class/simple.mmd`
+
+**Text**
+
+```text
+┌────────┐
+│ Animal │
+└────────┘
+     △
+     │
+     │
+  ┌─────┐
+  │ Dog │
+  └─────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![simple svg](../tests/svg-snapshots/class/simple.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```mermaid
+classDiagram
+    class Animal
+    class Dog
+    Animal <|-- Dog
 
 ```
 

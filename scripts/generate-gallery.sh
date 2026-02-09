@@ -11,9 +11,6 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-FIXTURES="$REPO/tests/fixtures/flowchart"
-TEXT_SNAPSHOTS="$REPO/tests/snapshots/flowchart"
-SVG_SNAPSHOTS="$REPO/tests/svg-snapshots/flowchart"
 OUTFILE="$REPO/docs/gallery.md"
 
 usage() {
@@ -49,27 +46,6 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-files=()
-if [[ ${#names[@]} -gt 0 ]]; then
-  for name in "${names[@]}"; do
-    f="$FIXTURES/${name}.mmd"
-    if [[ -f "$f" ]]; then
-      files+=("$f")
-    else
-      echo "Warning: fixture not found: $f" >&2
-    fi
-  done
-else
-  while IFS= read -r f; do
-    files+=("$f")
-  done < <(find "$FIXTURES" -maxdepth 1 -type f -name '*.mmd' | sort)
-fi
-
-if [[ ${#files[@]} -eq 0 ]]; then
-  echo "No fixtures found." >&2
-  exit 1
-fi
-
 mkdir -p "$(dirname "$OUTFILE")"
 outdir="$(cd "$(dirname "$OUTFILE")" && pwd)"
 
@@ -81,64 +57,135 @@ print(os.path.relpath(sys.argv[1], sys.argv[2]))
 PY
 }
 
+# Collect fixtures for a diagram type, printing one path per line
+collect_fixtures() {
+  local fixture_dir="$1"
+  if [[ ${#names[@]} -gt 0 ]]; then
+    for name in "${names[@]}"; do
+      local f="$fixture_dir/${name}.mmd"
+      if [[ -f "$f" ]]; then
+        echo "$f"
+      fi
+    done
+  else
+    find "$fixture_dir" -maxdepth 1 -type f -name '*.mmd' | sort
+  fi
+}
+
+flowchart_files=()
+while IFS= read -r f; do
+  flowchart_files+=("$f")
+done < <(collect_fixtures "$REPO/tests/fixtures/flowchart")
+
+class_files=()
+while IFS= read -r f; do
+  class_files+=("$f")
+done < <(collect_fixtures "$REPO/tests/fixtures/class")
+
+total_count=$(( ${#flowchart_files[@]} + ${#class_files[@]} ))
+
+if [[ $total_count -eq 0 ]]; then
+  echo "No fixtures found." >&2
+  exit 1
+fi
+
 commit_sha="$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
 
 {
   echo "# mmdflux gallery"
   echo
-  echo "_Generated from commit \`$commit_sha\` — ${#files[@]} fixtures_"
+  echo "_Generated from commit \`$commit_sha\` — $total_count fixtures_"
   echo
-  echo "This gallery is generated from test fixtures in \`tests/fixtures/flowchart\`,"
-  echo "text snapshots in \`tests/snapshots/flowchart\`, and SVG snapshots in \`tests/svg-snapshots/flowchart\`."
+  echo "- [Flowchart](#flowchart) (${#flowchart_files[@]})"
+  echo "- [Class](#class) (${#class_files[@]})"
   echo
 } > "$OUTFILE"
 
 missing_text=0
 missing_svg=0
 
-for f in "${files[@]}"; do
-  name="$(basename "$f" .mmd)"
-  text="$TEXT_SNAPSHOTS/${name}.txt"
-  svg="$SVG_SNAPSHOTS/${name}.svg"
+# Emit a section of gallery entries for a given diagram type
+emit_section() {
+  local section_name="$1"
+  local fixture_dir="$2"
+  local text_dir="$3"
+  local svg_dir="$4"
+  shift 4
+  local files=("$@")
 
-  echo "## $name" >> "$OUTFILE"
-  echo >> "$OUTFILE"
-  echo "\`tests/fixtures/flowchart/${name}.mmd\`" >> "$OUTFILE"
+  if [[ ${#files[@]} -eq 0 ]]; then
+    return
+  fi
+
+  echo "# $section_name" >> "$OUTFILE"
   echo >> "$OUTFILE"
 
-  if [[ -f "$text" ]]; then
-    echo "**Text**" >> "$OUTFILE"
+  local fixture_rel text_rel_dir svg_rel_dir
+  fixture_rel="tests/fixtures/$(basename "$fixture_dir")"
+  text_rel_dir="tests/snapshots/$(basename "$text_dir")"
+  svg_rel_dir="tests/svg-snapshots/$(basename "$svg_dir")"
+
+  for f in "${files[@]}"; do
+    local name
+    name="$(basename "$f" .mmd)"
+    local text="$text_dir/${name}.txt"
+    local svg="$svg_dir/${name}.svg"
+
+    echo "## $name" >> "$OUTFILE"
     echo >> "$OUTFILE"
-    echo '```text' >> "$OUTFILE"
-    cat "$text" >> "$OUTFILE"
+    echo "\`${fixture_rel}/${name}.mmd\`" >> "$OUTFILE"
+    echo >> "$OUTFILE"
+
+    if [[ -f "$text" ]]; then
+      echo "**Text**" >> "$OUTFILE"
+      echo >> "$OUTFILE"
+      echo '```text' >> "$OUTFILE"
+      cat "$text" >> "$OUTFILE"
+      printf '\n```\n\n' >> "$OUTFILE"
+    else
+      echo "> Missing text snapshot: \`${text_rel_dir}/${name}.txt\`" >> "$OUTFILE"
+      echo >> "$OUTFILE"
+      missing_text=$((missing_text + 1))
+    fi
+
+    if [[ -f "$svg" ]]; then
+      local svg_rel
+      svg_rel="$(relpath "$svg" "$outdir")"
+      echo "<details>" >> "$OUTFILE"
+      echo "<summary>SVG output</summary>" >> "$OUTFILE"
+      echo >> "$OUTFILE"
+      echo "![${name} svg](${svg_rel})" >> "$OUTFILE"
+      echo >> "$OUTFILE"
+      echo "</details>" >> "$OUTFILE"
+      echo >> "$OUTFILE"
+    else
+      echo "> Missing SVG snapshot: \`${svg_rel_dir}/${name}.svg\`" >> "$OUTFILE"
+      echo >> "$OUTFILE"
+      missing_svg=$((missing_svg + 1))
+    fi
+
+    echo "<details>" >> "$OUTFILE"
+    echo "<summary>Mermaid source</summary>" >> "$OUTFILE"
+    echo >> "$OUTFILE"
+    echo '```mermaid' >> "$OUTFILE"
+    cat "$f" >> "$OUTFILE"
     printf '\n```\n\n' >> "$OUTFILE"
-  else
-    echo "> Missing text snapshot: \`tests/snapshots/flowchart/${name}.txt\`" >> "$OUTFILE"
+    echo "</details>" >> "$OUTFILE"
     echo >> "$OUTFILE"
-    missing_text=$((missing_text + 1))
-  fi
+  done
+}
 
-  if [[ -f "$svg" ]]; then
-    svg_rel="$(relpath "$svg" "$outdir")"
-    echo "**SVG**" >> "$OUTFILE"
-    echo >> "$OUTFILE"
-    echo "![${name} svg](${svg_rel})" >> "$OUTFILE"
-    echo >> "$OUTFILE"
-  else
-    echo "> Missing SVG snapshot: \`tests/svg-snapshots/flowchart/${name}.svg\`" >> "$OUTFILE"
-    echo >> "$OUTFILE"
-    missing_svg=$((missing_svg + 1))
-  fi
+emit_section "Flowchart" \
+  "$REPO/tests/fixtures/flowchart" \
+  "$REPO/tests/snapshots/flowchart" \
+  "$REPO/tests/svg-snapshots/flowchart" \
+  "${flowchart_files[@]}"
 
-  echo "<details>" >> "$OUTFILE"
-  echo "<summary>Mermaid source</summary>" >> "$OUTFILE"
-  echo >> "$OUTFILE"
-  echo '```mermaid' >> "$OUTFILE"
-  cat "$f" >> "$OUTFILE"
-  printf '\n```\n\n' >> "$OUTFILE"
-  echo "</details>" >> "$OUTFILE"
-  echo >> "$OUTFILE"
-done
+emit_section "Class" \
+  "$REPO/tests/fixtures/class" \
+  "$REPO/tests/snapshots/class" \
+  "$REPO/tests/svg-snapshots/class" \
+  "${class_files[@]}"
 
 if [[ $missing_text -gt 0 || $missing_svg -gt 0 ]]; then
   echo "---" >> "$OUTFILE"
