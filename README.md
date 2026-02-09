@@ -462,7 +462,7 @@ use mmdflux::graph::{Stroke, Arrow};
 - [x] SVG rendering
 - [x] Subgraph support (nesting, direction overrides, edges to subgraph IDs)
 - [ ] Sequence diagrams
-- [ ] Class diagrams
+- [x] Class diagrams
 - [ ] State diagrams
 - [ ] Entity Relationship diagrams
 
