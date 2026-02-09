@@ -245,17 +245,12 @@ fn try_parse_relation(line: &str) -> Option<ClassRelation> {
                 continue;
             }
 
-            let (from, to) = if reversed {
-                (to_name, from_name)
-            } else {
-                (from_name, to_name)
-            };
-
             return Some(ClassRelation {
-                from,
-                to,
+                from: from_name,
+                to: to_name,
                 relation_type: rel_type,
                 label,
+                marker_start: reversed,
             });
         }
     }
@@ -307,8 +302,9 @@ mod tests {
         let input = "classDiagram\nAnimal <|-- Dog";
         let model = parse_class_diagram(input).unwrap();
         assert_eq!(model.relations.len(), 1);
-        assert_eq!(model.relations[0].from, "Dog");
-        assert_eq!(model.relations[0].to, "Animal");
+        assert_eq!(model.relations[0].from, "Animal");
+        assert_eq!(model.relations[0].to, "Dog");
+        assert!(model.relations[0].marker_start);
         assert_eq!(
             model.relations[0].relation_type,
             ClassRelationType::Inheritance

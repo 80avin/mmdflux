@@ -90,7 +90,7 @@ pub fn render_edge(
 
     // Draw label if present
     if let Some(label) = &routed.edge.label {
-        draw_edge_label_with_tracking(canvas, routed, label, diagram_direction, &[]);
+        draw_edge_label_with_tracking(canvas, routed, label, diagram_direction, &[], charset);
     }
 }
 
@@ -108,6 +108,7 @@ fn draw_edge_label_with_tracking(
     label: &str,
     direction: Direction,
     placed_labels: &[PlacedLabel],
+    charset: &CharSet,
 ) -> Option<PlacedLabel> {
     let label_len = label.chars().count();
 
@@ -258,6 +259,7 @@ fn draw_edge_label_with_tracking(
         direction,
         placed_labels,
         check_edge,
+        charset,
     );
 
     // If collision avoidance displaced the label far from its base (more
@@ -277,6 +279,7 @@ fn draw_edge_label_with_tracking(
             direction,
             placed_labels,
             false,
+            charset,
         )
     } else {
         (label_x, label_y)
@@ -300,9 +303,9 @@ fn draw_edge_label_with_tracking(
         {
             continue;
         }
-        // Only write if cell is not part of a node (but edge cells can be overwritten)
+        // Only write if cell is not part of a node and not an arrow character
         let cell = canvas.get(x, label_y);
-        let can_write = cell.is_some_and(|cell| !cell.is_node);
+        let can_write = cell.is_some_and(|cell| !cell.is_node && !charset.is_arrow(cell.ch));
         if can_write {
             canvas.set(x, label_y, ch);
         }
@@ -399,10 +402,12 @@ fn find_safe_label_position(
     direction: Direction,
     placed_labels: &[PlacedLabel],
     check_edge_collision: bool,
+    charset: &CharSet,
 ) -> (usize, usize) {
     let has_collision = |x, y| {
         label_collides_with_node(canvas, x, y, label_len)
             || (check_edge_collision && label_collides_with_edge(canvas, x, y, label_len))
+            || label_collides_with_arrow(canvas, x, y, label_len, charset)
             || placed_labels.iter().any(|p| p.overlaps(x, y, label_len))
     };
 
@@ -463,6 +468,21 @@ fn label_collides_with_node(canvas: &Canvas, x: usize, y: usize, label_len: usiz
 /// Check if placing a label at the given position would collide with any edge cells.
 fn label_collides_with_edge(canvas: &Canvas, x: usize, y: usize, label_len: usize) -> bool {
     (0..label_len).any(|i| canvas.get(x + i, y).is_some_and(|cell| cell.is_edge))
+}
+
+/// Check if placing a label at the given position would collide with any arrow characters.
+fn label_collides_with_arrow(
+    canvas: &Canvas,
+    x: usize,
+    y: usize,
+    label_len: usize,
+    charset: &CharSet,
+) -> bool {
+    (0..label_len).any(|i| {
+        canvas
+            .get(x + i, y)
+            .is_some_and(|cell| charset.is_arrow(cell.ch))
+    })
 }
 
 /// Check if an edge cell exists on the far side of a proposed label position.
@@ -831,8 +851,9 @@ pub fn render_all_edges_with_labels(
                         diagram_direction,
                         &placed_labels,
                         false,
+                        charset,
                     );
-                    draw_label_direct(canvas, label, safe_x, safe_y)
+                    draw_label_direct(canvas, label, safe_x, safe_y, charset)
                 } else {
                     draw_edge_label_with_tracking(
                         canvas,
@@ -840,6 +861,7 @@ pub fn render_all_edges_with_labels(
                         label,
                         diagram_direction,
                         &placed_labels,
+                        charset,
                     )
                 }
             } else if let Some(&(pre_x, pre_y)) = precomputed {
@@ -855,8 +877,9 @@ pub fn render_all_edges_with_labels(
                     diagram_direction,
                     &placed_labels,
                     false,
+                    charset,
                 );
-                draw_label_direct(canvas, label, safe_x, safe_y)
+                draw_label_direct(canvas, label, safe_x, safe_y, charset)
             } else {
                 draw_edge_label_with_tracking(
                     canvas,
@@ -864,6 +887,7 @@ pub fn render_all_edges_with_labels(
                     label,
                     diagram_direction,
                     &placed_labels,
+                    charset,
                 )
             };
 
@@ -879,7 +903,13 @@ pub fn render_all_edges_with_labels(
 /// Used for backward edge labels where the position is already computed
 /// relative to the routed path. Expands the canvas if the label would
 /// extend beyond the current bounds.
-fn draw_label_direct(canvas: &mut Canvas, label: &str, x: usize, y: usize) -> Option<PlacedLabel> {
+fn draw_label_direct(
+    canvas: &mut Canvas,
+    label: &str,
+    x: usize,
+    y: usize,
+    charset: &CharSet,
+) -> Option<PlacedLabel> {
     let label_len = label.chars().count();
 
     // Expand canvas if label extends beyond current width
@@ -890,7 +920,10 @@ fn draw_label_direct(canvas: &mut Canvas, label: &str, x: usize, y: usize) -> Op
 
     for (i, ch) in label.chars().enumerate() {
         let cell_x = x + i;
-        if canvas.get(cell_x, y).is_some_and(|cell| !cell.is_node) {
+        if canvas
+            .get(cell_x, y)
+            .is_some_and(|cell| !cell.is_node && !charset.is_arrow(cell.ch))
+        {
             canvas.set(cell_x, y, ch);
         }
     }

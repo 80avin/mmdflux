@@ -34,6 +34,13 @@ pub fn compile(model: &ClassModel) -> Diagram {
 
     for rel in &model.relations {
         let (stroke, arrow_start, arrow_end) = relation_style(rel.relation_type);
+        // When the operator points left (e.g. `<|--`), the marker belongs on
+        // the start (left/from) end instead of the default end position.
+        let (arrow_start, arrow_end) = if rel.marker_start {
+            (arrow_end, arrow_start)
+        } else {
+            (arrow_start, arrow_end)
+        };
         let mut edge = Edge::new(&rel.from, &rel.to)
             .with_stroke(stroke)
             .with_arrows(arrow_start, arrow_end);

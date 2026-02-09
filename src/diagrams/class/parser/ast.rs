@@ -21,14 +21,18 @@ pub struct ClassDecl {
 /// A relationship between two classes.
 #[derive(Debug, Clone)]
 pub struct ClassRelation {
-    /// Source class name.
+    /// Left-hand class name (always first in declaration order).
     pub from: String,
-    /// Target class name.
+    /// Right-hand class name (always second in declaration order).
     pub to: String,
     /// Relationship type.
     pub relation_type: ClassRelationType,
     /// Optional label on the relationship.
     pub label: Option<String>,
+    /// When true, the relationship marker belongs on the `from` (left) end
+    /// rather than the `to` (right) end. Set for left-pointing operators
+    /// like `<|--`, `*--`, `o--`.
+    pub marker_start: bool,
 }
 
 /// Types of class relationships (MVP scope).
