@@ -18,10 +18,14 @@ pub fn compile(model: &ClassModel) -> Diagram {
         let label = if class.members.is_empty() {
             class.name.clone()
         } else {
-            // Include members in the label, separated by newlines.
-            // A separator marker between name and members renders as a horizontal rule.
+            // 3-compartment UML: name / attributes / operations.
+            // Mermaid heuristic: contains ')' → method, otherwise attribute.
+            let (methods, attrs): (Vec<_>, Vec<_>) =
+                class.members.iter().partition(|m| m.contains(')'));
             let mut parts = vec![class.name.clone(), Node::SEPARATOR.to_string()];
-            parts.extend(class.members.iter().cloned());
+            parts.extend(attrs.into_iter().cloned());
+            parts.push(Node::SEPARATOR.to_string());
+            parts.extend(methods.into_iter().cloned());
             parts.join("\n")
         };
 
@@ -133,13 +137,46 @@ mod tests {
     }
 
     #[test]
-    fn compiler_class_with_members_label() {
-        let input = "classDiagram\nclass User {\n  +String name\n  +login()\n}";
+    fn compiler_class_with_members_has_three_compartments() {
+        let input = "classDiagram\nclass User {\n  +String name\n  +String email\n  +login()\n  +logout()\n}";
         let diagram = compile_class(input);
         let label = &diagram.nodes["User"].label;
-        assert!(label.contains("User"));
-        assert!(label.contains("+String name"));
-        assert!(label.contains("+login()"));
+        let lines: Vec<&str> = label.lines().collect();
+        // name / separator / attrs... / separator / methods...
+        assert_eq!(lines[0], "User");
+        assert_eq!(lines[1], Node::SEPARATOR);
+        assert_eq!(lines[2], "+String name");
+        assert_eq!(lines[3], "+String email");
+        assert_eq!(lines[4], Node::SEPARATOR);
+        assert_eq!(lines[5], "+login()");
+        assert_eq!(lines[6], "+logout()");
+    }
+
+    #[test]
+    fn compiler_methods_only_has_empty_attrs_compartment() {
+        let input = "classDiagram\nclass Foo {\n  +doStuff()\n}";
+        let diagram = compile_class(input);
+        let label = &diagram.nodes["Foo"].label;
+        let lines: Vec<&str> = label.lines().collect();
+        assert_eq!(lines[0], "Foo");
+        assert_eq!(lines[1], Node::SEPARATOR);
+        // empty attrs compartment
+        assert_eq!(lines[2], Node::SEPARATOR);
+        assert_eq!(lines[3], "+doStuff()");
+    }
+
+    #[test]
+    fn compiler_attrs_only_has_empty_methods_compartment() {
+        let input = "classDiagram\nclass Foo {\n  +String name\n}";
+        let diagram = compile_class(input);
+        let label = &diagram.nodes["Foo"].label;
+        let lines: Vec<&str> = label.lines().collect();
+        assert_eq!(lines[0], "Foo");
+        assert_eq!(lines[1], Node::SEPARATOR);
+        assert_eq!(lines[2], "+String name");
+        assert_eq!(lines[3], Node::SEPARATOR);
+        // empty methods compartment
+        assert_eq!(lines.len(), 4);
     }
 
     #[test]
