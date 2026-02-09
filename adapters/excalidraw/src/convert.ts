@@ -39,6 +39,10 @@ const CHAR_WIDTH_FACTOR = 0.6;
 const TEXT_PAD_X = 40;
 const TEXT_PAD_Y = 24;
 
+// UML compartment layout (class diagram nodes with --- separator lines)
+const COMPARTMENT_PAD_X = 15;
+const COMPARTMENT_PAD_Y = 8;
+
 // --- MMDS types (subset) ---
 
 interface MmdsNode {
@@ -247,6 +251,74 @@ function adjustEndpoint(
 	}
 }
 
+// --- UML compartment support ---
+
+interface Compartment {
+	lines: string[];
+	align: "center" | "left";
+}
+
+interface CompartmentLayout {
+	compartments: Compartment[];
+	sectionHeights: number[];
+	w: number;
+	h: number;
+}
+
+// Detect --- separators in a node label and split into UML compartments.
+// Returns null if the label has no separators (plain node).
+function parseCompartments(label: string): Compartment[] | null {
+	const SEP = "---";
+	const lines = label.split("\n");
+	if (!lines.includes(SEP)) return null;
+
+	const compartments: Compartment[] = [];
+	let current: string[] = [];
+
+	for (const line of lines) {
+		if (line === SEP) {
+			compartments.push({
+				lines: current.filter((l) => l.length > 0),
+				align: compartments.length === 0 ? "center" : "left",
+			});
+			current = [];
+		} else {
+			current.push(line);
+		}
+	}
+
+	// Final section (after last separator)
+	compartments.push({
+		lines: current.filter((l) => l.length > 0),
+		align: "left",
+	});
+
+	return compartments.length >= 2 ? compartments : null;
+}
+
+function layoutCompartments(compartments: Compartment[]): CompartmentLayout {
+	const lineH = NODE_FONT_SIZE * 1.25;
+	const sectionHeights: number[] = [];
+	let maxLineW = 0;
+
+	for (const c of compartments) {
+		for (const line of c.lines) {
+			maxLineW = Math.max(
+				maxLineW,
+				line.length * NODE_FONT_SIZE * CHAR_WIDTH_FACTOR,
+			);
+		}
+		sectionHeights.push(c.lines.length * lineH + COMPARTMENT_PAD_Y * 2);
+	}
+
+	return {
+		compartments,
+		sectionHeights,
+		w: maxLineW + COMPARTMENT_PAD_X * 2,
+		h: sectionHeights.reduce((a, b) => a + b, 0),
+	};
+}
+
 // --- Conversion ---
 
 export function convert(mmds: MmdsDocument): ConvertResult {
@@ -286,18 +358,27 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 
 	// Pre-compute pixel sizes for each node (text-aware)
 	const nodeSizes = new Map<string, { w: number; h: number }>();
+	const compartmentLayouts = new Map<string, CompartmentLayout>();
 	for (const n of mmds.nodes) {
 		const shape = n.shape ?? nodeDefaults.shape ?? "rectangle";
-		const textW = n.label.length * NODE_FONT_SIZE * CHAR_WIDTH_FACTOR;
-		const textH = NODE_FONT_SIZE * 1.25;
-		let w = Math.max(textW, n.size.width * SCALE) + TEXT_PAD_X;
-		let h = Math.max(textH, n.size.height * SCALE) + TEXT_PAD_Y;
-		if (shape === "diamond") {
-			const side = Math.max(w, h);
-			w = side;
-			h = side;
+		const compartments = parseCompartments(n.label);
+
+		if (compartments) {
+			const layout = layoutCompartments(compartments);
+			compartmentLayouts.set(n.id, layout);
+			nodeSizes.set(n.id, { w: layout.w, h: layout.h });
+		} else {
+			const textW = n.label.length * NODE_FONT_SIZE * CHAR_WIDTH_FACTOR;
+			const textH = NODE_FONT_SIZE * 1.25;
+			let w = Math.max(textW, n.size.width * SCALE) + TEXT_PAD_X;
+			let h = Math.max(textH, n.size.height * SCALE) + TEXT_PAD_Y;
+			if (shape === "diamond") {
+				const side = Math.max(w, h);
+				w = side;
+				h = side;
+			}
+			nodeSizes.set(n.id, { w, h });
 		}
-		nodeSizes.set(n.id, { w, h });
 	}
 
 	// Bounding box tracking
@@ -321,37 +402,128 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 		const { w, h } = size;
 		const left = n.position.x * SCALE - w / 2;
 		const top = n.position.y * SCALE - h / 2;
-		const textId = `${n.id}_label`;
 		const groupIds = groupIdsFor(n);
 
-		trackBounds(left, top, w, h);
-		nodeBound.get(n.id)?.push({ id: textId, type: "text" });
+		const layout = compartmentLayouts.get(n.id);
 
-		const el: ExcalidrawElement = {
-			type: excalidrawShape(shape),
-			id: n.id,
-			x: left,
-			y: top,
-			width: w,
-			height: h,
-			...baseProps(n.id),
-			roundness: excalidrawRoundness(shape),
-		};
-		if (groupIds.length > 0) el.groupIds = groupIds;
-		elements.push(el);
+		if (layout) {
+			// UML compartmented node: rectangle + separator lines + per-section text
+			const classGroupId = `class_${n.id}`;
+			const allGroupIds = [classGroupId, ...groupIds];
+			const lineH = NODE_FONT_SIZE * 1.25;
 
-		const txt = textElement(
-			textId,
-			left,
-			top,
-			w,
-			h,
-			n.label,
-			NODE_FONT_SIZE,
-			n.id,
-		);
-		if (groupIds.length > 0) txt.groupIds = groupIds;
-		elements.push(txt);
+			trackBounds(left, top, w, h);
+
+			// Outer rectangle (text is not bound — positioned manually)
+			elements.push({
+				type: "rectangle",
+				id: n.id,
+				x: left,
+				y: top,
+				width: w,
+				height: h,
+				...baseProps(n.id),
+				roundness: null,
+				groupIds: allGroupIds,
+			});
+
+			// Render each compartment's text and separator lines
+			let yCursor = top;
+			for (let i = 0; i < layout.compartments.length; i++) {
+				const c = layout.compartments[i];
+				const sectionH = layout.sectionHeights[i];
+
+				if (c.lines.length > 0) {
+					const text = c.lines.join("\n");
+					const textH = c.lines.length * lineH;
+					const textW = Math.max(
+						...c.lines.map(
+							(l) => l.length * NODE_FONT_SIZE * CHAR_WIDTH_FACTOR,
+						),
+					);
+					const textId = `${n.id}_s${i}`;
+
+					const textX =
+						c.align === "center"
+							? left + w / 2 - textW / 2
+							: left + COMPARTMENT_PAD_X;
+					const textY = yCursor + COMPARTMENT_PAD_Y;
+
+					elements.push({
+						type: "text",
+						id: textId,
+						x: textX,
+						y: textY,
+						width: textW,
+						height: textH,
+						...baseProps(textId),
+						text,
+						originalText: text,
+						fontSize: NODE_FONT_SIZE,
+						fontFamily: 1,
+						textAlign: c.align,
+						verticalAlign: "top",
+						containerId: null,
+						lineHeight: 1.25,
+						autoResize: true,
+						groupIds: allGroupIds,
+					});
+				}
+
+				yCursor += sectionH;
+
+				// Separator line between compartments
+				if (i < layout.compartments.length - 1) {
+					const lineId = `${n.id}_sep${i}`;
+					elements.push({
+						type: "line",
+						id: lineId,
+						x: left,
+						y: yCursor,
+						width: w,
+						height: 0,
+						...baseProps(lineId),
+						points: [
+							[0, 0],
+							[w, 0],
+						],
+						groupIds: allGroupIds,
+					});
+				}
+			}
+		} else {
+			// Standard node: single rectangle with bound text label
+			const textId = `${n.id}_label`;
+
+			trackBounds(left, top, w, h);
+			nodeBound.get(n.id)?.push({ id: textId, type: "text" });
+
+			const el: ExcalidrawElement = {
+				type: excalidrawShape(shape),
+				id: n.id,
+				x: left,
+				y: top,
+				width: w,
+				height: h,
+				...baseProps(n.id),
+				roundness: excalidrawRoundness(shape),
+			};
+			if (groupIds.length > 0) el.groupIds = groupIds;
+			elements.push(el);
+
+			const txt = textElement(
+				textId,
+				left,
+				top,
+				w,
+				h,
+				n.label,
+				NODE_FONT_SIZE,
+				n.id,
+			);
+			if (groupIds.length > 0) txt.groupIds = groupIds;
+			elements.push(txt);
+		}
 	}
 
 	// --- Edges ---
