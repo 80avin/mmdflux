@@ -1010,10 +1010,14 @@ fn render_node_label(
     let start_y = y - total_height / 2.0;
     let x1 = rect.x * scale;
     let x2 = (rect.x + rect.width) * scale;
+    // Left-align x: node left edge + padding (matches text renderer's x+2 convention)
+    let left_x = x1 + metrics.node_padding_x * scale;
+    let mut past_separator = false;
 
     for (idx, line_text) in lines.iter().enumerate() {
         let line_y = start_y + line_height * idx as f64;
         if *line_text == Node::SEPARATOR {
+            past_separator = true;
             let line = format!(
                 "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"{stroke}\" stroke-width=\"{sw}\" />",
                 x1 = fmt_f64(x1),
@@ -1023,7 +1027,18 @@ fn render_node_label(
                 sw = fmt_f64(1.0 * scale),
             );
             writer.push_line(&line);
+        } else if past_separator {
+            // Members: left-aligned
+            let line = format!(
+                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"start\" dominant-baseline=\"middle\" fill=\"{color}\">{text}</text>",
+                x = fmt_f64(left_x),
+                y = fmt_f64(line_y),
+                color = TEXT_COLOR,
+                text = escape_text(line_text)
+            );
+            writer.push_line(&line);
         } else {
+            // Class name: centered
             let line = format!(
                 "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"{color}\">{text}</text>",
                 x = fmt_f64(x),
