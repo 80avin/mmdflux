@@ -197,16 +197,20 @@ function excalidrawRoundness(mmdsShape: string): { type: 3 } | null {
 
 // --- Arrow mapping ---
 
-function mapArrowhead(
-	mmdsArrow: string | undefined,
-): "arrow" | "bar" | "circle" | null {
+function mapArrowhead(mmdsArrow: string | undefined): string | null {
 	switch (mmdsArrow) {
 		case "normal":
 			return "arrow";
+		case "open_triangle":
+			return "triangle_outline";
+		case "diamond":
+			return "diamond";
+		case "open_diamond":
+			return "diamond_outline";
 		case "cross":
 			return "bar";
 		case "circle":
-			return "circle";
+			return "dot";
 		default:
 			return null;
 	}
