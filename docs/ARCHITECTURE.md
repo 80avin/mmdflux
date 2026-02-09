@@ -4,306 +4,343 @@ This document describes the internal architecture of mmdflux for developers who 
 
 ## Overview
 
-mmdflux converts Mermaid flowchart syntax into ASCII art through a three-stage pipeline:
-
-```mermaid
-graph LR
-    A[Mermaid Text] --> B[Parser]
-    B --> C[AST]
-    C --> D[Graph Builder]
-    D --> E[Diagram]
-    E --> F[Layout Engine]
-    F --> G[Router]
-    G --> H[Renderer]
-    H --> I[ASCII Output]
-```
-
-Each stage has a clear responsibility and well-defined data structures that flow between them.
-
-## MMDS Governance
-
-MMDS uses a strict-core / permissive-extension contract:
-
-- Core fields are validated strictly (version, enums, references, structural integrity).
-- Output-specific controls are declared via top-level `profiles` and namespaced `extensions`.
-- Unknown profile names and unknown extension namespaces are tolerated for forward compatibility.
-- Unsupported MMDS core versions remain hard errors.
-
-Initial profile set:
-
-- `mmds-core-v1`
-- `mmdflux-svg-v1`
-- `mmdflux-text-v1`
-
-Extension namespace keys follow a versioned pattern such as `org.mmdflux.render.svg.v1`.
-
-## Pipeline Stages
-
-### Stage 1: Parsing
-
-**Location:** `src/parser/`
-
-The parser converts Mermaid text into an Abstract Syntax Tree (AST). It uses [pest](https://pest.rs/), a PEG (Parsing Expression Grammar) parser generator.
-
-```mermaid
-graph TD
-    A[Input String] --> B[pest Parser]
-    B --> C[Parse Tree]
-    C --> D[AST Builder]
-    D --> E[Flowchart AST]
-```
-
-**Key files:**
-- `grammar.pest` - PEG grammar rules defining valid Mermaid syntax
-- `ast.rs` - AST type definitions
-- `flowchart.rs` - Transforms pest parse tree into our AST
-
-**AST Types:**
+mmdflux converts Mermaid diagram syntax into text (Unicode/ASCII), SVG, or structured JSON (MMDS). It supports multiple diagram types through a registry-based architecture with pluggable layout engines.
 
 ```
-Flowchart
-├── direction: Direction (TD, BT, LR, RL)
-└── statements: Vec<Statement>
-    ├── Vertex(Vertex)
-    │   ├── id: String
-    │   └── shape: Option<ShapeSpec>
-    └── Edge(EdgeSpec)
-        ├── left: Vec<Vertex>
-        ├── right: Vec<Vertex>
-        └── connector: ConnectorSpec
+Input Text → Registry (detect type) → Diagram Instance → Parse → Layout → Route → Render → Output
 ```
 
-The grammar supports:
-- Header declarations (`graph TD`, `flowchart LR`)
-- Node shapes: `[rect]`, `(round)`, `{diamond}`
-- Edge types: `-->`, `-.->`, `==>`, `---`
-- Edge labels: `-->|label|`
-- Chains: `A --> B --> C`
-- Groups: `A & B --> C`
-- Comments: `%% comment`
+The codebase is organized around **diagram families** — groups of diagram types that share layout and rendering strategies:
 
-### Stage 2: Graph Building
+| Family   | Diagram Types    | Pipeline                                       |
+| -------- | ---------------- | ---------------------------------------------- |
+| Graph    | flowchart, class | Parser → Graph → Engine → Geometry IR → Render |
+| Timeline | sequence         | Parser → Model → Layout → Render               |
+| Chart    | pie              | Parser → Render                                |
+| Table    | packet           | Parser → Render                                |
+| —        | info             | Parser → Render                                |
 
-**Location:** `src/graph/`
-
-The graph builder transforms the AST into a normalized graph structure suitable for layout computation.
-
-```mermaid
-graph TD
-    A[Flowchart AST] --> B[Graph Builder]
-    B --> C[Diagram]
-    C --> D[Nodes HashMap]
-    C --> E[Edges Vec]
-    C --> F[Direction]
-```
-
-**Key files:**
-- `diagram.rs` - `Diagram` container struct
-- `node.rs` - `Node` with id, label, and shape
-- `edge.rs` - `Edge` with from/to, stroke, arrow, label
-- `builder.rs` - `build_diagram()` conversion logic
-
-**Responsibilities:**
-- Deduplicate nodes (same ID referenced multiple times)
-- Merge node attributes (label/shape from different statements)
-- Convert AST types to graph types
-- Expand chain syntax (`A --> B --> C` becomes two edges)
-- Expand ampersand groups (`A & B --> C` becomes two edges)
-
-### Stage 3: Rendering
-
-**Location:** `src/render/`
-
-Rendering is the most complex stage, subdivided into layout, routing, and drawing.
-
-```mermaid
-graph TD
-    A[Diagram] --> B[Layout Engine]
-    B --> C[Layout]
-    C --> D[Edge Router]
-    D --> E[Routed Edges]
-    E --> F[Canvas Renderer]
-    C --> F
-    F --> G[Canvas]
-    G --> H[String Output]
-    C --> I[SVG Renderer]
-    I --> H
-```
-
-Text rendering uses the ASCII canvas pipeline. SVG rendering bypasses the router
-and canvas entirely, consuming dagre's floating-point `LayoutResult` directly in
-`render/svg.rs` and emitting SVG elements with presentation attributes.
-
-#### Layout Engine (`layout.rs`)
-
-Computes where each node should be positioned on the canvas.
-
-**Algorithm:**
-1. **Topological Sort** - Assign nodes to layers based on dependencies
-2. **Grid Positioning** - Place nodes within each layer
-3. **Dimension Calculation** - Compute node sizes based on labels
-4. **Coordinate Mapping** - Convert grid positions to canvas coordinates
-5. **Backward Edge Detection** - Identify cycles and allocate corridor space
+## Module Structure
 
 ```
-Layout
-├── grid_positions: HashMap<String, GridPos>
-├── draw_positions: HashMap<String, (x, y)>
-├── node_bounds: HashMap<String, NodeBounds>
-├── width, height: canvas dimensions
-├── backward_corridors: count of cycle edges
-└── backward_edge_lanes: lane assignments for cycles
+src/
+├── main.rs              CLI entry point
+├── lib.rs               Library API
+├── diagram.rs           Core traits (DiagramModel, DiagramParser, DiagramRenderer,
+│                          GraphLayoutEngine), enums (OutputFormat, DiagramFamily,
+│                          LayoutEngineId, GeometryLevel, PathDetail), RenderConfig
+├── registry.rs          DiagramRegistry — type detection and dispatch
+├── mmds.rs              MMDS JSON serialization/deserialization
+├── lint.rs              Diagram linting
+│
+├── parser/              Mermaid parsing (PEG-based)
+│   ├── grammar.pest     Flowchart PEG grammar
+│   ├── ast.rs           Flowchart AST types
+│   ├── flowchart.rs     Flowchart parser
+│   ├── error.rs         Parser error types
+│   ├── info.rs          Info diagram parser
+│   ├── info_grammar.pest
+│   ├── pie.rs           Pie chart parser
+│   ├── pie_grammar.pest
+│   ├── packet.rs        Packet diagram parser
+│   └── packet_grammar.pest
+│
+├── graph/               Graph data structures (shared by Graph-family diagrams)
+│   ├── diagram.rs       Diagram struct (nodes, edges, subgraphs, direction)
+│   ├── node.rs          Node with Shape enum
+│   ├── edge.rs          Edge with Stroke and Arrow
+│   └── builder.rs       Flowchart AST → Diagram conversion
+│
+├── dagre/               Sugiyama hierarchical layout engine (~dagre v0.8.5 parity)
+│   ├── mod.rs           layout() entry point, phase orchestration
+│   ├── types.rs         LayoutConfig, LayoutResult, Rect, Point, Direction
+│   ├── graph.rs         DiGraph input, LayoutGraph internal representation
+│   ├── acyclic.rs       Cycle removal (DFS)
+│   ├── rank.rs          Layer assignment (longest-path)
+│   ├── network_simplex.rs  Network simplex ranking
+│   ├── normalize.rs     Long edge normalization (dummy nodes)
+│   ├── order.rs         Crossing reduction (barycenter heuristic)
+│   ├── position.rs      Coordinate assignment orchestration
+│   ├── bk.rs            Brandes-Köpf horizontal coordinate assignment
+│   ├── nesting.rs       Compound graph nesting (subgraph hierarchy)
+│   ├── border.rs        Border node handling for subgraphs
+│   └── parent_dummy_chains.rs  Parent dummy chain handling
+│
+├── engines/             Layout engine abstraction
+│   └── graph/
+│       ├── registry.rs  GraphEngineRegistry (maps LayoutEngineId → engine)
+│       ├── elk.rs       ELK subprocess adapter (feature-gated: engine-elk)
+│       └── cose.rs      COSE stub (not yet implemented)
+│
+├── render/              Shared rendering primitives
+│   ├── canvas.rs        2D character grid
+│   ├── chars.rs         CharSet for box-drawing (Unicode/ASCII)
+│   └── intersect.rs     Line intersection utilities
+│
+└── diagrams/            Diagram type implementations
+    ├── flowchart/
+    │   ├── mod.rs        Definition + detect function
+    │   ├── instance.rs   FlowchartDiagram (DiagramInstance impl)
+    │   ├── engine.rs     DagreLayoutEngine adapter (Diagram → GraphGeometry)
+    │   ├── geometry.rs   GraphGeometry IR types (Layer 1 + Layer 2)
+    │   ├── routing.rs    route_graph_geometry() — Layer 1 → Layer 2
+    │   └── render/
+    │       ├── layout.rs       Text layout computation
+    │       ├── router.rs       Text edge routing
+    │       ├── route_policy.rs Routing policies
+    │       ├── edge.rs         Text edge rendering
+    │       ├── shape.rs        Text node shape rendering
+    │       ├── subgraph.rs     Subgraph border rendering
+    │       ├── svg.rs          SVG output renderer
+    │       ├── svg_router.rs   SVG edge routing
+    │       └── svg_metrics.rs  SVG text metrics
+    ├── class/
+    │   ├── mod.rs        Definition + detect function
+    │   ├── instance.rs   ClassDiagram implementation
+    │   ├── compiler.rs   Class AST → graph::Diagram compiler
+    │   └── parser/       Hand-written line parser + AST
+    ├── sequence/
+    │   ├── mod.rs        Definition + detect function
+    │   ├── instance.rs   SequenceDiagram implementation
+    │   ├── model.rs      Timeline model types
+    │   ├── compiler.rs   Sequence AST → Model compiler
+    │   ├── layout.rs     Timeline layout engine
+    │   ├── parser/       Hand-written line parser + AST
+    │   └── render/       Text renderer
+    ├── mmds/
+    │   ├── mod.rs        Definition
+    │   ├── instance.rs   MMDS → render pipeline
+    │   └── hydrate.rs    MMDS JSON → GraphGeometry hydration
+    ├── info.rs           Info diagram (stub)
+    ├── pie.rs            Pie chart (stub)
+    └── packet.rs         Packet diagram (stub)
 ```
 
-**Direction handling:**
-- TD/BT: Layers are rows, nodes flow vertically
-- LR/RL: Layers are columns, nodes flow horizontally
-- BT/RL: Coordinates are reversed after computation
+## Diagram Registry
 
-**Cycle handling:**
-When a cycle is detected (edge goes "backward" against flow direction), the layout allocates corridor space on the diagram perimeter for routing these edges around.
+The `DiagramRegistry` (`src/registry.rs`) is the central dispatch mechanism. Each diagram type registers a `DiagramDefinition` containing:
 
-#### Edge Router (`router.rs`)
+- **id** — unique name (e.g., `"flowchart"`, `"class"`)
+- **family** — `DiagramFamily` classification
+- **detector** — function that checks if input text matches this type
+- **factory** — creates a `Box<dyn DiagramInstance>`
+- **supported_formats** — which output formats this type can produce
 
-Computes paths for edges, avoiding node boundaries.
+Detection runs in registration order; first match wins. The registry is populated at startup in `lib.rs`.
 
-**Forward edges** follow the natural flow direction:
-- TD: Exit bottom of source, enter top of target
-- LR: Exit right of source, enter left of target
+## Graph-Family Pipeline (Flowchart, Class)
 
-**Backward edges** (cycles) route around the perimeter:
-- TD/BT: Exit right, travel in corridor, enter right
-- LR/RL: Exit bottom, travel in corridor, enter bottom
+Graph-family diagrams share the most complex pipeline, built around two geometry IR layers:
 
 ```
-RoutedEdge
-├── edge: Edge
-├── start: Point (attachment on source)
-├── end: Point (attachment on target)
-├── segments: Vec<Segment>
-│   ├── Vertical { x, y_start, y_end }
-│   └── Horizontal { y, x_start, x_end }
-└── entry_direction: AttachDirection
+           ┌──────────────┐
+           │ Mermaid Text │
+           └──────────────┘
+                   │
+                   ▼
+              ┌────────┐
+              │ Parser │
+              └────────┘
+                   │
+                   ▼
+              ┌─────────┐
+              │ Diagram │
+              └─────────┘
+                   │
+                   ▼
+           ┌───────────────┐
+           │ Layout Engine │
+           └───────────────┘
+                   │
+                   ▼
+      ┌─────────────────────────┐
+      │ GraphGeometry (Layer 1) │
+      └─────────────────────────┘
+                   │
+                   ▼
+   ┌───────────────────────────────┐
+   │ RoutedGraphGeometry (Layer 2) │
+   └───────────────────────────────┘
+    └───┐                     ┌───┘
+        │                     │
+        ▼                     ▼
+┌───────────────┐     ┌──────────────┐
+│ Text Renderer │     │ SVG Renderer │
+└───────────────┘     └──────────────┘
 ```
 
-**Path computation:**
-- Straight paths when nodes are aligned
-- L-shaped or Z-shaped paths when offset
-- Multiple lanes for multiple backward edges
+### Parsing
 
-#### Canvas Renderer
+Flowcharts use a **pest PEG grammar** (`src/parser/grammar.pest`). Class and sequence diagrams use **hand-written line parsers** in their respective `diagrams/*/parser/` directories.
 
-**Key files:**
-- `canvas.rs` - 2D character grid
-- `shape.rs` - Node shape drawing
-- `edge.rs` - Edge and arrow drawing
-- `chars.rs` - Unicode/ASCII character sets
+The flowchart grammar supports: header declarations, 20+ node shapes, edge types (`-->`, `-.->`, `==>`, `---`), edge labels, chains, ampersand groups, subgraphs, comments, and various directives (style, classDef, click, linkStyle, direction) which are parsed and discarded.
 
-**Drawing order:**
-1. Create canvas with computed dimensions
-2. Draw all nodes (shapes with labels)
-3. Draw all edges (lines with arrows)
-4. Draw edge labels
+### Graph Building
 
-**Character sets:**
-```
-Unicode: ┌ ┐ └ ┘ │ ─ ┬ ┴ ├ ┤ ┼ ► ▼ ◄ ▲
-ASCII:   + + + + | - + + + + + > v < ^
-```
+The graph builder (`src/graph/builder.rs`) converts the flowchart AST into a `Diagram`:
+- Deduplicates nodes (same ID referenced multiple times)
+- Merges node attributes from different statements
+- Expands chains (`A --> B --> C` → two edges)
+- Expands ampersand groups (`A & B --> C` → two edges)
 
-## Data Flow Example
+Class diagrams have their own compiler (`diagrams/class/compiler.rs`) that produces the same `Diagram` type.
 
-Given input:
-```mermaid
-graph TD
-    A[Start] --> B{Decision}
-    B -->|Yes| C[Accept]
-    B -->|No| D[Reject]
-```
+### Layout Engine
 
-**After parsing (AST):**
-```
-Flowchart {
-    direction: TopDown,
-    statements: [
-        Edge { left: [A[Start]], right: [B{Decision}], connector: Arrow },
-        Edge { left: [B], right: [C[Accept]], connector: ArrowWithLabel("Yes") },
-        Edge { left: [B], right: [D[Reject]], connector: ArrowWithLabel("No") },
-    ]
+The `GraphLayoutEngine` trait (`src/diagram.rs`) defines the engine interface:
+
+```rust
+trait GraphLayoutEngine {
+    type Input;   // Diagram
+    type Output;  // GraphGeometry
+    fn layout(&self, input: &Self::Input, config: &EngineConfig) -> Result<Self::Output, RenderError>;
+    fn capabilities(&self) -> EngineCapabilities;
 }
 ```
 
-**After graph building (Diagram):**
+The `GraphEngineRegistry` maps `LayoutEngineId` (Dagre, Elk, Cose) to concrete engine adapters. The default engine is **Dagre**.
+
+**Dagre** (`src/dagre/`) implements the Sugiyama framework targeting parity with dagre.js v0.8.5:
+
+1. **Nesting** — compound graph hierarchy for subgraphs
+2. **Acyclic** — cycle removal via DFS, tracks reversed edges
+3. **Rank** — layer assignment (longest-path or network simplex)
+4. **Normalize** — long edge splitting with dummy nodes
+5. **Border** — border node creation for subgraph boundaries
+6. **Parent dummy chains** — maintain hierarchy through dummy nodes
+7. **Order** — crossing reduction via barycenter heuristic
+8. **Position** — Brandes-Köpf coordinate assignment
+9. **Denormalize** — remove dummy nodes, reconstruct edge paths
+
+The dagre adapter (`diagrams/flowchart/engine.rs`) wraps this as a `DagreLayoutEngine` that maps `Diagram` → `GraphGeometry`.
+
+**ELK** (behind `engine-elk` feature flag) runs the Eclipse Layout Kernel as a subprocess.
+
+### Geometry IR
+
+**Layer 1: GraphGeometry** (`diagrams/flowchart/geometry.rs`) — engine-agnostic layout output:
+- Node positions and dimensions (`FRect`)
+- Edge topology with layout hints (waypoints from engine)
+- Subgraph boundaries
+- Reversed edge tracking
+- Metadata (graph bounds, direction)
+
+**Layer 2: RoutedGraphGeometry** — produced by `routing::route_graph_geometry()`:
+- Resolved edge polyline paths (`Vec<FPoint>`)
+- Label positions
+- Backward-edge markers
+- Subgraph bounds with titles
+
+The routing stage (`diagrams/flowchart/routing.rs`) supports two modes based on engine capabilities:
+- **FullCompute** — build paths from layout hints and node positions (used by Dagre)
+- **PassThroughClip** — use engine-provided paths directly (used by ELK)
+
+### Rendering
+
+Text rendering converts RoutedGraphGeometry to a character grid:
+1. Map float coordinates to canvas grid positions
+2. Draw node shapes with labels (Unicode box-drawing or ASCII)
+3. Draw routed edge paths with arrows
+4. Draw edge labels and subgraph borders
+
+SVG rendering (`diagrams/flowchart/render/svg.rs`) consumes the same geometry IR but emits SVG elements with presentation attributes. It has its own edge routing (`svg_router.rs`) and text metrics (`svg_metrics.rs`).
+
+## Timeline-Family Pipeline (Sequence)
+
+Sequence diagrams use an independent pipeline:
+
 ```
-Diagram {
-    direction: TopDown,
-    nodes: {
-        "A": Node { label: "Start", shape: Rectangle },
-        "B": Node { label: "Decision", shape: Diamond },
-        "C": Node { label: "Accept", shape: Rectangle },
-        "D": Node { label: "Reject", shape: Rectangle },
-    },
-    edges: [
-        Edge { from: "A", to: "B", stroke: Solid, arrow: Normal },
-        Edge { from: "B", to: "C", label: "Yes", ... },
-        Edge { from: "B", to: "D", label: "No", ... },
-    ]
-}
+┌──────────────┐
+│ Mermaid Text │
+└──────────────┘
+        │
+        ▼
+   ┌────────┐
+   │ Parser │
+   └────────┘
+        │
+        ▼
+     ┌─────┐
+     │ AST │
+     └─────┘
+        │
+        ▼
+  ┌──────────┐
+  │ Compiler │
+  └──────────┘
+        │
+        ▼
+┌───────────────┐
+│ SequenceModel │
+└───────────────┘
+        │
+        ▼
+   ┌────────┐
+   │ Layout │
+   └────────┘
+        │
+        ▼
+┌───────────────┐
+│ Text Renderer │
+└───────────────┘
 ```
 
-**After layout:**
-```
-Layer 0: [A]
-Layer 1: [B]
-Layer 2: [C, D]
+- **Parser** — hand-written line parser (`diagrams/sequence/parser/`)
+- **Model** — participants, messages, activations, notes
+- **Layout** — column assignment, row spacing, lifeline positioning
+- **Renderer** — direct text output (no geometry IR)
 
-Grid positions:
-  A: (layer=0, pos=0)
-  B: (layer=1, pos=0)
-  C: (layer=2, pos=0)
-  D: (layer=2, pos=1)
-```
+## MMDS JSON Format
 
-**After routing:**
-```
-A→B: Vertical line from A.bottom to B.top
-B→C: Z-path from B.bottom to C.top (with horizontal jog)
-B→D: Z-path from B.bottom to D.top (with horizontal jog)
-```
+MMDS (Mermaid Diagram Specification) is a structured JSON interchange format (`src/mmds.rs`):
+
+- **Version 2** of the spec
+- Two geometry levels controlled by `--geometry-level`:
+  - **layout** (default) — node positions + edge topology only
+  - **routed** — adds edge paths, label positions, backward markers, subgraph bounds
+- Path detail controlled by `--path-detail`:
+  - **full** — all routed waypoints
+  - **simplified** — start, midpoint, end
+  - **endpoints** — start and end only
+- MMDS can also be used as input — the `diagrams/mmds/` module hydrates JSON back into `GraphGeometry` for rendering
+
+Schema: `docs/mmds.schema.json`. Spec: `docs/mmds.md`.
+
+## Output Formats
+
+| Format  | Flag        | Description                      |
+| ------- | ----------- | -------------------------------- |
+| Text    | (default)   | Unicode box-drawing characters   |
+| ASCII   | `--ascii`   | ASCII-only characters            |
+| SVG     | `--svg`     | Scalable Vector Graphics         |
+| MMDS    | `--json`    | Structured JSON interchange      |
+| Mermaid | `--mermaid` | Mermaid syntax (from MMDS input) |
 
 ## Key Design Decisions
 
 ### PEG Parser (pest)
 
-We chose pest for parsing because:
-- Declarative grammar is easy to read and modify
-- Generates fast, zero-copy parsers
-- Good error messages for malformed input
-- Rust-native with derive macros
+Flowcharts use pest for parsing: declarative grammar, fast zero-copy parsing, good error messages, and Rust-native derive macros. Class and sequence diagrams use hand-written parsers because their syntax is more line-oriented.
 
-### Topological Sort for Layout
+### Dagre Parity
 
-Nodes are assigned to layers using a modified topological sort:
-- Nodes with no incoming edges start in layer 0
-- Each subsequent layer contains nodes whose predecessors are all in earlier layers
-- Cycles are broken by selecting the node with minimum in-degree
+The dagre module targets v0.8.5 parity (the same version Mermaid.js uses). This means layout output should match dagre.js for identical input graphs. Parity tests (`tests/dagre_parity.rs`) compare against fixtures generated by running dagre.js directly.
 
-This produces natural top-to-bottom (or left-to-right) flow.
+### Compound Graph Support
 
-### Corridor-Based Backward Edge Routing
+mmdflux uses dagre's native compound graph pipeline for subgraphs (nesting, border nodes, parent dummy chains). This differs from Mermaid.js, which uses recursive rendering for subgraphs.
 
-Backward edges (cycles) are routed in corridors outside the main diagram area:
-- Avoids crossing through intermediate nodes
-- Multiple backward edges get separate lanes
-- Lane assignment is deterministic (sorted by source/target positions)
+### Two-Layer Geometry IR
 
-### Separation of Concerns
+The GraphGeometry/RoutedGraphGeometry split allows:
+- Layout engines to produce geometry without knowing about routing
+- Routing strategies to vary independently of engine choice
+- Both text and SVG renderers to consume the same routed geometry
+- MMDS JSON to serialize either layer depending on consumer needs
 
-The three-stage pipeline allows:
-- Parser can be reused for other output formats
-- Graph structure is independent of rendering
-- Layout algorithm can be improved without touching parsing
-- Different character sets (Unicode/ASCII) without changing logic
+### Engine Abstraction
+
+The `GraphLayoutEngine` trait with associated types enables multiple layout backends without changing diagram code. Each engine advertises capabilities (edge routing, subgraph support) so the pipeline adapts automatically.
 
 ## Extending mmdflux
 
@@ -313,7 +350,8 @@ The three-stage pipeline allows:
 2. Add grammar rule in `grammar.pest`
 3. Add variant to `Shape` in `graph/node.rs`
 4. Map AST shape to graph shape in `graph/builder.rs`
-5. Implement drawing in `render/shape.rs`
+5. Implement text drawing in `diagrams/flowchart/render/shape.rs`
+6. Implement SVG drawing in `diagrams/flowchart/render/svg.rs`
 
 ### Adding a New Edge Style
 
@@ -324,11 +362,17 @@ The three-stage pipeline allows:
 
 ### Adding a New Diagram Type
 
-The current architecture is flowchart-specific. Adding sequence diagrams, class diagrams, etc. would require:
-1. New grammar rules (or separate grammar file)
-2. New AST types
-3. New graph structures (may differ significantly)
-4. New layout algorithm (sequence diagrams have different constraints)
-5. New rendering logic
+1. Create `src/diagrams/<type>/` with:
+   - `mod.rs` — `definition()` returning `DiagramDefinition` with detector + factory
+   - `instance.rs` — implement `DiagramInstance` trait
+   - `parser/` — parser for the diagram syntax
+2. Register in `src/diagrams/mod.rs` and wire into `default_registry()` in `lib.rs`
+3. For Graph-family diagrams: write a compiler to `graph::Diagram` and reuse the shared engine/geometry/routing pipeline
+4. For other families: implement the full pipeline within the diagram module
 
-Consider creating parallel module trees (`parser/sequence/`, `graph/sequence/`, etc.) rather than overloading existing structures.
+### Adding a New Layout Engine
+
+1. Implement `GraphLayoutEngine` with `Input = Diagram, Output = GraphGeometry`
+2. Add variant to `LayoutEngineId` in `diagram.rs`
+3. Register in `GraphEngineRegistry::default()`
+4. Set `EngineCapabilities` appropriately (the pipeline adapts routing mode automatically)
