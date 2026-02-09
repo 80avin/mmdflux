@@ -249,6 +249,7 @@ fn draw_edge_label_with_tracking(
     // Try to find a position that doesn't collide with nodes or other labels.
     // When placed above a horizontal segment, skip edge collision checks since
     // the label intentionally overwrites edge cells on the jog line.
+    let check_edge = !on_h_seg;
     let (label_x, label_y) = find_safe_label_position(
         canvas,
         base_x,
@@ -256,8 +257,36 @@ fn draw_edge_label_with_tracking(
         label_len,
         direction,
         placed_labels,
-        !on_h_seg,
+        check_edge,
     );
+
+    // If collision avoidance displaced the label far from its base (more
+    // than 2 rows), retry at the overall edge midpoint, centered on the
+    // edge line. The segment-level midpoint can land on a node-border row;
+    // the edge midpoint sits between the two node rows where there is room.
+    // Edge collision is ignored since the label intentionally overwrites the
+    // edge path character at this position.
+    let (label_x, label_y) = if base_y.abs_diff(label_y) > 2 {
+        let alt_y = (routed.start.y + routed.end.y) / 2;
+        let alt_x = routed.end.x.saturating_sub(label_len / 2);
+        find_safe_label_position(
+            canvas,
+            alt_x,
+            alt_y,
+            label_len,
+            direction,
+            placed_labels,
+            false,
+        )
+    } else {
+        (label_x, label_y)
+    };
+    // Expand canvas if the label would extend past the right edge
+    let needed_width = label_x + label_len;
+    if needed_width > canvas.width() {
+        canvas.expand_width(needed_width);
+    }
+
     // Write the label only to non-node cells, avoiding the arrow position
     // Labels can overwrite edge cells since they're drawn after edges and should appear on top
     // For horizontal layouts, don't overwrite the arrow at routed.end
