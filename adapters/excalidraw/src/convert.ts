@@ -360,22 +360,72 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 		return groups;
 	}
 
-	// Pre-compute pixel sizes for each node (text-aware)
-	const nodeSizes = new Map<string, { w: number; h: number }>();
+	// Phase 1: parse compartment layouts and compute text-based sizes (scale-independent)
 	const compartmentLayouts = new Map<string, CompartmentLayout>();
+	const textSizes = new Map<string, { w: number; h: number }>();
 	for (const n of mmds.nodes) {
-		const shape = n.shape ?? nodeDefaults.shape ?? "rectangle";
 		const compartments = parseCompartments(n.label);
-
 		if (compartments) {
 			const layout = layoutCompartments(compartments);
 			compartmentLayouts.set(n.id, layout);
-			nodeSizes.set(n.id, { w: layout.w, h: layout.h });
+			textSizes.set(n.id, { w: layout.w, h: layout.h });
 		} else {
+			const shape = n.shape ?? nodeDefaults.shape ?? "rectangle";
 			const textW = n.label.length * NODE_FONT_SIZE * CHAR_WIDTH_FACTOR;
 			const textH = NODE_FONT_SIZE * 1.25;
-			let w = Math.max(textW, n.size.width * SCALE) + TEXT_PAD_X;
-			let h = Math.max(textH, n.size.height * SCALE) + TEXT_PAD_Y;
+			let w = textW + TEXT_PAD_X;
+			let h = textH + TEXT_PAD_Y;
+			if (shape === "diamond") {
+				const side = Math.max(w, h);
+				w = side;
+				h = side;
+			}
+			textSizes.set(n.id, { w, h });
+		}
+	}
+
+	// Phase 2: auto-compute minimum scale that prevents node overlap.
+	// Dagre positions assume dagre-sized boxes; text-based sizes can be much larger.
+	// Two nodes overlap when they overlap on BOTH axes — find the minimum scale
+	// that separates every pair on at least one axis.
+	const NODE_GAP = 20;
+	let scale = SCALE;
+	for (let i = 0; i < mmds.nodes.length; i++) {
+		for (let j = i + 1; j < mmds.nodes.length; j++) {
+			const a = mmds.nodes[i];
+			const b = mmds.nodes[j];
+			const sa = textSizes.get(a.id);
+			const sb = textSizes.get(b.id);
+			if (!sa || !sb) continue;
+			const dx = Math.abs(a.position.x - b.position.x);
+			const dy = Math.abs(a.position.y - b.position.y);
+			const needX = (sa.w + sb.w) / 2 + NODE_GAP;
+			const needY = (sa.h + sb.h) / 2 + NODE_GAP;
+
+			let minScale = 0;
+			if (dx > 0 && dy > 0) {
+				minScale = Math.min(needX / dx, needY / dy);
+			} else if (dx > 0) {
+				minScale = needX / dx;
+			} else if (dy > 0) {
+				minScale = needY / dy;
+			}
+			scale = Math.max(scale, minScale);
+		}
+	}
+
+	// Phase 3: compute final pixel sizes per node using effective scale
+	const nodeSizes = new Map<string, { w: number; h: number }>();
+	for (const n of mmds.nodes) {
+		const layout = compartmentLayouts.get(n.id);
+		if (layout) {
+			nodeSizes.set(n.id, { w: layout.w, h: layout.h });
+		} else {
+			const shape = n.shape ?? nodeDefaults.shape ?? "rectangle";
+			const textW = n.label.length * NODE_FONT_SIZE * CHAR_WIDTH_FACTOR;
+			const textH = NODE_FONT_SIZE * 1.25;
+			let w = Math.max(textW, n.size.width * scale) + TEXT_PAD_X;
+			let h = Math.max(textH, n.size.height * scale) + TEXT_PAD_Y;
 			if (shape === "diamond") {
 				const side = Math.max(w, h);
 				w = side;
@@ -404,8 +454,8 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 		const size = nodeSizes.get(n.id);
 		if (!size) continue;
 		const { w, h } = size;
-		const left = n.position.x * SCALE - w / 2;
-		const top = n.position.y * SCALE - h / 2;
+		const left = n.position.x * scale - w / 2;
+		const top = n.position.y * scale - h / 2;
 		const groupIds = groupIdsFor(n);
 
 		const layout = compartmentLayouts.get(n.id);
@@ -549,7 +599,7 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 		if (path && path.length >= 2) {
 			// Convert to pixel coordinates
 			const pxPath: [number, number][] = path.map(
-				(p) => [p[0] * SCALE, p[1] * SCALE] as [number, number],
+				(p) => [p[0] * scale, p[1] * scale] as [number, number],
 			);
 			// Snap endpoints to node boundaries
 			const srcSize = nodeSizes.get(e.source);
@@ -557,8 +607,8 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 			pxPath[0] = adjustEndpoint(
 				pxPath[0],
 				pxPath[1],
-				src.position.x * SCALE,
-				src.position.y * SCALE,
+				src.position.x * scale,
+				src.position.y * scale,
 				srcSize.w,
 				srcSize.h,
 			);
@@ -568,8 +618,8 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 			pxPath[last] = adjustEndpoint(
 				pxPath[last],
 				pxPath[last - 1],
-				tgt.position.x * SCALE,
-				tgt.position.y * SCALE,
+				tgt.position.x * scale,
+				tgt.position.y * scale,
 				tgtSize.w,
 				tgtSize.h,
 			);
@@ -579,10 +629,10 @@ export function convert(mmds: MmdsDocument): ConvertResult {
 				(p) => [p[0] - pxPath[0][0], p[1] - pxPath[0][1]] as [number, number],
 			);
 		} else {
-			const srcCx = src.position.x * SCALE;
-			const srcCy = src.position.y * SCALE;
-			const tgtCx = tgt.position.x * SCALE;
-			const tgtCy = tgt.position.y * SCALE;
+			const srcCx = src.position.x * scale;
+			const srcCy = src.position.y * scale;
+			const tgtCx = tgt.position.x * scale;
+			const tgtCy = tgt.position.y * scale;
 			const srcSize = nodeSizes.get(e.source);
 			const tgtSize = nodeSizes.get(e.target);
 			if (!srcSize || !tgtSize) continue;
