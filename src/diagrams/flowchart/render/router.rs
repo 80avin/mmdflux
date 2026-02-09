@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use super::layout::{Layout, SelfEdgeDrawData, SubgraphBounds};
 use super::shape::NodeBounds;
-use crate::graph::{Direction, Edge, Shape, Stroke};
+use crate::graph::{Arrow, Direction, Edge, Shape, Stroke};
 use crate::render::intersect::{
     NodeFace, calculate_attachment_points, classify_face, spread_points_on_face,
 };
@@ -493,6 +493,7 @@ fn route_edge_with_waypoints(
         end,
         direction,
         src_first_vertical,
+        edge.arrow_start != Arrow::None,
     ));
 
     // Determine entry direction based on final segment orientation
@@ -567,6 +568,7 @@ fn route_backward_with_synthetic_waypoints(
         end,
         direction,
         src_first_vertical,
+        edge.arrow_start != Arrow::None,
     ));
 
     let entry_direction = entry_direction_from_segments(&segments);
@@ -1056,6 +1058,7 @@ fn build_orthogonal_path_with_waypoints(
     end: Point,
     direction: Direction,
     start_vertical: bool,
+    has_arrow_start: bool,
 ) -> Vec<Segment> {
     let vertical_first = matches!(direction, Direction::TopDown | Direction::BottomTop);
 
@@ -1084,6 +1087,17 @@ fn build_orthogonal_path_with_waypoints(
             mid_y = match direction {
                 Direction::TopDown => end.y.saturating_sub(1),
                 Direction::BottomTop => end.y.saturating_add(1),
+                _ => mid_y,
+            };
+        }
+        // When the edge has a visible arrow_start marker, avoid placing
+        // the horizontal jog at the start row. Nudge mid_y one cell in
+        // the layout direction so there is always a vertical segment
+        // approaching the source-end arrow.
+        if has_arrow_start && mid_y == start.y && start.y != end.y {
+            mid_y = match direction {
+                Direction::TopDown => start.y + 1,
+                Direction::BottomTop => start.y.saturating_sub(1),
                 _ => mid_y,
             };
         }
