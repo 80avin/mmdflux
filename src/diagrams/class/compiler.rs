@@ -51,11 +51,13 @@ pub fn compile(model: &ClassModel) -> Diagram {
 /// Map a class relationship type to edge style.
 fn relation_style(rel: ClassRelationType) -> (Stroke, Arrow, Arrow) {
     match rel {
-        ClassRelationType::Association => (Stroke::Solid, Arrow::None, Arrow::Normal),
-        ClassRelationType::Inheritance => (Stroke::Solid, Arrow::None, Arrow::Normal),
-        ClassRelationType::Composition => (Stroke::Solid, Arrow::None, Arrow::Normal),
-        ClassRelationType::Aggregation => (Stroke::Solid, Arrow::None, Arrow::Normal),
-        ClassRelationType::Dependency => (Stroke::Dotted, Arrow::None, Arrow::Normal),
+        ClassRelationType::Association => (Stroke::Solid, Arrow::None, Arrow::None),
+        ClassRelationType::DirectedAssociation => (Stroke::Solid, Arrow::None, Arrow::Normal),
+        ClassRelationType::Inheritance => (Stroke::Solid, Arrow::None, Arrow::OpenTriangle),
+        ClassRelationType::Composition => (Stroke::Solid, Arrow::None, Arrow::Diamond),
+        ClassRelationType::Aggregation => (Stroke::Solid, Arrow::None, Arrow::OpenDiamond),
+        ClassRelationType::Dependency => (Stroke::Dotted, Arrow::None, Arrow::None),
+        ClassRelationType::DirectedDependency => (Stroke::Dotted, Arrow::None, Arrow::Normal),
     }
 }
 

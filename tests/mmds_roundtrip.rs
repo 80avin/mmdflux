@@ -171,5 +171,8 @@ fn arrow_rank(arrow: Arrow) -> u8 {
         Arrow::Normal => 1,
         Arrow::Cross => 2,
         Arrow::Circle => 3,
+        Arrow::OpenTriangle => 4,
+        Arrow::Diamond => 5,
+        Arrow::OpenDiamond => 6,
     }
 }

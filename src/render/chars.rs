@@ -52,6 +52,16 @@ pub struct CharSet {
     pub arrow_circle_left: char,
     pub arrow_circle_right: char,
 
+    // Open triangle arrows (hollow, for inheritance)
+    pub arrow_open_up: char,
+    pub arrow_open_down: char,
+    pub arrow_open_left: char,
+    pub arrow_open_right: char,
+
+    // Diamond arrows (symmetric, for composition/aggregation)
+    pub arrow_diamond: char,
+    pub arrow_open_diamond: char,
+
     // Dotted lines
     pub dotted_horizontal: char,
     pub dotted_vertical: char,
@@ -112,6 +122,12 @@ impl CharSet {
             arrow_circle_down: 'o',
             arrow_circle_left: 'o',
             arrow_circle_right: 'o',
+            arrow_open_up: '△',
+            arrow_open_down: '▽',
+            arrow_open_left: '◁',
+            arrow_open_right: '▷',
+            arrow_diamond: '◆',
+            arrow_open_diamond: '◇',
             dotted_horizontal: '┄',
             dotted_vertical: '┆',
             heavy_horizontal: '━',
@@ -167,6 +183,12 @@ impl CharSet {
             arrow_circle_down: 'o',
             arrow_circle_left: 'o',
             arrow_circle_right: 'o',
+            arrow_open_up: '^',
+            arrow_open_down: 'v',
+            arrow_open_left: '<',
+            arrow_open_right: '>',
+            arrow_diamond: '*',
+            arrow_open_diamond: 'o',
             dotted_horizontal: '-',
             dotted_vertical: ':',
             heavy_horizontal: '-',
@@ -211,6 +233,12 @@ impl CharSet {
             self.arrow_circle_down,
             self.arrow_circle_left,
             self.arrow_circle_right,
+            self.arrow_open_up,
+            self.arrow_open_down,
+            self.arrow_open_left,
+            self.arrow_open_right,
+            self.arrow_diamond,
+            self.arrow_open_diamond,
         ]
         .contains(&ch)
     }

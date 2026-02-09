@@ -290,6 +290,9 @@ fn arrow_str(arrow: Arrow) -> &'static str {
         Arrow::None => "none",
         Arrow::Cross => "cross",
         Arrow::Circle => "circle",
+        Arrow::OpenTriangle => "open_triangle",
+        Arrow::Diamond => "diamond",
+        Arrow::OpenDiamond => "open_diamond",
     }
 }
 

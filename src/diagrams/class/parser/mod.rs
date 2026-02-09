@@ -210,10 +210,10 @@ fn try_parse_relation(line: &str) -> Option<ClassRelation> {
         ("o--", ClassRelationType::Aggregation, true), // reversed
         ("--o", ClassRelationType::Aggregation, false),
         // 3-char operators
-        ("-->", ClassRelationType::Association, false),
-        ("<--", ClassRelationType::Association, true),
-        ("..>", ClassRelationType::Dependency, false),
-        ("<..", ClassRelationType::Dependency, true),
+        ("-->", ClassRelationType::DirectedAssociation, false),
+        ("<--", ClassRelationType::DirectedAssociation, true),
+        ("..>", ClassRelationType::DirectedDependency, false),
+        ("<..", ClassRelationType::DirectedDependency, true),
         // 2-char operators (must be last)
         ("--", ClassRelationType::Association, false),
         ("..", ClassRelationType::Dependency, false),
@@ -346,7 +346,7 @@ mod tests {
         assert_eq!(model.relations[0].to, "Repository");
         assert_eq!(
             model.relations[0].relation_type,
-            ClassRelationType::Dependency
+            ClassRelationType::DirectedDependency
         );
     }
 
@@ -357,7 +357,7 @@ mod tests {
         assert_eq!(model.relations.len(), 1);
         assert_eq!(
             model.relations[0].relation_type,
-            ClassRelationType::Association
+            ClassRelationType::DirectedAssociation
         );
     }
 

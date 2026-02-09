@@ -9,7 +9,7 @@ authenticates
   └──────┘     └─────────┘
       │    contains │
    places─┐     ┌───┘
-          ▼     ▼
+          ▼     ◆
          ┌───────┐
          │ Order │
          └───────┘

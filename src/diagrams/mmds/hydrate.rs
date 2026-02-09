@@ -742,6 +742,9 @@ fn parse_arrow(value: &str) -> Option<Arrow> {
         "none" => Some(Arrow::None),
         "cross" => Some(Arrow::Cross),
         "circle" => Some(Arrow::Circle),
+        "open_triangle" => Some(Arrow::OpenTriangle),
+        "diamond" => Some(Arrow::Diamond),
+        "open_diamond" => Some(Arrow::OpenDiamond),
         _ => None,
     }
 }

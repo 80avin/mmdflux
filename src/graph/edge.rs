@@ -30,6 +30,12 @@ pub enum Arrow {
     Cross,
     /// Circle arrow: o
     Circle,
+    /// Open (hollow) triangle arrow: △ (inheritance)
+    OpenTriangle,
+    /// Filled diamond: ◆ (composition)
+    Diamond,
+    /// Open (hollow) diamond: ◇ (aggregation)
+    OpenDiamond,
 }
 
 /// An edge connecting two nodes.

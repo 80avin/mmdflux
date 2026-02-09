@@ -9,12 +9,21 @@
     <marker id="circlehead" viewBox="0 0 10.00 10.00" refX="11.00" refY="5.00" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <circle cx="5" cy="5" r="5" stroke="#333" stroke-width="1" fill="#333" />
     </marker>
+    <marker id="open-arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0,0 10.00,5.00 0,10.00" fill="white" stroke="#333" stroke-width="1" />
+    </marker>
+    <marker id="diamondhead" viewBox="0 0 12.00 12.00" refX="6.00" refY="6.00" markerWidth="12.00" markerHeight="12.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0,6.00 6.00,0 12.00,6.00 6.00,12.00" fill="#333" />
+    </marker>
+    <marker id="open-diamondhead" viewBox="0 0 12.00 12.00" refX="6.00" refY="6.00" markerWidth="12.00" markerHeight="12.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0,6.00 6.00,0 12.00,6.00 6.00,12.00" fill="white" stroke="#333" stroke-width="1" />
+    </marker>
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M77.53,166.00 L77.53,170.17 C77.53,174.33 77.53,182.67 82.68,190.61 C87.83,198.55 98.13,206.09 103.27,209.86 L108.42,213.64" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M219.46,166.00 L219.46,170.17 C219.46,174.33 219.46,182.67 214.31,190.61 C209.16,198.55 198.86,206.09 193.71,209.86 L188.57,213.64" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M77.53,62.00 L77.53,66.17 C77.53,70.33 77.53,78.67 77.53,86.33 C77.53,94.00 77.53,101.00 77.53,104.50 L77.53,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M77.53,166.00 L77.53,170.17 C77.53,174.33 77.53,182.67 82.68,190.61 C87.83,198.55 98.13,206.09 103.27,209.86 L108.42,213.64" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#open-arrowhead)" />
+      <path d="M219.46,166.00 L219.46,170.17 C219.46,174.33 219.46,182.67 214.31,190.61 C209.16,198.55 198.86,206.09 193.71,209.86 L188.57,213.64" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#open-arrowhead)" />
+      <path d="M77.53,62.00 L77.53,66.17 C77.53,70.33 77.53,78.67 77.53,86.33 C77.53,94.00 77.53,101.00 77.53,104.50 L77.53,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#open-arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

@@ -34,14 +34,18 @@ pub struct ClassRelation {
 /// Types of class relationships (MVP scope).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClassRelationType {
-    /// `--` or `-->`  Plain association.
+    /// `--`  Plain association (no arrow).
     Association,
+    /// `-->`  Directed association (with arrow).
+    DirectedAssociation,
     /// `<|--`  Inheritance/generalization.
     Inheritance,
     /// `*--`  Composition.
     Composition,
     /// `o--`  Aggregation.
     Aggregation,
-    /// `..>` or `..`  Dependency/realization.
+    /// `..`  Dependency (no arrow).
     Dependency,
+    /// `..>`  Directed dependency (with arrow).
+    DirectedDependency,
 }

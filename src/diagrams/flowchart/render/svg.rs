@@ -613,6 +613,67 @@ fn render_defs(writer: &mut SvgWriter, scale: f64) {
     writer.push_line(&circle);
     writer.end_tag("</marker>");
 
+    // Open arrowhead (hollow triangle for inheritance)
+    let marker = format!(
+        "<marker id=\"open-arrowhead\" viewBox=\"0 0 {base} {base}\" refX=\"{ref_x}\" refY=\"{ref_y}\" markerWidth=\"{mw}\" markerHeight=\"{mh}\" orient=\"auto-start-reverse\" markerUnits=\"userSpaceOnUse\">",
+        base = fmt_f64(base),
+        ref_x = fmt_f64(half),
+        ref_y = fmt_f64(half),
+        mw = fmt_f64(marker_size),
+        mh = fmt_f64(marker_size)
+    );
+    writer.start_tag(&marker);
+    let polygon = format!(
+        "<polygon points=\"0,0 {tip},{mid} 0,{size}\" fill=\"white\" stroke=\"{color}\" stroke-width=\"1\" />",
+        tip = fmt_f64(base),
+        mid = fmt_f64(half),
+        size = fmt_f64(base),
+        color = STROKE_COLOR
+    );
+    writer.push_line(&polygon);
+    writer.end_tag("</marker>");
+
+    // Diamond marker (filled diamond for composition)
+    let diamond_size = 12.0;
+    let diamond_half = diamond_size / 2.0;
+    let diamond_marker_size = 12.0 * scale;
+    let marker = format!(
+        "<marker id=\"diamondhead\" viewBox=\"0 0 {size} {size}\" refX=\"{ref_x}\" refY=\"{ref_y}\" markerWidth=\"{mw}\" markerHeight=\"{mh}\" orient=\"auto-start-reverse\" markerUnits=\"userSpaceOnUse\">",
+        size = fmt_f64(diamond_size),
+        ref_x = fmt_f64(diamond_half),
+        ref_y = fmt_f64(diamond_half),
+        mw = fmt_f64(diamond_marker_size),
+        mh = fmt_f64(diamond_marker_size)
+    );
+    writer.start_tag(&marker);
+    let polygon = format!(
+        "<polygon points=\"0,{mid} {mid},0 {size},{mid} {mid},{size}\" fill=\"{color}\" />",
+        mid = fmt_f64(diamond_half),
+        size = fmt_f64(diamond_size),
+        color = STROKE_COLOR
+    );
+    writer.push_line(&polygon);
+    writer.end_tag("</marker>");
+
+    // Open diamond marker (hollow diamond for aggregation)
+    let marker = format!(
+        "<marker id=\"open-diamondhead\" viewBox=\"0 0 {size} {size}\" refX=\"{ref_x}\" refY=\"{ref_y}\" markerWidth=\"{mw}\" markerHeight=\"{mh}\" orient=\"auto-start-reverse\" markerUnits=\"userSpaceOnUse\">",
+        size = fmt_f64(diamond_size),
+        ref_x = fmt_f64(diamond_half),
+        ref_y = fmt_f64(diamond_half),
+        mw = fmt_f64(diamond_marker_size),
+        mh = fmt_f64(diamond_marker_size)
+    );
+    writer.start_tag(&marker);
+    let polygon = format!(
+        "<polygon points=\"0,{mid} {mid},0 {size},{mid} {mid},{size}\" fill=\"white\" stroke=\"{color}\" stroke-width=\"1\" />",
+        mid = fmt_f64(diamond_half),
+        size = fmt_f64(diamond_size),
+        color = STROKE_COLOR
+    );
+    writer.push_line(&polygon);
+    writer.end_tag("</marker>");
+
     writer.end_tag("</defs>");
 }
 
@@ -1773,12 +1834,18 @@ fn edge_marker_attrs(edge: &Edge) -> String {
         Arrow::Normal => attrs.push_str(" marker-start=\"url(#arrowhead)\""),
         Arrow::Cross => attrs.push_str(" marker-start=\"url(#crosshead)\""),
         Arrow::Circle => attrs.push_str(" marker-start=\"url(#circlehead)\""),
+        Arrow::OpenTriangle => attrs.push_str(" marker-start=\"url(#open-arrowhead)\""),
+        Arrow::Diamond => attrs.push_str(" marker-start=\"url(#diamondhead)\""),
+        Arrow::OpenDiamond => attrs.push_str(" marker-start=\"url(#open-diamondhead)\""),
         Arrow::None => {}
     }
     match edge.arrow_end {
         Arrow::Normal => attrs.push_str(" marker-end=\"url(#arrowhead)\""),
         Arrow::Cross => attrs.push_str(" marker-end=\"url(#crosshead)\""),
         Arrow::Circle => attrs.push_str(" marker-end=\"url(#circlehead)\""),
+        Arrow::OpenTriangle => attrs.push_str(" marker-end=\"url(#open-arrowhead)\""),
+        Arrow::Diamond => attrs.push_str(" marker-end=\"url(#diamondhead)\""),
+        Arrow::OpenDiamond => attrs.push_str(" marker-end=\"url(#open-diamondhead)\""),
         Arrow::None => {}
     }
     attrs
@@ -1972,13 +2039,15 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
     }
 
     let start_offset = match edge.arrow_start {
-        Arrow::Normal => 4.0,
+        Arrow::Normal | Arrow::OpenTriangle => 4.0,
+        Arrow::Diamond | Arrow::OpenDiamond => 5.0,
         // Cross and circle markers have refX past the visible shape,
         // so the marker already sits before the endpoint — no pullback needed.
         Arrow::Cross | Arrow::Circle | Arrow::None => 0.0,
     };
     let end_offset = match edge.arrow_end {
-        Arrow::Normal => 4.0,
+        Arrow::Normal | Arrow::OpenTriangle => 4.0,
+        Arrow::Diamond | Arrow::OpenDiamond => 5.0,
         Arrow::Cross | Arrow::Circle | Arrow::None => 0.0,
     };
 

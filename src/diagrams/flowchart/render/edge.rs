@@ -633,6 +633,12 @@ fn draw_arrow_with_entry(
         (Arrow::Circle, AttachDirection::Bottom) => charset.arrow_circle_up,
         (Arrow::Circle, AttachDirection::Left) => charset.arrow_circle_right,
         (Arrow::Circle, AttachDirection::Right) => charset.arrow_circle_left,
+        (Arrow::OpenTriangle, AttachDirection::Top) => charset.arrow_open_down,
+        (Arrow::OpenTriangle, AttachDirection::Bottom) => charset.arrow_open_up,
+        (Arrow::OpenTriangle, AttachDirection::Left) => charset.arrow_open_right,
+        (Arrow::OpenTriangle, AttachDirection::Right) => charset.arrow_open_left,
+        (Arrow::Diamond, _) => charset.arrow_diamond,
+        (Arrow::OpenDiamond, _) => charset.arrow_open_diamond,
         (Arrow::None, _) => return,
     };
 
