@@ -16,6 +16,28 @@ cd mmdflux
 cargo build --release
 ```
 
+## Releasing
+
+GitHub Actions now handles CI and binary distribution:
+
+- `CI` workflow runs lint, tests, and cross-platform build checks on pushes/PRs.
+- `Release` workflow builds release binaries and uploads them to GitHub Releases.
+
+To publish a release from a tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow publishes these artifacts:
+
+- Linux x64 (`x86_64-unknown-linux-gnu`)
+- macOS x64 (`x86_64-apple-darwin`)
+- macOS arm64 (`aarch64-apple-darwin`)
+- Windows x64 (`x86_64-pc-windows-msvc`)
+- `checksums.txt` (SHA256)
+
 ## CLI Usage
 
 ```bash
