@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 641.96 390.00" style="max-width: 641.96px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+    <marker id="crosshead" viewBox="0 0 11.00 11.00" refX="12.00" refY="5.20" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 1,1 l 9,9 M 10,1 l -9,9" stroke="#333" stroke-width="2" />
+    </marker>
+    <marker id="circlehead" viewBox="0 0 10.00 10.00" refX="11.00" refY="5.00" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="5" stroke="#333" stroke-width="1" fill="#333" />
+    </marker>
+  </defs>
+  <g transform="translate(0.00,0.00)">
+    <g class="edgePaths">
+      <path d="M103.15,158.00 L103.15,162.17 C103.15,166.33 103.15,174.67 127.37,190.47 C151.59,206.28 200.04,229.57 224.27,241.21 L248.49,252.85" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M336.20,134.00 L336.20,142.17 C336.20,150.33 336.20,166.67 336.20,178.33 C336.20,190.00 336.20,197.00 336.20,200.50 L336.20,204.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M554.03,134.00 L554.03,142.17 C554.03,150.33 554.03,166.67 532.34,185.99 C510.64,205.31 467.25,227.62 445.55,238.77 L423.86,249.93" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="252.10" y="208.00" width="168.20" height="174.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="336.20" y="235.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Animal</text>
+      <line x1="252.10" y1="259.00" x2="420.30" y2="259.00" stroke="#333" stroke-width="1.00" />
+      <text x="336.20" y="283.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+int age</text>
+      <text x="336.20" y="307.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String gender</text>
+      <text x="336.20" y="331.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+isMammal()</text>
+      <text x="336.20" y="355.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+mate()</text>
+      <rect x="8.00" y="8.00" width="190.29" height="150.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="103.15" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Duck</text>
+      <line x1="8.00" y1="59.00" x2="198.29" y2="59.00" stroke="#333" stroke-width="1.00" />
+      <text x="103.15" y="83.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String beakColor</text>
+      <text x="103.15" y="107.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+swim()</text>
+      <text x="103.15" y="131.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+quack()</text>
+      <rect x="248.29" y="8.00" width="175.81" height="126.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="336.20" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Fish</text>
+      <line x1="248.29" y1="59.00" x2="424.11" y2="59.00" stroke="#333" stroke-width="1.00" />
+      <text x="336.20" y="83.00" text-anchor="middle" dominant-baseline="middle" fill="#333">-int sizeInFeet</text>
+      <text x="336.20" y="107.00" text-anchor="middle" dominant-baseline="middle" fill="#333">-canEat()</text>
+      <rect x="474.11" y="8.00" width="159.85" height="126.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="554.03" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Zebra</text>
+      <line x1="474.11" y1="59.00" x2="633.96" y2="59.00" stroke="#333" stroke-width="1.00" />
+      <text x="554.03" y="83.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+bool is_wild</text>
+      <text x="554.03" y="107.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+run()</text>
+    </g>
+  </g>
+</svg>

@@ -8,6 +8,24 @@ pub mod ast;
 
 use ast::{ClassDecl, ClassModel, ClassRelation, ClassRelationType};
 
+/// Ensure a class exists in the classes list, merging members if it already does.
+///
+/// Uses `class_index` to track position of each class in `classes` for O(1) lookup.
+/// If the class already exists, new members are appended. If not, a new entry is created.
+fn ensure_class(
+    classes: &mut Vec<ClassDecl>,
+    class_index: &mut std::collections::HashMap<String, usize>,
+    name: String,
+    members: Vec<String>,
+) {
+    if let Some(&idx) = class_index.get(&name) {
+        classes[idx].members.extend(members);
+    } else {
+        class_index.insert(name.clone(), classes.len());
+        classes.push(ClassDecl { name, members });
+    }
+}
+
 /// Parse a class diagram from Mermaid input text.
 ///
 /// Expects the input to start with `classDiagram` (case-insensitive).
@@ -16,7 +34,8 @@ pub fn parse_class_diagram(
 ) -> Result<ClassModel, Box<dyn std::error::Error + Send + Sync>> {
     let mut classes: Vec<ClassDecl> = Vec::new();
     let mut relations: Vec<ClassRelation> = Vec::new();
-    let mut class_names = std::collections::HashSet::new();
+    let mut class_index: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
 
     let mut lines = input.lines().peekable();
 
@@ -66,13 +85,13 @@ pub fn parse_class_diagram(
 
         // Handle class body close
         if trimmed == "}" {
-            if let Some(class_name) = in_class_body.take()
-                && class_names.insert(class_name.clone())
-            {
-                classes.push(ClassDecl {
-                    name: class_name,
-                    members: std::mem::take(&mut current_members),
-                });
+            if let Some(class_name) = in_class_body.take() {
+                ensure_class(
+                    &mut classes,
+                    &mut class_index,
+                    class_name,
+                    std::mem::take(&mut current_members),
+                );
             }
             continue;
         }
@@ -96,11 +115,8 @@ pub fn parse_class_diagram(
             // Try: `class ClassName`  (bare declaration)
             // May have optional annotation like `class ClassName~T~`
             let name = parse_class_name(rest);
-            if !name.is_empty() && class_names.insert(name.clone()) {
-                classes.push(ClassDecl {
-                    name,
-                    members: Vec::new(),
-                });
+            if !name.is_empty() {
+                ensure_class(&mut classes, &mut class_index, name, Vec::new());
             }
             continue;
         }
@@ -109,28 +125,38 @@ pub fn parse_class_diagram(
         if let Some(rel) = try_parse_relation(trimmed) {
             // Ensure both sides are tracked as classes
             for name in [&rel.from, &rel.to] {
-                if class_names.insert(name.clone()) {
-                    classes.push(ClassDecl {
-                        name: name.clone(),
-                        members: Vec::new(),
-                    });
-                }
+                ensure_class(&mut classes, &mut class_index, name.clone(), Vec::new());
             }
             relations.push(rel);
             continue;
+        }
+
+        // Try: `ClassName : member` or `ClassName: member` (inline member)
+        if let Some(colon_pos) = trimmed.find(':') {
+            let left = trimmed[..colon_pos].trim();
+            let member = trimmed[colon_pos + 1..].trim();
+            if !left.is_empty() && !member.is_empty() && parse_class_name(left) == left {
+                ensure_class(
+                    &mut classes,
+                    &mut class_index,
+                    left.to_string(),
+                    vec![member.to_string()],
+                );
+                continue;
+            }
         }
 
         // Permissive: skip unrecognized lines (style, note, click, etc.)
     }
 
     // Handle unclosed class body
-    if let Some(class_name) = in_class_body.take()
-        && class_names.insert(class_name.clone())
-    {
-        classes.push(ClassDecl {
-            name: class_name,
-            members: std::mem::take(&mut current_members),
-        });
+    if let Some(class_name) = in_class_body.take() {
+        ensure_class(
+            &mut classes,
+            &mut class_index,
+            class_name,
+            std::mem::take(&mut current_members),
+        );
     }
 
     Ok(ClassModel { classes, relations })
@@ -392,6 +418,54 @@ mod tests {
         let input = "classDiagram\nclass List~T~";
         let model = parse_class_diagram(input).unwrap();
         assert_eq!(model.classes[0].name, "List");
+    }
+
+    #[test]
+    fn parse_inline_member_with_space() {
+        let input = "classDiagram\nAnimal : +int age";
+        let model = parse_class_diagram(input).unwrap();
+        assert_eq!(model.classes.len(), 1);
+        assert_eq!(model.classes[0].name, "Animal");
+        assert_eq!(model.classes[0].members, vec!["+int age"]);
+    }
+
+    #[test]
+    fn parse_inline_member_without_space() {
+        let input = "classDiagram\nAnimal: +isMammal()";
+        let model = parse_class_diagram(input).unwrap();
+        assert_eq!(model.classes[0].members, vec!["+isMammal()"]);
+    }
+
+    #[test]
+    fn parse_multiple_inline_members() {
+        let input = "classDiagram\nAnimal : +int age\nAnimal : +String gender\nAnimal: +mate()";
+        let model = parse_class_diagram(input).unwrap();
+        assert_eq!(model.classes.len(), 1);
+        assert_eq!(model.classes[0].members.len(), 3);
+    }
+
+    #[test]
+    fn parse_relation_before_class_body_preserves_members() {
+        let input = "classDiagram\nAnimal <|-- Dog\nclass Dog {\n  +bark()\n}";
+        let model = parse_class_diagram(input).unwrap();
+        let dog = model.classes.iter().find(|c| c.name == "Dog").unwrap();
+        assert_eq!(dog.members, vec!["+bark()"]);
+    }
+
+    #[test]
+    fn parse_inline_members_with_relations() {
+        let input = "\
+classDiagram
+    Animal <|-- Duck
+    Animal : +int age
+    class Duck{
+      +swim()
+    }";
+        let model = parse_class_diagram(input).unwrap();
+        let animal = model.classes.iter().find(|c| c.name == "Animal").unwrap();
+        assert_eq!(animal.members, vec!["+int age"]);
+        let duck = model.classes.iter().find(|c| c.name == "Duck").unwrap();
+        assert_eq!(duck.members, vec!["+swim()"]);
     }
 
     #[test]

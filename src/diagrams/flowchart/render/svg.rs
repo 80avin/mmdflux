@@ -973,17 +973,67 @@ fn render_nodes(
             text_y += offset - wave_amp / 2.0;
             text_x -= offset; // front doc is shifted left
         }
-        render_text_centered(
+        render_node_label(
             writer,
             text_x * scale,
             text_y * scale,
             &node.label,
+            &rect,
             metrics,
             scale,
         );
     }
 
     writer.end_group();
+}
+
+/// Render a node's label, converting `Node::SEPARATOR` lines into horizontal rules.
+fn render_node_label(
+    writer: &mut SvgWriter,
+    x: f64,
+    y: f64,
+    text: &str,
+    rect: &Rect,
+    metrics: &SvgTextMetrics,
+    scale: f64,
+) {
+    let lines: Vec<&str> = text.split('\n').collect();
+    let has_separator = lines.iter().any(|l| *l == Node::SEPARATOR);
+
+    if !has_separator {
+        render_text_centered(writer, x, y, text, metrics, scale);
+        return;
+    }
+
+    let line_height = metrics.line_height * scale;
+    let total_height = line_height * (lines.len().saturating_sub(1) as f64);
+    let start_y = y - total_height / 2.0;
+    let x1 = rect.x * scale;
+    let x2 = (rect.x + rect.width) * scale;
+
+    for (idx, line_text) in lines.iter().enumerate() {
+        let line_y = start_y + line_height * idx as f64;
+        if *line_text == Node::SEPARATOR {
+            let line = format!(
+                "<line x1=\"{x1}\" y1=\"{y}\" x2=\"{x2}\" y2=\"{y}\" stroke=\"{stroke}\" stroke-width=\"{sw}\" />",
+                x1 = fmt_f64(x1),
+                y = fmt_f64(line_y),
+                x2 = fmt_f64(x2),
+                stroke = STROKE_COLOR,
+                sw = fmt_f64(1.0 * scale),
+            );
+            writer.push_line(&line);
+        } else {
+            let line = format!(
+                "<text x=\"{x}\" y=\"{y}\" text-anchor=\"middle\" dominant-baseline=\"middle\" fill=\"{color}\">{text}</text>",
+                x = fmt_f64(x),
+                y = fmt_f64(line_y),
+                color = TEXT_COLOR,
+                text = escape_text(line_text)
+            );
+            writer.push_line(&line);
+        }
+    }
 }
 
 fn render_node_shape(

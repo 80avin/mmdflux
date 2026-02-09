@@ -20,12 +20,12 @@
     <g class="nodes">
       <rect x="8.00" y="256.00" width="159.67" height="126.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="87.83" y="283.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Session</text>
-      <text x="87.83" y="307.00" text-anchor="middle" dominant-baseline="middle" fill="#333">---</text>
+      <line x1="8.00" y1="307.00" x2="167.67" y2="307.00" stroke="#333" stroke-width="1.00" />
       <text x="87.83" y="331.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String token</text>
       <text x="87.83" y="355.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+isValid()</text>
       <rect x="8.37" y="8.00" width="158.92" height="174.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="87.83" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">User</text>
-      <text x="87.83" y="59.00" text-anchor="middle" dominant-baseline="middle" fill="#333">---</text>
+      <line x1="8.37" y1="59.00" x2="167.30" y2="59.00" stroke="#333" stroke-width="1.00" />
       <text x="87.83" y="83.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String name</text>
       <text x="87.83" y="107.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String email</text>
       <text x="87.83" y="131.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+login()</text>
