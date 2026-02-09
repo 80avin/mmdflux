@@ -220,15 +220,13 @@ mod single_node {
         }
     }
 
-    // Upstream supports numeric and quoted IDs; we only support letter/underscore start.
+    // Upstream supports numeric and quoted IDs; keep these as compatibility checks.
     #[test]
-    #[ignore = "numeric node IDs not supported (upstream: 1test)"]
     fn numeric_start_id() {
         let _fc = parse_flowchart("graph TD\n1test[Text]\n").unwrap();
     }
 
     #[test]
-    #[ignore = "quoted node text not supported (upstream: A[\"quoted text\"])"]
     fn quoted_node_text() {
         let _fc = parse_flowchart("graph TD\nA[\"quoted text\"]\n").unwrap();
     }
@@ -727,13 +725,11 @@ mod subgraphs {
 
     // Upstream supports numeric-start subgraph IDs and quoted titles without brackets.
     #[test]
-    #[ignore = "numeric-start subgraph IDs not supported (upstream: subgraph 1test)"]
     fn numeric_start_subgraph_id() {
         let _fc = parse_flowchart("graph TD\nsubgraph 1test\nA\nend\n").unwrap();
     }
 
     #[test]
-    #[ignore = "quoted subgraph title without brackets not supported"]
     fn quoted_subgraph_title() {
         let _fc = parse_flowchart("graph TB\nsubgraph \"Some Title\"\na1-->a2\nend\n").unwrap();
     }

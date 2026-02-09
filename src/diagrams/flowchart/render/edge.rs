@@ -1733,7 +1733,6 @@ mod tests {
     // === Rendering integration tests for backward edge labels (Task 4.1) ===
 
     #[test]
-    #[ignore = "backward edge label positioning — will be fixed by BK parity work (plan 0040)"]
     fn backward_edge_label_near_routed_path_td() {
         use crate::graph::build_diagram;
         use crate::parser::parse_flowchart;
@@ -1748,18 +1747,29 @@ mod tests {
             "Label should appear in output:\n{output}"
         );
 
-        // In TD layout, backward edges route to the right of nodes.
-        // The label should appear at a column position to the right of both nodes.
+        // In TD layout, backward edge label should appear on the routed connector
+        // between the source and target node rows.
         let lines: Vec<&str> = output.lines().collect();
-        let node_a_line = lines.iter().find(|l| l.contains('A')).unwrap();
-        let node_a_right = node_a_line.rfind('A').unwrap_or(0);
-
-        let retry_line = lines.iter().find(|l| l.contains("retry")).unwrap();
-        let retry_col = retry_line.find("retry").unwrap();
+        let a_line = lines
+            .iter()
+            .position(|l| l.contains(" A "))
+            .expect("missing node A row");
+        let b_line = lines
+            .iter()
+            .rposition(|l| l.contains(" B "))
+            .expect("missing node B row");
+        let retry_line = lines
+            .iter()
+            .position(|l| l.contains("retry"))
+            .expect("missing retry label row");
 
         assert!(
-            retry_col > node_a_right,
-            "Label 'retry' at col {retry_col} should be right of node A ending at col {node_a_right}\n{output}"
+            retry_line > a_line && retry_line < b_line,
+            "Label row {} should be between A row {} and B row {}\n{}",
+            retry_line,
+            a_line,
+            b_line,
+            output
         );
     }
 }

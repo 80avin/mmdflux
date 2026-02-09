@@ -112,7 +112,6 @@ fn info_trailing_whitespace_on_keyword_line() {
 }
 
 #[test]
-#[ignore = "upstream allows showInfo on same line as info keyword; grammar currently requires separate lines"]
 fn info_show_info_same_line() {
     // Upstream: `info showInfo`
     let result = parse_info("info showInfo\n");

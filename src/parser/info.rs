@@ -28,6 +28,7 @@ pub fn parse_info(input: &str) -> Result<Info, ParseError> {
         for inner in pair.into_inner() {
             match inner.as_rule() {
                 Rule::show_info => show_info = true,
+                Rule::info_with_show_info => show_info = true,
                 Rule::title_stmt => {
                     title = inner
                         .into_inner()
@@ -56,6 +57,12 @@ mod tests {
     #[test]
     fn test_parse_info_show_info() {
         let result = parse_info("info\nshowInfo\n").unwrap();
+        assert!(result.show_info);
+    }
+
+    #[test]
+    fn test_parse_info_show_info_same_line() {
+        let result = parse_info("info showInfo\n").unwrap();
         assert!(result.show_info);
     }
 

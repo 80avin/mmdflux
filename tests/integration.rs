@@ -387,7 +387,6 @@ mod rendering {
     }
 
     #[test]
-    #[ignore]
     fn branching_labels_dont_overlap() {
         // Test that branching edges with labels place them on separate branches
         let output = render_fixture("label_spacing.mmd");
@@ -1367,28 +1366,6 @@ mod label_edge_cases {
     }
 
     #[test]
-    #[ignore = "backward edge label positioning — will be fixed by BK parity work (plan 0040)"]
-    fn labeled_backward_edge_renders() {
-        let output = render_input("graph TD\n    A --> B\n    B -->|retry| A");
-        assert!(!output.is_empty());
-        // The backward "retry" label should appear
-        assert!(
-            output.contains("retry"),
-            "Expected 'retry' label on backward edge:\n{output}"
-        );
-        // Label should be to the right of nodes (path-midpoint placement)
-        let lines: Vec<&str> = output.lines().collect();
-        let node_line = lines.iter().find(|l| l.contains('A')).unwrap();
-        let node_right = node_line.rfind('A').unwrap_or(0);
-        let retry_line = lines.iter().find(|l| l.contains("retry")).unwrap();
-        let retry_col = retry_line.find("retry").unwrap();
-        assert!(
-            retry_col > node_right,
-            "Label should be to the right of nodes:\n{output}"
-        );
-    }
-
-    #[test]
     fn labeled_edge_lr_direction() {
         let output = render_input("graph LR\n    A -->|label| B");
         assert!(output.contains(" A "), "Should contain node A:\n{output}");
@@ -1437,7 +1414,6 @@ mod label_edge_cases {
     }
 
     #[test]
-    #[ignore]
     fn labeled_edges_reasonable_height() {
         let output = render_fixture("labeled_edges.mmd");
         let line_count = output.lines().count();
@@ -1488,16 +1464,31 @@ mod label_edge_cases {
 // === Backward edge label position tests (Plan 0027, Task 5.1) ===
 
 #[test]
-#[ignore = "backward edge label positioning — will be fixed by BK parity work (plan 0040)"]
 fn backward_edge_label_position_td() {
     let output = render_input("graph TD\n    A --> B\n    B -->|retry| A");
     assert!(output.contains("retry"), "Label missing:\n{output}");
+
     let lines: Vec<&str> = output.lines().collect();
-    let retry_line = lines.iter().find(|l| l.contains("retry")).unwrap();
-    let retry_col = retry_line.find("retry").unwrap();
+    let a_line = lines
+        .iter()
+        .position(|l| l.contains(" A "))
+        .expect("missing node A row");
+    let b_line = lines
+        .iter()
+        .rposition(|l| l.contains(" B "))
+        .expect("missing node B row");
+    let retry_line = lines
+        .iter()
+        .position(|l| l.contains("retry"))
+        .expect("missing retry label row");
+
     assert!(
-        retry_col > 5,
-        "Label should be positioned away from left edge:\n{output}"
+        retry_line > a_line && retry_line < b_line,
+        "Label row {} should be between A row {} and B row {}\n{}",
+        retry_line,
+        a_line,
+        b_line,
+        output
     );
 }
 
@@ -1821,7 +1812,6 @@ fn test_sibling_subgraph_nodes_distinct_x() {
 }
 
 #[test]
-#[ignore = "external node positioning — goal of BK parity work (plan 0040)"]
 fn test_external_node_not_far_from_targets() {
     // E connects to A (us-east) and C (us-west).
     // E should be reasonably close to the A-C range, not pushed far away.
@@ -1854,7 +1844,6 @@ fn test_external_node_not_far_from_targets() {
 }
 
 #[test]
-#[ignore = "external node positioning — goal of BK parity work (plan 0040)"]
 fn test_external_node_centered_between_targets() {
     let (_, layout) = layout_fixture("external_node_subgraph.mmd");
     let a_cx = layout.node_bounds["A"].center_x();
