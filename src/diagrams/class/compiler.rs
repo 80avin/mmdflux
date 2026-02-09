@@ -18,8 +18,9 @@ pub fn compile(model: &ClassModel) -> Diagram {
         let label = if class.members.is_empty() {
             class.name.clone()
         } else {
-            // Include members in the label, separated by newlines
-            let mut parts = vec![class.name.clone()];
+            // Include members in the label, separated by newlines.
+            // A separator marker between name and members renders as a horizontal rule.
+            let mut parts = vec![class.name.clone(), Node::SEPARATOR.to_string()];
             parts.extend(class.members.iter().cloned());
             parts.join("\n")
         };

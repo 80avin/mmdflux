@@ -5,6 +5,21 @@ use crate::render::canvas::Canvas;
 use crate::render::chars::CharSet;
 use crate::render::intersect::NodeFace;
 
+/// Split a label into lines, returning the lines and maximum content-line width.
+///
+/// Lines matching `Node::SEPARATOR` are excluded from the width calculation
+/// since they span the full box width regardless of content.
+fn label_lines(label: &str) -> (Vec<&str>, usize) {
+    let lines: Vec<&str> = label.split('\n').collect();
+    let max_width = lines
+        .iter()
+        .filter(|l| **l != Node::SEPARATOR)
+        .map(|l| l.chars().count())
+        .max()
+        .unwrap_or(0);
+    (lines, max_width)
+}
+
 /// Bounding box for a rendered node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodeBounds {
@@ -233,8 +248,8 @@ pub fn categorize_shape(shape: Shape) -> ShapeCategory {
 /// ForkJoin bars are perpendicular to the flow direction: horizontal for TD/BT,
 /// vertical for LR/RL. When rendered vertically, width and height are swapped.
 pub fn node_dimensions(node: &Node, direction: Direction) -> (usize, usize) {
-    let label_len = node.label.chars().count();
-    let (w, h) = (label_len + 4, 3);
+    let (lines, max_line_len) = label_lines(&node.label);
+    let (w, h) = (max_line_len + 4, lines.len() + 2);
 
     // ForkJoin bars without labels are rendered as bars perpendicular to flow.
     // In LR/RL, the bar is vertical so we swap dimensions.
@@ -406,12 +421,32 @@ fn render_box(
     }
     canvas.set(x + width - 1, y, tr);
 
-    // Middle row with label
-    let mid_y = y + height / 2;
-    canvas.set(x, mid_y, left_vertical);
-    let label_start = x + (width - label.chars().count()) / 2;
-    canvas.write_str(label_start, mid_y, label);
-    canvas.set(x + width - 1, mid_y, right_vertical);
+    // Content rows
+    let lines: Vec<&str> = label.split('\n').collect();
+    if lines.len() <= 1 {
+        // Single-line: centered
+        let mid_y = y + height / 2;
+        canvas.set(x, mid_y, left_vertical);
+        let label_start = x + (width - label.chars().count()) / 2;
+        canvas.write_str(label_start, mid_y, label);
+        canvas.set(x + width - 1, mid_y, right_vertical);
+    } else {
+        // Multi-line: left-aligned with padding, separator markers become hrules
+        for (i, line) in lines.iter().enumerate() {
+            let row_y = y + 1 + i;
+            if *line == Node::SEPARATOR {
+                canvas.set(x, row_y, charset.tee_right);
+                for dx in 1..width - 1 {
+                    canvas.set(x + dx, row_y, top_horizontal);
+                }
+                canvas.set(x + width - 1, row_y, charset.tee_left);
+            } else {
+                canvas.set(x, row_y, left_vertical);
+                canvas.write_str(x + 2, row_y, line);
+                canvas.set(x + width - 1, row_y, right_vertical);
+            }
+        }
+    };
 
     // Bottom border
     let bot_y = y + height - 1;

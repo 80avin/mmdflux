@@ -82,6 +82,10 @@ pub struct Node {
 }
 
 impl Node {
+    /// Separator marker for multi-line labels (e.g., between class name and members).
+    /// Rendered as a horizontal rule inside box shapes.
+    pub const SEPARATOR: &'static str = "---";
+
     /// Create a new node with just an ID (label defaults to ID, shape to Rectangle).
     pub fn new(id: impl Into<String>) -> Self {
         let id = id.into();

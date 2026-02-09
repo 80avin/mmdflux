@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 175.67 342.00" style="max-width: 175.67px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 175.67 390.00" style="max-width: 175.67px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
@@ -12,22 +12,24 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M87.83,158.00 L87.83,164.17 C87.83,170.33 87.83,182.67 87.83,194.33 C87.83,206.00 87.83,217.00 87.83,222.50 L87.83,228.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M87.83,182.00 L87.83,188.17 C87.83,194.33 87.83,206.67 87.83,218.33 C87.83,230.00 87.83,241.00 87.83,246.50 L87.83,252.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
-      <text x="87.83" y="195.00" text-anchor="middle" dominant-baseline="middle" fill="#333">creates</text>
+      <text x="87.83" y="219.00" text-anchor="middle" dominant-baseline="middle" fill="#333">creates</text>
     </g>
     <g class="nodes">
-      <rect x="8.00" y="232.00" width="159.67" height="102.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="87.83" y="259.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Session</text>
-      <text x="87.83" y="283.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String token</text>
-      <text x="87.83" y="307.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+isValid()</text>
-      <rect x="8.37" y="8.00" width="158.92" height="150.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <rect x="8.00" y="256.00" width="159.67" height="126.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="87.83" y="283.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Session</text>
+      <text x="87.83" y="307.00" text-anchor="middle" dominant-baseline="middle" fill="#333">---</text>
+      <text x="87.83" y="331.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String token</text>
+      <text x="87.83" y="355.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+isValid()</text>
+      <rect x="8.37" y="8.00" width="158.92" height="174.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="87.83" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">User</text>
-      <text x="87.83" y="59.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String name</text>
-      <text x="87.83" y="83.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String email</text>
-      <text x="87.83" y="107.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+login()</text>
-      <text x="87.83" y="131.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+logout()</text>
+      <text x="87.83" y="59.00" text-anchor="middle" dominant-baseline="middle" fill="#333">---</text>
+      <text x="87.83" y="83.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String name</text>
+      <text x="87.83" y="107.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+String email</text>
+      <text x="87.83" y="131.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+login()</text>
+      <text x="87.83" y="155.00" text-anchor="middle" dominant-baseline="middle" fill="#333">+logout()</text>
     </g>
   </g>
 </svg>
