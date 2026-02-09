@@ -1059,7 +1059,7 @@ fn render_node_label(
     scale: f64,
 ) {
     let lines: Vec<&str> = text.split('\n').collect();
-    let has_separator = lines.iter().any(|l| *l == Node::SEPARATOR);
+    let has_separator = lines.contains(&Node::SEPARATOR);
 
     if !has_separator {
         render_text_centered(writer, x, y, text, metrics, scale);

@@ -253,8 +253,7 @@ fn draw_edge_label_with_tracking(
     let check_edge = !on_h_seg;
     let (label_x, label_y) = find_safe_label_position(
         canvas,
-        base_x,
-        base_y,
+        (base_x, base_y),
         label_len,
         direction,
         placed_labels,
@@ -273,8 +272,7 @@ fn draw_edge_label_with_tracking(
         let alt_x = routed.end.x.saturating_sub(label_len / 2);
         find_safe_label_position(
             canvas,
-            alt_x,
-            alt_y,
+            (alt_x, alt_y),
             label_len,
             direction,
             placed_labels,
@@ -396,14 +394,14 @@ fn find_label_position_on_segment_with_side(
 /// label is expected to overwrite the jog line).
 fn find_safe_label_position(
     canvas: &Canvas,
-    base_x: usize,
-    base_y: usize,
+    base: (usize, usize),
     label_len: usize,
     direction: Direction,
     placed_labels: &[PlacedLabel],
     check_edge_collision: bool,
     charset: &CharSet,
 ) -> (usize, usize) {
+    let (base_x, base_y) = base;
     let has_collision = |x, y| {
         label_collides_with_node(canvas, x, y, label_len)
             || (check_edge_collision && label_collides_with_edge(canvas, x, y, label_len))
@@ -845,8 +843,7 @@ pub fn render_all_edges_with_labels(
                     let base_y = midpoint.y;
                     let (safe_x, safe_y) = find_safe_label_position(
                         canvas,
-                        base_x,
-                        base_y,
+                        (base_x, base_y),
                         label_len,
                         diagram_direction,
                         &placed_labels,
@@ -871,8 +868,7 @@ pub fn render_all_edges_with_labels(
                 let base_x = pre_x.saturating_sub(label_len / 2);
                 let (safe_x, safe_y) = find_safe_label_position(
                     canvas,
-                    base_x,
-                    pre_y,
+                    (base_x, pre_y),
                     label_len,
                     diagram_direction,
                     &placed_labels,
