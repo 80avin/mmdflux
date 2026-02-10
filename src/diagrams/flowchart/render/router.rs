@@ -486,15 +486,70 @@ fn route_edge_with_waypoints(
         add_connector_segment(&mut segments, src_attach, start);
     }
 
-    // Build orthogonal path through waypoints, ending with appropriate segment
-    segments.extend(build_orthogonal_path_with_waypoints(
-        start,
-        waypoints,
-        end,
-        direction,
-        src_first_vertical,
-        edge.arrow_start != Arrow::None,
-    ));
+    // When dagre's float-space waypoints collapse to ≤1 cell offset from the
+    // straight path on the discrete text grid, they produce stub artifacts
+    // (e.g. `├─`). Project them onto the straight path to eliminate the jog
+    // while preserving segment splits (important for label placement).
+    let vertical_first = matches!(direction, Direction::TopDown | Direction::BottomTop);
+    let trivial_waypoints = !is_backward
+        && ((vertical_first
+            && start.x == end.x
+            && waypoints.iter().all(|(x, _)| x.abs_diff(start.x) <= 1))
+            || (!vertical_first
+                && start.y == end.y
+                && waypoints.iter().all(|(_, y)| y.abs_diff(start.y) <= 1)));
+
+    if trivial_waypoints {
+        // Project waypoints onto the straight axis, preserving splits
+        let mut current = start;
+        if vertical_first {
+            for &(_, wp_y) in waypoints {
+                if wp_y != current.y {
+                    segments.push(Segment::Vertical {
+                        x: start.x,
+                        y_start: current.y,
+                        y_end: wp_y,
+                    });
+                    current = Point::new(start.x, wp_y);
+                }
+            }
+            if current.y != end.y {
+                segments.push(Segment::Vertical {
+                    x: start.x,
+                    y_start: current.y,
+                    y_end: end.y,
+                });
+            }
+        } else {
+            for &(wp_x, _) in waypoints {
+                if wp_x != current.x {
+                    segments.push(Segment::Horizontal {
+                        y: start.y,
+                        x_start: current.x,
+                        x_end: wp_x,
+                    });
+                    current = Point::new(wp_x, start.y);
+                }
+            }
+            if current.x != end.x {
+                segments.push(Segment::Horizontal {
+                    y: start.y,
+                    x_start: current.x,
+                    x_end: end.x,
+                });
+            }
+        }
+    } else {
+        // Build orthogonal path through waypoints
+        segments.extend(build_orthogonal_path_with_waypoints(
+            start,
+            waypoints,
+            end,
+            direction,
+            src_first_vertical,
+            edge.arrow_start != Arrow::None,
+        ));
+    }
 
     // Determine entry direction based on final segment orientation
     let entry_direction = entry_direction_from_segments(&segments);
