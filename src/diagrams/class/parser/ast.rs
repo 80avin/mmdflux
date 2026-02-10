@@ -9,6 +9,8 @@ pub struct ClassModel {
     pub relations: Vec<ClassRelation>,
     /// Optional Mermaid direction directive (`LR`, `RL`, `BT`, `TB`).
     pub direction: Option<String>,
+    /// Namespace declarations (inner-first close order).
+    pub namespaces: Vec<ClassNamespace>,
 }
 
 /// A class declaration.
@@ -18,10 +20,23 @@ pub struct ClassDecl {
     pub name: String,
     /// Optional Mermaid display label (`class Id["Display Label"]`).
     pub display_label: Option<String>,
+    /// Optional containing namespace ID.
+    pub namespace: Option<String>,
     /// Optional class annotations/stereotypes (without `<<`/`>>`).
     pub annotations: Vec<String>,
     /// Body members (fields and methods), if any.
     pub members: Vec<String>,
+}
+
+/// A parsed Mermaid namespace declaration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClassNamespace {
+    /// Internal namespace identifier (stable for compiler/subgraph wiring).
+    pub id: String,
+    /// Display namespace name.
+    pub name: String,
+    /// Parent namespace ID when nested.
+    pub parent: Option<String>,
 }
 
 /// A relationship between two classes.

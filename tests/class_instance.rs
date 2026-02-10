@@ -91,6 +91,39 @@ fn class_instance_inheritance_renders() {
 }
 
 #[test]
+fn lollipop_relations_render_all_participating_classes() {
+    let mut instance = ClassInstance::new();
+    let input = "classDiagram\nclass Class01 {\n  int amount\n  draw()\n}\nClass01 --() bar\nClass02 --() bar\nfoo ()-- Class01";
+    instance.parse(input).unwrap();
+    let output = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+
+    assert!(output.contains("Class02"));
+    assert!(output.contains("foo"));
+}
+
+#[test]
+fn namespace_blocks_render_namespace_titles() {
+    let mut instance = ClassInstance::new();
+    let input = "\
+classDiagram
+namespace BaseShapes {
+  class Triangle
+  class Rectangle
+}
+Triangle --> Rectangle";
+    instance.parse(input).unwrap();
+    let output = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+
+    assert!(output.contains("BaseShapes"));
+    assert!(output.contains("Triangle"));
+    assert!(output.contains("Rectangle"));
+}
+
+#[test]
 fn class_instance_via_registry() {
     let registry = mmdflux::registry::default_registry();
     let mut instance = registry.create("class").unwrap();

@@ -4,7 +4,7 @@
 //! preserving class diagram semantics through edge styles and arrows.
 
 use super::parser::ast::{ClassModel, ClassRelationType};
-use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
+use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke, Subgraph};
 
 /// Compile a `ClassModel` into a canonical `graph::Diagram`.
 ///
@@ -12,7 +12,7 @@ use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 /// rectangle node whose label includes member lines (if any). Relationships
 /// map to edges with style/arrow metadata based on their type.
 pub fn compile(model: &ClassModel) -> Diagram {
-    let mut diagram = Diagram::new(Direction::TopDown);
+    let mut diagram = Diagram::new(class_direction(model.direction.as_deref()));
 
     for class in &model.classes {
         let mut header: Vec<String> = class
@@ -48,14 +48,19 @@ pub fn compile(model: &ClassModel) -> Diagram {
         );
     }
 
+    apply_namespaces(model, &mut diagram);
+
     for rel in &model.relations {
-        let (stroke, arrow_start, arrow_end) = relation_style(rel.relation_type);
-        // When the operator points left (e.g. `<|--`), the marker belongs on
-        // the start (left/from) end instead of the default end position.
-        let (arrow_start, arrow_end) = if rel.marker_start {
-            (arrow_end, arrow_start)
+        let (stroke, marker_arrow) = relation_style(rel.relation_type);
+        let arrow_start = if rel.marker_start {
+            marker_arrow
         } else {
-            (arrow_start, arrow_end)
+            Arrow::None
+        };
+        let arrow_end = if rel.marker_end {
+            marker_arrow
+        } else {
+            Arrow::None
         };
         let mut edge = Edge::new(&rel.from, &rel.to)
             .with_stroke(stroke)
@@ -71,18 +76,65 @@ pub fn compile(model: &ClassModel) -> Diagram {
     diagram
 }
 
+fn class_direction(direction: Option<&str>) -> Direction {
+    match direction {
+        Some("LR") => Direction::LeftRight,
+        Some("RL") => Direction::RightLeft,
+        Some("BT") => Direction::BottomTop,
+        Some("TB") => Direction::TopDown,
+        _ => Direction::TopDown,
+    }
+}
+
+fn apply_namespaces(model: &ClassModel, diagram: &mut Diagram) {
+    for namespace in &model.namespaces {
+        diagram.subgraphs.insert(
+            namespace.id.clone(),
+            Subgraph {
+                id: namespace.id.clone(),
+                title: namespace.name.clone(),
+                nodes: Vec::new(),
+                parent: namespace.parent.clone(),
+                dir: None,
+            },
+        );
+        diagram.subgraph_order.push(namespace.id.clone());
+    }
+
+    for class in &model.classes {
+        let Some(namespace_id) = class.namespace.as_deref() else {
+            continue;
+        };
+
+        if let Some(node) = diagram.nodes.get_mut(&class.name) {
+            node.parent = Some(namespace_id.to_string());
+        }
+
+        let mut current_namespace = Some(namespace_id.to_string());
+        while let Some(ns_id) = current_namespace {
+            let Some(namespace) = diagram.subgraphs.get_mut(&ns_id) else {
+                break;
+            };
+            if !namespace.nodes.contains(&class.name) {
+                namespace.nodes.push(class.name.clone());
+            }
+            current_namespace = namespace.parent.clone();
+        }
+    }
+}
+
 /// Map a class relationship type to edge style.
-fn relation_style(rel: ClassRelationType) -> (Stroke, Arrow, Arrow) {
+fn relation_style(rel: ClassRelationType) -> (Stroke, Arrow) {
     match rel {
-        ClassRelationType::Association => (Stroke::Solid, Arrow::None, Arrow::None),
-        ClassRelationType::DirectedAssociation => (Stroke::Solid, Arrow::None, Arrow::Normal),
-        ClassRelationType::Inheritance => (Stroke::Solid, Arrow::None, Arrow::OpenTriangle),
-        ClassRelationType::Realization => (Stroke::Dotted, Arrow::None, Arrow::OpenTriangle),
-        ClassRelationType::Composition => (Stroke::Solid, Arrow::None, Arrow::Diamond),
-        ClassRelationType::Aggregation => (Stroke::Solid, Arrow::None, Arrow::OpenDiamond),
-        ClassRelationType::Dependency => (Stroke::Dotted, Arrow::None, Arrow::None),
-        ClassRelationType::DirectedDependency => (Stroke::Dotted, Arrow::None, Arrow::Normal),
-        ClassRelationType::Lollipop => (Stroke::Solid, Arrow::None, Arrow::None),
+        ClassRelationType::Association => (Stroke::Solid, Arrow::None),
+        ClassRelationType::DirectedAssociation => (Stroke::Solid, Arrow::Normal),
+        ClassRelationType::Inheritance => (Stroke::Solid, Arrow::OpenTriangle),
+        ClassRelationType::Realization => (Stroke::Dotted, Arrow::OpenTriangle),
+        ClassRelationType::Composition => (Stroke::Solid, Arrow::Diamond),
+        ClassRelationType::Aggregation => (Stroke::Solid, Arrow::OpenDiamond),
+        ClassRelationType::Dependency => (Stroke::Dotted, Arrow::None),
+        ClassRelationType::DirectedDependency => (Stroke::Dotted, Arrow::Normal),
+        ClassRelationType::Lollipop => (Stroke::Solid, Arrow::Circle),
     }
 }
 
@@ -127,6 +179,39 @@ mod tests {
     }
 
     #[test]
+    fn compiler_uses_lr_direction_from_model() {
+        let diagram = compile_class("classDiagram\ndirection LR\nA --> B");
+        assert_eq!(diagram.direction, Direction::LeftRight);
+    }
+
+    #[test]
+    fn compiler_uses_rl_direction_from_model() {
+        let diagram = compile_class("classDiagram\ndirection RL\nA --> B");
+        assert_eq!(diagram.direction, Direction::RightLeft);
+    }
+
+    #[test]
+    fn compiler_uses_bt_direction_from_model() {
+        let diagram = compile_class("classDiagram\ndirection BT\nA --> B");
+        assert_eq!(diagram.direction, Direction::BottomTop);
+    }
+
+    #[test]
+    fn compiler_uses_tb_direction_from_model() {
+        let diagram = compile_class("classDiagram\ndirection TB\nA --> B");
+        assert_eq!(diagram.direction, Direction::TopDown);
+    }
+
+    #[test]
+    fn compiler_falls_back_to_top_down_for_invalid_or_missing_direction() {
+        let invalid = compile_class("classDiagram\ndirection DIAGONAL\nA --> B");
+        assert_eq!(invalid.direction, Direction::TopDown);
+
+        let missing = compile_class("classDiagram\nA --> B");
+        assert_eq!(missing.direction, Direction::TopDown);
+    }
+
+    #[test]
     fn compiler_node_shape_is_rectangle() {
         let diagram = compile_class("classDiagram\nclass User");
         assert_eq!(diagram.nodes["User"].shape, Shape::Rectangle);
@@ -149,6 +234,67 @@ mod tests {
     fn compiler_dependency_edge_is_dotted() {
         let diagram = compile_class("classDiagram\nA ..> B");
         assert_eq!(diagram.edges[0].stroke, Stroke::Dotted);
+    }
+
+    #[test]
+    fn compiler_lollipop_edge_uses_circle_marker_at_end() {
+        let diagram = compile_class("classDiagram\nClass01 --() bar");
+        assert_eq!(diagram.edges[0].arrow_end, Arrow::Circle);
+        assert_eq!(diagram.edges[0].arrow_start, Arrow::None);
+    }
+
+    #[test]
+    fn compiler_lollipop_edge_uses_circle_marker_at_start() {
+        let diagram = compile_class("classDiagram\nfoo ()-- Class01");
+        assert_eq!(diagram.edges[0].arrow_start, Arrow::Circle);
+        assert_eq!(diagram.edges[0].arrow_end, Arrow::None);
+    }
+
+    #[test]
+    fn compiler_namespace_creates_subgraph_and_assigns_node_parent() {
+        let input = "\
+classDiagram
+namespace BaseShapes {
+  class Triangle
+  class Rectangle
+}";
+        let diagram = compile_class(input);
+
+        assert!(diagram.subgraphs.contains_key("namespace:BaseShapes"));
+        let namespace = &diagram.subgraphs["namespace:BaseShapes"];
+        assert_eq!(namespace.title, "BaseShapes");
+        assert!(namespace.nodes.contains(&"Triangle".to_string()));
+        assert!(namespace.nodes.contains(&"Rectangle".to_string()));
+        assert_eq!(
+            diagram.nodes["Triangle"].parent.as_deref(),
+            Some("namespace:BaseShapes")
+        );
+    }
+
+    #[test]
+    fn compiler_cross_namespace_relation_keeps_endpoints() {
+        let input = "\
+classDiagram
+namespace A {
+  class Source
+}
+namespace B {
+  class Target
+}
+Source --> Target";
+        let diagram = compile_class(input);
+
+        assert_eq!(diagram.edges.len(), 1);
+        assert_eq!(diagram.edges[0].from, "Source");
+        assert_eq!(diagram.edges[0].to, "Target");
+        assert_eq!(
+            diagram.nodes["Source"].parent.as_deref(),
+            Some("namespace:A")
+        );
+        assert_eq!(
+            diagram.nodes["Target"].parent.as_deref(),
+            Some("namespace:B")
+        );
     }
 
     #[test]

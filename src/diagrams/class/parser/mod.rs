@@ -6,7 +6,7 @@
 
 pub mod ast;
 
-use ast::{ClassDecl, ClassModel, ClassRelation, ClassRelationType};
+use ast::{ClassDecl, ClassModel, ClassNamespace, ClassRelation, ClassRelationType};
 
 /// Ensure a class exists in the classes list, merging metadata if it already does.
 ///
@@ -17,12 +17,16 @@ fn ensure_class(
     class_index: &mut std::collections::HashMap<String, usize>,
     name: String,
     display_label: Option<String>,
+    namespace: Option<String>,
     annotations: Vec<String>,
     members: Vec<String>,
 ) {
     if let Some(&idx) = class_index.get(&name) {
         if display_label.is_some() {
             classes[idx].display_label = display_label;
+        }
+        if namespace.is_some() && classes[idx].namespace.is_none() {
+            classes[idx].namespace = namespace;
         }
         classes[idx].annotations.extend(annotations);
         classes[idx].members.extend(members);
@@ -31,9 +35,24 @@ fn ensure_class(
         classes.push(ClassDecl {
             name,
             display_label,
+            namespace,
             annotations,
             members,
         });
+    }
+}
+
+#[derive(Debug, Clone)]
+struct OpenNamespace {
+    id: String,
+    name: String,
+    parent: Option<String>,
+}
+
+fn namespace_id(parent: Option<&str>, name: &str) -> String {
+    match parent {
+        Some(parent) => format!("{parent}/{name}"),
+        None => format!("namespace:{name}"),
     }
 }
 
@@ -46,6 +65,8 @@ pub fn parse_class_diagram(
     let mut classes: Vec<ClassDecl> = Vec::new();
     let mut relations: Vec<ClassRelation> = Vec::new();
     let mut direction: Option<String> = None;
+    let mut namespaces: Vec<ClassNamespace> = Vec::new();
+    let mut namespace_stack: Vec<OpenNamespace> = Vec::new();
     let mut class_index: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
 
@@ -86,6 +107,7 @@ pub fn parse_class_diagram(
     // Parse body lines
     let mut in_class_body: Option<String> = None;
     let mut current_display_label: Option<String> = None;
+    let mut current_namespace: Option<String> = None;
     let mut current_annotations: Vec<String> = Vec::new();
     let mut current_members: Vec<String> = Vec::new();
 
@@ -97,7 +119,7 @@ pub fn parse_class_diagram(
             continue;
         }
 
-        // Handle class body close
+        // Handle class body / namespace close.
         if trimmed == "}" {
             if let Some(class_name) = in_class_body.take() {
                 ensure_class(
@@ -105,9 +127,16 @@ pub fn parse_class_diagram(
                     &mut class_index,
                     class_name,
                     std::mem::take(&mut current_display_label),
+                    std::mem::take(&mut current_namespace),
                     std::mem::take(&mut current_annotations),
                     std::mem::take(&mut current_members),
                 );
+            } else if let Some(open_namespace) = namespace_stack.pop() {
+                namespaces.push(ClassNamespace {
+                    id: open_namespace.id,
+                    name: open_namespace.name,
+                    parent: open_namespace.parent,
+                });
             }
             continue;
         }
@@ -132,6 +161,21 @@ pub fn parse_class_diagram(
             continue;
         }
 
+        // Try: `namespace Name {`
+        if let Some(rest) = strip_keyword(trimmed, "namespace")
+            && let Some(name_raw) = rest.trim().strip_suffix('{')
+        {
+            let name_raw = name_raw.trim();
+            if let Some((name, consumed)) = parse_class_name_token(name_raw)
+                && consumed == name_raw.len()
+            {
+                let parent = namespace_stack.last().map(|ns| ns.id.clone());
+                let id = namespace_id(parent.as_deref(), &name);
+                namespace_stack.push(OpenNamespace { id, name, parent });
+            }
+            continue;
+        }
+
         // Try: `class ClassName {`  (body start)
         if let Some(rest) = strip_keyword(trimmed, "class") {
             let rest = rest.trim();
@@ -142,6 +186,7 @@ pub fn parse_class_diagram(
                 }
                 in_class_body = Some(name);
                 current_display_label = display_label;
+                current_namespace = namespace_stack.last().map(|ns| ns.id.clone());
                 current_annotations = annotations;
                 current_members.clear();
                 continue;
@@ -158,6 +203,7 @@ pub fn parse_class_diagram(
                     &mut class_index,
                     name,
                     display_label,
+                    namespace_stack.last().map(|ns| ns.id.clone()),
                     annotations,
                     Vec::new(),
                 );
@@ -172,6 +218,7 @@ pub fn parse_class_diagram(
                 &mut class_index,
                 class_name,
                 None,
+                namespace_stack.last().map(|ns| ns.id.clone()),
                 vec![annotation],
                 Vec::new(),
             );
@@ -187,6 +234,7 @@ pub fn parse_class_diagram(
                     &mut class_index,
                     name.clone(),
                     None,
+                    namespace_stack.last().map(|ns| ns.id.clone()),
                     Vec::new(),
                     Vec::new(),
                 );
@@ -209,6 +257,7 @@ pub fn parse_class_diagram(
                     &mut class_index,
                     class_name,
                     None,
+                    namespace_stack.last().map(|ns| ns.id.clone()),
                     Vec::new(),
                     vec![member.to_string()],
                 );
@@ -226,15 +275,25 @@ pub fn parse_class_diagram(
             &mut class_index,
             class_name,
             std::mem::take(&mut current_display_label),
+            std::mem::take(&mut current_namespace),
             std::mem::take(&mut current_annotations),
             std::mem::take(&mut current_members),
         );
+    }
+
+    while let Some(open_namespace) = namespace_stack.pop() {
+        namespaces.push(ClassNamespace {
+            id: open_namespace.id,
+            name: open_namespace.name,
+            parent: open_namespace.parent,
+        });
     }
 
     Ok(ClassModel {
         classes,
         relations,
         direction,
+        namespaces,
     })
 }
 
@@ -802,6 +861,32 @@ mod tests {
     fn parse_class_direction_ignores_invalid_values() {
         let model = parse_class_diagram("classDiagram\ndirection DIAGONAL\nA --> B").unwrap();
         assert!(model.direction.is_none());
+    }
+
+    #[test]
+    fn parse_namespace_with_nested_classes() {
+        let input = "\
+classDiagram
+namespace BaseShapes {
+  class Triangle
+  namespace Primitives {
+    class Rectangle
+  }
+}";
+        let model = parse_class_diagram(input).unwrap();
+
+        assert!(model.namespaces.iter().any(|ns| ns.name == "BaseShapes"));
+        assert!(model.namespaces.iter().any(|ns| ns.name == "Primitives"));
+
+        let triangle = model.classes.iter().find(|c| c.name == "Triangle").unwrap();
+        assert!(triangle.namespace.is_some());
+
+        let rectangle = model
+            .classes
+            .iter()
+            .find(|c| c.name == "Rectangle")
+            .unwrap();
+        assert!(rectangle.namespace.is_some());
     }
 
     #[test]
