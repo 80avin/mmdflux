@@ -261,8 +261,12 @@ function installDomGlobalsForMermaid(): () => void {
   );
   defineGlobal("location", window.location);
 
-  if (!window.SVGElement.prototype.getBBox) {
-    Object.defineProperty(window.SVGElement.prototype, "getBBox", {
+  const svgElementPrototype = window.SVGElement.prototype as SVGElement & {
+    getBBox?: () => { x: number; y: number; width: number; height: number };
+  };
+
+  if (!svgElementPrototype.getBBox) {
+    Object.defineProperty(svgElementPrototype, "getBBox", {
       configurable: true,
       value() {
         const text = (this.textContent ?? "").trim();
