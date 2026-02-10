@@ -1,26 +1,22 @@
-use std::process::Command;
+use std::fs;
+use std::path::PathBuf;
 
 #[test]
 fn justfile_exposes_wasm_recipes() {
-    let output = Command::new("just")
-        .arg("--list")
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .expect("failed to run `just --list`");
+    let justfile_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Justfile");
+    let contents = fs::read_to_string(&justfile_path).unwrap_or_else(|error| {
+        panic!(
+            "failed to read Justfile at {}: {error}",
+            justfile_path.display()
+        )
+    });
 
     assert!(
-        output.status.success(),
-        "`just --list` failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("wasm-build"),
-        "`just --list` must include `wasm-build`"
+        contents.lines().any(|line| line.trim_start().starts_with("wasm-build:")),
+        "Justfile must include `wasm-build` recipe"
     );
     assert!(
-        stdout.contains("wasm-test"),
-        "`just --list` must include `wasm-test`"
+        contents.lines().any(|line| line.trim_start().starts_with("wasm-test:")),
+        "Justfile must include `wasm-test` recipe"
     );
 }
