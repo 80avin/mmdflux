@@ -1482,6 +1482,33 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_node_quoted_rect_text_allows_closing_bracket_inside() {
+        let result =
+            parse_flowchart("graph TD\nA[\"addSubGraph(nodes[], id, title)\"]\n").unwrap();
+        let vertices = result.vertices();
+        assert_eq!(
+            vertices[0].shape,
+            Some(ShapeSpec::Rectangle(
+                "addSubGraph(nodes[], id, title)".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_parse_edge_target_quoted_rect_text_allows_closing_bracket_inside() {
+        let input = "graph TD\nDBMethods --> addSubGraph[\"addSubGraph(nodes[], id, title)\"]\n";
+        let result = parse_flowchart(input).unwrap();
+        let edges = result.edges();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(
+            edges[0].to.shape,
+            Some(ShapeSpec::Rectangle(
+                "addSubGraph(nodes[], id, title)".to_string()
+            ))
+        );
+    }
+
+    #[test]
     fn test_parse_node_round_quoted_text_strips_quotes() {
         let result = parse_flowchart("graph TD\nA(\"Rounded\")\n").unwrap();
         let vertices = result.vertices();

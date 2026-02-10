@@ -34,7 +34,9 @@ identifier = @{
 }
 
 // Text content inside shapes (any chars except shape delimiters)
-text_rect = @{ (!"]" ~ ANY)+ }
+// Rectangle labels can include `]` when that text is wrapped in quotes.
+quoted_text_chunk = { "\"" ~ ("\\\"" | !("\"") ~ ANY)* ~ "\"" }
+text_rect = @{ (quoted_text_chunk | (!"]" ~ ANY))+ }
 text_round = @{ (!")" ~ ANY)+ }
 text_diamond = @{ (!"}" ~ ANY)+ }
 text_stadium = @{ (!"])" ~ ANY)+ }

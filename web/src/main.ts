@@ -6,7 +6,10 @@ import {
   findExampleById,
   PLAYGROUND_EXAMPLES
 } from "./examples";
-import { createLiveUpdateController } from "./live-update";
+import {
+  createLiveUpdateController,
+  type LiveUpdateDebounceSetting
+} from "./live-update";
 import { createPreviewController } from "./preview";
 import { decodeShareState, encodeShareState } from "./share";
 import { createThemeController, type ThemePreference } from "./theme";
@@ -52,8 +55,22 @@ const PLAYGROUND_STATE_STORAGE_KEY = "mmdflux-playground-state";
 
 export interface RenderAppOptions {
   renderClientFactory?: () => RenderWorkerClient | null;
-  debounceMs?: number;
+  debounceMs?: LiveUpdateDebounceSetting;
   stateStorage?: StateStorage;
+}
+
+function defaultAdaptiveDebounce(requestInput: string): number {
+  const length = requestInput.length;
+  if (length <= 2_500) {
+    return 0;
+  }
+  if (length <= 8_000) {
+    return 40;
+  }
+  if (length <= 16_000) {
+    return 80;
+  }
+  return 120;
 }
 
 function resolveStateStorage(explicitStorage?: StateStorage): StateStorage | undefined {
@@ -376,7 +393,9 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
   }
 
   const liveUpdate = createLiveUpdateController({
-    debounceMs: options.debounceMs ?? 0,
+    debounceMs:
+      options.debounceMs ??
+      ((request) => defaultAdaptiveDebounce(request.input)),
     render: (request) => workerClient.render(request),
     onResult: (response) => {
       preview.showResult({

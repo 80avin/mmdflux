@@ -16,8 +16,12 @@ export interface LiveUpdateRenderResult {
   output: string;
 }
 
+export type LiveUpdateDebounceSetting =
+  | number
+  | ((request: LiveUpdateRequest) => number);
+
 interface LiveUpdateControllerOptions {
-  debounceMs?: number;
+  debounceMs?: LiveUpdateDebounceSetting;
   render: (request: LiveUpdateRenderRequest) => Promise<LiveUpdateRenderResult>;
   onResult: (result: LiveUpdateRenderResult) => void;
   onError: (message: string) => void;
@@ -32,10 +36,22 @@ function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function normalizeDelay(delay: number): number {
+  if (!Number.isFinite(delay)) {
+    return 0;
+  }
+
+  if (delay < 0) {
+    return 0;
+  }
+
+  return Math.floor(delay);
+}
+
 export function createLiveUpdateController(
   options: LiveUpdateControllerOptions
 ): LiveUpdateController {
-  const debounceMs = options.debounceMs ?? 200;
+  const debounceSetting = options.debounceMs ?? 200;
   let nextSeq = 0;
   let latestScheduled: LiveUpdateRequest | null = null;
   let latestSeq = 0;
@@ -69,9 +85,20 @@ export function createLiveUpdateController(
   return {
     schedule: (request: LiveUpdateRequest) => {
       latestScheduled = request;
+      const debounceMs = normalizeDelay(
+        typeof debounceSetting === "function"
+          ? debounceSetting(request)
+          : debounceSetting
+      );
 
       if (timeoutHandle !== null) {
         clearTimeout(timeoutHandle);
+      }
+
+      if (debounceMs === 0) {
+        timeoutHandle = null;
+        triggerRender(request);
+        return;
       }
 
       timeoutHandle = setTimeout(() => {

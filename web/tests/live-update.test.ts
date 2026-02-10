@@ -22,6 +22,45 @@ describe("createLiveUpdateController", () => {
     vi.useRealTimers();
   });
 
+  it("supports adaptive debounce via a request-aware callback", async () => {
+    vi.useFakeTimers();
+
+    const render = vi.fn(async (request) => ({
+      seq: request.seq,
+      format: request.format,
+      output: request.input
+    }));
+
+    const controller = createLiveUpdateController({
+      debounceMs: (request) => (request.input.length < 20 ? 0 : 75),
+      render,
+      onResult: vi.fn(),
+      onError: vi.fn()
+    });
+
+    controller.schedule({
+      input: "graph TD\nA-->B",
+      format: "text",
+      configJson: "{}"
+    });
+    expect(render).toHaveBeenCalledTimes(1);
+    render.mockClear();
+
+    controller.schedule({
+      input: "graph TD\nA-->B\nB-->C\nC-->D\nD-->E",
+      format: "text",
+      configJson: "{}"
+    });
+    expect(render).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(74);
+    expect(render).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(1);
+    await Promise.resolve();
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
   it("debounces rapid edits and sends only latest render request", async () => {
     vi.useFakeTimers();
 
