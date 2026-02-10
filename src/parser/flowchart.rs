@@ -1483,8 +1483,7 @@ mod tests {
 
     #[test]
     fn test_parse_node_quoted_rect_text_allows_closing_bracket_inside() {
-        let result =
-            parse_flowchart("graph TD\nA[\"addSubGraph(nodes[], id, title)\"]\n").unwrap();
+        let result = parse_flowchart("graph TD\nA[\"addSubGraph(nodes[], id, title)\"]\n").unwrap();
         let vertices = result.vertices();
         assert_eq!(
             vertices[0].shape,
