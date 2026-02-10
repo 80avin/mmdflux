@@ -1,9 +1,9 @@
 # mmdflux gallery
 
-_Generated from commit `ac02796` — 77 fixtures_
+_Generated from commit `cab12d0` — 78 fixtures_
 
 - [Flowchart](#flowchart) (71)
-- [Class](#class) (6)
+- [Class](#class) (7)
 
 # Flowchart
 
@@ -3711,9 +3711,9 @@ classDiagram
 
 ```text
                          ┌────────────────┐
-                         │ Animal         │
+                         │     Animal     │
                          ├────────────────┤
-                         │ +int age       │
+                         │    +int age    │
                          │ +String gender │
                          ├────────────────┤
                          │ +isMammal()    │
@@ -3723,8 +3723,8 @@ classDiagram
           ┌───────────────┘      └┐      └──────────────┐
           │                       │                     │
 ┌───────────────────┐             │                     │
-│ Duck              │    ┌─────────────────┐    ┌───────────────┐
-├───────────────────┤    │ Fish            │    │ Zebra         │
+│       Duck        │    ┌─────────────────┐    ┌───────────────┐
+├───────────────────┤    │      Fish       │    │     Zebra     │
 │ +String beakColor │    ├─────────────────┤    ├───────────────┤
 ├───────────────────┤    │ -int sizeInFeet │    │ +bool is_wild │
 │ +swim()           │    ├─────────────────┤    ├───────────────┤
@@ -3817,6 +3817,54 @@ classDiagram
 
 </details>
 
+## interface_realization
+
+`tests/fixtures/class/interface_realization.mmd`
+
+**Text**
+
+```text
+          ┌───────────────┐
+          │ <<interface>> │
+          │    Logger     │
+          ├───────────────┤
+          ├───────────────┤
+          │ +log(message) │
+          └───────────────┘
+           △             △
+        ┌┄┄┘             └┄┐
+        ┆                  ┆
+        ┆                  ┆
+┌───────────────┐    ┌────────────┐
+│ ConsoleLogger │    │ FileLogger │
+└───────────────┘    └────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![interface_realization svg](../tests/svg-snapshots/class/interface_realization.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+classDiagram
+class Logger {
+  <<interface>>
+  +log(message)
+}
+class ConsoleLogger
+class FileLogger
+Logger <|.. ConsoleLogger
+Logger <|.. FileLogger
+
+```
+
+</details>
+
 ## members
 
 `tests/fixtures/class/members.mmd`
@@ -3825,7 +3873,7 @@ classDiagram
 
 ```text
 ┌───────────────┐
-│ User          │
+│     User      │
 ├───────────────┤
 │ +String name  │
 │ +String email │
@@ -3838,7 +3886,7 @@ classDiagram
      creates
         ▼
 ┌───────────────┐
-│ Session       │
+│    Session    │
 ├───────────────┤
 │ +String token │
 ├───────────────┤
