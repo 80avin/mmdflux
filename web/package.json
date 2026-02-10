@@ -7,7 +7,8 @@
     "wasm:build": "wasm-pack build ../crates/mmdflux-wasm --target web --dev --out-dir ../../web/src/wasm-pkg",
     "dev": "npm run wasm:build && vite",
     "build": "npm run wasm:build && tsc --noEmit && vite build",
-    "test": "npm run wasm:build && vitest run"
+    "test": "npm run wasm:build && vitest run",
+    "benchmark:smoke": "npm run wasm:build && node --experimental-strip-types scripts/benchmark-smoke.ts"
   },
   "devDependencies": {
     "@types/node": "^24.3.1",

@@ -20,6 +20,12 @@ on:
       - "Justfile"
       - ".github/workflows/playground-ci.yml"
   workflow_dispatch:
+    inputs:
+      run_benchmark_smoke:
+        description: "Run optional benchmark smoke checks"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -63,3 +69,8 @@ jobs:
       - name: Build playground
         working-directory: web
         run: npm run build
+
+      - name: Run benchmark smoke checks (optional)
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_benchmark_smoke == 'true' }}
+        working-directory: web
+        run: npm run benchmark:smoke
