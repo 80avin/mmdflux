@@ -10,6 +10,17 @@ use crate::diagram::{
 };
 use crate::graph::Diagram;
 
+fn text_edge_label_dimensions(label: &str) -> (f64, f64) {
+    let lines: Vec<&str> = label.split('\n').collect();
+    let width = lines
+        .iter()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
+    let height = lines.len().max(1);
+    (width as f64 + 2.0, height as f64)
+}
+
 /// Dagre (Sugiyama) layout engine.
 ///
 /// Wraps the existing dagre layout pipeline behind the `GraphLayoutEngine` trait.
@@ -53,7 +64,7 @@ impl GraphLayoutEngine for DagreLayoutEngine {
             |edge| {
                 edge.label
                     .as_ref()
-                    .map(|label| (label.len() as f64 + 2.0, 1.0))
+                    .map(|label| text_edge_label_dimensions(label))
             },
         );
 

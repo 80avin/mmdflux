@@ -227,8 +227,66 @@ fn normalize_shape_label(id: &str, shape_spec: &ShapeSpec, shape: Shape) -> Stri
     {
         id.to_string()
     } else {
-        text.to_string()
+        normalize_br_tags(text)
     }
+}
+
+/// Replace HTML `<br>` tag variants with newline characters.
+///
+/// Handles `<br>`, `<br/>`, `<br />`, and case-insensitive variants,
+/// matching the Mermaid convention for line breaks in labels.
+fn normalize_br_tags(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    let mut result = String::with_capacity(len);
+    let mut i = 0;
+
+    while i < len {
+        if bytes[i] == b'<' {
+            // Try to match <br>, <br/>, <br />, etc.
+            let start = i;
+            i += 1;
+            // Skip optional whitespace after <
+            while i < len && bytes[i] == b' ' {
+                i += 1;
+            }
+            // Match 'b'/'B'
+            if i < len && bytes[i].eq_ignore_ascii_case(&b'b') {
+                i += 1;
+                // Match 'r'/'R'
+                if i < len && bytes[i].eq_ignore_ascii_case(&b'r') {
+                    i += 1;
+                    // Skip optional whitespace
+                    while i < len && bytes[i] == b' ' {
+                        i += 1;
+                    }
+                    // Skip optional '/'
+                    if i < len && bytes[i] == b'/' {
+                        i += 1;
+                    }
+                    // Skip optional whitespace
+                    while i < len && bytes[i] == b' ' {
+                        i += 1;
+                    }
+                    // Match '>'
+                    if i < len && bytes[i] == b'>' {
+                        i += 1;
+                        result.push('\n');
+                        continue;
+                    }
+                }
+            }
+            // Not a <br> tag — emit the characters we skipped
+            for &b in &bytes[start..i] {
+                result.push(b as char);
+            }
+        } else {
+            result.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+
+    result
 }
 
 fn convert_shape(shape_spec: &ShapeSpec) -> Shape {
@@ -305,7 +363,12 @@ fn convert_connector(connector: &ConnectorSpec) -> (Stroke, Arrow, Arrow, Option
     let arrow_start = map_arrow_head(connector.left);
     let arrow_end = map_arrow_head(connector.right);
 
-    (stroke, arrow_start, arrow_end, connector.label.clone())
+    (
+        stroke,
+        arrow_start,
+        arrow_end,
+        connector.label.as_deref().map(normalize_br_tags),
+    )
 }
 
 fn map_arrow_head(head: ArrowHead) -> Arrow {
@@ -677,5 +740,73 @@ mod tests {
         let node_j = diagram.get_node("J").unwrap();
         assert_eq!(node_j.shape, Shape::SmallCircle);
         assert_eq!(node_j.label, "");
+    }
+
+    // === normalize_br_tags tests ===
+
+    #[test]
+    fn test_br_tag_lowercase() {
+        assert_eq!(normalize_br_tags("hello<br>world"), "hello\nworld");
+    }
+
+    #[test]
+    fn test_br_tag_uppercase() {
+        assert_eq!(normalize_br_tags("hello<BR>world"), "hello\nworld");
+    }
+
+    #[test]
+    fn test_br_tag_self_closing() {
+        assert_eq!(normalize_br_tags("hello<br/>world"), "hello\nworld");
+    }
+
+    #[test]
+    fn test_br_tag_self_closing_with_space() {
+        assert_eq!(normalize_br_tags("hello<br />world"), "hello\nworld");
+    }
+
+    #[test]
+    fn test_br_tag_mixed_case() {
+        assert_eq!(normalize_br_tags("hello<Br>world"), "hello\nworld");
+        assert_eq!(normalize_br_tags("hello<bR/>world"), "hello\nworld");
+    }
+
+    #[test]
+    fn test_br_tag_multiple() {
+        assert_eq!(normalize_br_tags("a<br>b<br/>c<BR />d"), "a\nb\nc\nd");
+    }
+
+    #[test]
+    fn test_br_tag_no_tags() {
+        assert_eq!(normalize_br_tags("hello world"), "hello world");
+    }
+
+    #[test]
+    fn test_br_tag_empty_string() {
+        assert_eq!(normalize_br_tags(""), "");
+    }
+
+    #[test]
+    fn test_br_tag_non_br_html_preserved() {
+        assert_eq!(normalize_br_tags("a<b>bold</b>c"), "a<b>bold</b>c");
+    }
+
+    #[test]
+    fn test_br_tag_incomplete_tag_preserved() {
+        assert_eq!(normalize_br_tags("a<br"), "a<br");
+    }
+
+    #[test]
+    fn test_node_label_with_br_tag() {
+        let flowchart = parse_flowchart("graph TD\nA[Hello<br>World]\n").unwrap();
+        let diagram = build_diagram(&flowchart);
+        let node = diagram.get_node("A").unwrap();
+        assert_eq!(node.label, "Hello\nWorld");
+    }
+
+    #[test]
+    fn test_edge_label_with_br_tag() {
+        let flowchart = parse_flowchart("graph TD\nA -->|yes<br>no| B\n").unwrap();
+        let diagram = build_diagram(&flowchart);
+        assert_eq!(diagram.edges[0].label, Some("yes\nno".to_string()));
     }
 }
