@@ -10,14 +10,6 @@ on:
         description: "Tag to release (for example v1.0.1)"
         required: true
         type: string
-      publish_auth:
-        description: "npm publish auth mode (token for initial bootstrap publish)"
-        required: false
-        default: trusted
-        type: choice
-        options:
-          - trusted
-          - token
 
 permissions:
   contents: read
@@ -53,17 +45,6 @@ jobs:
           fi
           TAG_VERSION="${TAG#v}"
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            AUTH_MODE="${{ github.event.inputs.publish_auth }}"
-          else
-            AUTH_MODE="trusted"
-          fi
-
-          if [[ "$AUTH_MODE" != "trusted" && "$AUTH_MODE" != "token" ]]; then
-            echo "Unsupported publish_auth value: $AUTH_MODE" >&2
-            exit 1
-          fi
-
           ROOT_VERSION="$(sed -n 's/^version = \"\\(.*\\)\"$/\\1/p' Cargo.toml | head -n1)"
           WASM_VERSION="$(sed -n 's/^version = \"\\(.*\\)\"$/\\1/p' crates/mmdflux-wasm/Cargo.toml | head -n1)"
 
@@ -84,7 +65,6 @@ jobs:
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$WASM_VERSION" >> "$GITHUB_OUTPUT"
-          echo "auth_mode=$AUTH_MODE" >> "$GITHUB_OUTPUT"
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -123,20 +103,5 @@ jobs:
           npm pkg get name version
 
       - name: Publish to npm (trusted publisher)
-        if: ${{ steps.meta.outputs.auth_mode == 'trusted' }}
         working-directory: target/wasm-pkg-release
         run: npm publish --access=public --provenance
-
-      - name: Publish to npm (token bootstrap)
-        if: ${{ steps.meta.outputs.auth_mode == 'token' }}
-        working-directory: target/wasm-pkg-release
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -z "${NODE_AUTH_TOKEN:-}" ]]; then
-            echo "NPM_TOKEN secret is required when publish_auth=token" >&2
-            exit 1
-          fi
-          npm publish --access=public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -46,12 +46,10 @@ Required repository setup:
 - Preferred (steady state): configure npm trusted publishing for
   `@mmds/wasm` in npm package settings, linked to this GitHub repository
   workflow (`.github/workflows/wasm-release.yml`).
-- Bootstrap (first publish, before package settings exist): set `NPM_TOKEN`
-  with publish rights to `@mmds` and run `workflow_dispatch` with
-  `publish_auth=token`.
-- After first publish succeeds: configure trusted publisher in npm settings,
-  then run releases with `publish_auth=trusted` (or tag pushes, which default
-  to trusted mode).
+- Bootstrap (first publish, before package settings exist): publish once
+  manually from a maintainer machine.
+- After first publish succeeds: configure trusted publisher in npm settings.
+- CI publishing is trusted-publisher only and does not use `NPM_TOKEN`.
 
 Local preflight before tagging:
 
