@@ -1,6 +1,6 @@
 # mmdflux gallery
 
-_Generated from commit `a7ac299` — 76 fixtures_
+_Generated from commit `629731f` — 76 fixtures_
 
 - [Flowchart](#flowchart) (70)
 - [Class](#class) (6)
@@ -41,7 +41,7 @@ _Generated from commit `a7ac299` — 76 fixtures_
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Source 1] & B[Source 2] --> C[Merge]
     C --> D[Output 1] & E[Output 2]
@@ -80,7 +80,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
 subgraph sg1[Group]
 A[Node] --> B[Node2]
@@ -131,7 +131,7 @@ end
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A <--> B
     B <-.-> C
@@ -181,7 +181,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A <--> B
     B <-.-> C
@@ -225,7 +225,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph BT
     Foundation[Foundation] --> Structure[Structure]
     Structure --> Roof[Roof]
@@ -274,7 +274,7 @@ graph BT
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Step 1] --> B[Step 2] --> C[Step 3] --> D[Step 4]
 
@@ -310,7 +310,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph LR
     Push[Git Push] --> Build[Build]
     Build --> Test[Run Tests]
@@ -361,7 +361,7 @@ graph LR
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Start]:::highlight --> B{Decision}
     B -->|Yes| C:::success
@@ -412,7 +412,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 %%{init: {"theme": "dark", "flowchart": {"curve": "basis"}}}%%
 graph TD
     A[Start] --> B{Decision}
@@ -457,7 +457,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 ---
 config:
   theme: dark
@@ -509,7 +509,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     start-node[Start] --> process-1[Process A]
     process-1 --> decision-point{Check}
@@ -553,7 +553,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A --> B
     A --> C
@@ -609,7 +609,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 ---
 config:
   theme: default
@@ -657,7 +657,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph
     A[Start] --> B[End]
 
@@ -687,7 +687,7 @@ graph
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph LR
     1[First] --> 2[Second]
     2 --> 3[Third]
@@ -758,7 +758,7 @@ graph LR
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     %% Complex diagram with multiple features
     A[Input] --> B{Validate}
@@ -822,7 +822,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A --x B
     B --o C
@@ -871,7 +871,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Start] --> B{Is it working?}
     B -->|Yes| C[Great!]
@@ -916,7 +916,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Start] --> B[Left]
     A --> C[Right]
@@ -979,7 +979,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     subgraph sg1[Horizontal Section]
         direction LR
@@ -1032,7 +1032,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Start] --> B[Step 1]
     B --> C[Step 2]
@@ -1072,7 +1072,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Solid] --> B[Normal]
     C[Dotted] -.-> D[Arrow]
@@ -1127,7 +1127,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
   subgraph Cloud
     subgraph us-east [US East Region]
@@ -1178,7 +1178,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph LR
     A[Src A] --> D[Target]
     B[Src B] --> D
@@ -1216,7 +1216,7 @@ graph LR
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Source A] --> D[Target]
     B[Source B] --> D
@@ -1254,7 +1254,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Source] --> B[Target A]
     A --> C[Target B]
@@ -1292,7 +1292,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[A] --> F[Target]
     B[B] --> F
@@ -1329,7 +1329,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph LR
     %% A typical git workflow
     Working[Working Dir] -->|git add| Staging[Staging Area]
@@ -1396,7 +1396,7 @@ graph LR
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     Client[Client] -->|HTTP Request| Server[Server]
     Server --> Auth{Authenticated?}
@@ -1457,7 +1457,7 @@ final step
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Start] -- yes --> B[Next]
     B -. retry .-> C[Again]
@@ -1587,7 +1587,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 flowchart TD
   start((Start)) --> ingest[Ingest Request]
   ingest --> parse[Parse Payload]
@@ -1659,7 +1659,7 @@ valid          invalid
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     %% Test case for edge label spacing with branching edges
     %% Labels should not overlap when multiple edges branch from the same source
@@ -1717,7 +1717,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     Start[Begin] -->|initialize| Setup[Setup]
     Setup -->|configure| Config{Valid?}
@@ -1751,7 +1751,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph LR
     Input[User Input] --> Process[Process Data]
     Process --> Output[Display Result]
@@ -1798,7 +1798,7 @@ path 1  │
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A -->|path 1| B
     A -->|path 2| B
@@ -1836,7 +1836,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A --> B
     A --> B
@@ -1871,7 +1871,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph LR
 subgraph sg1[Frontend]
 A[UI] --> B[API]
@@ -1919,7 +1919,7 @@ B --> C
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Top] --> B[Middle]
     B --> C[Bottom]
@@ -1958,7 +1958,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[A] --> D[X]
     B[B] --> D
@@ -2014,7 +2014,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     subgraph cloud[Cloud]
         subgraph region[US East]
@@ -2065,7 +2065,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
 subgraph outer[Outer]
 subgraph inner[Inner]
@@ -2118,7 +2118,7 @@ end
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
 subgraph outer[Outer]
 A[Start]
@@ -2162,7 +2162,7 @@ A --> B
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph LR
 subgraph outer[Outer]
 subgraph left[Left]
@@ -2200,7 +2200,7 @@ B --> C
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph RL
     End[Finish] --> Middle[Process]
     Middle --> Start[Begin]
@@ -2247,7 +2247,7 @@ graph RL
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Start] --> B{Retry?}
     B -->|retry| B
@@ -2291,7 +2291,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Start] --> B[Process]
     B --> B
@@ -2323,7 +2323,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Process] --> A
 
@@ -2389,7 +2389,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     rect[Rectangle]
     round(Rounded)
@@ -2468,7 +2468,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     cloud@{shape: cloud, label: "Cloud"}
     bolt@{shape: bolt, label: "Bolt"}
@@ -2530,7 +2530,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     doc@{shape: doc, label: "Doc"}
     docs@{shape: docs, label: "Docs"}
@@ -2563,7 +2563,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph LR
     j1@{shape: sm-circ}
     j2@{shape: fr-circ}
@@ -2597,7 +2597,7 @@ graph LR
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph LR
     fork@{shape: fork}
     note@{shape: text, label: "Note"}
@@ -2641,7 +2641,7 @@ graph LR
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     rect[Rectangle Node]
     round(Rounded Node)
@@ -2686,7 +2686,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Start] --> B[Process]
     B --> C[End]
@@ -2734,7 +2734,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
 subgraph sg1[Process]
 A[Start] --> B[Middle]
@@ -2773,7 +2773,7 @@ B --> C[End]
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Start] --> B[End]
 
@@ -2821,7 +2821,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Start] --> B[Step 1]
     B --> C[Step 2]
@@ -2866,7 +2866,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[Top] --> B[Mid]
     B --> C[Bot]
@@ -2922,7 +2922,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     subgraph sg1[Backend]
         API[API Server]
@@ -3003,7 +3003,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     subgraph s1[Horizontal Section]
         direction LR
@@ -3070,7 +3070,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     Start --> A
     subgraph sg1[Horizontal Flow]
@@ -3131,7 +3131,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     subgraph lr_group[Left to Right]
         direction LR
@@ -3196,7 +3196,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     subgraph outer[Outer LR]
         direction LR
@@ -3259,7 +3259,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     subgraph outer[Vertical Outer]
         subgraph inner[Horizontal Inner]
@@ -3309,7 +3309,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph BT
 subgraph sg1[Input]
 A[Data]
@@ -3362,7 +3362,7 @@ B --> D
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
 subgraph sg1[Input]
 A[Data]
@@ -3431,7 +3431,7 @@ B --> D
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     subgraph "Data Processing Pipeline"
         Extract[Extract] --> Transform[Transform] --> Load[Load]
@@ -3491,7 +3491,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     subgraph 1phase[Phase 1]
         A --> B
@@ -3553,7 +3553,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     subgraph frontend[Frontend]
         UI[User Interface]
@@ -3599,7 +3599,7 @@ graph TD
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 graph TD
     A[X] --> E[Y]
     B[X] --> E
@@ -3640,7 +3640,7 @@ association │   inheritance   │   aggregation   ┆  directed dep
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 classDiagram
     A -- B : association
     C --> D : directed
@@ -3693,7 +3693,7 @@ classDiagram
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 classDiagram
     Animal <|-- Duck
     Animal <|-- Fish
@@ -3754,7 +3754,7 @@ classDiagram
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 classDiagram
     class Vehicle
     class Car
@@ -3807,7 +3807,7 @@ classDiagram
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 classDiagram
     class User {
         +String name
@@ -3866,7 +3866,7 @@ contains
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 classDiagram
     class User
     class Order
@@ -3908,7 +3908,7 @@ classDiagram
 <details>
 <summary>Mermaid source</summary>
 
-```mermaid
+```
 classDiagram
     class Animal
     class Dog
