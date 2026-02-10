@@ -73,6 +73,22 @@ fn render_class_svg(fixture: &str) -> String {
     render_svg(&diagram, &RenderOptions::default_svg())
 }
 
+fn assert_class_text_snapshot(fixture: &str) {
+    let output = render_class_text(fixture);
+    let stem = fixture.trim_end_matches(".mmd");
+    let snapshot_path = class_text_snapshot_dir().join(format!("{stem}.txt"));
+    let expected = fs::read_to_string(&snapshot_path).unwrap_or_else(|_| {
+        panic!(
+            "Missing class text snapshot: {}. Set GENERATE_CLASS_TEXT_SNAPSHOTS=1 to generate.",
+            snapshot_path.display()
+        )
+    });
+    assert_eq!(
+        output, expected,
+        "Class text snapshot mismatch for {fixture}. Set GENERATE_CLASS_TEXT_SNAPSHOTS=1 to regenerate."
+    );
+}
+
 // --- Text snapshots ---
 
 #[test]
@@ -194,4 +210,29 @@ fn class_inheritance_direction_correct() {
     // Dog should appear before Animal in top-down layout (source on top)
     assert!(output.contains("Dog"));
     assert!(output.contains("Animal"));
+}
+
+#[test]
+fn class_fixture_lollipop_interfaces_matches_snapshot() {
+    assert_class_text_snapshot("lollipop_interfaces.mmd");
+}
+
+#[test]
+fn class_fixture_two_way_relations_matches_snapshot() {
+    assert_class_text_snapshot("two_way_relations.mmd");
+}
+
+#[test]
+fn class_fixture_cardinality_labels_matches_snapshot() {
+    assert_class_text_snapshot("cardinality_labels.mmd");
+}
+
+#[test]
+fn class_fixture_class_labels_matches_snapshot() {
+    assert_class_text_snapshot("class_labels.mmd");
+}
+
+#[test]
+fn class_fixture_user_lollipop_repro_matches_snapshot() {
+    assert_class_text_snapshot("user_lollipop_repro.mmd");
 }

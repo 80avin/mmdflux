@@ -48,7 +48,7 @@ mmdflux --lint diagram.mmd
 ## What It Supports
 
 - Flowchart rendering in text/ASCII/SVG/MMDS
-- Class diagram support in MMDS workflows
+- Class diagram rendering in text/ASCII/SVG/MMDS
 - Mermaid-to-MMDS and MMDS-to-Mermaid conversion
 - Layout directions: `TD`, `BT`, `LR`, `RL`
 - Edge styles: solid, dotted, thick, invisible, cross-arrow, circle-arrow
@@ -56,6 +56,7 @@ mmdflux --lint diagram.mmd
 ## Documentation
 
 - [CLI reference](docs/CLI_REFERENCE.md)
+- [Class diagram support matrix](docs/CLASS_DIAGRAM_SUPPORT.md)
 - [MMDS specification](docs/mmds.md)
 - [MMDS JSON schema](docs/mmds.schema.json)
 - [Gallery](docs/gallery.md)
