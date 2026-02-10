@@ -63,6 +63,7 @@ mmdflux --lint diagram.mmd
 - [Architecture](docs/ARCHITECTURE.md)
 - [Debugging and parity tools](docs/DEBUG.md)
 - [Releasing](docs/RELEASING.md)
+- [WASM build/test commands](docs/WASM.md)
 
 ## License
 

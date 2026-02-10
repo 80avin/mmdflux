@@ -45,3 +45,12 @@ conformance *args:
 
 # Check that everything compiles, passes lint, and tests
 check: lint test
+
+# Build library for wasm32 without CLI-only dependencies
+wasm-build:
+    cargo build --target wasm32-unknown-unknown --no-default-features --lib
+
+# Validate wasm-safe library + CLI feature contract
+wasm-test:
+    cargo test --test wasm_cli_contract --test wasm_just_recipes
+    cargo check --target wasm32-unknown-unknown --no-default-features --lib

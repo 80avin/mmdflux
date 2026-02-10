@@ -12,7 +12,7 @@ documentation = "https://docs.rs/mmdflux"
 keywords = ["mermaid", "diagram", "cli", "svg", "text"]
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive"], optional = true }
 pest = "2.7"
 pest_derive = "2.7"
 serde = { version = "1", features = ["derive"] }
@@ -20,8 +20,17 @@ serde_json = "1"
 thiserror = "2"
 
 [features]
-default = []
+# Keep CLI behavior by default while allowing library/WASM users to opt out.
+default = ["cli"]
+# CLI-only dependency surface.
+cli = ["dep:clap"]
 engine-elk = []
+
+[[bin]]
+name = "mmdflux"
+path = "src/main.rs"
+# Prevent compiling the CLI binary when `clap` is intentionally excluded.
+required-features = ["cli"]
 
 [dev-dependencies]
 assert_cmd = "2"
