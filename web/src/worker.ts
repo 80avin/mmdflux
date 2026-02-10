@@ -18,12 +18,8 @@ interface RenderRequestHandlerOptions {
   postMessage: (message: WorkerResponseMessage) => void;
 }
 
-const WASM_ENTRYPOINT_PATH = "/wasm-pkg/mmdflux_wasm.js";
-
 export async function loadWasmModule(): Promise<WasmModule> {
-  return (await import(
-    /* @vite-ignore */ WASM_ENTRYPOINT_PATH
-  )) as unknown as WasmModule;
+  return (await import("./wasm-pkg/mmdflux_wasm.js")) as unknown as WasmModule;
 }
 
 export function createRenderRequestHandler(

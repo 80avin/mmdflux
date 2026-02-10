@@ -40,10 +40,84 @@ export interface RenderWorkerClient {
 }
 
 type PlaygroundFormat = "text" | "svg" | "mmds";
+type StateStorage = Pick<Storage, "getItem" | "setItem">;
+
+interface PersistedPlaygroundState {
+  v: 1;
+  input: string;
+  format: PlaygroundFormat;
+}
+
+const PLAYGROUND_STATE_STORAGE_KEY = "mmdflux-playground-state";
 
 export interface RenderAppOptions {
   renderClientFactory?: () => RenderWorkerClient | null;
   debounceMs?: number;
+  stateStorage?: StateStorage;
+}
+
+function resolveStateStorage(explicitStorage?: StateStorage): StateStorage | undefined {
+  if (explicitStorage) {
+    return explicitStorage;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function parsePersistedPlaygroundState(
+  rawValue: string | null
+): PersistedPlaygroundState | null {
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue) as Partial<PersistedPlaygroundState>;
+    if (parsed.v !== 1) {
+      return null;
+    }
+    if (typeof parsed.input !== "string") {
+      return null;
+    }
+    if (typeof parsed.format !== "string" || !isPlaygroundFormat(parsed.format)) {
+      return null;
+    }
+
+    return {
+      v: 1,
+      input: parsed.input,
+      format: parsed.format
+    };
+  } catch {
+    return null;
+  }
+}
+
+function readPersistedPlaygroundState(
+  storage: StateStorage | undefined
+): PersistedPlaygroundState | null {
+  if (!storage) {
+    return null;
+  }
+
+  return parsePersistedPlaygroundState(
+    storage.getItem(PLAYGROUND_STATE_STORAGE_KEY)
+  );
+}
+
+function persistPlaygroundState(
+  storage: StateStorage | undefined,
+  state: PersistedPlaygroundState
+): void {
+  if (!storage) {
+    return;
+  }
+
+  storage.setItem(PLAYGROUND_STATE_STORAGE_KEY, JSON.stringify(state));
 }
 
 function createDefaultWorker(): Worker {
@@ -151,10 +225,17 @@ export function createRenderWorkerClient(
 }
 
 export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): void {
+  const stateStorage = resolveStateStorage(options.stateStorage);
   const restoredShareState = decodeShareState(window.location.hash);
+  const restoredLocalState = readPersistedPlaygroundState(stateStorage);
   const defaultExample = findExampleById(DEFAULT_EXAMPLE_ID) ?? PLAYGROUND_EXAMPLES[0];
-  const initialInput = restoredShareState?.input ?? defaultExample?.input ?? "";
-  const initialFormat = restoredShareState?.format ?? "text";
+  const initialInput =
+    restoredShareState?.input ??
+    restoredLocalState?.input ??
+    defaultExample?.input ??
+    "";
+  const initialFormat =
+    restoredShareState?.format ?? restoredLocalState?.format ?? "text";
 
   root.innerHTML = `
     <main class="playground">
@@ -241,20 +322,20 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
     exampleSelect.value = "__custom__";
   }
 
-  const storage = (() => {
+  const matchMedia =
+    typeof window.matchMedia === "function"
+      ? window.matchMedia.bind(window)
+      : undefined;
+  const themeStorage = (() => {
     try {
       return window.localStorage;
     } catch {
       return undefined;
     }
   })();
-  const matchMedia =
-    typeof window.matchMedia === "function"
-      ? window.matchMedia.bind(window)
-      : undefined;
   const themeController = createThemeController({
     root: document.documentElement,
-    storage,
+    storage: themeStorage,
     matchMedia
   });
   themeController.apply();
@@ -281,13 +362,21 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
     shareStatus.textContent = message;
   };
 
+  const persistCurrentState = (): void => {
+    persistPlaygroundState(stateStorage, {
+      v: 1,
+      input: editor.getValue(),
+      format: selectedFormat
+    });
+  };
+
   if (!workerClient) {
     preview.showError("Web Worker support is unavailable in this environment.");
     return;
   }
 
   const liveUpdate = createLiveUpdateController({
-    debounceMs: options.debounceMs ?? 200,
+    debounceMs: options.debounceMs ?? 0,
     render: (request) => workerClient.render(request),
     onResult: (response) => {
       preview.showResult({
@@ -316,6 +405,7 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
       }
 
       setFormat(format);
+      persistCurrentState();
       scheduleRender();
     });
   }
@@ -327,6 +417,7 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
     }
 
     editor.setValue(nextExample.input);
+    persistCurrentState();
     scheduleRender();
   });
 
@@ -358,10 +449,12 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
   });
 
   editor.onChange(() => {
+    persistCurrentState();
     scheduleRender();
   });
 
   setFormat(selectedFormat);
+  persistCurrentState();
   scheduleRender();
 }
 

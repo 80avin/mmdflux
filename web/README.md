@@ -11,7 +11,7 @@ npm run build
 npm run dev
 ```
 
-`npm run build` and `npm run dev` call `wasm-pack` to refresh `public/wasm-pkg` from `../crates/mmdflux-wasm`.
+`npm run dev`, `npm run build`, and `npm run test` call `wasm-pack` to refresh `src/wasm-pkg` from `../crates/mmdflux-wasm`.
 
 ## Included Examples
 
