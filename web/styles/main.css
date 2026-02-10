@@ -1,0 +1,129 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(145deg, #f5f7fa 0%, #eef3f8 50%, #f8fafb 100%);
+  color: #17233a;
+}
+
+.playground {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.toolbar h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.format-tabs {
+  display: inline-flex;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgba(23, 35, 58, 0.08);
+  gap: 0.25rem;
+}
+
+.format-tabs button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font-weight: 600;
+  color: #2f3e5f;
+  background: transparent;
+  cursor: pointer;
+}
+
+.format-tabs button.is-active {
+  background: #ffffff;
+  color: #0a2540;
+  box-shadow: 0 1px 2px rgba(9, 30, 66, 0.12);
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(23, 35, 58, 0.14);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.panel h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #46526a;
+}
+
+.editor-input {
+  width: 100%;
+  min-height: 420px;
+  resize: vertical;
+  border: 1px solid rgba(23, 35, 58, 0.2);
+  border-radius: 10px;
+  padding: 0.85rem;
+  line-height: 1.4;
+  font: 500 0.94rem/1.45 "JetBrains Mono", "Iosevka", "SFMono-Regular", monospace;
+  background: #ffffff;
+  color: #13213b;
+}
+
+.preview-error {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #d65252;
+  background: #fff1f1;
+  color: #8d1f1f;
+  font-size: 0.88rem;
+}
+
+.preview-error[hidden] {
+  display: none;
+}
+
+.preview-output {
+  min-height: 420px;
+  overflow: auto;
+  border: 1px solid rgba(23, 35, 58, 0.16);
+  border-radius: 10px;
+  padding: 0.8rem;
+  background: #ffffff;
+  font: 500 0.93rem/1.45 "JetBrains Mono", "Iosevka", "SFMono-Regular", monospace;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-input,
+  .preview-output {
+    min-height: 320px;
+  }
+}

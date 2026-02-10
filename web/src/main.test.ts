@@ -7,6 +7,7 @@ describe("renderApp", () => {
     renderApp(root);
 
     expect(root.textContent).toContain("mmdflux Playground");
-    expect(root.textContent).toContain("WASM render transport");
+    expect(root.textContent).toContain("Preview");
+    expect(root.textContent).toContain("Text");
   });
 });
