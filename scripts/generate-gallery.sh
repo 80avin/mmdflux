@@ -167,7 +167,7 @@ emit_section() {
     echo "<details>" >> "$OUTFILE"
     echo "<summary>Mermaid source</summary>" >> "$OUTFILE"
     echo >> "$OUTFILE"
-    echo '```mermaid' >> "$OUTFILE"
+    echo '```' >> "$OUTFILE"
     cat "$f" >> "$OUTFILE"
     printf '\n```\n\n' >> "$OUTFILE"
     echo "</details>" >> "$OUTFILE"
