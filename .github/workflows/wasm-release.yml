@@ -1,0 +1,103 @@
+name: WASM Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (for example v1.0.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wasm-release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish @mmds/wasm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve tag and versions
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+
+          TAG="${TAG#refs/tags/}"
+          if [[ "$TAG" != v* ]]; then
+            TAG="v$TAG"
+          fi
+          TAG_VERSION="${TAG#v}"
+
+          ROOT_VERSION="$(sed -n 's/^version = \"\\(.*\\)\"$/\\1/p' Cargo.toml | head -n1)"
+          WASM_VERSION="$(sed -n 's/^version = \"\\(.*\\)\"$/\\1/p' crates/mmdflux-wasm/Cargo.toml | head -n1)"
+
+          if [[ -z "$ROOT_VERSION" || -z "$WASM_VERSION" ]]; then
+            echo "Could not read crate versions from Cargo.toml files" >&2
+            exit 1
+          fi
+
+          if [[ "$ROOT_VERSION" != "$WASM_VERSION" ]]; then
+            echo "Version mismatch: root=${ROOT_VERSION}, wasm=${WASM_VERSION}" >&2
+            exit 1
+          fi
+
+          if [[ "$TAG_VERSION" != "$WASM_VERSION" ]]; then
+            echo "Tag/version mismatch: tag=${TAG_VERSION}, wasm=${WASM_VERSION}" >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$WASM_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm-release
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Build bundler package
+        run: wasm-pack build crates/mmdflux-wasm --target bundler --release --out-dir ../../target/wasm-pkg-release
+
+      - name: Enforce npm package contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd target/wasm-pkg-release
+          npm pkg set name='@mmds/wasm'
+          npm pkg set version='${{ steps.meta.outputs.version }}'
+          npm pkg get name version
+
+      - name: Publish to npm
+        working-directory: target/wasm-pkg-release
+        run: npm publish --access=public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

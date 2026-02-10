@@ -28,3 +28,27 @@ just wasm-test
   both `web` and `bundler` wasm-pack targets.
 - `just wasm-test` runs browser-executed wasm-bindgen contract tests for
   `crates/mmdflux-wasm`.
+
+## npm Release Contract
+
+WASM publishing is tag-driven via:
+
+- `.github/workflows/wasm-release.yml`
+
+Rules enforced by the workflow:
+
+- Release tags must be `v*` and tag version must equal crate version.
+- Root `Cargo.toml` version and `crates/mmdflux-wasm/Cargo.toml` version must match.
+- Bundler package is published to npm as `@mmds/wasm`.
+
+Required repository setup:
+
+- `NPM_TOKEN` secret with publish rights to the `@mmds` npm organization.
+
+Local preflight before tagging:
+
+```bash
+cargo test --features cli
+just wasm-build
+just wasm-test
+```

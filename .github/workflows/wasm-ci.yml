@@ -1,0 +1,129 @@
+name: WASM CI
+
+on:
+  push:
+    paths:
+      - "crates/mmdflux-wasm/**"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Justfile"
+      - "scripts/run-wasm-browser-tests.sh"
+      - ".github/workflows/wasm-ci.yml"
+  pull_request:
+    paths:
+      - "crates/mmdflux-wasm/**"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Justfile"
+      - "scripts/run-wasm-browser-tests.sh"
+      - ".github/workflows/wasm-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  WASM_WEB_OUT_DIR: target/wasm-pkg-web
+  WASM_BUNDLER_OUT_DIR: target/wasm-pkg-bundler
+  WASM_MAX_BYTES: 2097152
+  WASM_GZIP_MAX_BYTES: 700000
+
+jobs:
+  wasm:
+    name: Build, Test, and Size Budget
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm-ci
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Build WASM package (web target)
+        run: wasm-pack build crates/mmdflux-wasm --target web --release --out-dir ../../${{ env.WASM_WEB_OUT_DIR }}
+
+      - name: Build WASM package (bundler target)
+        run: wasm-pack build crates/mmdflux-wasm --target bundler --release --out-dir ../../${{ env.WASM_BUNDLER_OUT_DIR }}
+
+      - name: Run browser tests
+        run: wasm-pack test --headless --chrome crates/mmdflux-wasm
+
+      - name: Report and enforce WASM size budget
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          web_wasm="${WASM_WEB_OUT_DIR}/mmdflux_wasm_bg.wasm"
+          bundler_wasm="${WASM_BUNDLER_OUT_DIR}/mmdflux_wasm_bg.wasm"
+
+          for wasm in "$web_wasm" "$bundler_wasm"; do
+            if [[ ! -f "$wasm" ]]; then
+              echo "Expected wasm artifact missing: $wasm" >&2
+              exit 1
+            fi
+            gzip -kf "$wasm"
+          done
+
+          report_target() {
+            local label="$1"
+            local wasm_file="$2"
+            local gzip_file="${wasm_file}.gz"
+
+            local wasm_bytes
+            local gzip_bytes
+            wasm_bytes=$(wc -c < "$wasm_file" | tr -d ' ')
+            gzip_bytes=$(wc -c < "$gzip_file" | tr -d ' ')
+
+            local wasm_kib
+            local gzip_kib
+            wasm_kib=$(awk "BEGIN {printf \"%.1f\", ${wasm_bytes}/1024}")
+            gzip_kib=$(awk "BEGIN {printf \"%.1f\", ${gzip_bytes}/1024}")
+
+            printf '| %s | %s | %s | %s | %s |\n' \
+              "$label" \
+              "$wasm_bytes" \
+              "$wasm_kib" \
+              "$gzip_bytes" \
+              "$gzip_kib" >> "$GITHUB_STEP_SUMMARY"
+
+            if (( wasm_bytes > WASM_MAX_BYTES )); then
+              echo "${label} raw wasm size ${wasm_bytes} exceeds budget ${WASM_MAX_BYTES}" >&2
+              return 1
+            fi
+
+            if (( gzip_bytes > WASM_GZIP_MAX_BYTES )); then
+              echo "${label} gzipped wasm size ${gzip_bytes} exceeds budget ${WASM_GZIP_MAX_BYTES}" >&2
+              return 1
+            fi
+
+            return 0
+          }
+
+          {
+            echo "## WASM Size Report"
+            echo
+            echo "Budget: raw <= ${WASM_MAX_BYTES} bytes, gzip <= ${WASM_GZIP_MAX_BYTES} bytes."
+            echo
+            echo "| Target | Raw (bytes) | Raw (KiB) | Gzip (bytes) | Gzip (KiB) |"
+            echo "| --- | ---: | ---: | ---: | ---: |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          report_target "web" "$web_wasm"
+          report_target "bundler" "$bundler_wasm"
