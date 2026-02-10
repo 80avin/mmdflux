@@ -14,6 +14,8 @@ pub struct ClassModel {
 pub struct ClassDecl {
     /// Class name/identifier.
     pub name: String,
+    /// Optional class annotations/stereotypes (without `<<`/`>>`).
+    pub annotations: Vec<String>,
     /// Body members (fields and methods), if any.
     pub members: Vec<String>,
 }
@@ -44,6 +46,8 @@ pub enum ClassRelationType {
     DirectedAssociation,
     /// `<|--`  Inheritance/generalization.
     Inheritance,
+    /// `<|..` / `..|>`  Realization/implementation.
+    Realization,
     /// `*--`  Composition.
     Composition,
     /// `o--`  Aggregation.

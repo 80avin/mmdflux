@@ -2,27 +2,33 @@
 //!
 //! Hand-written line-oriented parser for Mermaid class diagram syntax.
 //! Supports MVP scope: class declarations (with optional body), and
-//! relationships (association, inheritance, composition, aggregation, dependency).
+//! relationships (association, inheritance, realization, composition, aggregation, dependency).
 
 pub mod ast;
 
 use ast::{ClassDecl, ClassModel, ClassRelation, ClassRelationType};
 
-/// Ensure a class exists in the classes list, merging members if it already does.
+/// Ensure a class exists in the classes list, merging metadata if it already does.
 ///
 /// Uses `class_index` to track position of each class in `classes` for O(1) lookup.
-/// If the class already exists, new members are appended. If not, a new entry is created.
+/// If the class already exists, annotations/members are appended. If not, a new entry is created.
 fn ensure_class(
     classes: &mut Vec<ClassDecl>,
     class_index: &mut std::collections::HashMap<String, usize>,
     name: String,
+    annotations: Vec<String>,
     members: Vec<String>,
 ) {
     if let Some(&idx) = class_index.get(&name) {
+        classes[idx].annotations.extend(annotations);
         classes[idx].members.extend(members);
     } else {
         class_index.insert(name.clone(), classes.len());
-        classes.push(ClassDecl { name, members });
+        classes.push(ClassDecl {
+            name,
+            annotations,
+            members,
+        });
     }
 }
 
@@ -73,6 +79,7 @@ pub fn parse_class_diagram(
 
     // Parse body lines
     let mut in_class_body: Option<String> = None;
+    let mut current_annotations: Vec<String> = Vec::new();
     let mut current_members: Vec<String> = Vec::new();
 
     for line in lines {
@@ -90,15 +97,20 @@ pub fn parse_class_diagram(
                     &mut classes,
                     &mut class_index,
                     class_name,
+                    std::mem::take(&mut current_annotations),
                     std::mem::take(&mut current_members),
                 );
             }
             continue;
         }
 
-        // Inside a class body — collect members
+        // Inside a class body — collect annotations/members
         if in_class_body.is_some() {
-            current_members.push(trimmed.to_string());
+            if let Some(annotation) = parse_annotation(trimmed) {
+                current_annotations.push(annotation);
+            } else {
+                current_members.push(trimmed.to_string());
+            }
             continue;
         }
 
@@ -106,18 +118,42 @@ pub fn parse_class_diagram(
         if let Some(rest) = strip_keyword(trimmed, "class") {
             let rest = rest.trim();
             if let Some(name) = rest.strip_suffix('{') {
-                let name = name.trim().to_string();
+                let (name, annotations) = parse_class_decl(name.trim());
+                if name.is_empty() {
+                    continue;
+                }
                 in_class_body = Some(name);
+                current_annotations = annotations;
                 current_members.clear();
                 continue;
             }
 
             // Try: `class ClassName`  (bare declaration)
-            // May have optional annotation like `class ClassName~T~`
-            let name = parse_class_name(rest);
+            // May have optional generic/type and annotation like:
+            //   `class ClassName~T~`
+            //   `class ClassName <<interface>>`
+            let (name, annotations) = parse_class_decl(rest);
             if !name.is_empty() {
-                ensure_class(&mut classes, &mut class_index, name, Vec::new());
+                ensure_class(
+                    &mut classes,
+                    &mut class_index,
+                    name,
+                    annotations,
+                    Vec::new(),
+                );
             }
+            continue;
+        }
+
+        // Try: `<<annotation>> ClassName`
+        if let Some((annotation, class_name)) = parse_annotation_statement(trimmed) {
+            ensure_class(
+                &mut classes,
+                &mut class_index,
+                class_name,
+                vec![annotation],
+                Vec::new(),
+            );
             continue;
         }
 
@@ -125,7 +161,13 @@ pub fn parse_class_diagram(
         if let Some(rel) = try_parse_relation(trimmed) {
             // Ensure both sides are tracked as classes
             for name in [&rel.from, &rel.to] {
-                ensure_class(&mut classes, &mut class_index, name.clone(), Vec::new());
+                ensure_class(
+                    &mut classes,
+                    &mut class_index,
+                    name.clone(),
+                    Vec::new(),
+                    Vec::new(),
+                );
             }
             relations.push(rel);
             continue;
@@ -140,6 +182,7 @@ pub fn parse_class_diagram(
                     &mut classes,
                     &mut class_index,
                     left.to_string(),
+                    Vec::new(),
                     vec![member.to_string()],
                 );
                 continue;
@@ -155,6 +198,7 @@ pub fn parse_class_diagram(
             &mut classes,
             &mut class_index,
             class_name,
+            std::mem::take(&mut current_annotations),
             std::mem::take(&mut current_members),
         );
     }
@@ -184,10 +228,68 @@ fn parse_class_name(s: &str) -> String {
     name
 }
 
+/// Parse `class` declaration tail into class name and inline annotations.
+fn parse_class_decl(s: &str) -> (String, Vec<String>) {
+    let name = parse_class_name(s);
+    if name.is_empty() {
+        return (String::new(), Vec::new());
+    }
+    let annotations = parse_annotations(&s[name.len()..]);
+    (name, annotations)
+}
+
+/// Parse a standalone annotation line like `<<interface>>`.
+fn parse_annotation(line: &str) -> Option<String> {
+    let inner = line.strip_prefix("<<")?.strip_suffix(">>")?.trim();
+    if inner.is_empty() {
+        None
+    } else {
+        Some(inner.to_string())
+    }
+}
+
+/// Parse an annotation statement line like `<<interface>> ClassName`.
+fn parse_annotation_statement(line: &str) -> Option<(String, String)> {
+    let start = line.strip_prefix("<<")?;
+    let end_idx = start.find(">>")?;
+    let annotation = start[..end_idx].trim();
+    if annotation.is_empty() {
+        return None;
+    }
+    let class_part = start[end_idx + 2..].trim();
+    let class_name = parse_class_name(class_part);
+    if class_name.is_empty() {
+        return None;
+    }
+    Some((annotation.to_string(), class_name))
+}
+
+/// Extract all annotation markers from text, returning marker content without brackets.
+fn parse_annotations(s: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = s;
+
+    while let Some(start_idx) = rest.find("<<") {
+        let after_start = &rest[start_idx + 2..];
+        if let Some(end_idx) = after_start.find(">>") {
+            let annotation = after_start[..end_idx].trim();
+            if !annotation.is_empty() {
+                out.push(annotation.to_string());
+            }
+            rest = &after_start[end_idx + 2..];
+        } else {
+            break;
+        }
+    }
+
+    out
+}
+
 /// Relationship patterns to try, ordered by specificity (longest first).
 ///
 /// Mermaid class diagram relationship syntax:
 ///   `A <|-- B`     inheritance
+///   `A <|.. B`     realization (implements)
 ///   `A *-- B`      composition
 ///   `A o-- B`      aggregation
 ///   `A <.. B`      dependency (reverse)
@@ -203,8 +305,8 @@ fn try_parse_relation(line: &str) -> Option<ClassRelation> {
         // 4-char operators
         ("<|--", ClassRelationType::Inheritance, true), // reversed: B inherits from A
         ("--|>", ClassRelationType::Inheritance, false), // A inherits from B
-        ("<|..", ClassRelationType::Inheritance, true), // dotted inheritance (reversed)
-        ("..|>", ClassRelationType::Inheritance, false), // dotted inheritance
+        ("<|..", ClassRelationType::Realization, true), // reversed: B realizes A
+        ("..|>", ClassRelationType::Realization, false), // A realizes B
         ("*--", ClassRelationType::Composition, true),  // reversed
         ("--*", ClassRelationType::Composition, false),
         ("o--", ClassRelationType::Aggregation, true), // reversed
@@ -274,6 +376,7 @@ mod tests {
         let model = parse_class_diagram("classDiagram\nclass User").unwrap();
         assert_eq!(model.classes.len(), 1);
         assert_eq!(model.classes[0].name, "User");
+        assert!(model.classes[0].annotations.is_empty());
     }
 
     #[test]
@@ -292,9 +395,36 @@ mod tests {
         let model = parse_class_diagram(input).unwrap();
         assert_eq!(model.classes.len(), 1);
         assert_eq!(model.classes[0].name, "User");
+        assert!(model.classes[0].annotations.is_empty());
         assert_eq!(model.classes[0].members.len(), 2);
         assert_eq!(model.classes[0].members[0], "+String name");
         assert_eq!(model.classes[0].members[1], "+login()");
+    }
+
+    #[test]
+    fn parse_class_with_inline_annotation() {
+        let input = "classDiagram\nclass Logger <<interface>>";
+        let model = parse_class_diagram(input).unwrap();
+        assert_eq!(model.classes.len(), 1);
+        assert_eq!(model.classes[0].name, "Logger");
+        assert_eq!(model.classes[0].annotations, vec!["interface"]);
+    }
+
+    #[test]
+    fn parse_annotation_statement() {
+        let input = "classDiagram\nclass Logger\n<<interface>> Logger";
+        let model = parse_class_diagram(input).unwrap();
+        assert_eq!(model.classes.len(), 1);
+        assert_eq!(model.classes[0].annotations, vec!["interface"]);
+    }
+
+    #[test]
+    fn parse_annotation_in_class_body() {
+        let input = "classDiagram\nclass Logger {\n  <<interface>>\n  +log(message)\n}";
+        let model = parse_class_diagram(input).unwrap();
+        assert_eq!(model.classes.len(), 1);
+        assert_eq!(model.classes[0].annotations, vec!["interface"]);
+        assert_eq!(model.classes[0].members, vec!["+log(message)"]);
     }
 
     #[test]
@@ -344,6 +474,18 @@ mod tests {
             model.relations[0].relation_type,
             ClassRelationType::DirectedDependency
         );
+    }
+
+    #[test]
+    fn parse_realization_relation() {
+        let input = "classDiagram\nLogger <|.. ConsoleLogger";
+        let model = parse_class_diagram(input).unwrap();
+        assert_eq!(model.relations.len(), 1);
+        assert_eq!(
+            model.relations[0].relation_type,
+            ClassRelationType::Realization
+        );
+        assert!(model.relations[0].marker_start);
     }
 
     #[test]

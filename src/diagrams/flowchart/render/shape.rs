@@ -423,6 +423,13 @@ fn render_box(
 
     // Content rows
     let lines: Vec<&str> = label.split('\n').collect();
+    let first_separator_idx = lines.iter().position(|line| *line == Node::SEPARATOR);
+    let second_separator_idx = first_separator_idx.and_then(|first| {
+        lines[first + 1..]
+            .iter()
+            .position(|line| *line == Node::SEPARATOR)
+            .map(|offset| first + 1 + offset)
+    });
     if lines.len() <= 1 {
         // Single-line: centered
         let mid_y = y + height / 2;
@@ -431,7 +438,9 @@ fn render_box(
         canvas.write_str(label_start, mid_y, label);
         canvas.set(x + width - 1, mid_y, right_vertical);
     } else {
-        // Multi-line: left-aligned with padding, separator markers become hrules
+        // Multi-line: by default left-aligned with padding.
+        // For compartment-style labels (`---` separators), center title/attributes
+        // rows and keep operation rows left-aligned.
         for (i, line) in lines.iter().enumerate() {
             let row_y = y + 1 + i;
             if *line == Node::SEPARATOR {
@@ -442,7 +451,21 @@ fn render_box(
                 canvas.set(x + width - 1, row_y, charset.tee_left);
             } else {
                 canvas.set(x, row_y, left_vertical);
-                canvas.write_str(x + 2, row_y, line);
+                let center_line = if let Some(first_sep) = first_separator_idx {
+                    if let Some(second_sep) = second_separator_idx {
+                        i < second_sep
+                    } else {
+                        i < first_sep
+                    }
+                } else {
+                    false
+                };
+                let label_start = if center_line {
+                    x + (width - line.chars().count()) / 2
+                } else {
+                    x + 2
+                };
+                canvas.write_str(label_start, row_y, line);
                 canvas.set(x + width - 1, row_y, right_vertical);
             }
         }
@@ -834,6 +857,37 @@ mod tests {
         render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
         let output = canvas.to_string();
         assert!(output.contains(charset.heavy_horizontal));
+    }
+
+    #[test]
+    fn test_render_compartment_multiline_centers_header_and_attributes() {
+        let mut canvas = Canvas::new(20, 8);
+        let label = format!("Header\n{}\nA\n{}\nm()", Node::SEPARATOR, Node::SEPARATOR);
+        let node = Node::new("C").with_label(label);
+        let charset = CharSet::unicode();
+
+        render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
+        let output = canvas.to_string();
+
+        // Title and attributes are centered in text mode.
+        assert!(output.contains("│ Header │"));
+        assert!(output.contains("│   A    │"));
+        // Operations remain left-aligned.
+        assert!(output.contains("│ m()    │"));
+    }
+
+    #[test]
+    fn test_render_multiline_without_separator_remains_left_aligned() {
+        let mut canvas = Canvas::new(20, 6);
+        let node = Node::new("C").with_label("Long\nx");
+        let charset = CharSet::unicode();
+
+        render_node(&mut canvas, &node, 1, 1, &charset, Direction::TopDown);
+        let output = canvas.to_string();
+
+        // Non-compartment multiline labels keep left padding alignment.
+        assert!(output.contains("│ Long │"));
+        assert!(output.contains("│ x    │"));
     }
 
     #[test]
