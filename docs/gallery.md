@@ -1,8 +1,8 @@
 # mmdflux gallery
 
-_Generated from commit `629731f` — 76 fixtures_
+_Generated from commit `ac02796` — 77 fixtures_
 
-- [Flowchart](#flowchart) (70)
+- [Flowchart](#flowchart) (71)
 - [Class](#class) (6)
 
 # Flowchart
@@ -91,56 +91,6 @@ end
 
 </details>
 
-## bidirectional_arrows
-
-`tests/fixtures/flowchart/bidirectional_arrows.mmd`
-
-**Text**
-
-```text
-┌───┐
-│ A │
-└───┘
-  ▲
-  │
-  ▼
-┌───┐
-│ B │
-└───┘
-  ▲
-  ┆
-  ▼
-┌───┐
-│ C │
-└───┘
-  ▲
-  ┃
-  ▼
-┌───┐
-│ D │
-└───┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![bidirectional_arrows svg](../tests/svg-snapshots/flowchart/bidirectional_arrows.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A <--> B
-    B <-.-> C
-    C <==> D
-
-```
-
-</details>
-
 ## bidirectional
 
 `tests/fixtures/flowchart/bidirectional.mmd`
@@ -175,6 +125,56 @@ graph TD
 <summary>SVG output</summary>
 
 ![bidirectional svg](../tests/svg-snapshots/flowchart/bidirectional.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A <--> B
+    B <-.-> C
+    C <==> D
+
+```
+
+</details>
+
+## bidirectional_arrows
+
+`tests/fixtures/flowchart/bidirectional_arrows.mmd`
+
+**Text**
+
+```text
+┌───┐
+│ A │
+└───┘
+  ▲
+  │
+  ▼
+┌───┐
+│ B │
+└───┘
+  ▲
+  ┆
+  ▼
+┌───┐
+│ C │
+└───┘
+  ▲
+  ┃
+  ▼
+┌───┐
+│ D │
+└───┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![bidirectional_arrows svg](../tests/svg-snapshots/flowchart/bidirectional_arrows.svg)
 
 </details>
 
@@ -229,6 +229,55 @@ graph TD
 graph BT
     Foundation[Foundation] --> Structure[Structure]
     Structure --> Roof[Roof]
+
+```
+
+</details>
+
+## br_line_breaks
+
+`tests/fixtures/flowchart/br_line_breaks.mmd`
+
+**Text**
+
+```text
+ ┌───────┐
+ │ Hello │
+ │ World │
+ └───────┘
+     │
+     │
+     │
+     ▼
+┌────────┐
+│ Line 1 │
+│ Line 2 │
+└────────┘
+     │
+    yes
+    no
+     ▼
+ ┌───────┐
+ │ One   │
+ │ Two   │
+ │ Three │
+ └───────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![br_line_breaks svg](../tests/svg-snapshots/flowchart/br_line_breaks.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[Hello<br>World] --> B[Line 1<br/>Line 2]
+    B -->|yes<br>no| C[One<BR>Two<BR />Three]
 
 ```
 
@@ -1144,6 +1193,44 @@ graph TD
 
 </details>
 
+## fan_in
+
+`tests/fixtures/flowchart/fan_in.mmd`
+
+**Text**
+
+```text
+┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Source A │    │ Source B │    │ Source C │
+└──────────┘    └──────────┘    └──────────┘
+      │              │               │
+      └──────────┐  ┌┘  ┌────────────┘
+                 ▼  ▼   ▼
+                ┌────────┐
+                │ Target │
+                └────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![fan_in svg](../tests/svg-snapshots/flowchart/fan_in.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[Source A] --> D[Target]
+    B[Source B] --> D
+    C[Source C] --> D
+
+```
+
+</details>
+
 ## fan_in_lr
 
 `tests/fixtures/flowchart/fan_in_lr.mmd`
@@ -1183,44 +1270,6 @@ graph LR
     A[Src A] --> D[Target]
     B[Src B] --> D
     C[Src C] --> D
-
-```
-
-</details>
-
-## fan_in
-
-`tests/fixtures/flowchart/fan_in.mmd`
-
-**Text**
-
-```text
-┌──────────┐    ┌──────────┐    ┌──────────┐
-│ Source A │    │ Source B │    │ Source C │
-└──────────┘    └──────────┘    └──────────┘
-      │              │               │
-      └──────────┐  ┌┘  ┌────────────┘
-                 ▼  ▼   ▼
-                ┌────────┐
-                │ Target │
-                └────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![fan_in svg](../tests/svg-snapshots/flowchart/fan_in.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A[Source A] --> D[Target]
-    B[Source B] --> D
-    C[Source C] --> D
 
 ```
 
@@ -1760,6 +1809,43 @@ graph LR
 
 </details>
 
+## multi_edge
+
+`tests/fixtures/flowchart/multi_edge.mmd`
+
+**Text**
+
+```text
+┌───┐
+│ A │
+└───┘
+ │ │
+ │ │
+ ▼ ▼
+┌───┐
+│ B │
+└───┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![multi_edge svg](../tests/svg-snapshots/flowchart/multi_edge.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A --> B
+    A --> B
+
+```
+
+</details>
+
 ## multi_edge_labeled
 
 `tests/fixtures/flowchart/multi_edge_labeled.mmd`
@@ -1803,43 +1889,6 @@ graph TD
     A -->|path 1| B
     A -->|path 2| B
     B --> C
-
-```
-
-</details>
-
-## multi_edge
-
-`tests/fixtures/flowchart/multi_edge.mmd`
-
-**Text**
-
-```text
-┌───┐
-│ A │
-└───┘
- │ │
- │ │
- ▼ ▼
-┌───┐
-│ B │
-└───┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![multi_edge svg](../tests/svg-snapshots/flowchart/multi_edge.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A --> B
-    A --> B
 
 ```
 
@@ -1968,6 +2017,61 @@ graph TD
 
 </details>
 
+## nested_subgraph
+
+`tests/fixtures/flowchart/nested_subgraph.mmd`
+
+**Text**
+
+```text
+┌───────── Outer ─────────┐
+│                         │
+│        ┌───────┐        │
+│        │ Start │        │
+│        └───────┘        │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│    ┌──── Inner ────┐    │
+│    │       ▼       │    │
+│    │  ┌─────────┐  │    │
+│    │  │ Process │  │    │
+│    │  └─────────┘  │    │
+│    │       │       │    │
+│    │       │       │    │
+│    │       ▼       │    │
+│    │    ┌─────┐    │    │
+│    │    │ End │    │    │
+│    │    └─────┘    │    │
+│    └───────────────┘    │
+└─────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![nested_subgraph svg](../tests/svg-snapshots/flowchart/nested_subgraph.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+subgraph outer[Outer]
+A[Start]
+subgraph inner[Inner]
+B[Process] --> C[End]
+end
+end
+A --> B
+
+```
+
+</details>
+
 ## nested_subgraph_edge
 
 `tests/fixtures/flowchart/nested_subgraph_edge.mmd`
@@ -2077,61 +2181,6 @@ end
 
 </details>
 
-## nested_subgraph
-
-`tests/fixtures/flowchart/nested_subgraph.mmd`
-
-**Text**
-
-```text
-┌───────── Outer ─────────┐
-│                         │
-│        ┌───────┐        │
-│        │ Start │        │
-│        └───────┘        │
-│            │            │
-│            │            │
-│            │            │
-│            │            │
-│    ┌──── Inner ────┐    │
-│    │       ▼       │    │
-│    │  ┌─────────┐  │    │
-│    │  │ Process │  │    │
-│    │  └─────────┘  │    │
-│    │       │       │    │
-│    │       │       │    │
-│    │       ▼       │    │
-│    │    ┌─────┐    │    │
-│    │    │ End │    │    │
-│    │    └─────┘    │    │
-│    └───────────────┘    │
-└─────────────────────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![nested_subgraph svg](../tests/svg-snapshots/flowchart/nested_subgraph.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-subgraph outer[Outer]
-A[Start]
-subgraph inner[Inner]
-B[Process] --> C[End]
-end
-end
-A --> B
-
-```
-
-</details>
-
 ## nested_with_siblings
 
 `tests/fixtures/flowchart/nested_with_siblings.mmd`
@@ -2204,6 +2253,36 @@ B --> C
 graph RL
     End[Finish] --> Middle[Process]
     Middle --> Start[Begin]
+
+```
+
+</details>
+
+## self_loop
+
+`tests/fixtures/flowchart/self_loop.mmd`
+
+**Text**
+
+```text
+┌─────────┐───┐
+│ Process │   │
+└─────────┘◄──┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![self_loop svg](../tests/svg-snapshots/flowchart/self_loop.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[Process] --> A
 
 ```
 
@@ -2301,22 +2380,34 @@ graph TD
 
 </details>
 
-## self_loop
+## shapes
 
-`tests/fixtures/flowchart/self_loop.mmd`
+`tests/fixtures/flowchart/shapes.mmd`
 
 **Text**
 
 ```text
-┌─────────┐───┐
-│ Process │   │
-└─────────┘◄──┘
+┌────────────────┐
+│ Rectangle Node │
+└────────────────┘
+         │
+         │
+         ▼
+ ╭──────────────╮
+ │ Rounded Node │
+ ╰──────────────╯
+         │
+         │
+         ▼
+ ┌──────────────┐
+ < Diamond Node >
+ └──────────────┘
 ```
 
 <details>
 <summary>SVG output</summary>
 
-![self_loop svg](../tests/svg-snapshots/flowchart/self_loop.svg)
+![shapes svg](../tests/svg-snapshots/flowchart/shapes.svg)
 
 </details>
 
@@ -2325,7 +2416,10 @@ graph TD
 
 ```
 graph TD
-    A[Process] --> A
+    rect[Rectangle Node]
+    round(Rounded Node)
+    diamond{Diamond Node}
+    rect --> round --> diamond
 
 ```
 
@@ -2607,34 +2701,28 @@ graph LR
 
 </details>
 
-## shapes
+## simple
 
-`tests/fixtures/flowchart/shapes.mmd`
+`tests/fixtures/flowchart/simple.mmd`
 
 **Text**
 
 ```text
-┌────────────────┐
-│ Rectangle Node │
-└────────────────┘
-         │
-         │
-         ▼
- ╭──────────────╮
- │ Rounded Node │
- ╰──────────────╯
-         │
-         │
-         ▼
- ┌──────────────┐
- < Diamond Node >
- └──────────────┘
+┌───────┐
+│ Start │
+└───────┘
+    │
+    │
+    ▼
+ ┌─────┐
+ │ End │
+ └─────┘
 ```
 
 <details>
 <summary>SVG output</summary>
 
-![shapes svg](../tests/svg-snapshots/flowchart/shapes.svg)
+![simple svg](../tests/svg-snapshots/flowchart/simple.svg)
 
 </details>
 
@@ -2643,10 +2731,7 @@ graph LR
 
 ```
 graph TD
-    rect[Rectangle Node]
-    round(Rounded Node)
-    diamond{Diamond Node}
-    rect --> round --> diamond
+    A[Start] --> B[End]
 
 ```
 
@@ -2740,42 +2825,6 @@ subgraph sg1[Process]
 A[Start] --> B[Middle]
 end
 B --> C[End]
-
-```
-
-</details>
-
-## simple
-
-`tests/fixtures/flowchart/simple.mmd`
-
-**Text**
-
-```text
-┌───────┐
-│ Start │
-└───────┘
-    │
-    │
-    ▼
- ┌─────┐
- │ End │
- └─────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![simple svg](../tests/svg-snapshots/flowchart/simple.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A[Start] --> B[End]
 
 ```
 
@@ -3147,6 +3196,67 @@ graph TD
 
 </details>
 
+## subgraph_direction_nested
+
+`tests/fixtures/flowchart/subgraph_direction_nested.mmd`
+
+**Text**
+
+```text
+┌──── Vertical Outer ─────┐
+│                         │
+│          ┌───┐          │
+│          │ D │          │
+│          └───┘          │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│            │            │
+│     ┌──────┘            │
+│     │                   │
+│┌── Horizontal Inner ───┐│
+││    │                  ││
+││    ▼                  ││
+││ ┌───┐  ┌───┐    ┌───┐ ││
+││ │ A │─►│ B │───►│ C │ ││
+││ └───┘  └───┘    └───┘ ││
+││                       ││
+│└───────────────────────┘│
+│                         │
+│                         │
+│                         │
+│                         │
+│                         │
+└─────────────────────────┘
+```
+
+<details>
+<summary>SVG output</summary>
+
+![subgraph_direction_nested svg](../tests/svg-snapshots/flowchart/subgraph_direction_nested.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    subgraph outer[Vertical Outer]
+        subgraph inner[Horizontal Inner]
+            direction LR
+            A --> B --> C
+        end
+        D --> A
+    end
+
+```
+
+</details>
+
 ## subgraph_direction_nested_both
 
 `tests/fixtures/flowchart/subgraph_direction_nested_both.mmd`
@@ -3212,47 +3322,36 @@ graph TD
 
 </details>
 
-## subgraph_direction_nested
+## subgraph_edges
 
-`tests/fixtures/flowchart/subgraph_direction_nested.mmd`
+`tests/fixtures/flowchart/subgraph_edges.mmd`
 
 **Text**
 
 ```text
-┌──── Vertical Outer ─────┐
-│                         │
-│          ┌───┐          │
-│          │ D │          │
-│          └───┘          │
-│            │            │
-│            │            │
-│            │            │
-│            │            │
-│            │            │
-│            │            │
-│            │            │
-│     ┌──────┘            │
-│     │                   │
-│┌── Horizontal Inner ───┐│
-││    │                  ││
-││    ▼                  ││
-││ ┌───┐  ┌───┐    ┌───┐ ││
-││ │ A │─►│ B │───►│ C │ ││
-││ └───┘  └───┘    └───┘ ││
-││                       ││
-│└───────────────────────┘│
-│                         │
-│                         │
-│                         │
-│                         │
-│                         │
-└─────────────────────────┘
+  ┌───────── Input ──────────┐
+  │  ┌──────┐    ┌────────┐  │
+  │  │ Data │    │ Config │  │
+  │  └──────┘    └────────┘  │
+  └──────┼───────────┼───────┘
+         │           │
+         │           │
+         │           │
+         │           │
+         │           │
+         │           │
+┌────────┼ Output ───┼──────┐
+│        ▼           ▼      │
+│   ┌────────┐    ┌─────┐   │
+│   │ Result │    │ Log │   │
+│   └────────┘    └─────┘   │
+└───────────────────────────┘
 ```
 
 <details>
 <summary>SVG output</summary>
 
-![subgraph_direction_nested svg](../tests/svg-snapshots/flowchart/subgraph_direction_nested.svg)
+![subgraph_edges svg](../tests/svg-snapshots/flowchart/subgraph_edges.svg)
 
 </details>
 
@@ -3261,13 +3360,16 @@ graph TD
 
 ```
 graph TD
-    subgraph outer[Vertical Outer]
-        subgraph inner[Horizontal Inner]
-            direction LR
-            A --> B --> C
-        end
-        D --> A
-    end
+subgraph sg1[Input]
+A[Data]
+B[Config]
+end
+subgraph sg2[Output]
+C[Result]
+D[Log]
+end
+A --> C
+B --> D
 
 ```
 
@@ -3311,59 +3413,6 @@ graph TD
 
 ```
 graph BT
-subgraph sg1[Input]
-A[Data]
-B[Config]
-end
-subgraph sg2[Output]
-C[Result]
-D[Log]
-end
-A --> C
-B --> D
-
-```
-
-</details>
-
-## subgraph_edges
-
-`tests/fixtures/flowchart/subgraph_edges.mmd`
-
-**Text**
-
-```text
-  ┌───────── Input ──────────┐
-  │  ┌──────┐    ┌────────┐  │
-  │  │ Data │    │ Config │  │
-  │  └──────┘    └────────┘  │
-  └──────┼───────────┼───────┘
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-┌────────┼ Output ───┼──────┐
-│        ▼           ▼      │
-│   ┌────────┐    ┌─────┐   │
-│   │ Result │    │ Log │   │
-│   └────────┘    └─────┘   │
-└───────────────────────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![subgraph_edges svg](../tests/svg-snapshots/flowchart/subgraph_edges.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
 subgraph sg1[Input]
 A[Data]
 B[Config]
