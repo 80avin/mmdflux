@@ -1,0 +1,65 @@
+name: Playground CI
+
+on:
+  push:
+    paths:
+      - "web/**"
+      - "crates/mmdflux-wasm/**"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Justfile"
+      - ".github/workflows/playground-ci.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - "crates/mmdflux-wasm/**"
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Justfile"
+      - ".github/workflows/playground-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  playground:
+    name: Test and Build Playground
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: playground-ci
+
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Run playground tests
+        working-directory: web
+        run: npm run test
+
+      - name: Build playground
+        working-directory: web
+        run: npm run build
