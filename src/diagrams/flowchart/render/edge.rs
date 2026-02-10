@@ -33,6 +33,37 @@ pub fn calc_label_position(segments: &[Segment]) -> Option<Point> {
     segments.last().map(Segment::end_point)
 }
 
+/// A label split into lines with precomputed dimensions.
+#[derive(Debug)]
+struct LabelBlock<'a> {
+    lines: Vec<&'a str>,
+    width: usize,
+    height: usize,
+}
+
+fn label_block(label: &str) -> LabelBlock<'_> {
+    let lines: Vec<&str> = label.split('\n').collect();
+    let width = lines
+        .iter()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
+    let height = lines.len().max(1);
+    LabelBlock {
+        lines,
+        width,
+        height,
+    }
+}
+
+fn label_top_for_center(center_y: usize, height: usize) -> usize {
+    center_y.saturating_sub(height / 2)
+}
+
+fn label_center_from_top(top_y: usize, height: usize) -> usize {
+    top_y + height / 2
+}
+
 fn exit_direction_from_segments(segments: &[Segment]) -> AttachDirection {
     match segments.first() {
         Some(Segment::Vertical { y_start, y_end, .. }) if *y_end > *y_start => {
@@ -110,14 +141,16 @@ fn draw_edge_label_with_tracking(
     placed_labels: &[PlacedLabel],
     charset: &CharSet,
 ) -> Option<PlacedLabel> {
-    let label_len = label.chars().count();
+    let block = label_block(label);
+    let label_width = block.width;
+    let label_height = block.height;
 
     // Calculate base position for label.
     // `on_h_seg` tracks whether we placed above a horizontal segment,
     // which means edge cell collisions should be ignored (the label
     // intentionally overwrites the jog line).
     let mut on_h_seg = false;
-    let (base_x, base_y) = {
+    let (base_x, base_center_y) = {
         match direction {
             Direction::TopDown | Direction::BottomTop => {
                 // For vertical layouts with Z-shaped paths (3+ segments),
@@ -137,7 +170,7 @@ fn draw_edge_label_with_tracking(
                                 Segment::Horizontal { x_start, x_end, .. } => {
                                     // Require padding so the label doesn't touch the
                                     // turn characters at segment endpoints.
-                                    x_start.abs_diff(*x_end) >= label_len + 2
+                                    x_start.abs_diff(*x_end) >= label_width + 2
                                 }
                                 _ => false,
                             })
@@ -155,7 +188,7 @@ fn draw_edge_label_with_tracking(
                         let seg_min_x = (*x_start).min(*x_end);
                         let seg_max_x = (*x_start).max(*x_end);
                         let seg_len = seg_max_x - seg_min_x;
-                        let label_x = seg_min_x + (seg_len - label_len) / 2;
+                        let label_x = seg_min_x + (seg_len - label_width) / 2;
                         on_h_seg = true;
                         (label_x, *y)
                     } else {
@@ -173,79 +206,81 @@ fn draw_edge_label_with_tracking(
                             // of the label, flip sides.
                             let (trial_x, trial_y) = find_label_position_on_segment_with_side(
                                 seg,
-                                label_len,
+                                label_width,
                                 place_right,
                             );
                             if label_adjacent_to_edge_on_far_side(
                                 canvas,
                                 trial_x,
                                 trial_y,
-                                label_len,
+                                label_width,
+                                label_height,
                                 place_right,
                             ) {
                                 place_right = !place_right;
                             }
 
-                            find_label_position_on_segment_with_side(seg, label_len, place_right)
+                            find_label_position_on_segment_with_side(seg, label_width, place_right)
                         } else {
                             // Fallback to midpoint
-                            let mid_y = (routed.start.y + routed.end.y) / 2;
-                            (routed.end.x.saturating_sub(label_len / 2), mid_y)
+                            let center_y = (routed.start.y + routed.end.y) / 2;
+                            (routed.end.x.saturating_sub(label_width / 2), center_y)
                         }
                     }
                 } else {
                     // Simple straight path - place label beside the edge line
-                    let mid_y = (routed.start.y + routed.end.y) / 2;
+                    let center_y = (routed.start.y + routed.end.y) / 2;
                     // Place label to the left of the edge, not centered on it
                     // This avoids collision with the edge line
-                    let label_x = routed.end.x.saturating_sub(label_len + 1);
-                    (label_x, mid_y)
+                    let label_x = routed.end.x.saturating_sub(label_width + 1);
+                    (label_x, center_y)
                 }
             }
             Direction::LeftRight => {
                 if routed.segments.len() >= 3 {
-                    label_on_horizontal_segment(routed, label_len)
+                    label_on_horizontal_segment(routed, label_width)
                 } else {
                     // Short/straight path — keep existing inline placement
-                    let mid_y = (routed.start.y + routed.end.y) / 2;
+                    let center_y = (routed.start.y + routed.end.y) / 2;
                     let max_label_end = routed.end.x.saturating_sub(1);
                     let min_x = routed.start.x.saturating_add(1);
                     let available = max_label_end.saturating_sub(routed.start.x);
-                    let label_x = if available >= label_len {
-                        let centered = routed.start.x + (available - label_len) / 2;
-                        let max_x = max_label_end.saturating_sub(label_len);
+                    let label_x = if available >= label_width {
+                        let centered = routed.start.x + (available - label_width) / 2;
+                        let max_x = max_label_end.saturating_sub(label_width);
                         centered.max(min_x).min(max_x)
                     } else {
                         min_x
                     };
-                    (label_x, mid_y)
+                    (label_x, center_y)
                 }
             }
             Direction::RightLeft => {
                 if routed.segments.len() >= 3 {
-                    label_on_horizontal_segment(routed, label_len)
+                    label_on_horizontal_segment(routed, label_width)
                 } else {
                     // Short/straight path — keep existing inline placement
-                    let mid_y = (routed.start.y + routed.end.y) / 2;
+                    let center_y = (routed.start.y + routed.end.y) / 2;
                     let mid_x = (routed.start.x + routed.end.x) / 2;
-                    let label_x = mid_x.saturating_sub(label_len / 2);
-                    let max_x = routed.start.x.saturating_sub(label_len + 1);
+                    let label_x = mid_x.saturating_sub(label_width / 2);
+                    let max_x = routed.start.x.saturating_sub(label_width + 1);
                     let min_x = routed.end.x.saturating_add(2);
                     let label_x = if max_x < min_x {
                         let available = routed.start.x.saturating_sub(routed.end.x);
-                        if available >= label_len {
-                            routed.end.x + (available - label_len) / 2
+                        if available >= label_width {
+                            routed.end.x + (available - label_width) / 2
                         } else {
                             routed.end.x
                         }
                     } else {
                         label_x.max(min_x).min(max_x)
                     };
-                    (label_x, mid_y)
+                    (label_x, center_y)
                 }
             }
         }
     };
+    let base_y = label_top_for_center(base_center_y, label_height);
 
     // Try to find a position that doesn't collide with nodes or other labels.
     // When placed above a horizontal segment, skip edge collision checks since
@@ -254,7 +289,7 @@ fn draw_edge_label_with_tracking(
     let (label_x, label_y) = find_safe_label_position(
         canvas,
         (base_x, base_y),
-        label_len,
+        (label_width, label_height),
         direction,
         placed_labels,
         check_edge,
@@ -267,52 +302,47 @@ fn draw_edge_label_with_tracking(
     // the edge midpoint sits between the two node rows where there is room.
     // Edge collision is ignored since the label intentionally overwrites the
     // edge path character at this position.
-    let (label_x, label_y) = if base_y.abs_diff(label_y) > 2 {
-        let alt_y = (routed.start.y + routed.end.y) / 2;
-        let alt_x = routed.end.x.saturating_sub(label_len / 2);
-        find_safe_label_position(
-            canvas,
-            (alt_x, alt_y),
-            label_len,
-            direction,
-            placed_labels,
-            false,
-            charset,
-        )
-    } else {
-        (label_x, label_y)
-    };
+    let (label_x, label_y) =
+        if base_center_y.abs_diff(label_center_from_top(label_y, label_height)) > 2 {
+            let alt_center_y = (routed.start.y + routed.end.y) / 2;
+            let alt_x = routed.end.x.saturating_sub(label_width / 2);
+            let alt_y = label_top_for_center(alt_center_y, label_height);
+            find_safe_label_position(
+                canvas,
+                (alt_x, alt_y),
+                (label_width, label_height),
+                direction,
+                placed_labels,
+                false,
+                charset,
+            )
+        } else {
+            (label_x, label_y)
+        };
     // Expand canvas if the label would extend past the right edge
-    let needed_width = label_x + label_len;
+    let needed_width = label_x + label_width;
     if needed_width > canvas.width() {
         canvas.expand_width(needed_width);
     }
 
-    // Write the label only to non-node cells, avoiding the arrow position
-    // Labels can overwrite edge cells since they're drawn after edges and should appear on top
-    // For horizontal layouts, don't overwrite the arrow at routed.end
+    // Write the label block only to non-node cells, avoiding the arrow positions.
     let arrow_pos = (routed.end.x, routed.end.y);
     let arrow_start_pos = (routed.start.x, routed.start.y);
-    for (i, ch) in label.chars().enumerate() {
-        let x = label_x + i;
-        // Skip if this would overwrite the arrow
-        if (x == arrow_pos.0 && label_y == arrow_pos.1)
-            || (x == arrow_start_pos.0 && label_y == arrow_start_pos.1)
-        {
-            continue;
-        }
-        // Only write if cell is not part of a node and not an arrow character
-        let cell = canvas.get(x, label_y);
-        let can_write = cell.is_some_and(|cell| !cell.is_node && !charset.is_arrow(cell.ch));
-        if can_write {
-            canvas.set(x, label_y, ch);
-        }
-    }
+    write_label_block(
+        canvas,
+        &block.lines,
+        label_x,
+        label_y,
+        label_width,
+        charset,
+        &[arrow_pos, arrow_start_pos],
+    );
 
     Some(PlacedLabel {
         x: label_x,
         y: label_y,
-        len: label_len,
+        width: label_width,
+        height: label_height,
     })
 }
 
@@ -395,18 +425,22 @@ fn find_label_position_on_segment_with_side(
 fn find_safe_label_position(
     canvas: &Canvas,
     base: (usize, usize),
-    label_len: usize,
+    label_size: (usize, usize),
     direction: Direction,
     placed_labels: &[PlacedLabel],
     check_edge_collision: bool,
     charset: &CharSet,
 ) -> (usize, usize) {
     let (base_x, base_y) = base;
+    let (label_width, label_height) = label_size;
     let has_collision = |x, y| {
-        label_collides_with_node(canvas, x, y, label_len)
-            || (check_edge_collision && label_collides_with_edge(canvas, x, y, label_len))
-            || label_collides_with_arrow(canvas, x, y, label_len, charset)
-            || placed_labels.iter().any(|p| p.overlaps(x, y, label_len))
+        label_collides_with_node(canvas, x, y, label_width, label_height)
+            || (check_edge_collision
+                && label_collides_with_edge(canvas, x, y, label_width, label_height))
+            || label_collides_with_arrow(canvas, x, y, label_width, label_height, charset)
+            || placed_labels
+                .iter()
+                .any(|p| p.overlaps(x, y, label_width, label_height))
     };
 
     // Check if the base position has any collision
@@ -459,13 +493,29 @@ fn find_safe_label_position(
 }
 
 /// Check if placing a label at the given position would collide with any node cells.
-fn label_collides_with_node(canvas: &Canvas, x: usize, y: usize, label_len: usize) -> bool {
-    (0..label_len).any(|i| canvas.get(x + i, y).is_some_and(|cell| cell.is_node))
+fn label_collides_with_node(
+    canvas: &Canvas,
+    x: usize,
+    y: usize,
+    label_width: usize,
+    label_height: usize,
+) -> bool {
+    (0..label_height).any(|dy| {
+        (0..label_width).any(|dx| canvas.get(x + dx, y + dy).is_some_and(|cell| cell.is_node))
+    })
 }
 
 /// Check if placing a label at the given position would collide with any edge cells.
-fn label_collides_with_edge(canvas: &Canvas, x: usize, y: usize, label_len: usize) -> bool {
-    (0..label_len).any(|i| canvas.get(x + i, y).is_some_and(|cell| cell.is_edge))
+fn label_collides_with_edge(
+    canvas: &Canvas,
+    x: usize,
+    y: usize,
+    label_width: usize,
+    label_height: usize,
+) -> bool {
+    (0..label_height).any(|dy| {
+        (0..label_width).any(|dx| canvas.get(x + dx, y + dy).is_some_and(|cell| cell.is_edge))
+    })
 }
 
 /// Check if placing a label at the given position would collide with any arrow characters.
@@ -473,13 +523,16 @@ fn label_collides_with_arrow(
     canvas: &Canvas,
     x: usize,
     y: usize,
-    label_len: usize,
+    label_width: usize,
+    label_height: usize,
     charset: &CharSet,
 ) -> bool {
-    (0..label_len).any(|i| {
-        canvas
-            .get(x + i, y)
-            .is_some_and(|cell| charset.is_arrow(cell.ch))
+    (0..label_height).any(|dy| {
+        (0..label_width).any(|dx| {
+            canvas
+                .get(x + dx, y + dy)
+                .is_some_and(|cell| charset.is_arrow(cell.ch))
+        })
     })
 }
 
@@ -495,24 +548,31 @@ fn label_adjacent_to_edge_on_far_side(
     canvas: &Canvas,
     label_x: usize,
     label_y: usize,
-    label_len: usize,
+    label_width: usize,
+    label_height: usize,
     place_right: bool,
 ) -> bool {
     if place_right {
         // Label is to the right of its segment; check cells just after the label end
-        let check_x = label_x + label_len;
-        (0..=1).any(|offset| {
-            canvas
-                .get(check_x + offset, label_y)
-                .is_some_and(|cell| cell.is_edge)
+        let check_x = label_x + label_width;
+        (0..label_height).any(|dy| {
+            let y = label_y + dy;
+            (0..=1).any(|offset| {
+                canvas
+                    .get(check_x + offset, y)
+                    .is_some_and(|cell| cell.is_edge)
+            })
         })
     } else {
         // Label is to the left of its segment; check cells just before the label start
-        (1..=2).any(|offset| {
-            label_x
-                .checked_sub(offset)
-                .and_then(|x| canvas.get(x, label_y))
-                .is_some_and(|cell| cell.is_edge)
+        (0..label_height).any(|dy| {
+            let y = label_y + dy;
+            (1..=2).any(|offset| {
+                label_x
+                    .checked_sub(offset)
+                    .and_then(|x| canvas.get(x, y))
+                    .is_some_and(|cell| cell.is_edge)
+            })
         })
     }
 }
@@ -730,21 +790,18 @@ fn draw_arrow(canvas: &mut Canvas, point: &Point, direction: Direction, charset:
 struct PlacedLabel {
     x: usize,
     y: usize,
-    len: usize,
+    width: usize,
+    height: usize,
 }
 
 impl PlacedLabel {
     /// Check if this label overlaps with a proposed label position.
-    fn overlaps(&self, x: usize, y: usize, len: usize) -> bool {
-        // Labels only collide if on the same row
-        if self.y != y {
-            return false;
-        }
-        // Check horizontal overlap
-        let self_end = self.x + self.len;
-        let other_end = x + len;
-        // Overlap if ranges intersect
-        x < self_end && self.x < other_end
+    fn overlaps(&self, x: usize, y: usize, width: usize, height: usize) -> bool {
+        let self_end_x = self.x + self.width;
+        let self_end_y = self.y + self.height;
+        let other_end_x = x + width;
+        let other_end_y = y + height;
+        x < self_end_x && self.x < other_end_x && y < self_end_y && self.y < other_end_y
     }
 }
 
@@ -817,7 +874,9 @@ pub fn render_all_edges_with_labels(
     for routed in routed_edges {
         if let Some(label) = &routed.edge.label {
             // Check for pre-computed label position from normalization
-            let label_len = label.chars().count();
+            let block = label_block(label);
+            let label_width = block.width;
+            let label_height = block.height;
 
             // Use precomputed position if available and within canvas bounds,
             // otherwise fall back to heuristic placement.
@@ -829,7 +888,7 @@ pub fn render_all_edges_with_labels(
                     .filter(|&&(px, py)| {
                         px < canvas.width()
                             && py < canvas.height()
-                            && px.saturating_add(label_len) <= canvas.width()
+                            && px.saturating_add(label_width) <= canvas.width()
                     })
             } else {
                 None
@@ -839,12 +898,12 @@ pub fn render_all_edges_with_labels(
                 // For backward edges, compute label position from actual routed path
                 // Center on midpoint, then run collision avoidance like forward edges
                 if let Some(midpoint) = calc_label_position(&routed.segments) {
-                    let base_x = midpoint.x.saturating_sub(label_len / 2);
-                    let base_y = midpoint.y;
+                    let base_x = midpoint.x.saturating_sub(label_width / 2);
+                    let base_y = label_top_for_center(midpoint.y, label_height);
                     let (safe_x, safe_y) = find_safe_label_position(
                         canvas,
                         (base_x, base_y),
-                        label_len,
+                        (label_width, label_height),
                         diagram_direction,
                         &placed_labels,
                         false,
@@ -865,11 +924,12 @@ pub fn render_all_edges_with_labels(
                 // Defensive safety net: route precomputed position through
                 // collision avoidance. When the midpoint formula is correct,
                 // find_safe_label_position returns the base position unchanged.
-                let base_x = pre_x.saturating_sub(label_len / 2);
+                let base_x = pre_x.saturating_sub(label_width / 2);
+                let base_y = label_top_for_center(pre_y, label_height);
                 let (safe_x, safe_y) = find_safe_label_position(
                     canvas,
-                    (base_x, pre_y),
-                    label_len,
+                    (base_x, base_y),
+                    (label_width, label_height),
                     diagram_direction,
                     &placed_labels,
                     false,
@@ -899,6 +959,37 @@ pub fn render_all_edges_with_labels(
 /// Used for backward edge labels where the position is already computed
 /// relative to the routed path. Expands the canvas if the label would
 /// extend beyond the current bounds.
+fn write_label_block(
+    canvas: &mut Canvas,
+    lines: &[&str],
+    x: usize,
+    y: usize,
+    block_width: usize,
+    charset: &CharSet,
+    blocked_points: &[(usize, usize)],
+) {
+    for (line_idx, line) in lines.iter().enumerate() {
+        let row_y = y + line_idx;
+        let line_width = line.chars().count();
+        let line_x = x + (block_width.saturating_sub(line_width) / 2);
+        for (ch_idx, ch) in line.chars().enumerate() {
+            let cell_x = line_x + ch_idx;
+            if blocked_points
+                .iter()
+                .any(|&(bx, by)| bx == cell_x && by == row_y)
+            {
+                continue;
+            }
+            if canvas
+                .get(cell_x, row_y)
+                .is_some_and(|cell| !cell.is_node && !charset.is_arrow(cell.ch))
+            {
+                canvas.set(cell_x, row_y, ch);
+            }
+        }
+    }
+}
+
 fn draw_label_direct(
     canvas: &mut Canvas,
     label: &str,
@@ -906,28 +997,23 @@ fn draw_label_direct(
     y: usize,
     charset: &CharSet,
 ) -> Option<PlacedLabel> {
-    let label_len = label.chars().count();
+    let block = label_block(label);
+    let label_width = block.width;
+    let label_height = block.height;
 
     // Expand canvas if label extends beyond current width
-    let needed_width = x + label_len;
+    let needed_width = x + label_width;
     if needed_width > canvas.width() {
         canvas.expand_width(needed_width);
     }
 
-    for (i, ch) in label.chars().enumerate() {
-        let cell_x = x + i;
-        if canvas
-            .get(cell_x, y)
-            .is_some_and(|cell| !cell.is_node && !charset.is_arrow(cell.ch))
-        {
-            canvas.set(cell_x, y, ch);
-        }
-    }
+    write_label_block(canvas, &block.lines, x, y, label_width, charset, &[]);
 
     Some(PlacedLabel {
         x,
         y,
-        len: label_len,
+        width: label_width,
+        height: label_height,
     })
 }
 
@@ -1126,6 +1212,57 @@ mod tests {
     }
 
     #[test]
+    fn test_render_multiline_edge_label_as_centered_block() {
+        let mut diagram = Diagram::new(Direction::TopDown);
+        diagram.add_node(Node::new("A").with_label("A"));
+        diagram.add_node(Node::new("B").with_label("B"));
+        diagram.add_edge(Edge::new("A", "B").with_label("yes\nno"));
+
+        let output = crate::render::render(&diagram, &crate::render::RenderOptions::default());
+        let lines: Vec<&str> = output.lines().collect();
+
+        let yes_line = lines
+            .iter()
+            .position(|l| l.contains("yes"))
+            .expect("missing first line of multiline label");
+        let no_line = lines
+            .iter()
+            .position(|l| l.contains("no"))
+            .expect("missing second line of multiline label");
+        assert_eq!(
+            no_line,
+            yes_line + 1,
+            "multiline label lines should render on consecutive rows:\n{output}"
+        );
+
+        let yes_col = lines[yes_line]
+            .find("yes")
+            .expect("could not locate 'yes' column");
+        let no_col = lines[no_line]
+            .find("no")
+            .expect("could not locate 'no' column");
+        assert!(
+            yes_col.abs_diff(no_col) <= 1,
+            "multiline label lines should stay horizontally aligned:\n{output}"
+        );
+
+        let a_line = lines
+            .iter()
+            .position(|l| l.contains(" A "))
+            .expect("missing node A row");
+        let b_line = lines
+            .iter()
+            .rposition(|l| l.contains(" B "))
+            .expect("missing node B row");
+        let edge_mid = (a_line + b_line) / 2;
+        let label_mid = (yes_line + no_line) / 2;
+        assert!(
+            label_mid.abs_diff(edge_mid) <= 1,
+            "multiline label should stay near the edge midpoint:\n{output}"
+        );
+    }
+
+    #[test]
     fn test_label_rendered_at_precomputed_position() {
         let output = crate::render::render(
             &{
@@ -1242,16 +1379,16 @@ mod tests {
         }
 
         // Label at y=5 should collide with edge
-        assert!(label_collides_with_edge(&canvas, 7, 5, 5));
+        assert!(label_collides_with_edge(&canvas, 7, 5, 5, 1));
 
         // Label at y=4 should not collide
-        assert!(!label_collides_with_edge(&canvas, 7, 4, 5));
+        assert!(!label_collides_with_edge(&canvas, 7, 4, 5, 1));
 
         // Label at y=6 should not collide
-        assert!(!label_collides_with_edge(&canvas, 7, 6, 5));
+        assert!(!label_collides_with_edge(&canvas, 7, 6, 5, 1));
 
         // Partial overlap still collides
-        assert!(label_collides_with_edge(&canvas, 3, 5, 5)); // ends at x=7, overlapping edge at x=5-7
+        assert!(label_collides_with_edge(&canvas, 3, 5, 5, 1)); // ends at x=7, overlapping edge at x=5-7
     }
 
     #[test]

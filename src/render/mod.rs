@@ -224,7 +224,13 @@ pub fn layout_config_for_diagram(diagram: &Diagram, options: &RenderOptions) -> 
         .edges
         .iter()
         .filter_map(|e| e.label.as_ref())
-        .map(|l| l.chars().count())
+        .map(|label| {
+            label
+                .split('\n')
+                .map(|line| line.chars().count())
+                .max()
+                .unwrap_or(0)
+        })
         .max()
         .unwrap_or(0);
 

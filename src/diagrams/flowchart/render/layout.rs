@@ -1644,6 +1644,17 @@ where
     build_dagre_layout_with_config(diagram, &dagre_config, node_dims, edge_label_dims)
 }
 
+fn text_edge_label_dimensions(label: &str) -> (f64, f64) {
+    let lines: Vec<&str> = label.split('\n').collect();
+    let width = lines
+        .iter()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
+    let height = lines.len().max(1);
+    (width as f64 + 2.0, height as f64)
+}
+
 /// Compute the layout using the dagre algorithm with direct coordinate translation.
 ///
 /// This uses uniform scale factors to translate dagre's float coordinates to ASCII
@@ -1668,7 +1679,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         |edge| {
             edge.label
                 .as_ref()
-                .map(|label| (label.len() as f64 + 2.0, 1.0))
+                .map(|label| text_edge_label_dimensions(label))
         },
     );
 
@@ -1682,7 +1693,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         |edge| {
             edge.label
                 .as_ref()
-                .map(|label| (label.len() as f64 + 2.0, 1.0))
+                .map(|label| text_edge_label_dimensions(label))
         },
     );
 
@@ -3490,7 +3501,7 @@ mod tests {
             |edge| {
                 edge.label
                     .as_ref()
-                    .map(|label| (label.len() as f64 + 2.0, 1.0))
+                    .map(|label| text_edge_label_dimensions(label))
             },
         );
 
