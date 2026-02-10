@@ -5,3 +5,4 @@ public/wasm-pkg/
 src/wasm-pkg/
 .benchmarks/
 benchmark-results/
+.vite/
