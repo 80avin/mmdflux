@@ -1,8 +1,15 @@
 import "../styles/main.css";
 
 import { createEditorController } from "./editor";
+import {
+  DEFAULT_EXAMPLE_ID,
+  findExampleById,
+  PLAYGROUND_EXAMPLES
+} from "./examples";
 import { createLiveUpdateController } from "./live-update";
 import { createPreviewController } from "./preview";
+import { decodeShareState, encodeShareState } from "./share";
+import { createThemeController, type ThemePreference } from "./theme";
 import type {
   WorkerOutputFormat,
   WorkerRequestMessage,
@@ -34,10 +41,10 @@ export interface RenderWorkerClient {
 
 type PlaygroundFormat = "text" | "svg" | "mmds";
 
-const DEFAULT_INPUT = `graph TD
-A[Start] --> B{Decision}
-B -->|Yes| C[Done]
-B -->|No| D[Retry]`;
+export interface RenderAppOptions {
+  renderClientFactory?: () => RenderWorkerClient | null;
+  debounceMs?: number;
+}
 
 function createDefaultWorker(): Worker {
   return new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
@@ -49,6 +56,39 @@ function isPlaygroundFormat(value: string): value is PlaygroundFormat {
 
 function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function nextThemePreference(current: ThemePreference): ThemePreference {
+  if (current === "system") {
+    return "light";
+  }
+  if (current === "light") {
+    return "dark";
+  }
+  return "system";
+}
+
+function formatThemeLabel(preference: ThemePreference): string {
+  if (preference === "system") {
+    return "Theme: System";
+  }
+  if (preference === "light") {
+    return "Theme: Light";
+  }
+  return "Theme: Dark";
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (!navigator.clipboard?.writeText) {
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function createRenderWorkerClient(
@@ -110,15 +150,28 @@ export function createRenderWorkerClient(
   };
 }
 
-export function renderApp(root: HTMLElement): void {
+export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): void {
+  const restoredShareState = decodeShareState(window.location.hash);
+  const defaultExample = findExampleById(DEFAULT_EXAMPLE_ID) ?? PLAYGROUND_EXAMPLES[0];
+  const initialInput = restoredShareState?.input ?? defaultExample?.input ?? "";
+  const initialFormat = restoredShareState?.format ?? "text";
+
   root.innerHTML = `
     <main class="playground">
       <header class="toolbar">
         <h1>mmdflux Playground</h1>
-        <div class="format-tabs" role="tablist" aria-label="Output format">
-          <button type="button" role="tab" data-format="text" aria-selected="true" class="is-active">Text</button>
-          <button type="button" role="tab" data-format="svg" aria-selected="false">SVG</button>
-          <button type="button" role="tab" data-format="mmds" aria-selected="false">MMDS</button>
+        <div class="toolbar-actions">
+          <label class="example-picker">
+            <span>Example</span>
+            <select data-example-select></select>
+          </label>
+          <div class="format-tabs" role="tablist" aria-label="Output format">
+            <button type="button" role="tab" data-format="text" aria-selected="true" class="is-active">Text</button>
+            <button type="button" role="tab" data-format="svg" aria-selected="false">SVG</button>
+            <button type="button" role="tab" data-format="mmds" aria-selected="false">MMDS</button>
+          </div>
+          <button type="button" class="toolbar-button" data-theme-toggle>Theme: System</button>
+          <button type="button" class="toolbar-button" data-share>Copy Share URL</button>
         </div>
       </header>
       <section class="workspace">
@@ -128,6 +181,7 @@ export function renderApp(root: HTMLElement): void {
         </div>
         <div class="panel">
           <h2>Preview</h2>
+          <p class="share-status" data-share-status hidden></p>
           <p class="preview-error" data-preview-error hidden></p>
           <div class="preview-output" data-preview-output></div>
         </div>
@@ -138,11 +192,23 @@ export function renderApp(root: HTMLElement): void {
   const editorRoot = root.querySelector<HTMLElement>("[data-editor-root]");
   const previewOutput = root.querySelector<HTMLElement>("[data-preview-output]");
   const previewError = root.querySelector<HTMLElement>("[data-preview-error]");
+  const shareStatus = root.querySelector<HTMLElement>("[data-share-status]");
+  const shareButton = root.querySelector<HTMLButtonElement>("[data-share]");
+  const themeToggleButton = root.querySelector<HTMLButtonElement>("[data-theme-toggle]");
+  const exampleSelect = root.querySelector<HTMLSelectElement>("[data-example-select]");
   const formatButtons = root.querySelectorAll<HTMLButtonElement>(
     ".format-tabs button[data-format]"
   );
 
-  if (!editorRoot || !previewOutput || !previewError) {
+  if (
+    !editorRoot ||
+    !previewOutput ||
+    !previewError ||
+    !shareStatus ||
+    !shareButton ||
+    !themeToggleButton ||
+    !exampleSelect
+  ) {
     return;
   }
 
@@ -152,12 +218,54 @@ export function renderApp(root: HTMLElement): void {
   });
   const editor = createEditorController({
     root: editorRoot,
-    initialValue: DEFAULT_INPUT
+    initialValue: initialInput
   });
 
-  let selectedFormat: PlaygroundFormat = "text";
-  const workerClient =
-    typeof Worker === "undefined" ? null : createRenderWorkerClient();
+  for (const example of PLAYGROUND_EXAMPLES) {
+    const option = document.createElement("option");
+    option.value = example.id;
+    option.textContent = `${example.name} · ${example.description}`;
+    exampleSelect.append(option);
+  }
+
+  const matchedExample = PLAYGROUND_EXAMPLES.find(
+    (example) => example.input === initialInput
+  );
+  if (matchedExample) {
+    exampleSelect.value = matchedExample.id;
+  } else {
+    const customOption = document.createElement("option");
+    customOption.value = "__custom__";
+    customOption.textContent = "Custom from URL";
+    exampleSelect.prepend(customOption);
+    exampleSelect.value = "__custom__";
+  }
+
+  const storage = (() => {
+    try {
+      return window.localStorage;
+    } catch {
+      return undefined;
+    }
+  })();
+  const matchMedia =
+    typeof window.matchMedia === "function"
+      ? window.matchMedia.bind(window)
+      : undefined;
+  const themeController = createThemeController({
+    root: document.documentElement,
+    storage,
+    matchMedia
+  });
+  themeController.apply();
+  themeToggleButton.textContent = formatThemeLabel(themeController.getPreference());
+
+  let selectedFormat: PlaygroundFormat = initialFormat;
+  const workerClient = options.renderClientFactory
+    ? options.renderClientFactory()
+    : typeof Worker === "undefined"
+      ? null
+      : createRenderWorkerClient();
 
   const setFormat = (format: PlaygroundFormat): void => {
     selectedFormat = format;
@@ -168,13 +276,18 @@ export function renderApp(root: HTMLElement): void {
     }
   };
 
+  const updateShareStatus = (message: string): void => {
+    shareStatus.hidden = false;
+    shareStatus.textContent = message;
+  };
+
   if (!workerClient) {
     preview.showError("Web Worker support is unavailable in this environment.");
     return;
   }
 
   const liveUpdate = createLiveUpdateController({
-    debounceMs: 200,
+    debounceMs: options.debounceMs ?? 200,
     render: (request) => workerClient.render(request),
     onResult: (response) => {
       preview.showResult({
@@ -206,6 +319,43 @@ export function renderApp(root: HTMLElement): void {
       scheduleRender();
     });
   }
+
+  exampleSelect.addEventListener("change", () => {
+    const nextExample = findExampleById(exampleSelect.value);
+    if (!nextExample) {
+      return;
+    }
+
+    editor.setValue(nextExample.input);
+    scheduleRender();
+  });
+
+  themeToggleButton.addEventListener("click", () => {
+    const nextPreference = nextThemePreference(themeController.getPreference());
+    themeController.setPreference(nextPreference);
+    themeToggleButton.textContent = formatThemeLabel(
+      themeController.getPreference()
+    );
+  });
+
+  shareButton.addEventListener("click", () => {
+    const shareState = {
+      input: editor.getValue(),
+      format: selectedFormat
+    };
+    const hash = encodeShareState(shareState);
+    const shareUrl = `${window.location.origin}${window.location.pathname}#${hash}`;
+
+    history.replaceState(null, "", `#${hash}`);
+
+    void copyToClipboard(shareUrl).then((copied) => {
+      if (copied) {
+        updateShareStatus("Share URL copied to clipboard.");
+        return;
+      }
+      updateShareStatus("Share URL updated in address bar.");
+    });
+  });
 
   editor.onChange(() => {
     scheduleRender();
