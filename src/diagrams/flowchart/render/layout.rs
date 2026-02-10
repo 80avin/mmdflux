@@ -418,6 +418,32 @@ fn reconcile_sublayouts_draw(
             sub_draw_nodes.push((node_id.0.clone(), x, y, w, h));
         }
 
+        // Repair overlapping/touching nodes along the primary axis.
+        // After scaling and rounding, the leftmost (or topmost) node can clip
+        // to position 0 via saturating_sub, collapsing the gap to its neighbor.
+        // Push only the affected nodes apart by the minimum amount needed for
+        // edge rendering (2 chars: stem + arrowhead).
+        let min_gap = 2;
+        if !sub_is_vertical {
+            sub_draw_nodes.sort_by_key(|n| n.1); // sort by x
+            for i in 1..sub_draw_nodes.len() {
+                let prev_right = sub_draw_nodes[i - 1].1 + sub_draw_nodes[i - 1].3;
+                let needed = prev_right + min_gap;
+                if sub_draw_nodes[i].1 < needed {
+                    sub_draw_nodes[i].1 = needed;
+                }
+            }
+        } else {
+            sub_draw_nodes.sort_by_key(|n| n.2); // sort by y
+            for i in 1..sub_draw_nodes.len() {
+                let prev_bottom = sub_draw_nodes[i - 1].2 + sub_draw_nodes[i - 1].4;
+                let needed = prev_bottom + min_gap;
+                if sub_draw_nodes[i].2 < needed {
+                    sub_draw_nodes[i].2 = needed;
+                }
+            }
+        }
+
         if sub_draw_nodes.is_empty() {
             continue;
         }
