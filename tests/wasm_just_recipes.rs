@@ -12,11 +12,15 @@ fn justfile_exposes_wasm_recipes() {
     });
 
     assert!(
-        contents.lines().any(|line| line.trim_start().starts_with("wasm-build:")),
+        contents
+            .lines()
+            .any(|line| line.trim_start().starts_with("wasm-build:")),
         "Justfile must include `wasm-build` recipe"
     );
     assert!(
-        contents.lines().any(|line| line.trim_start().starts_with("wasm-test:")),
+        contents
+            .lines()
+            .any(|line| line.trim_start().starts_with("wasm-test:")),
         "Justfile must include `wasm-test` recipe"
     );
 }
