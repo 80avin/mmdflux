@@ -3,3 +3,5 @@ dist/
 coverage/
 public/wasm-pkg/
 src/wasm-pkg/
+.benchmarks/
+benchmark-results/

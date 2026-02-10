@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import { JSDOM } from "jsdom";
@@ -6,6 +6,7 @@ import { JSDOM } from "jsdom";
 import {
   createBenchmarkReport,
   createSummaryRows,
+  toBenchmarkReportJson,
   type BenchmarkEngineInput,
   type BenchmarkReport
 } from "../src/benchmark-report.ts";
@@ -14,6 +15,7 @@ import {
   type BenchmarkEngineRunner
 } from "../src/benchmarks/engine-runners.ts";
 import { BENCHMARK_SCENARIOS, type BenchmarkScenario } from "../src/benchmarks/scenarios.ts";
+import { formatTable } from "./table-format.ts";
 
 type EngineId = BenchmarkEngineRunner["id"];
 
@@ -40,12 +42,20 @@ interface BenchmarkSmokeRunResult {
   failures: string[];
 }
 
+interface BenchmarkSmokeCliOptions {
+  outPath?: string;
+  full: boolean;
+  enforceThresholds: boolean;
+}
+
+const SMOKE_SCENARIOS = BENCHMARK_SCENARIOS.filter(
+  (scenario) => scenario.complexity !== "large"
+);
+
 export const BENCHMARK_SMOKE_POLICY: BenchmarkSmokePolicy = {
   warmupIterations: 1,
   measurementIterations: 3,
-  scenarios: BENCHMARK_SCENARIOS.filter(
-    (scenario) => scenario.complexity !== "large"
-  ),
+  scenarios: SMOKE_SCENARIOS,
   thresholds: {
     maxMeanMsByEngine: {
       mmdflux: 500,
@@ -68,23 +78,93 @@ function roundTo(value: number, precision = 2): number {
 }
 
 function formatSummaryTable(report: BenchmarkReport): string {
-  const rows = createSummaryRows(report);
-  const table = [
-    "Scenario | Engine | Mean (ms) | Median (ms) | P95 (ms) | Min (ms) | Max (ms)",
-    "--- | --- | ---: | ---: | ---: | ---: | ---:"
-  ];
+  const rows = createSummaryRows(report).map((row) => ({
+    scenario: `${row.scenarioName} (${row.complexity})`,
+    engine: row.engineLabel,
+    meanMs: row.meanMs.toFixed(2),
+    medianMs: row.medianMs.toFixed(2),
+    p95Ms: row.p95Ms.toFixed(2),
+    minMs: row.minMs.toFixed(2),
+    maxMs: row.maxMs.toFixed(2)
+  }));
 
-  for (const row of rows) {
-    table.push(
-      `${row.scenarioName} (${row.complexity}) | ${row.engineLabel} | ${row.meanMs.toFixed(
-        2
-      )} | ${row.medianMs.toFixed(2)} | ${row.p95Ms.toFixed(
-        2
-      )} | ${row.minMs.toFixed(2)} | ${row.maxMs.toFixed(2)}`
-    );
+  return formatTable(rows, [
+    {
+      header: "Scenario",
+      value: (row) => row.scenario
+    },
+    {
+      header: "Engine",
+      value: (row) => row.engine
+    },
+    {
+      header: "Mean (ms)",
+      align: "right",
+      value: (row) => row.meanMs
+    },
+    {
+      header: "Median (ms)",
+      align: "right",
+      value: (row) => row.medianMs
+    },
+    {
+      header: "P95 (ms)",
+      align: "right",
+      value: (row) => row.p95Ms
+    },
+    {
+      header: "Min (ms)",
+      align: "right",
+      value: (row) => row.minMs
+    },
+    {
+      header: "Max (ms)",
+      align: "right",
+      value: (row) => row.maxMs
+    }
+  ]);
+}
+
+function parseCliOptions(args: readonly string[]): BenchmarkSmokeCliOptions {
+  const options: BenchmarkSmokeCliOptions = {
+    full: false,
+    enforceThresholds: true
+  };
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === "--out") {
+      const outPath = args[index + 1];
+      if (!outPath) {
+        throw new Error("missing value for --out");
+      }
+      options.outPath = outPath;
+      index += 1;
+      continue;
+    }
+    if (arg === "--full") {
+      options.full = true;
+      continue;
+    }
+    if (arg === "--no-thresholds") {
+      options.enforceThresholds = false;
+      continue;
+    }
+
+    throw new Error(`unknown argument: ${arg}`);
   }
 
-  return table.join("\n");
+  return options;
+}
+
+function policyForCliOptions(cliOptions: BenchmarkSmokeCliOptions): BenchmarkSmokePolicy {
+  if (!cliOptions.full) {
+    return BENCHMARK_SMOKE_POLICY;
+  }
+
+  return {
+    ...BENCHMARK_SMOKE_POLICY,
+    scenarios: BENCHMARK_SCENARIOS
+  };
 }
 
 function evaluateThresholds(
@@ -285,25 +365,39 @@ export async function runBenchmarkSmoke(
   }
 }
 
-async function main(): Promise<void> {
-  console.log("Running benchmark smoke checks...");
-  console.log(
-    `Scenarios: ${BENCHMARK_SMOKE_POLICY.scenarios
-      .map((scenario) => scenario.id)
-      .join(", ")}`
-  );
-  console.log(
-    `Iterations: warmup=${BENCHMARK_SMOKE_POLICY.warmupIterations}, measured=${BENCHMARK_SMOKE_POLICY.measurementIterations}`
-  );
-
+async function main(args: readonly string[] = process.argv.slice(2)): Promise<void> {
   try {
-    const result = await runBenchmarkSmoke();
+    const cliOptions = parseCliOptions(args);
+    const policy = policyForCliOptions(cliOptions);
+
+    console.log(
+      `Running benchmark ${cliOptions.full ? "full" : "smoke"} checks...`
+    );
+    console.log(
+      `Scenarios: ${policy.scenarios
+        .map((scenario) => scenario.id)
+        .join(", ")}`
+    );
+    console.log(
+      `Iterations: warmup=${policy.warmupIterations}, measured=${policy.measurementIterations}`
+    );
+    console.log(
+      `Threshold checks: ${cliOptions.enforceThresholds ? "enabled" : "disabled"}`
+    );
+
+    const result = await runBenchmarkSmoke({ policy });
 
     console.log("");
     console.log(formatSummaryTable(result.report));
     console.log("");
 
-    if (result.failures.length > 0) {
+    if (cliOptions.outPath) {
+      await writeFile(cliOptions.outPath, toBenchmarkReportJson(result.report), "utf8");
+      console.log(`Wrote benchmark report JSON: ${cliOptions.outPath}`);
+      console.log("");
+    }
+
+    if (result.failures.length > 0 && cliOptions.enforceThresholds) {
       console.error("Benchmark smoke checks failed:");
       for (const failure of result.failures) {
         console.error(`- ${failure}`);
@@ -312,7 +406,17 @@ async function main(): Promise<void> {
       return;
     }
 
-    console.log("Benchmark smoke checks passed.");
+    if (result.failures.length > 0) {
+      console.log("Threshold checks disabled; potential issues observed:");
+      for (const failure of result.failures) {
+        console.log(`- ${failure}`);
+      }
+      console.log("");
+    }
+
+    console.log(
+      `Benchmark ${cliOptions.full ? "full" : "smoke"} checks completed.`
+    );
   } catch (error) {
     console.error(`Benchmark smoke checks failed to run: ${toMessage(error)}`);
     process.exitCode = 1;

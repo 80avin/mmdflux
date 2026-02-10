@@ -10,11 +10,22 @@ npm run test
 npm run build
 npm run dev
 npm run benchmark:smoke
+npm run benchmark:smoke:release
+npm run benchmark:full
+npm run benchmark:full:release
+npm run benchmark:compare -- --baseline <path-to-baseline.json>
+npm run benchmark:compare:release -- --baseline <path-to-baseline.json>
 ```
 
 `npm run dev`, `npm run build`, and `npm run test` call `wasm-pack` to refresh `src/wasm-pkg` from `../crates/mmdflux-wasm`.
 
 `npm run benchmark:smoke` also refreshes `src/wasm-pkg`, then runs `scripts/benchmark-smoke.ts` to execute reduced benchmark scenarios against mmdflux and mermaid with conservative CI thresholds.
+
+`npm run benchmark:smoke:release` does the same smoke run but builds WASM with `--release`, which is better for representative performance comparisons.
+
+`benchmark:full*` commands include all scenarios (`small`, `medium`, `large`) and disable threshold enforcement by default so they act as non-gating exploratory runs.
+
+`benchmark:compare*` commands run current smoke benchmarks and compare against a baseline JSON report, including delta metrics (`ΔMean`, `ΔP95`, and speedup).
 
 ## Deploy Runbook
 
@@ -45,6 +56,21 @@ Operator sequence:
 
 The benchmark runner uses mmdflux WASM and mermaid through a shared `warm`/`render` contract and reports `mean`, `median`, `p95`, `min`, and `max` values.
 
+For terminal readability, smoke and compare scripts print fixed-width tables with aligned numeric columns.
+
+Delta workflow example:
+
+1. Capture a baseline:
+   `npm run benchmark:smoke:release -- --out .benchmarks/baseline-release.json`
+2. Compare current run to baseline:
+   `npm run benchmark:compare:release -- --baseline .benchmarks/baseline-release.json`
+3. Optional regression gate (fail if either `ΔMean` or `ΔP95` exceeds threshold):
+   `npm run benchmark:compare:release -- --baseline .benchmarks/baseline-release.json --max-regression-pct 25`
+
+Full benchmark example (includes `flowchart-large`, non-gating):
+
+`npm run benchmark:full:release -- --out .benchmarks/full-release.json`
+
 Interpretation caveats:
 
 - Results are machine/browser specific and should be compared on the same host/runtime.
@@ -62,7 +88,10 @@ Interpretation caveats:
 
 The goal is to catch catastrophic regressions while avoiding noisy machine-specific failures.
 
+Local benchmark outputs are intentionally untracked; `.benchmarks/` is gitignored for baseline/result files.
+
 CI wiring is optional by default: `playground-ci.yml` exposes a `workflow_dispatch` input (`run_benchmark_smoke`) so operators can run the smoke step on demand.
+When running optional smoke checks from `workflow_dispatch`, `benchmark_profile` can be set to `dev` or `release`.
 
 ## Included Examples
 

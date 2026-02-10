@@ -5,10 +5,18 @@
   "type": "module",
   "scripts": {
     "wasm:build": "wasm-pack build ../crates/mmdflux-wasm --target web --dev --out-dir ../../web/src/wasm-pkg",
+    "wasm:build:release": "wasm-pack build ../crates/mmdflux-wasm --target web --release --out-dir ../../web/src/wasm-pkg",
     "dev": "npm run wasm:build && vite",
     "build": "npm run wasm:build && tsc --noEmit && vite build",
     "test": "npm run wasm:build && vitest run",
-    "benchmark:smoke": "npm run wasm:build && node --experimental-strip-types scripts/benchmark-smoke.ts"
+    "benchmark:smoke:run": "node --experimental-strip-types scripts/benchmark-smoke.ts",
+    "benchmark:smoke": "npm run wasm:build && npm run benchmark:smoke:run --",
+    "benchmark:smoke:release": "npm run wasm:build:release && npm run benchmark:smoke:run --",
+    "benchmark:full": "npm run wasm:build && npm run benchmark:smoke:run -- --full --no-thresholds",
+    "benchmark:full:release": "npm run wasm:build:release && npm run benchmark:smoke:run -- --full --no-thresholds",
+    "benchmark:compare:run": "node --experimental-strip-types scripts/benchmark-compare.ts",
+    "benchmark:compare": "npm run wasm:build && npm run benchmark:compare:run --",
+    "benchmark:compare:release": "npm run wasm:build:release && npm run benchmark:compare:run --"
   },
   "devDependencies": {
     "@types/node": "^24.3.1",

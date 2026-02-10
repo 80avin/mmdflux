@@ -26,6 +26,14 @@ on:
         required: false
         default: false
         type: boolean
+      benchmark_profile:
+        description: "WASM build profile for optional benchmark smoke checks"
+        required: false
+        default: dev
+        type: choice
+        options:
+          - dev
+          - release
 
 permissions:
   contents: read
@@ -73,4 +81,10 @@ jobs:
       - name: Run benchmark smoke checks (optional)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_benchmark_smoke == 'true' }}
         working-directory: web
-        run: npm run benchmark:smoke
+        shell: bash
+        run: |
+          if [[ "${{ github.event.inputs.benchmark_profile }}" == "release" ]]; then
+            npm run benchmark:smoke:release
+          else
+            npm run benchmark:smoke
+          fi
