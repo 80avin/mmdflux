@@ -49,7 +49,7 @@ function normalizeDelay(delay: number): number {
 }
 
 export function createLiveUpdateController(
-  options: LiveUpdateControllerOptions
+  options: LiveUpdateControllerOptions,
 ): LiveUpdateController {
   const debounceSetting = options.debounceMs ?? 200;
   let nextSeq = 0;
@@ -66,7 +66,7 @@ export function createLiveUpdateController(
         seq,
         input: request.input,
         format: request.format,
-        configJson: request.configJson
+        configJson: request.configJson,
       })
       .then((result) => {
         if (result.seq !== latestSeq) {
@@ -88,7 +88,7 @@ export function createLiveUpdateController(
       const debounceMs = normalizeDelay(
         typeof debounceSetting === "function"
           ? debounceSetting(request)
-          : debounceSetting
+          : debounceSetting,
       );
 
       if (timeoutHandle !== null) {
@@ -116,6 +116,6 @@ export function createLiveUpdateController(
         clearTimeout(timeoutHandle);
         timeoutHandle = null;
       }
-    }
+    },
   };
 }

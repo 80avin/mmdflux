@@ -35,7 +35,7 @@ function isThemePreference(value: string): value is ThemePreference {
 }
 
 export function createThemeController(
-  options: ThemeControllerOptions
+  options: ThemeControllerOptions,
 ): ThemeController {
   const storage = options.storage;
   const mediaQuery = options.matchMedia?.("(prefers-color-scheme: dark)");
@@ -49,7 +49,7 @@ export function createThemeController(
   const apply = (): ResolvedTheme => {
     const resolved = resolveTheme({
       preference,
-      systemPrefersDark: Boolean(mediaQuery?.matches)
+      systemPrefersDark: Boolean(mediaQuery?.matches),
     });
     options.root.dataset.theme = resolved;
     options.root.dataset.themePreference = preference;
@@ -63,6 +63,6 @@ export function createThemeController(
       preference = nextPreference;
       storage?.setItem(THEME_STORAGE_KEY, nextPreference);
       return apply();
-    }
+    },
   };
 }

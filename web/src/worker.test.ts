@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import { createRenderRequestHandler } from "./worker";
 import type {
   WorkerRequestMessage,
-  WorkerResponseMessage
+  WorkerResponseMessage,
 } from "./worker-protocol";
-import { createRenderRequestHandler } from "./worker";
 
 interface MockWasmModule {
   default: () => Promise<void>;
@@ -13,18 +13,22 @@ interface MockWasmModule {
 describe("createRenderRequestHandler", () => {
   it("initializes worker once and returns render results", async () => {
     const initialize = vi.fn(async () => {});
-    const render = vi.fn((input: string, format: string, configJson: string) => {
-      return `${format}:${input}:${configJson}`;
-    });
-    const loadWasmModule = vi.fn(async (): Promise<MockWasmModule> => ({
-      default: initialize,
-      render
-    }));
+    const render = vi.fn(
+      (input: string, format: string, configJson: string) => {
+        return `${format}:${input}:${configJson}`;
+      },
+    );
+    const loadWasmModule = vi.fn(
+      async (): Promise<MockWasmModule> => ({
+        default: initialize,
+        render,
+      }),
+    );
 
     const responses: WorkerResponseMessage[] = [];
     const handler = createRenderRequestHandler({
       loadWasmModule,
-      postMessage: (message) => responses.push(message)
+      postMessage: (message) => responses.push(message),
     });
 
     const first: WorkerRequestMessage = {
@@ -32,14 +36,14 @@ describe("createRenderRequestHandler", () => {
       seq: 1,
       input: "graph TD\nA-->B",
       format: "text",
-      configJson: "{}"
+      configJson: "{}",
     };
     const second: WorkerRequestMessage = {
       type: "render",
       seq: 2,
       input: "graph TD\nB-->C",
       format: "svg",
-      configJson: "{\"padding\":2}"
+      configJson: '{"padding":2}',
     };
 
     await handler(first);
@@ -53,29 +57,31 @@ describe("createRenderRequestHandler", () => {
         type: "result",
         seq: 1,
         format: "text",
-        output: "text:graph TD\nA-->B:{}"
+        output: "text:graph TD\nA-->B:{}",
       },
       {
         type: "result",
         seq: 2,
         format: "svg",
-        output: "svg:graph TD\nB-->C:{\"padding\":2}"
-      }
+        output: 'svg:graph TD\nB-->C:{"padding":2}',
+      },
     ]);
   });
 
   it("returns structured error payload on render failure", async () => {
-    const loadWasmModule = vi.fn(async (): Promise<MockWasmModule> => ({
-      default: async () => {},
-      render: () => {
-        throw new Error("unknown output format: bad");
-      }
-    }));
+    const loadWasmModule = vi.fn(
+      async (): Promise<MockWasmModule> => ({
+        default: async () => {},
+        render: () => {
+          throw new Error("unknown output format: bad");
+        },
+      }),
+    );
 
     const responses: WorkerResponseMessage[] = [];
     const handler = createRenderRequestHandler({
       loadWasmModule,
-      postMessage: (message) => responses.push(message)
+      postMessage: (message) => responses.push(message),
     });
 
     const request: WorkerRequestMessage = {
@@ -83,7 +89,7 @@ describe("createRenderRequestHandler", () => {
       seq: 42,
       input: "graph TD\nA-->B",
       format: "text",
-      configJson: "{}"
+      configJson: "{}",
     };
 
     await handler(request);
@@ -92,7 +98,7 @@ describe("createRenderRequestHandler", () => {
     expect(responses[0]).toEqual({
       type: "error",
       seq: 42,
-      error: "unknown output format: bad"
+      error: "unknown output format: bad",
     });
   });
 });

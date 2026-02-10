@@ -4,11 +4,11 @@ import { createEditorController } from "./editor";
 import {
   DEFAULT_EXAMPLE_ID,
   findExampleById,
-  PLAYGROUND_EXAMPLES
+  PLAYGROUND_EXAMPLES,
 } from "./examples";
 import {
   createLiveUpdateController,
-  type LiveUpdateDebounceSetting
+  type LiveUpdateDebounceSetting,
 } from "./live-update";
 import { createPreviewController } from "./preview";
 import { decodeShareState, encodeShareState } from "./share";
@@ -16,7 +16,7 @@ import { createThemeController, type ThemePreference } from "./theme";
 import type {
   WorkerOutputFormat,
   WorkerRequestMessage,
-  WorkerResponseMessage
+  WorkerResponseMessage,
 } from "./worker-protocol";
 
 export interface RenderRequest {
@@ -75,7 +75,9 @@ function defaultAdaptiveDebounce(requestInput: string): number {
   return 120;
 }
 
-function resolveStateStorage(explicitStorage?: StateStorage): StateStorage | undefined {
+function resolveStateStorage(
+  explicitStorage?: StateStorage,
+): StateStorage | undefined {
   if (explicitStorage) {
     return explicitStorage;
   }
@@ -88,7 +90,7 @@ function resolveStateStorage(explicitStorage?: StateStorage): StateStorage | und
 }
 
 function parsePersistedPlaygroundState(
-  rawValue: string | null
+  rawValue: string | null,
 ): PersistedPlaygroundState | null {
   if (!rawValue) {
     return null;
@@ -102,14 +104,17 @@ function parsePersistedPlaygroundState(
     if (typeof parsed.input !== "string") {
       return null;
     }
-    if (typeof parsed.format !== "string" || !isPlaygroundFormat(parsed.format)) {
+    if (
+      typeof parsed.format !== "string" ||
+      !isPlaygroundFormat(parsed.format)
+    ) {
       return null;
     }
 
     return {
       v: 1,
       input: parsed.input,
-      format: parsed.format
+      format: parsed.format,
     };
   } catch {
     return null;
@@ -117,20 +122,20 @@ function parsePersistedPlaygroundState(
 }
 
 function readPersistedPlaygroundState(
-  storage: StateStorage | undefined
+  storage: StateStorage | undefined,
 ): PersistedPlaygroundState | null {
   if (!storage) {
     return null;
   }
 
   return parsePersistedPlaygroundState(
-    storage.getItem(PLAYGROUND_STATE_STORAGE_KEY)
+    storage.getItem(PLAYGROUND_STATE_STORAGE_KEY),
   );
 }
 
 function persistPlaygroundState(
   storage: StateStorage | undefined,
-  state: PersistedPlaygroundState
+  state: PersistedPlaygroundState,
 ): void {
   if (!storage) {
     return;
@@ -140,7 +145,9 @@ function persistPlaygroundState(
 }
 
 function createDefaultWorker(): Worker {
-  return new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
+  return new Worker(new URL("./worker.ts", import.meta.url), {
+    type: "module",
+  });
 }
 
 function isPlaygroundFormat(value: string): value is PlaygroundFormat {
@@ -185,7 +192,7 @@ async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 export function createRenderWorkerClient(
-  worker: Worker = createDefaultWorker()
+  worker: Worker = createDefaultWorker(),
 ): RenderWorkerClient {
   const pending = new Map<number, PendingRequest>();
 
@@ -202,7 +209,7 @@ export function createRenderWorkerClient(
       pendingRequest.resolve({
         seq: response.seq,
         format: response.format,
-        output: response.output
+        output: response.output,
       });
       return;
     }
@@ -220,7 +227,7 @@ export function createRenderWorkerClient(
           seq: currentSeq,
           input: request.input,
           format: request.format,
-          configJson: request.configJson ?? "{}"
+          configJson: request.configJson ?? "{}",
         };
 
         pending.set(currentSeq, { resolve, reject });
@@ -229,7 +236,9 @@ export function createRenderWorkerClient(
           worker.postMessage(message);
         } catch (error) {
           pending.delete(currentSeq);
-          reject(new Error(`failed to post render request: ${toMessage(error)}`));
+          reject(
+            new Error(`failed to post render request: ${toMessage(error)}`),
+          );
         }
       });
     },
@@ -239,15 +248,19 @@ export function createRenderWorkerClient(
         request.reject(new Error("render worker terminated"));
       }
       pending.clear();
-    }
+    },
   };
 }
 
-export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): void {
+export function renderApp(
+  root: HTMLElement,
+  options: RenderAppOptions = {},
+): void {
   const stateStorage = resolveStateStorage(options.stateStorage);
   const restoredShareState = decodeShareState(window.location.hash);
   const restoredLocalState = readPersistedPlaygroundState(stateStorage);
-  const defaultExample = findExampleById(DEFAULT_EXAMPLE_ID) ?? PLAYGROUND_EXAMPLES[0];
+  const defaultExample =
+    findExampleById(DEFAULT_EXAMPLE_ID) ?? PLAYGROUND_EXAMPLES[0];
   const initialInput =
     restoredShareState?.input ??
     restoredLocalState?.input ??
@@ -290,14 +303,20 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
   `;
 
   const editorRoot = root.querySelector<HTMLElement>("[data-editor-root]");
-  const previewOutput = root.querySelector<HTMLElement>("[data-preview-output]");
+  const previewOutput = root.querySelector<HTMLElement>(
+    "[data-preview-output]",
+  );
   const previewError = root.querySelector<HTMLElement>("[data-preview-error]");
   const shareStatus = root.querySelector<HTMLElement>("[data-share-status]");
   const shareButton = root.querySelector<HTMLButtonElement>("[data-share]");
-  const themeToggleButton = root.querySelector<HTMLButtonElement>("[data-theme-toggle]");
-  const exampleSelect = root.querySelector<HTMLSelectElement>("[data-example-select]");
+  const themeToggleButton = root.querySelector<HTMLButtonElement>(
+    "[data-theme-toggle]",
+  );
+  const exampleSelect = root.querySelector<HTMLSelectElement>(
+    "[data-example-select]",
+  );
   const formatButtons = root.querySelectorAll<HTMLButtonElement>(
-    ".format-tabs button[data-format]"
+    ".format-tabs button[data-format]",
   );
 
   if (
@@ -314,11 +333,11 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
 
   const preview = createPreviewController({
     output: previewOutput,
-    error: previewError
+    error: previewError,
   });
   const editor = createEditorController({
     root: editorRoot,
-    initialValue: initialInput
+    initialValue: initialInput,
   });
 
   for (const example of PLAYGROUND_EXAMPLES) {
@@ -329,7 +348,7 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
   }
 
   const matchedExample = PLAYGROUND_EXAMPLES.find(
-    (example) => example.input === initialInput
+    (example) => example.input === initialInput,
   );
   if (matchedExample) {
     exampleSelect.value = matchedExample.id;
@@ -355,10 +374,12 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
   const themeController = createThemeController({
     root: document.documentElement,
     storage: themeStorage,
-    matchMedia
+    matchMedia,
   });
   themeController.apply();
-  themeToggleButton.textContent = formatThemeLabel(themeController.getPreference());
+  themeToggleButton.textContent = formatThemeLabel(
+    themeController.getPreference(),
+  );
 
   let selectedFormat: PlaygroundFormat = initialFormat;
   const workerClient = options.renderClientFactory
@@ -385,7 +406,7 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
     persistPlaygroundState(stateStorage, {
       v: 1,
       input: editor.getValue(),
-      format: selectedFormat
+      format: selectedFormat,
     });
   };
 
@@ -402,19 +423,19 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
     onResult: (response) => {
       preview.showResult({
         format: response.format,
-        output: response.output
+        output: response.output,
       });
     },
     onError: (message) => {
       preview.showError(message);
-    }
+    },
   });
 
   const scheduleRender = (): void => {
     liveUpdate.schedule({
       input: editor.getValue(),
       format: selectedFormat,
-      configJson: "{}"
+      configJson: "{}",
     });
   };
 
@@ -446,14 +467,14 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
     const nextPreference = nextThemePreference(themeController.getPreference());
     themeController.setPreference(nextPreference);
     themeToggleButton.textContent = formatThemeLabel(
-      themeController.getPreference()
+      themeController.getPreference(),
     );
   });
 
   shareButton.addEventListener("click", () => {
     const shareState = {
       input: editor.getValue(),
-      format: selectedFormat
+      format: selectedFormat,
     };
     const hash = encodeShareState(shareState);
     const shareUrl = `${window.location.origin}${window.location.pathname}#${hash}`;
@@ -488,7 +509,7 @@ function searchFromLocation(locationValue: SearchLocation): string {
 }
 
 export function isBenchmarkModeEnabled(
-  locationValue: SearchLocation = window.location
+  locationValue: SearchLocation = window.location,
 ): boolean {
   const params = new URLSearchParams(searchFromLocation(locationValue));
   const rawValue = params.get("benchmark");

@@ -10,7 +10,7 @@ interface CreateEditorControllerOptions {
 }
 
 export function createEditorController(
-  options: CreateEditorControllerOptions
+  options: CreateEditorControllerOptions,
 ): EditorController {
   const textarea = document.createElement("textarea");
   textarea.className = "editor-input";
@@ -35,6 +35,6 @@ export function createEditorController(
       return () => {
         listeners.delete(listener);
       };
-    }
+    },
   };
 }

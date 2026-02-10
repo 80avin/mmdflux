@@ -9,7 +9,7 @@ describe("createPreviewController", () => {
 
     preview.showResult({
       format: "text",
-      output: "<svg data-kind='text'></svg>"
+      output: "<svg data-kind='text'></svg>",
     });
 
     expect(output.textContent).toBe("<svg data-kind='text'></svg>");
@@ -17,7 +17,7 @@ describe("createPreviewController", () => {
 
     preview.showResult({
       format: "svg",
-      output: "<svg data-kind='svg'></svg>"
+      output: "<svg data-kind='svg'></svg>",
     });
 
     expect(output.querySelector("svg")?.getAttribute("data-kind")).toBe("svg");

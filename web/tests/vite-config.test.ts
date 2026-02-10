@@ -13,8 +13,8 @@ describe("resolveViteBasePath", () => {
     expect(
       resolveViteBasePath({
         GITHUB_ACTIONS: "true",
-        GITHUB_REPOSITORY: "mmds/mmdflux"
-      })
+        GITHUB_REPOSITORY: "mmds/mmdflux",
+      }),
     ).toBe("/mmdflux/");
   });
 
@@ -23,8 +23,8 @@ describe("resolveViteBasePath", () => {
       resolveViteBasePath({
         GITHUB_ACTIONS: "true",
         GITHUB_REPOSITORY: "mmds/mmdflux",
-        VITE_BASE_PATH: "preview/site"
-      })
+        VITE_BASE_PATH: "preview/site",
+      }),
     ).toBe("/preview/site/");
   });
 });

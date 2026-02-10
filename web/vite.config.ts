@@ -16,7 +16,7 @@ function normalizeBasePath(basePath: string): string {
 }
 
 export function resolveViteBasePath(
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
 ): string {
   const explicitBasePath = env.VITE_BASE_PATH;
   if (typeof explicitBasePath === "string" && explicitBasePath.trim() !== "") {
@@ -42,9 +42,9 @@ export default defineConfig({
   plugins: [wasm()],
   worker: {
     format: "es",
-    plugins: () => [wasm()]
+    plugins: () => [wasm()],
   },
   test: {
-    environment: "jsdom"
-  }
+    environment: "jsdom",
+  },
 });

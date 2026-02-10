@@ -1,11 +1,11 @@
 import type {
   WorkerRequestMessage,
-  WorkerResponseMessage
+  WorkerResponseMessage,
 } from "./worker-protocol";
 
 export type {
   WorkerRequestMessage,
-  WorkerResponseMessage
+  WorkerResponseMessage,
 } from "./worker-protocol";
 
 interface WasmModule {
@@ -23,7 +23,7 @@ export async function loadWasmModule(): Promise<WasmModule> {
 }
 
 export function createRenderRequestHandler(
-  options: RenderRequestHandlerOptions
+  options: RenderRequestHandlerOptions,
 ): (message: WorkerRequestMessage) => Promise<void> {
   const loadModule = options.loadWasmModule ?? loadWasmModule;
   const postMessage = options.postMessage;
@@ -50,20 +50,20 @@ export function createRenderRequestHandler(
       const output = wasmModule.render(
         message.input,
         message.format,
-        message.configJson
+        message.configJson,
       );
 
       postMessage({
         type: "result",
         seq: message.seq,
         format: message.format,
-        output
+        output,
       });
     } catch (error) {
       postMessage({
         type: "error",
         seq: message.seq,
-        error: formatError(error)
+        error: formatError(error),
       });
     }
   };
@@ -79,9 +79,7 @@ function formatError(error: unknown): string {
 
 interface WorkerScope {
   postMessage: (message: WorkerResponseMessage) => void;
-  onmessage:
-    | ((event: MessageEvent<WorkerRequestMessage>) => void)
-    | null;
+  onmessage: ((event: MessageEvent<WorkerRequestMessage>) => void) | null;
 }
 
 function getWorkerScope(scope: unknown): WorkerScope | null {
@@ -110,7 +108,7 @@ if (workerScope) {
   const handler = createRenderRequestHandler({
     postMessage: (message) => {
       workerScope.postMessage(message);
-    }
+    },
   });
 
   workerScope.onmessage = (event: MessageEvent<WorkerRequestMessage>) => {

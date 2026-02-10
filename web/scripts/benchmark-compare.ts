@@ -2,12 +2,12 @@ import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import {
+  type BenchmarkReport,
+  type BenchmarkSummaryRow,
   createSummaryRows,
   isWasmBuildProfile,
   toBenchmarkReportJson,
-  type BenchmarkReport,
-  type BenchmarkSummaryRow,
-  type WasmBuildProfile
+  type WasmBuildProfile,
 } from "../src/benchmark-report.ts";
 import { runBenchmarkSmoke } from "./benchmark-smoke.ts";
 import { formatTable } from "./table-format.ts";
@@ -103,7 +103,7 @@ function parseCliOptions(args: readonly string[]): CompareCliOptions {
       }
       if (!isWasmBuildProfile(value)) {
         throw new Error(
-          `invalid --wasm-profile value: ${value} (expected dev|release)`
+          `invalid --wasm-profile value: ${value} (expected dev|release)`,
         );
       }
       wasmProfile = value;
@@ -123,16 +123,21 @@ function parseCliOptions(args: readonly string[]): CompareCliOptions {
     currentPath,
     outCurrentPath,
     maxRegressionPct,
-    wasmProfile
+    wasmProfile,
   };
 }
 
-function parseBenchmarkReport(rawJson: string, source: string): BenchmarkReport {
+function parseBenchmarkReport(
+  rawJson: string,
+  source: string,
+): BenchmarkReport {
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawJson);
   } catch (error) {
-    throw new Error(`failed to parse benchmark report JSON (${source}): ${toMessage(error)}`);
+    throw new Error(
+      `failed to parse benchmark report JSON (${source}): ${toMessage(error)}`,
+    );
   }
 
   if (
@@ -162,7 +167,7 @@ function parseBenchmarkReport(rawJson: string, source: string): BenchmarkReport 
 
 export function evaluateWasmProfileCompatibility(
   baselineReport: BenchmarkReport,
-  currentReport: BenchmarkReport
+  currentReport: BenchmarkReport,
 ): WasmProfileCompatibilityResult {
   const baselineProfile = baselineReport.metadata?.wasmProfile;
   const currentProfile = currentReport.metadata?.wasmProfile;
@@ -171,13 +176,13 @@ export function evaluateWasmProfileCompatibility(
     if (baselineProfile !== currentProfile) {
       return {
         issue: `WASM profile mismatch: baseline=${baselineProfile}, current=${currentProfile}. Compare reports generated from the same WASM profile.`,
-        warning: null
+        warning: null,
       };
     }
 
     return {
       issue: null,
-      warning: null
+      warning: null,
     };
   }
 
@@ -185,22 +190,27 @@ export function evaluateWasmProfileCompatibility(
     return {
       issue:
         "missing wasm profile metadata in one report. Re-run both benchmarks with --wasm-profile to enforce apples-to-apples comparisons.",
-      warning: null
+      warning: null,
     };
   }
 
   return {
     issue: null,
     warning:
-      "cannot verify WASM profile compatibility because both reports are missing wasm profile metadata."
+      "cannot verify WASM profile compatibility because both reports are missing wasm profile metadata.",
   };
 }
 
-function rowKey(row: Pick<BenchmarkSummaryRow, "scenarioId" | "engineId">): string {
+function rowKey(
+  row: Pick<BenchmarkSummaryRow, "scenarioId" | "engineId">,
+): string {
   return `${row.scenarioId}::${row.engineId}`;
 }
 
-function toPercentDelta(currentValue: number, baselineValue: number): number | null {
+function toPercentDelta(
+  currentValue: number,
+  baselineValue: number,
+): number | null {
   if (baselineValue === 0) {
     return null;
   }
@@ -229,17 +239,17 @@ function formatSpeedup(value: number | null): string {
 
 function buildDeltaRows(
   baselineRows: readonly BenchmarkSummaryRow[],
-  currentRows: readonly BenchmarkSummaryRow[]
+  currentRows: readonly BenchmarkSummaryRow[],
 ): {
   deltas: DeltaRow[];
   missingFromBaseline: string[];
   missingFromCurrent: string[];
 } {
   const baselineByKey = new Map(
-    baselineRows.map((row) => [rowKey(row), row] as const)
+    baselineRows.map((row) => [rowKey(row), row] as const),
   );
   const currentByKey = new Map(
-    currentRows.map((row) => [rowKey(row), row] as const)
+    currentRows.map((row) => [rowKey(row), row] as const),
   );
 
   const deltas: DeltaRow[] = [];
@@ -268,7 +278,7 @@ function buildDeltaRows(
       deltaP95Ms,
       deltaP95Pct: toPercentDelta(currentRow.p95Ms, baselineRow.p95Ms),
       meanSpeedup:
-        currentRow.meanMs === 0 ? null : baselineRow.meanMs / currentRow.meanMs
+        currentRow.meanMs === 0 ? null : baselineRow.meanMs / currentRow.meanMs,
     });
   }
 
@@ -282,7 +292,7 @@ function buildDeltaRows(
   return {
     deltas,
     missingFromBaseline,
-    missingFromCurrent
+    missingFromCurrent,
   };
 }
 
@@ -294,7 +304,7 @@ function formatCurrentSummaryTable(report: BenchmarkReport): string {
     medianMs: row.medianMs.toFixed(2),
     p95Ms: row.p95Ms.toFixed(2),
     minMs: row.minMs.toFixed(2),
-    maxMs: row.maxMs.toFixed(2)
+    maxMs: row.maxMs.toFixed(2),
   }));
 
   return formatTable(rows, [
@@ -304,7 +314,7 @@ function formatCurrentSummaryTable(report: BenchmarkReport): string {
     { header: "Median", align: "right", value: (row) => row.medianMs },
     { header: "P95", align: "right", value: (row) => row.p95Ms },
     { header: "Min", align: "right", value: (row) => row.minMs },
-    { header: "Max", align: "right", value: (row) => row.maxMs }
+    { header: "Max", align: "right", value: (row) => row.maxMs },
   ]);
 }
 
@@ -318,7 +328,7 @@ function formatDeltaTable(rows: readonly DeltaRow[]): string {
     p95: `${row.p95Base.toFixed(2)} -> ${row.p95Current.toFixed(2)}`,
     deltaP95Ms: formatSigned(row.deltaP95Ms),
     deltaP95Pct: formatSignedPercent(row.deltaP95Pct),
-    speedup: formatSpeedup(row.meanSpeedup)
+    speedup: formatSpeedup(row.meanSpeedup),
   }));
 
   return formatTable(displayRows, [
@@ -330,7 +340,7 @@ function formatDeltaTable(rows: readonly DeltaRow[]): string {
     { header: "P95 (base -> curr)", value: (row) => row.p95 },
     { header: "ΔP95 ms", align: "right", value: (row) => row.deltaP95Ms },
     { header: "ΔP95 %", align: "right", value: (row) => row.deltaP95Pct },
-    { header: "Mean speedup", align: "right", value: (row) => row.speedup }
+    { header: "Mean speedup", align: "right", value: (row) => row.speedup },
   ]);
 }
 
@@ -340,30 +350,36 @@ async function readReportFromPath(path: string): Promise<BenchmarkReport> {
 }
 
 async function resolveCurrentReport(
-  options: CompareCliOptions
+  options: CompareCliOptions,
 ): Promise<{ report: BenchmarkReport; smokeFailures: string[] }> {
   if (options.currentPath) {
     return {
       report: await readReportFromPath(options.currentPath),
-      smokeFailures: []
+      smokeFailures: [],
     };
   }
 
   const smokeResult = await runBenchmarkSmoke({
     reportMetadata: options.wasmProfile
       ? { wasmProfile: options.wasmProfile }
-      : undefined
+      : undefined,
   });
   if (options.outCurrentPath) {
-    await writeFile(options.outCurrentPath, toBenchmarkReportJson(smokeResult.report), "utf8");
+    await writeFile(
+      options.outCurrentPath,
+      toBenchmarkReportJson(smokeResult.report),
+      "utf8",
+    );
   }
   return {
     report: smokeResult.report,
-    smokeFailures: smokeResult.failures
+    smokeFailures: smokeResult.failures,
   };
 }
 
-async function main(args: readonly string[] = process.argv.slice(2)): Promise<void> {
+async function main(
+  args: readonly string[] = process.argv.slice(2),
+): Promise<void> {
   try {
     const options = parseCliOptions(args);
     const baselineReport = await readReportFromPath(options.baselinePath);
@@ -371,7 +387,7 @@ async function main(args: readonly string[] = process.argv.slice(2)): Promise<vo
     const currentReport = currentResult.report;
     const profileCompatibility = evaluateWasmProfileCompatibility(
       baselineReport,
-      currentReport
+      currentReport,
     );
 
     const baselineRows = createSummaryRows(baselineReport);
@@ -386,12 +402,16 @@ async function main(args: readonly string[] = process.argv.slice(2)): Promise<vo
     console.log("");
 
     if (options.outCurrentPath && !options.currentPath) {
-      console.log(`Wrote current benchmark report JSON: ${options.outCurrentPath}`);
+      console.log(
+        `Wrote current benchmark report JSON: ${options.outCurrentPath}`,
+      );
       console.log("");
     }
 
     if (profileCompatibility.warning) {
-      console.warn(`Profile compatibility warning: ${profileCompatibility.warning}`);
+      console.warn(
+        `Profile compatibility warning: ${profileCompatibility.warning}`,
+      );
       console.log("");
     }
 
@@ -400,29 +420,31 @@ async function main(args: readonly string[] = process.argv.slice(2)): Promise<vo
       failures.push(profileCompatibility.issue);
     }
     failures.push(
-      ...currentResult.smokeFailures.map((failure) => `smoke: ${failure}`)
+      ...currentResult.smokeFailures.map((failure) => `smoke: ${failure}`),
     );
     failures.push(
       ...deltaResult.missingFromBaseline.map(
-        (key) => `missing baseline row: ${key}`
-      )
+        (key) => `missing baseline row: ${key}`,
+      ),
     );
     failures.push(
       ...deltaResult.missingFromCurrent.map(
-        (key) => `missing current row: ${key}`
-      )
+        (key) => `missing current row: ${key}`,
+      ),
     );
 
     if (options.maxRegressionPct !== undefined) {
       for (const row of deltaResult.deltas) {
         const exceeded =
-          (row.deltaMeanPct !== null && row.deltaMeanPct > options.maxRegressionPct) ||
-          (row.deltaP95Pct !== null && row.deltaP95Pct > options.maxRegressionPct);
+          (row.deltaMeanPct !== null &&
+            row.deltaMeanPct > options.maxRegressionPct) ||
+          (row.deltaP95Pct !== null &&
+            row.deltaP95Pct > options.maxRegressionPct);
         if (exceeded) {
           failures.push(
             `regression>${options.maxRegressionPct.toFixed(2)}%: ${row.scenarioId}/${row.engineId} (Δmean=${formatSignedPercent(
-              row.deltaMeanPct
-            )}, Δp95=${formatSignedPercent(row.deltaP95Pct)})`
+              row.deltaMeanPct,
+            )}, Δp95=${formatSignedPercent(row.deltaP95Pct)})`,
           );
         }
       }

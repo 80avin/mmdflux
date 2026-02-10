@@ -15,7 +15,9 @@ export interface PreviewController {
   showError: (message: string) => void;
 }
 
-export function createPreviewController(elements: PreviewElements): PreviewController {
+export function createPreviewController(
+  elements: PreviewElements,
+): PreviewController {
   const hideError = (): void => {
     elements.error.hidden = true;
     elements.error.textContent = "";
@@ -34,6 +36,6 @@ export function createPreviewController(elements: PreviewElements): PreviewContr
     showError: (message) => {
       elements.error.hidden = false;
       elements.error.textContent = `Render error: ${message}`;
-    }
+    },
   };
 }

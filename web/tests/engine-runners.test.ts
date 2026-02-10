@@ -7,23 +7,23 @@ describe("benchmark engine runners", () => {
     const initMmdflux = vi.fn(async () => {});
     const renderMmdflux = vi.fn(
       (input: string, format: string, configJson: string): string =>
-        `<svg data-engine="mmdflux" data-input="${input}" data-format="${format}" data-config="${configJson}"></svg>`
+        `<svg data-engine="mmdflux" data-input="${input}" data-format="${format}" data-config="${configJson}"></svg>`,
     );
     const renderMermaid = vi.fn(
       async (_id: string, input: string): Promise<{ svg: string }> => ({
-        svg: `<svg data-engine="mermaid" data-input="${input}"></svg>`
-      })
+        svg: `<svg data-engine="mermaid" data-input="${input}"></svg>`,
+      }),
     );
 
     const runners = await createBenchmarkEngineRunners({
       loadMmdfluxModule: async () => ({
         default: initMmdflux,
-        render: renderMmdflux
+        render: renderMmdflux,
       }),
       loadMermaidModule: async () => ({
         initialize: vi.fn(),
-        render: renderMermaid
-      })
+        render: renderMermaid,
+      }),
     });
 
     expect(runners.map((runner) => runner.id)).toEqual(["mmdflux", "mermaid"]);

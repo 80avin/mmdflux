@@ -1,14 +1,14 @@
 import {
-  createBenchmarkEngineRunners,
-  type BenchmarkEngineRunner
-} from "./benchmarks/engine-runners";
-import {
+  type BenchmarkEngineInput,
+  type BenchmarkReport,
   createBenchmarkReport,
   createSummaryRows,
   toBenchmarkReportJson,
-  type BenchmarkEngineInput,
-  type BenchmarkReport
 } from "./benchmark-report";
+import {
+  type BenchmarkEngineRunner,
+  createBenchmarkEngineRunners,
+} from "./benchmarks/engine-runners";
 import { BENCHMARK_SCENARIOS } from "./benchmarks/scenarios";
 
 export interface BenchmarkAppOptions {
@@ -30,14 +30,18 @@ async function measureRunner(
   input: string,
   now: () => number,
   warmupIterations: number,
-  measurementIterations: number
+  measurementIterations: number,
 ): Promise<BenchmarkEngineInput> {
   for (let warmup = 0; warmup < warmupIterations; warmup += 1) {
     await runner.warm(input);
   }
 
   const samplesMs: number[] = [];
-  for (let measurement = 0; measurement < measurementIterations; measurement += 1) {
+  for (
+    let measurement = 0;
+    measurement < measurementIterations;
+    measurement += 1
+  ) {
     const startedAt = now();
     await runner.render(input);
     const completedAt = now();
@@ -47,7 +51,7 @@ async function measureRunner(
   return {
     engineId: runner.id,
     engineLabel: runner.label,
-    samplesMs
+    samplesMs,
   };
 }
 
@@ -70,11 +74,11 @@ function toSummaryTable(report: BenchmarkReport): string {
       rows.map(
         (row) =>
           `${row.scenarioName} (${row.complexity}) | ${row.engineLabel} | ${formatNumber(
-            row.meanMs
+            row.meanMs,
           )} | ${formatNumber(row.medianMs)} | ${formatNumber(
-            row.p95Ms
-          )} | ${formatNumber(row.minMs)} | ${formatNumber(row.maxMs)}`
-      )
+            row.p95Ms,
+          )} | ${formatNumber(row.minMs)} | ${formatNumber(row.maxMs)}`,
+      ),
     )
     .join("\n");
 }
@@ -87,7 +91,7 @@ function downloadBenchmarkReport(report: BenchmarkReport): void {
   anchor.href = objectUrl;
   anchor.download = `mmdflux-benchmark-report-${report.generatedAt.replace(
     /[:.]/g,
-    "-"
+    "-",
   )}.json`;
   anchor.click();
   URL.revokeObjectURL(objectUrl);
@@ -95,7 +99,7 @@ function downloadBenchmarkReport(report: BenchmarkReport): void {
 
 export async function renderBenchmarkApp(
   root: HTMLElement,
-  options: BenchmarkAppOptions = {}
+  options: BenchmarkAppOptions = {},
 ): Promise<void> {
   root.innerHTML = `
     <main class="playground benchmark-mode">
@@ -121,18 +125,24 @@ export async function renderBenchmarkApp(
   `;
 
   const status = root.querySelector<HTMLElement>("[data-benchmark-status]");
-  const runnerList = root.querySelector<HTMLUListElement>("[data-benchmark-runners]");
+  const runnerList = root.querySelector<HTMLUListElement>(
+    "[data-benchmark-runners]",
+  );
   const output = root.querySelector<HTMLElement>("[data-benchmark-output]");
-  const runButton = root.querySelector<HTMLButtonElement>("[data-benchmark-run]");
-  const exportButton =
-    root.querySelector<HTMLButtonElement>("[data-benchmark-export]");
+  const runButton = root.querySelector<HTMLButtonElement>(
+    "[data-benchmark-run]",
+  );
+  const exportButton = root.querySelector<HTMLButtonElement>(
+    "[data-benchmark-export]",
+  );
 
   if (!status || !runnerList || !output || !runButton || !exportButton) {
     return;
   }
 
   const createRunners = options.createRunners ?? createBenchmarkEngineRunners;
-  const warmupIterations = options.warmupIterations ?? DEFAULT_WARMUP_ITERATIONS;
+  const warmupIterations =
+    options.warmupIterations ?? DEFAULT_WARMUP_ITERATIONS;
   const measurementIterations =
     options.measurementIterations ?? DEFAULT_MEASUREMENT_ITERATIONS;
   const now =
@@ -177,21 +187,21 @@ export async function renderBenchmarkApp(
                 scenario.input,
                 now,
                 warmupIterations,
-                measurementIterations
-              )
+                measurementIterations,
+              ),
             );
           }
 
           scenarioResults.push({
             scenario,
-            engines
+            engines,
           });
         }
 
         latestReport = createBenchmarkReport({
           warmupIterations,
           measurementIterations,
-          scenarios: scenarioResults
+          scenarios: scenarioResults,
         });
         output.textContent = toSummaryTable(latestReport);
         status.textContent = "Benchmark run complete.";

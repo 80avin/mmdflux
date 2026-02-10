@@ -28,20 +28,20 @@ describe("createLiveUpdateController", () => {
     const render = vi.fn(async (request) => ({
       seq: request.seq,
       format: request.format,
-      output: request.input
+      output: request.input,
     }));
 
     const controller = createLiveUpdateController({
       debounceMs: (request) => (request.input.length < 20 ? 0 : 75),
       render,
       onResult: vi.fn(),
-      onError: vi.fn()
+      onError: vi.fn(),
     });
 
     controller.schedule({
       input: "graph TD\nA-->B",
       format: "text",
-      configJson: "{}"
+      configJson: "{}",
     });
     expect(render).toHaveBeenCalledTimes(1);
     render.mockClear();
@@ -49,7 +49,7 @@ describe("createLiveUpdateController", () => {
     controller.schedule({
       input: "graph TD\nA-->B\nB-->C\nC-->D\nD-->E",
       format: "text",
-      configJson: "{}"
+      configJson: "{}",
     });
     expect(render).not.toHaveBeenCalled();
 
@@ -67,7 +67,7 @@ describe("createLiveUpdateController", () => {
     const render = vi.fn(async (request) => ({
       seq: request.seq,
       format: request.format,
-      output: request.input
+      output: request.input,
     }));
     const onResult = vi.fn();
 
@@ -75,23 +75,23 @@ describe("createLiveUpdateController", () => {
       debounceMs: 200,
       render,
       onResult,
-      onError: vi.fn()
+      onError: vi.fn(),
     });
 
     controller.schedule({
       input: "graph TD\nA-->B",
       format: "text",
-      configJson: "{}"
+      configJson: "{}",
     });
     controller.schedule({
       input: "graph TD\nA-->B\nB-->C",
       format: "text",
-      configJson: "{}"
+      configJson: "{}",
     });
     controller.schedule({
       input: "graph TD\nA-->B\nB-->C\nC-->D",
       format: "text",
-      configJson: "{}"
+      configJson: "{}",
     });
 
     vi.advanceTimersByTime(199);
@@ -105,7 +105,7 @@ describe("createLiveUpdateController", () => {
       seq: 1,
       input: "graph TD\nA-->B\nB-->C\nC-->D",
       format: "text",
-      configJson: "{}"
+      configJson: "{}",
     });
     expect(onResult).toHaveBeenCalledTimes(1);
   });
@@ -125,27 +125,27 @@ describe("createLiveUpdateController", () => {
       debounceMs: 200,
       render,
       onResult,
-      onError: vi.fn()
+      onError: vi.fn(),
     });
 
     controller.schedule({
       input: "graph TD\nA-->B",
       format: "text",
-      configJson: "{}"
+      configJson: "{}",
     });
     vi.advanceTimersByTime(200);
 
     controller.schedule({
       input: "graph TD\nA-->B\nB-->C",
       format: "text",
-      configJson: "{}"
+      configJson: "{}",
     });
     vi.advanceTimersByTime(200);
 
     first.resolve({
       seq: 1,
       format: "text",
-      output: "stale result"
+      output: "stale result",
     });
     await Promise.resolve();
     expect(onResult).not.toHaveBeenCalled();
@@ -153,7 +153,7 @@ describe("createLiveUpdateController", () => {
     second.resolve({
       seq: 2,
       format: "text",
-      output: "latest result"
+      output: "latest result",
     });
     await Promise.resolve();
 
@@ -161,7 +161,7 @@ describe("createLiveUpdateController", () => {
     expect(onResult).toHaveBeenCalledWith({
       seq: 2,
       format: "text",
-      output: "latest result"
+      output: "latest result",
     });
   });
 });

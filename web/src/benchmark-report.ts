@@ -1,6 +1,6 @@
 import type {
   BenchmarkScenario,
-  BenchmarkScenarioComplexity
+  BenchmarkScenarioComplexity,
 } from "./benchmarks/scenarios";
 
 export const WASM_BUILD_PROFILES = ["dev", "release"] as const;
@@ -119,7 +119,7 @@ export function summarizeSamples(samplesMs: number[]): BenchmarkMetrics {
     maxMs: sorted.at(-1) ?? 0,
     meanMs: roundTo(mean),
     medianMs: roundTo(medianFromSorted(sorted)),
-    p95Ms: roundTo(percentileFromSorted(sorted, 95))
+    p95Ms: roundTo(percentileFromSorted(sorted, 95)),
   };
 }
 
@@ -128,7 +128,7 @@ export function isWasmBuildProfile(value: unknown): value is WasmBuildProfile {
 }
 
 export function createBenchmarkReport(
-  input: CreateBenchmarkReportInput
+  input: CreateBenchmarkReportInput,
 ): BenchmarkReport {
   return {
     schemaVersion: 1,
@@ -145,14 +145,14 @@ export function createBenchmarkReport(
         engineId: engineInput.engineId,
         engineLabel: engineInput.engineLabel,
         samplesMs: [...engineInput.samplesMs],
-        metrics: summarizeSamples(engineInput.samplesMs)
-      }))
-    }))
+        metrics: summarizeSamples(engineInput.samplesMs),
+      })),
+    })),
   };
 }
 
 export function createSummaryRows(
-  report: BenchmarkReport
+  report: BenchmarkReport,
 ): BenchmarkSummaryRow[] {
   return report.scenarios.flatMap((scenario) =>
     scenario.engines.map((engine) => ({
@@ -165,8 +165,8 @@ export function createSummaryRows(
       medianMs: engine.metrics.medianMs,
       p95Ms: engine.metrics.p95Ms,
       minMs: engine.metrics.minMs,
-      maxMs: engine.metrics.maxMs
-    }))
+      maxMs: engine.metrics.maxMs,
+    })),
   );
 }
 

@@ -14,7 +14,7 @@ export const PLAYGROUND_EXAMPLES: PlaygroundExample[] = [
 A[Start] --> B{Ready?}
 B -->|Yes| C[Deploy]
 B -->|No| D[Wait]
-D --> B`
+D --> B`,
   },
   {
     id: "flowchart-fanout",
@@ -24,7 +24,7 @@ D --> B`
 API --> Auth
 API --> Billing
 API --> Search
-API --> Profile`
+API --> Profile`,
   },
   {
     id: "sequence-basics",
@@ -37,7 +37,7 @@ API --> Profile`
     User->>App: Submit form
     App->>API: POST /submit
     API-->>App: 200 OK
-    App-->>User: Success`
+    App-->>User: Success`,
   },
   {
     id: "sequence-retry",
@@ -49,7 +49,7 @@ API --> Profile`
     Client->>Service: GET /resource
     Service-->>Client: 503
     Client->>Service: Retry request
-    Service-->>Client: 200`
+    Service-->>Client: 200`,
   },
   {
     id: "class-basics",
@@ -63,7 +63,7 @@ class Animal {
 class Dog {
   +bark()
 }
-Animal <|-- Dog`
+Animal <|-- Dog`,
   },
   {
     id: "class-interfaces",
@@ -77,8 +77,8 @@ class Logger {
 class ConsoleLogger
 class FileLogger
 Logger <|.. ConsoleLogger
-Logger <|.. FileLogger`
-  }
+Logger <|.. FileLogger`,
+  },
 ];
 
 export const DEFAULT_EXAMPLE_ID = "flowchart-basics";

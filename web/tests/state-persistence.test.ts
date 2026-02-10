@@ -8,14 +8,14 @@ interface MemoryStorage {
 }
 
 function createMemoryStorage(
-  initialValues: Record<string, string> = {}
+  initialValues: Record<string, string> = {},
 ): MemoryStorage {
   const values = new Map(Object.entries(initialValues));
   return {
     getItem: (key) => values.get(key) ?? null,
     setItem: (key, value) => {
       values.set(key, value);
-    }
+    },
   };
 }
 
@@ -24,9 +24,9 @@ function createFakeRenderClient() {
     render: vi.fn(async (request) => ({
       seq: request.seq,
       format: request.format,
-      output: `${request.format}:${request.input}`
+      output: `${request.format}:${request.input}`,
     })),
-    terminate: vi.fn()
+    terminate: vi.fn(),
   } satisfies RenderWorkerClient;
 }
 
@@ -36,19 +36,20 @@ describe("playground state persistence", () => {
       "mmdflux-playground-state": JSON.stringify({
         v: 1,
         input: "graph LR\nPersisted-->State",
-        format: "svg"
-      })
+        format: "svg",
+      }),
     });
     const root = document.createElement("div");
 
     renderApp(root, {
       renderClientFactory: () => createFakeRenderClient(),
-      stateStorage: storage
+      stateStorage: storage,
     });
 
-    const editorInput = root.querySelector<HTMLTextAreaElement>(".editor-input");
+    const editorInput =
+      root.querySelector<HTMLTextAreaElement>(".editor-input");
     const activeTab = root.querySelector<HTMLButtonElement>(
-      ".format-tabs button.is-active"
+      ".format-tabs button.is-active",
     );
 
     expect(editorInput?.value).toContain("Persisted-->State");
@@ -61,23 +62,25 @@ describe("playground state persistence", () => {
 
     renderApp(root, {
       renderClientFactory: () => createFakeRenderClient(),
-      stateStorage: storage
+      stateStorage: storage,
     });
 
-    const editorInput = root.querySelector<HTMLTextAreaElement>(".editor-input");
+    const editorInput =
+      root.querySelector<HTMLTextAreaElement>(".editor-input");
     const mmdsTab = root.querySelector<HTMLButtonElement>(
-      '.format-tabs button[data-format="mmds"]'
+      '.format-tabs button[data-format="mmds"]',
     );
 
-    expect(editorInput).not.toBeNull();
-    expect(mmdsTab).not.toBeNull();
+    if (!editorInput || !mmdsTab) {
+      throw new Error("expected editor input and mmds tab");
+    }
 
-    editorInput!.value = "graph TD\nA-->Saved";
-    editorInput!.dispatchEvent(new Event("input"));
-    mmdsTab!.click();
+    editorInput.value = "graph TD\nA-->Saved";
+    editorInput.dispatchEvent(new Event("input"));
+    mmdsTab.click();
 
     const persisted = JSON.parse(
-      storage.getItem("mmdflux-playground-state") ?? "{}"
+      storage.getItem("mmdflux-playground-state") ?? "{}",
     ) as { input?: string; format?: string };
 
     expect(persisted.input).toBe("graph TD\nA-->Saved");

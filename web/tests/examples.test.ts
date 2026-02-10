@@ -6,11 +6,11 @@ function createFakeRenderClient() {
   const render = vi.fn(async (request) => ({
     seq: request.seq,
     format: request.format,
-    output: `${request.format}:${request.input}`
+    output: `${request.format}:${request.input}`,
   }));
   return {
     render,
-    terminate: vi.fn()
+    terminate: vi.fn(),
   } satisfies RenderWorkerClient;
 }
 
@@ -26,28 +26,30 @@ describe("playground examples", () => {
 
     renderApp(root, {
       renderClientFactory: () => renderClient,
-      debounceMs: 50
+      debounceMs: 50,
     });
 
     const exampleSelect = root.querySelector<HTMLSelectElement>(
-      "[data-example-select]"
+      "[data-example-select]",
     );
-    const editorInput = root.querySelector<HTMLTextAreaElement>(".editor-input");
+    const editorInput =
+      root.querySelector<HTMLTextAreaElement>(".editor-input");
 
-    expect(exampleSelect).not.toBeNull();
-    expect(editorInput).not.toBeNull();
+    if (!exampleSelect || !editorInput) {
+      throw new Error("expected example select and editor input");
+    }
 
     renderClient.render.mockClear();
 
-    exampleSelect!.value = "sequence-basics";
-    exampleSelect!.dispatchEvent(new Event("change"));
+    exampleSelect.value = "sequence-basics";
+    exampleSelect.dispatchEvent(new Event("change"));
     vi.advanceTimersByTime(50);
     await Promise.resolve();
 
-    expect(editorInput!.value).toContain("sequenceDiagram");
+    expect(editorInput.value).toContain("sequenceDiagram");
     expect(renderClient.render).toHaveBeenCalledTimes(1);
     expect(renderClient.render.mock.calls[0]?.[0]).toMatchObject({
-      format: "text"
+      format: "text",
     });
   });
 
@@ -58,31 +60,34 @@ describe("playground examples", () => {
 
     renderApp(root, {
       renderClientFactory: () => renderClient,
-      debounceMs: 50
+      debounceMs: 50,
     });
 
-    const svgTab = root.querySelector<HTMLButtonElement>('button[data-format="svg"]');
+    const svgTab = root.querySelector<HTMLButtonElement>(
+      'button[data-format="svg"]',
+    );
     const exampleSelect = root.querySelector<HTMLSelectElement>(
-      "[data-example-select]"
+      "[data-example-select]",
     );
 
-    expect(svgTab).not.toBeNull();
-    expect(exampleSelect).not.toBeNull();
+    if (!svgTab || !exampleSelect) {
+      throw new Error("expected svg tab and example select");
+    }
 
-    svgTab!.click();
+    svgTab.click();
     vi.advanceTimersByTime(50);
     await Promise.resolve();
 
     renderClient.render.mockClear();
 
-    exampleSelect!.value = "class-basics";
-    exampleSelect!.dispatchEvent(new Event("change"));
+    exampleSelect.value = "class-basics";
+    exampleSelect.dispatchEvent(new Event("change"));
     vi.advanceTimersByTime(50);
     await Promise.resolve();
 
     expect(renderClient.render).toHaveBeenCalledTimes(1);
     expect(renderClient.render.mock.calls[0]?.[0]).toMatchObject({
-      format: "svg"
+      format: "svg",
     });
   });
 });

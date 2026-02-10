@@ -33,7 +33,9 @@ export interface CreateBenchmarkEngineRunnersOptions {
 }
 
 export async function loadMmdfluxModule(): Promise<MmdfluxWasmModule> {
-  return (await import("../wasm-pkg/mmdflux_wasm.js")) as unknown as MmdfluxWasmModule;
+  return (await import(
+    "../wasm-pkg/mmdflux_wasm.js"
+  )) as unknown as MmdfluxWasmModule;
 }
 
 export async function loadMermaidModule(): Promise<MermaidModule> {
@@ -43,7 +45,7 @@ export async function loadMermaidModule(): Promise<MermaidModule> {
 function wrapRunner(
   id: BenchmarkEngineRunner["id"],
   label: string,
-  render: (input: string) => Promise<string>
+  render: (input: string) => Promise<string>,
 ): BenchmarkEngineRunner {
   return {
     id,
@@ -51,7 +53,7 @@ function wrapRunner(
     warm: async (input) => {
       await render(input);
     },
-    render
+    render,
   };
 }
 
@@ -62,7 +64,7 @@ function toMermaidApi(module: MermaidModule): MermaidApi {
   if (typeof module.render === "function") {
     return {
       initialize: module.initialize,
-      render: module.render
+      render: module.render,
     };
   }
 
@@ -81,32 +83,32 @@ function normalizeMermaidSvg(result: string | MermaidRenderResult): string {
 }
 
 export async function createBenchmarkEngineRunners(
-  options: CreateBenchmarkEngineRunnersOptions = {}
+  options: CreateBenchmarkEngineRunnersOptions = {},
 ): Promise<[BenchmarkEngineRunner, BenchmarkEngineRunner]> {
   const loadMmdflux = options.loadMmdfluxModule ?? loadMmdfluxModule;
   const loadMermaid = options.loadMermaidModule ?? loadMermaidModule;
 
   const [mmdfluxModule, mermaidModule] = await Promise.all([
     loadMmdflux(),
-    loadMermaid()
+    loadMermaid(),
   ]);
 
   await mmdfluxModule.default();
 
   const mmdfluxRunner = wrapRunner("mmdflux", "mmdflux (WASM)", async (input) =>
-    mmdfluxModule.render(input, "svg", "{}")
+    mmdfluxModule.render(input, "svg", "{}"),
   );
 
   const mermaidApi = toMermaidApi(mermaidModule);
   mermaidApi.initialize?.({
     startOnLoad: false,
-    securityLevel: "strict"
+    securityLevel: "strict",
   });
   let sequence = 0;
   const mermaidRunner = wrapRunner("mermaid", "mermaid.js", async (input) => {
     const renderOutput = await mermaidApi.render(
       `mmdflux-benchmark-${sequence++}`,
-      input
+      input,
     );
     return normalizeMermaidSvg(renderOutput);
   });

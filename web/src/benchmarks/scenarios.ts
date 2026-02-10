@@ -18,13 +18,14 @@ export const BENCHMARK_SCENARIOS: readonly BenchmarkScenario[] = [
 A[Start] --> B{Decision}
 B -->|Yes| C[Process]
 B -->|No| D[Error]
-C --> E[End]`
+C --> E[End]`,
   },
   {
     id: "flowchart-medium",
     name: "Flowchart Medium",
     complexity: "medium",
-    description: "Multi-step service pipeline with fan-out, fan-in, and retries.",
+    description:
+      "Multi-step service pipeline with fan-out, fan-in, and retries.",
     input: `graph LR
 Client[Client] --> Gateway[API Gateway]
 Gateway --> Auth[Auth]
@@ -42,13 +43,14 @@ WorkerB --> DB
 DB --> Notify[Notifier]
 Notify --> Client
 ServiceB -. timeout .-> Retry[Retry Policy]
-Retry --> Router`
+Retry --> Router`,
   },
   {
     id: "flowchart-large",
     name: "Flowchart Large",
     complexity: "large",
-    description: "Broad CI delivery pipeline with parallel stages and rollback loops.",
+    description:
+      "Broad CI delivery pipeline with parallel stages and rollback loops.",
     input: `graph TD
 Start[Start] --> Plan[Plan]
 Plan --> BuildA[Build Linux]
@@ -79,6 +81,6 @@ subgraph "Canary Checks"
   CanaryB --> CanaryC[Canary APAC]
 end
 PublishB --> CanaryA
-CanaryC --> Verify`
-  }
+CanaryC --> Verify`,
+  },
 ];

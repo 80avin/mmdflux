@@ -9,7 +9,7 @@ export interface TableColumn<Row> {
 function pad(
   value: string,
   width: number,
-  alignment: TableAlignment = "left"
+  alignment: TableAlignment = "left",
 ): string {
   if (alignment === "right") {
     return value.padStart(width, " ");
@@ -22,14 +22,14 @@ function makeBorder(
   widths: number[],
   left: string,
   middle: string,
-  right: string
+  right: string,
 ): string {
   return `${left}${widths.map((width) => "─".repeat(width + 2)).join(middle)}${right}`;
 }
 
 export function formatTable<Row>(
   rows: readonly Row[],
-  columns: readonly TableColumn<Row>[]
+  columns: readonly TableColumn<Row>[],
 ): string {
   if (columns.length === 0) {
     return "";

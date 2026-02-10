@@ -50,7 +50,7 @@ export function encodeShareState(state: ShareState): string {
   const wireState: ShareWireState = {
     v: 1,
     input: state.input,
-    format: state.format
+    format: state.format,
   };
   return base64UrlEncode(JSON.stringify(wireState));
 }
@@ -62,7 +62,9 @@ export function decodeShareState(value: string): ShareState | null {
   }
 
   try {
-    const decoded = JSON.parse(base64UrlDecode(normalized)) as Partial<ShareWireState>;
+    const decoded = JSON.parse(
+      base64UrlDecode(normalized),
+    ) as Partial<ShareWireState>;
     if (decoded.v !== 1) {
       return null;
     }
@@ -75,7 +77,7 @@ export function decodeShareState(value: string): ShareState | null {
 
     return {
       input: decoded.input,
-      format: decoded.format
+      format: decoded.format,
     };
   } catch {
     return null;
