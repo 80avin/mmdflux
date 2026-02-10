@@ -46,11 +46,12 @@ conformance *args:
 # Check that everything compiles, passes lint, and tests
 check: lint test
 
-# Build library for wasm32 without CLI-only dependencies
+# Build wasm bindings for browser and bundler targets
 wasm-build:
-    cargo build --target wasm32-unknown-unknown --no-default-features --lib
+    wasm-pack build crates/mmdflux-wasm --target web --dev --out-dir ../../target/wasm-pkg-web
+    wasm-pack build crates/mmdflux-wasm --target bundler --dev --out-dir ../../target/wasm-pkg-bundler
 
-# Validate wasm-safe library + CLI feature contract
+# Run browser-executed wasm-bindgen contract tests
 wasm-test:
-    cargo test --test wasm_cli_contract --test wasm_just_recipes
-    cargo check --target wasm32-unknown-unknown --no-default-features --lib
+    just wasm-build
+    ./scripts/run-wasm-browser-tests.sh

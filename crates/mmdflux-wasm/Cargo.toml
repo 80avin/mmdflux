@@ -1,0 +1,19 @@
+[package]
+name = "mmdflux-wasm"
+version = "1.0.1"
+edition = "2024"
+description = "wasm-bindgen bindings for mmdflux"
+license = "MIT"
+repository = "https://github.com/kevinswiber/mmdflux"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+mmdflux = { path = "../..", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wasm-bindgen = "0.2"
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"
