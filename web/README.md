@@ -8,6 +8,7 @@ Static Vite + TypeScript playground for `mmdflux-wasm`.
 npm install
 npm run test
 npm run build
+npm run build:release
 npm run dev
 npm run benchmark:smoke
 npm run benchmark:smoke:release
@@ -18,6 +19,8 @@ npm run benchmark:compare:release -- --baseline <path-to-baseline.json>
 ```
 
 `npm run dev`, `npm run build`, and `npm run test` call `wasm-pack` to refresh `src/wasm-pkg` from `../crates/mmdflux-wasm`.
+
+`npm run build:release` is the production build path and uses `wasm-pack --release` before `vite build` (used by the Pages deploy workflow).
 
 `npm run benchmark:smoke` also refreshes `src/wasm-pkg`, then runs `scripts/benchmark-smoke.ts` to execute reduced benchmark scenarios against mmdflux and mermaid with conservative CI thresholds.
 
