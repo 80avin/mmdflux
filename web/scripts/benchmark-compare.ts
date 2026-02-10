@@ -3,9 +3,11 @@ import { pathToFileURL } from "node:url";
 
 import {
   createSummaryRows,
+  isWasmBuildProfile,
   toBenchmarkReportJson,
   type BenchmarkReport,
-  type BenchmarkSummaryRow
+  type BenchmarkSummaryRow,
+  type WasmBuildProfile
 } from "../src/benchmark-report.ts";
 import { runBenchmarkSmoke } from "./benchmark-smoke.ts";
 import { formatTable } from "./table-format.ts";
@@ -15,6 +17,7 @@ interface CompareCliOptions {
   currentPath?: string;
   outCurrentPath?: string;
   maxRegressionPct?: number;
+  wasmProfile?: WasmBuildProfile;
 }
 
 interface DeltaRow {
@@ -29,6 +32,11 @@ interface DeltaRow {
   deltaP95Ms: number;
   deltaP95Pct: number | null;
   meanSpeedup: number | null;
+}
+
+interface WasmProfileCompatibilityResult {
+  issue: string | null;
+  warning: string | null;
 }
 
 function toMessage(error: unknown): string {
@@ -48,6 +56,7 @@ function parseCliOptions(args: readonly string[]): CompareCliOptions {
   let currentPath: string | undefined;
   let outCurrentPath: string | undefined;
   let maxRegressionPct: number | undefined;
+  let wasmProfile: WasmBuildProfile | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -87,6 +96,20 @@ function parseCliOptions(args: readonly string[]): CompareCliOptions {
       index += 1;
       continue;
     }
+    if (arg === "--wasm-profile") {
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error("missing value for --wasm-profile");
+      }
+      if (!isWasmBuildProfile(value)) {
+        throw new Error(
+          `invalid --wasm-profile value: ${value} (expected dev|release)`
+        );
+      }
+      wasmProfile = value;
+      index += 1;
+      continue;
+    }
 
     throw new Error(`unknown argument: ${arg}`);
   }
@@ -99,7 +122,8 @@ function parseCliOptions(args: readonly string[]): CompareCliOptions {
     baselinePath,
     currentPath,
     outCurrentPath,
-    maxRegressionPct
+    maxRegressionPct,
+    wasmProfile
   };
 }
 
@@ -122,7 +146,54 @@ function parseBenchmarkReport(rawJson: string, source: string): BenchmarkReport 
     throw new Error(`invalid benchmark report schema (${source})`);
   }
 
+  const metadata = (parsed as { metadata?: unknown }).metadata;
+  if (metadata !== undefined) {
+    if (typeof metadata !== "object" || metadata === null) {
+      throw new Error(`invalid benchmark report metadata (${source})`);
+    }
+    const wasmProfile = (metadata as { wasmProfile?: unknown }).wasmProfile;
+    if (wasmProfile !== undefined && !isWasmBuildProfile(wasmProfile)) {
+      throw new Error(`invalid benchmark report wasmProfile (${source})`);
+    }
+  }
+
   return parsed as BenchmarkReport;
+}
+
+export function evaluateWasmProfileCompatibility(
+  baselineReport: BenchmarkReport,
+  currentReport: BenchmarkReport
+): WasmProfileCompatibilityResult {
+  const baselineProfile = baselineReport.metadata?.wasmProfile;
+  const currentProfile = currentReport.metadata?.wasmProfile;
+
+  if (baselineProfile && currentProfile) {
+    if (baselineProfile !== currentProfile) {
+      return {
+        issue: `WASM profile mismatch: baseline=${baselineProfile}, current=${currentProfile}. Compare reports generated from the same WASM profile.`,
+        warning: null
+      };
+    }
+
+    return {
+      issue: null,
+      warning: null
+    };
+  }
+
+  if (baselineProfile || currentProfile) {
+    return {
+      issue:
+        "missing wasm profile metadata in one report. Re-run both benchmarks with --wasm-profile to enforce apples-to-apples comparisons.",
+      warning: null
+    };
+  }
+
+  return {
+    issue: null,
+    warning:
+      "cannot verify WASM profile compatibility because both reports are missing wasm profile metadata."
+  };
 }
 
 function rowKey(row: Pick<BenchmarkSummaryRow, "scenarioId" | "engineId">): string {
@@ -278,7 +349,11 @@ async function resolveCurrentReport(
     };
   }
 
-  const smokeResult = await runBenchmarkSmoke();
+  const smokeResult = await runBenchmarkSmoke({
+    reportMetadata: options.wasmProfile
+      ? { wasmProfile: options.wasmProfile }
+      : undefined
+  });
   if (options.outCurrentPath) {
     await writeFile(options.outCurrentPath, toBenchmarkReportJson(smokeResult.report), "utf8");
   }
@@ -294,6 +369,10 @@ async function main(args: readonly string[] = process.argv.slice(2)): Promise<vo
     const baselineReport = await readReportFromPath(options.baselinePath);
     const currentResult = await resolveCurrentReport(options);
     const currentReport = currentResult.report;
+    const profileCompatibility = evaluateWasmProfileCompatibility(
+      baselineReport,
+      currentReport
+    );
 
     const baselineRows = createSummaryRows(baselineReport);
     const currentRows = createSummaryRows(currentReport);
@@ -311,7 +390,15 @@ async function main(args: readonly string[] = process.argv.slice(2)): Promise<vo
       console.log("");
     }
 
+    if (profileCompatibility.warning) {
+      console.warn(`Profile compatibility warning: ${profileCompatibility.warning}`);
+      console.log("");
+    }
+
     const failures: string[] = [];
+    if (profileCompatibility.issue) {
+      failures.push(profileCompatibility.issue);
+    }
     failures.push(
       ...currentResult.smokeFailures.map((failure) => `smoke: ${failure}`)
     );

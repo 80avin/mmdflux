@@ -10,13 +10,13 @@
     "build": "npm run wasm:build && tsc --noEmit && vite build",
     "test": "npm run wasm:build && vitest run",
     "benchmark:smoke:run": "node --experimental-strip-types scripts/benchmark-smoke.ts",
-    "benchmark:smoke": "npm run wasm:build && npm run benchmark:smoke:run --",
-    "benchmark:smoke:release": "npm run wasm:build:release && npm run benchmark:smoke:run --",
-    "benchmark:full": "npm run wasm:build && npm run benchmark:smoke:run -- --full --no-thresholds",
-    "benchmark:full:release": "npm run wasm:build:release && npm run benchmark:smoke:run -- --full --no-thresholds",
+    "benchmark:smoke": "npm run wasm:build && npm run benchmark:smoke:run -- --wasm-profile dev",
+    "benchmark:smoke:release": "npm run wasm:build:release && npm run benchmark:smoke:run -- --wasm-profile release",
+    "benchmark:full": "npm run wasm:build && npm run benchmark:smoke:run -- --full --no-thresholds --wasm-profile dev",
+    "benchmark:full:release": "npm run wasm:build:release && npm run benchmark:smoke:run -- --full --no-thresholds --wasm-profile release",
     "benchmark:compare:run": "node --experimental-strip-types scripts/benchmark-compare.ts",
-    "benchmark:compare": "npm run wasm:build && npm run benchmark:compare:run --",
-    "benchmark:compare:release": "npm run wasm:build:release && npm run benchmark:compare:run --"
+    "benchmark:compare": "npm run wasm:build && npm run benchmark:compare:run -- --wasm-profile dev",
+    "benchmark:compare:release": "npm run wasm:build:release && npm run benchmark:compare:run -- --wasm-profile release"
   },
   "devDependencies": {
     "@types/node": "^24.3.1",

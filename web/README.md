@@ -26,6 +26,7 @@ npm run benchmark:compare:release -- --baseline <path-to-baseline.json>
 `benchmark:full*` commands include all scenarios (`small`, `medium`, `large`) and disable threshold enforcement by default so they act as non-gating exploratory runs.
 
 `benchmark:compare*` commands run current smoke benchmarks and compare against a baseline JSON report, including delta metrics (`ΔMean`, `ΔP95`, and speedup).
+These scripts tag reports with WASM profile metadata and fail on `dev` vs `release` mismatches (or one-sided missing metadata) to avoid apples-to-oranges deltas.
 
 ## Deploy Runbook
 

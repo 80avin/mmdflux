@@ -6,8 +6,11 @@ import { JSDOM } from "jsdom";
 import {
   createBenchmarkReport,
   createSummaryRows,
+  isWasmBuildProfile,
   toBenchmarkReportJson,
   type BenchmarkEngineInput,
+  type BenchmarkReportMetadata,
+  type WasmBuildProfile,
   type BenchmarkReport
 } from "../src/benchmark-report.ts";
 import {
@@ -33,6 +36,7 @@ export interface BenchmarkSmokePolicy {
 
 interface BenchmarkSmokeRunOptions {
   policy?: BenchmarkSmokePolicy;
+  reportMetadata?: BenchmarkReportMetadata;
   createRunners?: () => Promise<BenchmarkEngineRunner[]>;
   now?: () => number;
 }
@@ -46,6 +50,7 @@ interface BenchmarkSmokeCliOptions {
   outPath?: string;
   full: boolean;
   enforceThresholds: boolean;
+  wasmProfile?: WasmBuildProfile;
 }
 
 const SMOKE_SCENARIOS = BENCHMARK_SCENARIOS.filter(
@@ -147,6 +152,20 @@ function parseCliOptions(args: readonly string[]): BenchmarkSmokeCliOptions {
     }
     if (arg === "--no-thresholds") {
       options.enforceThresholds = false;
+      continue;
+    }
+    if (arg === "--wasm-profile") {
+      const wasmProfile = args[index + 1];
+      if (!wasmProfile) {
+        throw new Error("missing value for --wasm-profile");
+      }
+      if (!isWasmBuildProfile(wasmProfile)) {
+        throw new Error(
+          `invalid --wasm-profile value: ${wasmProfile} (expected dev|release)`
+        );
+      }
+      options.wasmProfile = wasmProfile;
+      index += 1;
       continue;
     }
 
@@ -330,6 +349,7 @@ export async function runBenchmarkSmoke(
   options: BenchmarkSmokeRunOptions = {}
 ): Promise<BenchmarkSmokeRunResult> {
   const policy = options.policy ?? BENCHMARK_SMOKE_POLICY;
+  const reportMetadata = options.reportMetadata;
   const now = options.now ?? (() => performance.now());
   const createRunners = options.createRunners ?? defaultCreateRunners;
 
@@ -351,6 +371,7 @@ export async function runBenchmarkSmoke(
     }
 
     const report = createBenchmarkReport({
+      metadata: reportMetadata,
       warmupIterations: policy.warmupIterations,
       measurementIterations: policy.measurementIterations,
       scenarios: scenarioResults
@@ -369,6 +390,9 @@ async function main(args: readonly string[] = process.argv.slice(2)): Promise<vo
   try {
     const cliOptions = parseCliOptions(args);
     const policy = policyForCliOptions(cliOptions);
+    const reportMetadata: BenchmarkReportMetadata | undefined = cliOptions.wasmProfile
+      ? { wasmProfile: cliOptions.wasmProfile }
+      : undefined;
 
     console.log(
       `Running benchmark ${cliOptions.full ? "full" : "smoke"} checks...`
@@ -384,8 +408,11 @@ async function main(args: readonly string[] = process.argv.slice(2)): Promise<vo
     console.log(
       `Threshold checks: ${cliOptions.enforceThresholds ? "enabled" : "disabled"}`
     );
+    if (reportMetadata?.wasmProfile) {
+      console.log(`WASM profile: ${reportMetadata.wasmProfile}`);
+    }
 
-    const result = await runBenchmarkSmoke({ policy });
+    const result = await runBenchmarkSmoke({ policy, reportMetadata });
 
     console.log("");
     console.log(formatSummaryTable(result.report));

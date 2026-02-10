@@ -27,6 +27,9 @@ describe("benchmark metrics", () => {
 
     const report = createBenchmarkReport({
       generatedAt: "2026-02-10T00:00:00.000Z",
+      metadata: {
+        wasmProfile: "release"
+      },
       warmupIterations: 2,
       measurementIterations: 5,
       scenarios: [
@@ -53,6 +56,8 @@ describe("benchmark metrics", () => {
 
     const reportJson = toBenchmarkReportJson(report);
     expect(reportJson).toContain('"schemaVersion": 1');
+    expect(reportJson).toContain('"metadata"');
+    expect(reportJson).toContain('"wasmProfile": "release"');
     expect(reportJson).toContain(`"scenarioId": "${scenario!.id}"`);
     expect(reportJson).toContain('"engineId": "mmdflux"');
     expect(reportJson).toContain('"engineId": "mermaid"');

@@ -3,6 +3,14 @@ import type {
   BenchmarkScenarioComplexity
 } from "./benchmarks/scenarios";
 
+export const WASM_BUILD_PROFILES = ["dev", "release"] as const;
+
+export type WasmBuildProfile = (typeof WASM_BUILD_PROFILES)[number];
+
+export interface BenchmarkReportMetadata {
+  wasmProfile?: WasmBuildProfile;
+}
+
 export interface BenchmarkMetrics {
   sampleCount: number;
   minMs: number;
@@ -25,6 +33,7 @@ export interface BenchmarkScenarioInput {
 
 export interface CreateBenchmarkReportInput {
   generatedAt?: string;
+  metadata?: BenchmarkReportMetadata;
   warmupIterations: number;
   measurementIterations: number;
   scenarios: BenchmarkScenarioInput[];
@@ -48,6 +57,7 @@ export interface BenchmarkScenarioReport {
 export interface BenchmarkReport {
   schemaVersion: 1;
   generatedAt: string;
+  metadata?: BenchmarkReportMetadata;
   warmupIterations: number;
   measurementIterations: number;
   scenarios: BenchmarkScenarioReport[];
@@ -113,12 +123,17 @@ export function summarizeSamples(samplesMs: number[]): BenchmarkMetrics {
   };
 }
 
+export function isWasmBuildProfile(value: unknown): value is WasmBuildProfile {
+  return value === "dev" || value === "release";
+}
+
 export function createBenchmarkReport(
   input: CreateBenchmarkReportInput
 ): BenchmarkReport {
   return {
     schemaVersion: 1,
     generatedAt: input.generatedAt ?? new Date().toISOString(),
+    ...(input.metadata ? { metadata: { ...input.metadata } } : {}),
     warmupIterations: input.warmupIterations,
     measurementIterations: input.measurementIterations,
     scenarios: input.scenarios.map((scenarioInput) => ({
