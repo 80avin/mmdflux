@@ -59,6 +59,8 @@ export interface RenderAppOptions {
   stateStorage?: StateStorage;
 }
 
+type SearchLocation = URL | Pick<Location, "search">;
+
 function defaultAdaptiveDebounce(requestInput: string): number {
   const length = requestInput.length;
   if (length <= 2_500) {
@@ -477,7 +479,38 @@ export function renderApp(root: HTMLElement, options: RenderAppOptions = {}): vo
   scheduleRender();
 }
 
+function searchFromLocation(locationValue: SearchLocation): string {
+  if (locationValue instanceof URL) {
+    return locationValue.search;
+  }
+
+  return locationValue.search;
+}
+
+export function isBenchmarkModeEnabled(
+  locationValue: SearchLocation = window.location
+): boolean {
+  const params = new URLSearchParams(searchFromLocation(locationValue));
+  const rawValue = params.get("benchmark");
+  if (rawValue === null) {
+    return false;
+  }
+
+  const normalized = rawValue.trim().toLowerCase();
+  return normalized === "" || normalized === "1" || normalized === "true";
+}
+
+async function mountApp(root: HTMLElement): Promise<void> {
+  if (isBenchmarkModeEnabled(window.location)) {
+    const { renderBenchmarkApp } = await import("./benchmark");
+    await renderBenchmarkApp(root);
+    return;
+  }
+
+  renderApp(root);
+}
+
 const root = document.querySelector<HTMLElement>("#app");
 if (root) {
-  renderApp(root);
+  void mountApp(root);
 }
