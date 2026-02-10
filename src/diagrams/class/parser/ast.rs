@@ -7,6 +7,8 @@ pub struct ClassModel {
     pub classes: Vec<ClassDecl>,
     /// Relationships between classes.
     pub relations: Vec<ClassRelation>,
+    /// Optional Mermaid direction directive (`LR`, `RL`, `BT`, `TB`).
+    pub direction: Option<String>,
 }
 
 /// A class declaration.
@@ -14,6 +16,8 @@ pub struct ClassModel {
 pub struct ClassDecl {
     /// Class name/identifier.
     pub name: String,
+    /// Optional Mermaid display label (`class Id["Display Label"]`).
+    pub display_label: Option<String>,
     /// Optional class annotations/stereotypes (without `<<`/`>>`).
     pub annotations: Vec<String>,
     /// Body members (fields and methods), if any.
@@ -31,10 +35,17 @@ pub struct ClassRelation {
     pub relation_type: ClassRelationType,
     /// Optional label on the relationship.
     pub label: Option<String>,
+    /// Optional cardinality/multiplicity label on the `from` endpoint.
+    pub cardinality_from: Option<String>,
+    /// Optional cardinality/multiplicity label on the `to` endpoint.
+    pub cardinality_to: Option<String>,
     /// When true, the relationship marker belongs on the `from` (left) end
     /// rather than the `to` (right) end. Set for left-pointing operators
     /// like `<|--`, `*--`, `o--`.
     pub marker_start: bool,
+    /// When true, the relationship marker belongs on the `to` (right) end.
+    /// This is true for right-pointing and two-way relation operators.
+    pub marker_end: bool,
 }
 
 /// Types of class relationships (MVP scope).
@@ -56,4 +67,6 @@ pub enum ClassRelationType {
     Dependency,
     /// `..>`  Directed dependency (with arrow).
     DirectedDependency,
+    /// `--()` / `()--`  Lollipop interface relation.
+    Lollipop,
 }

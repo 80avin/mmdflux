@@ -82,6 +82,7 @@ fn relation_style(rel: ClassRelationType) -> (Stroke, Arrow, Arrow) {
         ClassRelationType::Aggregation => (Stroke::Solid, Arrow::None, Arrow::OpenDiamond),
         ClassRelationType::Dependency => (Stroke::Dotted, Arrow::None, Arrow::None),
         ClassRelationType::DirectedDependency => (Stroke::Dotted, Arrow::None, Arrow::Normal),
+        ClassRelationType::Lollipop => (Stroke::Solid, Arrow::None, Arrow::None),
     }
 }
 

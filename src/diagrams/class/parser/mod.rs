@@ -16,16 +16,21 @@ fn ensure_class(
     classes: &mut Vec<ClassDecl>,
     class_index: &mut std::collections::HashMap<String, usize>,
     name: String,
+    display_label: Option<String>,
     annotations: Vec<String>,
     members: Vec<String>,
 ) {
     if let Some(&idx) = class_index.get(&name) {
+        if display_label.is_some() {
+            classes[idx].display_label = display_label;
+        }
         classes[idx].annotations.extend(annotations);
         classes[idx].members.extend(members);
     } else {
         class_index.insert(name.clone(), classes.len());
         classes.push(ClassDecl {
             name,
+            display_label,
             annotations,
             members,
         });
@@ -40,6 +45,7 @@ pub fn parse_class_diagram(
 ) -> Result<ClassModel, Box<dyn std::error::Error + Send + Sync>> {
     let mut classes: Vec<ClassDecl> = Vec::new();
     let mut relations: Vec<ClassRelation> = Vec::new();
+    let mut direction: Option<String> = None;
     let mut class_index: std::collections::HashMap<String, usize> =
         std::collections::HashMap::new();
 
@@ -79,6 +85,7 @@ pub fn parse_class_diagram(
 
     // Parse body lines
     let mut in_class_body: Option<String> = None;
+    let mut current_display_label: Option<String> = None;
     let mut current_annotations: Vec<String> = Vec::new();
     let mut current_members: Vec<String> = Vec::new();
 
@@ -97,6 +104,7 @@ pub fn parse_class_diagram(
                     &mut classes,
                     &mut class_index,
                     class_name,
+                    std::mem::take(&mut current_display_label),
                     std::mem::take(&mut current_annotations),
                     std::mem::take(&mut current_members),
                 );
@@ -114,15 +122,26 @@ pub fn parse_class_diagram(
             continue;
         }
 
+        // Try: `direction LR|RL|BT|TB`
+        if let Some(rest) = strip_keyword(trimmed, "direction") {
+            if let Some(token) = rest.split_whitespace().next()
+                && let Some(parsed) = normalize_class_direction(token)
+            {
+                direction = Some(parsed);
+            }
+            continue;
+        }
+
         // Try: `class ClassName {`  (body start)
         if let Some(rest) = strip_keyword(trimmed, "class") {
             let rest = rest.trim();
             if let Some(name) = rest.strip_suffix('{') {
-                let (name, annotations) = parse_class_decl(name.trim());
+                let (name, display_label, annotations) = parse_class_decl(name.trim());
                 if name.is_empty() {
                     continue;
                 }
                 in_class_body = Some(name);
+                current_display_label = display_label;
                 current_annotations = annotations;
                 current_members.clear();
                 continue;
@@ -132,12 +151,13 @@ pub fn parse_class_diagram(
             // May have optional generic/type and annotation like:
             //   `class ClassName~T~`
             //   `class ClassName <<interface>>`
-            let (name, annotations) = parse_class_decl(rest);
+            let (name, display_label, annotations) = parse_class_decl(rest);
             if !name.is_empty() {
                 ensure_class(
                     &mut classes,
                     &mut class_index,
                     name,
+                    display_label,
                     annotations,
                     Vec::new(),
                 );
@@ -151,6 +171,7 @@ pub fn parse_class_diagram(
                 &mut classes,
                 &mut class_index,
                 class_name,
+                None,
                 vec![annotation],
                 Vec::new(),
             );
@@ -165,6 +186,7 @@ pub fn parse_class_diagram(
                     &mut classes,
                     &mut class_index,
                     name.clone(),
+                    None,
                     Vec::new(),
                     Vec::new(),
                 );
@@ -177,11 +199,16 @@ pub fn parse_class_diagram(
         if let Some(colon_pos) = trimmed.find(':') {
             let left = trimmed[..colon_pos].trim();
             let member = trimmed[colon_pos + 1..].trim();
-            if !left.is_empty() && !member.is_empty() && parse_class_name(left) == left {
+            if !left.is_empty()
+                && !member.is_empty()
+                && let Some((class_name, consumed)) = parse_class_name_token(left)
+                && consumed == left.len()
+            {
                 ensure_class(
                     &mut classes,
                     &mut class_index,
-                    left.to_string(),
+                    class_name,
+                    None,
                     Vec::new(),
                     vec![member.to_string()],
                 );
@@ -198,12 +225,17 @@ pub fn parse_class_diagram(
             &mut classes,
             &mut class_index,
             class_name,
+            std::mem::take(&mut current_display_label),
             std::mem::take(&mut current_annotations),
             std::mem::take(&mut current_members),
         );
     }
 
-    Ok(ClassModel { classes, relations })
+    Ok(ClassModel {
+        classes,
+        relations,
+        direction,
+    })
 }
 
 /// Strip a case-insensitive keyword prefix followed by whitespace.
@@ -218,24 +250,81 @@ fn strip_keyword<'a>(line: &'a str, keyword: &str) -> Option<&'a str> {
     None
 }
 
-/// Parse a class name, stripping optional generic annotations like `~T~`.
-fn parse_class_name(s: &str) -> String {
-    // Take identifier chars (alphanumeric, underscore)
-    let name: String = s
-        .chars()
-        .take_while(|c| c.is_alphanumeric() || *c == '_')
-        .collect();
-    name
+/// Normalize a class-diagram direction token into Mermaid canonical uppercase form.
+fn normalize_class_direction(token: &str) -> Option<String> {
+    let upper = token.to_ascii_uppercase();
+    match upper.as_str() {
+        "LR" | "RL" | "BT" | "TB" => Some(upper),
+        _ => None,
+    }
 }
 
-/// Parse `class` declaration tail into class name and inline annotations.
-fn parse_class_decl(s: &str) -> (String, Vec<String>) {
-    let name = parse_class_name(s);
-    if name.is_empty() {
-        return (String::new(), Vec::new());
+/// Parse a class name token from the start of `s`.
+///
+/// Supports:
+/// - Mermaid literal/backtick names: `` `A B` ``
+/// - Regular identifiers including alnum + `_` + `.` + `-`.
+fn parse_class_name_token(s: &str) -> Option<(String, usize)> {
+    if let Some(rest) = s.strip_prefix('`') {
+        let end = rest.find('`')?;
+        if end == 0 {
+            return None;
+        }
+        let name = rest[..end].to_string();
+        return Some((name, end + 2));
     }
-    let annotations = parse_annotations(&s[name.len()..]);
-    (name, annotations)
+
+    let mut end = 0;
+    for (idx, ch) in s.char_indices() {
+        if ch.is_alphanumeric() || matches!(ch, '_' | '.' | '-') {
+            end = idx + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if end == 0 {
+        None
+    } else {
+        Some((s[..end].to_string(), end))
+    }
+}
+
+/// Parse Mermaid class display label syntax after an identifier:
+/// `[\"Display Label\"]`.
+fn parse_class_display_label(s: &str) -> (Option<String>, &str) {
+    let trimmed = s.trim_start();
+    let Some(rest) = trimmed.strip_prefix('[') else {
+        return (None, trimmed);
+    };
+    let rest = rest.trim_start();
+    let Some(rest) = rest.strip_prefix('"') else {
+        return (None, trimmed);
+    };
+    let Some(end_quote) = rest.find('"') else {
+        return (None, trimmed);
+    };
+    let label = rest[..end_quote].to_string();
+    let rest = rest[end_quote + 1..].trim_start();
+    let Some(rest) = rest.strip_prefix(']') else {
+        return (None, trimmed);
+    };
+
+    (Some(label), rest)
+}
+
+/// Parse `class` declaration tail into class name, display label, and inline annotations.
+fn parse_class_decl(s: &str) -> (String, Option<String>, Vec<String>) {
+    let Some((name, consumed)) = parse_class_name_token(s) else {
+        return (String::new(), None, Vec::new());
+    };
+    if name.is_empty() {
+        return (String::new(), None, Vec::new());
+    }
+
+    let (display_label, rest) = parse_class_display_label(&s[consumed..]);
+    let annotations = parse_annotations(rest);
+    (name, display_label, annotations)
 }
 
 /// Parse a standalone annotation line like `<<interface>>`.
@@ -257,11 +346,11 @@ fn parse_annotation_statement(line: &str) -> Option<(String, String)> {
         return None;
     }
     let class_part = start[end_idx + 2..].trim();
-    let class_name = parse_class_name(class_part);
-    if class_name.is_empty() {
+    let (class_name, consumed) = parse_class_name_token(class_part)?;
+    if class_name.is_empty() || consumed != class_part.len() {
         return None;
     }
-    Some((annotation.to_string(), class_name))
+    Some((annotation.to_string(), class_name.to_string()))
 }
 
 /// Extract all annotation markers from text, returning marker content without brackets.
@@ -285,79 +374,164 @@ fn parse_annotations(s: &str) -> Vec<String> {
     out
 }
 
-/// Relationship patterns to try, ordered by specificity (longest first).
-///
-/// Mermaid class diagram relationship syntax:
-///   `A <|-- B`     inheritance
-///   `A <|.. B`     realization (implements)
-///   `A *-- B`      composition
-///   `A o-- B`      aggregation
-///   `A <.. B`      dependency (reverse)
-///   `A ..> B`      dependency
-///   `A .. B`       dependency (no arrow)
-///   `A --> B`      association (directed)
-///   `A -- B`       association (undirected)
-///
-/// Optional labels: `A --> B : label text`
-fn try_parse_relation(line: &str) -> Option<ClassRelation> {
-    // Patterns ordered by specificity
-    static PATTERNS: &[(&str, ClassRelationType, bool)] = &[
-        // 4-char operators
-        ("<|--", ClassRelationType::Inheritance, true), // reversed: B inherits from A
-        ("--|>", ClassRelationType::Inheritance, false), // A inherits from B
-        ("<|..", ClassRelationType::Realization, true), // reversed: B realizes A
-        ("..|>", ClassRelationType::Realization, false), // A realizes B
-        ("*--", ClassRelationType::Composition, true),  // reversed
-        ("--*", ClassRelationType::Composition, false),
-        ("o--", ClassRelationType::Aggregation, true), // reversed
-        ("--o", ClassRelationType::Aggregation, false),
-        // 3-char operators
-        ("-->", ClassRelationType::DirectedAssociation, false),
-        ("<--", ClassRelationType::DirectedAssociation, true),
-        ("..>", ClassRelationType::DirectedDependency, false),
-        ("<..", ClassRelationType::DirectedDependency, true),
-        // 2-char operators (must be last)
-        ("--", ClassRelationType::Association, false),
-        ("..", ClassRelationType::Dependency, false),
-    ];
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ParsedRelationMarker {
+    Arrow,
+    Triangle,
+    Diamond,
+    OpenDiamond,
+    Lollipop,
+}
 
-    for &(pattern, rel_type, reversed) in PATTERNS {
-        if let Some(pos) = line.find(pattern) {
-            let left = line[..pos].trim();
-            let right_with_label = line[pos + pattern.len()..].trim();
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ParsedRelationLine {
+    Solid,
+    Dotted,
+}
 
-            // Left side must be a valid class name
-            let from_name = parse_class_name(left);
-            if from_name.is_empty() || from_name.len() != left.len() {
-                continue;
+/// Parse `ClassName ...` from the start of a relation line.
+fn parse_relation_endpoint(input: &str) -> Option<(String, &str)> {
+    let trimmed = input.trim_start();
+    let (name, consumed) = parse_class_name_token(trimmed)?;
+    if name.is_empty() {
+        return None;
+    }
+    Some((name, &trimmed[consumed..]))
+}
+
+/// Parse an optional quoted cardinality token (`"1"`, `"*"`, etc).
+fn parse_optional_cardinality(input: &str) -> Option<(Option<String>, &str)> {
+    let trimmed = input.trim_start();
+    let Some(rest) = trimmed.strip_prefix('"') else {
+        return Some((None, trimmed));
+    };
+    let end_quote = rest.find('"')?;
+    Some((Some(rest[..end_quote].to_string()), &rest[end_quote + 1..]))
+}
+
+/// Split relation text from an optional edge label (`:label` or ` : label`).
+/// Colons inside quoted cardinality tokens are ignored.
+fn split_relation_label(line: &str) -> (&str, Option<String>) {
+    let mut in_quotes = false;
+    for (idx, ch) in line.char_indices() {
+        match ch {
+            '"' => in_quotes = !in_quotes,
+            ':' if !in_quotes => {
+                let relation = line[..idx].trim_end();
+                let label = line[idx + 1..].trim();
+                return (relation, (!label.is_empty()).then(|| label.to_string()));
             }
-
-            // Right side: "ClassName" or "ClassName : label"
-            let (to_raw, label) = if let Some(colon_pos) = right_with_label.find(" : ") {
-                (
-                    &right_with_label[..colon_pos],
-                    Some(right_with_label[colon_pos + 3..].trim().to_string()),
-                )
-            } else {
-                (right_with_label, None)
-            };
-
-            let to_name = parse_class_name(to_raw.trim());
-            if to_name.is_empty() {
-                continue;
-            }
-
-            return Some(ClassRelation {
-                from: from_name,
-                to: to_name,
-                relation_type: rel_type,
-                label,
-                marker_start: reversed,
-            });
+            _ => {}
         }
     }
+    (line.trim_end(), None)
+}
 
-    None
+fn parse_left_relation_marker(input: &str) -> (Option<ParsedRelationMarker>, &str) {
+    if let Some(rest) = input.strip_prefix("<|") {
+        (Some(ParsedRelationMarker::Triangle), rest)
+    } else if let Some(rest) = input.strip_prefix("()") {
+        (Some(ParsedRelationMarker::Lollipop), rest)
+    } else if let Some(rest) = input.strip_prefix('*') {
+        (Some(ParsedRelationMarker::Diamond), rest)
+    } else if let Some(rest) = input.strip_prefix('o') {
+        (Some(ParsedRelationMarker::OpenDiamond), rest)
+    } else if let Some(rest) = input.strip_prefix('<') {
+        (Some(ParsedRelationMarker::Arrow), rest)
+    } else {
+        (None, input)
+    }
+}
+
+fn parse_right_relation_marker(input: &str) -> (Option<ParsedRelationMarker>, &str) {
+    if let Some(rest) = input.strip_prefix("|>") {
+        (Some(ParsedRelationMarker::Triangle), rest)
+    } else if let Some(rest) = input.strip_prefix("()") {
+        (Some(ParsedRelationMarker::Lollipop), rest)
+    } else if let Some(rest) = input.strip_prefix('*') {
+        (Some(ParsedRelationMarker::Diamond), rest)
+    } else if let Some(rest) = input.strip_prefix('o') {
+        (Some(ParsedRelationMarker::OpenDiamond), rest)
+    } else if let Some(rest) = input.strip_prefix('>') {
+        (Some(ParsedRelationMarker::Arrow), rest)
+    } else {
+        (None, input)
+    }
+}
+
+fn relation_type_from_markers(
+    start: Option<ParsedRelationMarker>,
+    end: Option<ParsedRelationMarker>,
+    line: ParsedRelationLine,
+) -> ClassRelationType {
+    let primary_marker = end.or(start);
+    match primary_marker {
+        Some(ParsedRelationMarker::Arrow) => match line {
+            ParsedRelationLine::Solid => ClassRelationType::DirectedAssociation,
+            ParsedRelationLine::Dotted => ClassRelationType::DirectedDependency,
+        },
+        Some(ParsedRelationMarker::Triangle) => match line {
+            ParsedRelationLine::Solid => ClassRelationType::Inheritance,
+            ParsedRelationLine::Dotted => ClassRelationType::Realization,
+        },
+        Some(ParsedRelationMarker::Diamond) => ClassRelationType::Composition,
+        Some(ParsedRelationMarker::OpenDiamond) => ClassRelationType::Aggregation,
+        Some(ParsedRelationMarker::Lollipop) => ClassRelationType::Lollipop,
+        None => match line {
+            ParsedRelationLine::Solid => ClassRelationType::Association,
+            ParsedRelationLine::Dotted => ClassRelationType::Dependency,
+        },
+    }
+}
+
+fn parse_relation_operator(input: &str) -> Option<(ClassRelationType, bool, bool, &str)> {
+    let (start_marker, rest) = parse_left_relation_marker(input);
+
+    let (line, rest) = if let Some(rest) = rest.strip_prefix("--") {
+        (ParsedRelationLine::Solid, rest)
+    } else if let Some(rest) = rest.strip_prefix("..") {
+        (ParsedRelationLine::Dotted, rest)
+    } else {
+        return None;
+    };
+
+    let (end_marker, rest) = parse_right_relation_marker(rest);
+    let relation_type = relation_type_from_markers(start_marker, end_marker, line);
+
+    Some((
+        relation_type,
+        start_marker.is_some(),
+        end_marker.is_some(),
+        rest,
+    ))
+}
+
+/// Parse class relationships, including lollipop/two-way operators, cardinality,
+/// and relaxed relation labels.
+fn try_parse_relation(line: &str) -> Option<ClassRelation> {
+    let (relation_text, label) = split_relation_label(line.trim());
+    let (from_name, rest) = parse_relation_endpoint(relation_text)?;
+    let (cardinality_from, rest) = parse_optional_cardinality(rest)?;
+    let (relation_type, marker_start, marker_end, rest) =
+        parse_relation_operator(rest.trim_start())?;
+    let (cardinality_to, rest) = parse_optional_cardinality(rest)?;
+    let to_text = rest.trim();
+
+    let (to_name, consumed) = parse_class_name_token(to_text)?;
+    if to_name.is_empty() || consumed != to_text.len() {
+        return None;
+    }
+
+    Some(ClassRelation {
+        from: from_name,
+        to: to_name,
+        relation_type,
+        label,
+        cardinality_from,
+        cardinality_to,
+        marker_start,
+        marker_end,
+    })
 }
 
 #[cfg(test)]
@@ -377,6 +551,25 @@ mod tests {
         assert_eq!(model.classes.len(), 1);
         assert_eq!(model.classes[0].name, "User");
         assert!(model.classes[0].annotations.is_empty());
+    }
+
+    #[test]
+    fn parse_backtick_class_name() {
+        let model = parse_class_diagram("classDiagram\nclass `A B`").unwrap();
+        assert!(model.classes.iter().any(|c| c.name == "A B"));
+    }
+
+    #[test]
+    fn parse_class_display_label() {
+        let model = parse_class_diagram("classDiagram\nclass User[\"App User\"]").unwrap();
+        let user = model.classes.iter().find(|c| c.name == "User").unwrap();
+        assert_eq!(user.display_label.as_deref(), Some("App User"));
+    }
+
+    #[test]
+    fn parse_dotted_and_hyphenated_class_name() {
+        let model = parse_class_diagram("classDiagram\nclass HTTP.Client-Parser").unwrap();
+        assert!(model.classes.iter().any(|c| c.name == "HTTP.Client-Parser"));
     }
 
     #[test]
@@ -518,6 +711,48 @@ mod tests {
     }
 
     #[test]
+    fn parse_lollipop_relations_do_not_drop_classes() {
+        let input = "classDiagram\nClass01 --() bar\nClass02 --() bar\nfoo ()-- Class01";
+        let model = parse_class_diagram(input).unwrap();
+
+        assert!(model.classes.iter().any(|c| c.name == "Class02"));
+        assert!(model.classes.iter().any(|c| c.name == "foo"));
+        assert!(
+            model
+                .relations
+                .iter()
+                .all(|r| r.relation_type == ClassRelationType::Lollipop)
+        );
+        assert!(model.relations[0].marker_end);
+        assert!(model.relations[2].marker_start);
+    }
+
+    #[test]
+    fn parse_cardinality_relation_with_label_without_strict_spaces() {
+        let input = "classDiagram\nA \"1\" --> \"*\" B:uses";
+        let model = parse_class_diagram(input).unwrap();
+
+        assert_eq!(model.relations.len(), 1);
+        assert_eq!(model.relations[0].cardinality_from, Some("1".to_string()));
+        assert_eq!(model.relations[0].cardinality_to, Some("*".to_string()));
+        assert_eq!(model.relations[0].label, Some("uses".to_string()));
+    }
+
+    #[test]
+    fn parse_two_way_relation_operator() {
+        let input = "classDiagram\nA <|--|> B";
+        let model = parse_class_diagram(input).unwrap();
+
+        assert_eq!(model.relations.len(), 1);
+        assert_eq!(
+            model.relations[0].relation_type,
+            ClassRelationType::Inheritance
+        );
+        assert!(model.relations[0].marker_start);
+        assert!(model.relations[0].marker_end);
+    }
+
+    #[test]
     fn parse_relation_creates_implicit_classes() {
         let input = "classDiagram\nA --> B";
         let model = parse_class_diagram(input).unwrap();
@@ -549,6 +784,24 @@ mod tests {
     fn parse_case_insensitive_header() {
         let model = parse_class_diagram("CLASSDIAGRAM\nclass User").unwrap();
         assert_eq!(model.classes.len(), 1);
+    }
+
+    #[test]
+    fn parse_class_direction_lr() {
+        let model = parse_class_diagram("classDiagram\ndirection LR\nA --> B").unwrap();
+        assert_eq!(model.direction, Some("LR".into()));
+    }
+
+    #[test]
+    fn parse_class_direction_defaults_when_absent() {
+        let model = parse_class_diagram("classDiagram\nA --> B").unwrap();
+        assert!(model.direction.is_none());
+    }
+
+    #[test]
+    fn parse_class_direction_ignores_invalid_values() {
+        let model = parse_class_diagram("classDiagram\ndirection DIAGONAL\nA --> B").unwrap();
+        assert!(model.direction.is_none());
     }
 
     #[test]
