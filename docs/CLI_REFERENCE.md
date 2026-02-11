@@ -50,6 +50,38 @@ mmdflux --format mermaid diagram.mmds.json
 
 Note: SVG output is currently supported for flowcharts. For MMDS geometry-level constraints, see [mmds.md](mmds.md).
 
+## SVG Routing Controls
+
+```bash
+# Select SVG edge path style
+mmdflux --format svg --svg-edge-path-style basis diagram.mmd
+mmdflux --format svg --svg-edge-path-style linear diagram.mmd
+mmdflux --format svg --svg-edge-path-style rounded --svg-edge-path-radius 6 diagram.mmd
+mmdflux --format svg --svg-edge-path-style orthogonal diagram.mmd
+
+# Routing mode override (flowchart graph-family routing stage)
+mmdflux --format svg --routing-mode full-compute diagram.mmd
+mmdflux --format svg --routing-mode pass-through-clip diagram.mmd
+mmdflux --format svg --routing-mode unified-preview diagram.mmd
+```
+
+`--svg-edge-path-style` values:
+
+| Value | Description |
+| ----- | ----------- |
+| `basis` | Smooth spline path (default) |
+| `linear` | Straight polyline segments |
+| `rounded` | Polyline with rounded corners (radius via `--svg-edge-path-radius`) |
+| `orthogonal` | Axis-aligned path construction |
+
+`--routing-mode` values:
+
+| Value | Description |
+| ----- | ----------- |
+| `full-compute` | Compute paths from layout hints and node geometry (legacy baseline) |
+| `pass-through-clip` | Use engine-provided paths with clipping adjustments |
+| `unified-preview` | Use unified float-first preview routing where supported |
+
 ## Supported Mermaid Syntax (Flowchart)
 
 ### Directions
