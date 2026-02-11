@@ -25,10 +25,10 @@
       <text x="177.00" y="113.20" text-anchor="middle" dominant-baseline="hanging" fill="#333">Horizontal Flow</text>
     </g>
     <g class="edgePaths">
-      <path d="M177.00,62.00 L177.00,68.92 C177.00,75.83 177.00,89.67 150.50,96.58 C124.00,103.50 71.00,103.50 44.50,109.75 C18.00,116.00 18.00,128.50 18.00,134.75 L18.00,141.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M80.12,62.00 L80.12,68.92 C80.12,75.83 80.12,89.67 69.77,96.58 C59.42,103.50 38.71,103.50 28.35,109.75 C18.00,116.00 18.00,128.50 18.00,134.75 L18.00,141.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M72.50,172.00 L118.50,172.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M231.50,172.00 L277.50,172.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M336.00,199.00 L336.00,204.58 C336.00,210.17 336.00,221.33 309.50,226.92 C283.00,232.50 230.00,232.50 203.50,237.42 C177.00,242.33 177.00,252.17 177.00,257.08 L177.00,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M336.00,199.00 L336.00,204.58 C336.00,210.17 336.00,221.33 325.64,226.92 C315.29,232.50 294.58,232.50 284.23,237.42 C273.87,242.33 273.87,252.17 273.87,257.08 L273.87,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>
@@ -39,10 +39,10 @@
       <text x="177.00" y="172.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Step 2</text>
       <rect x="281.50" y="145.00" width="109.00" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="336.00" y="172.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Step 3</text>
-      <rect x="134.01" y="266.00" width="85.98" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="177.00" y="293.00" text-anchor="middle" dominant-baseline="middle" fill="#333">End</text>
-      <rect x="129.37" y="8.00" width="95.26" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="177.00" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
+      <rect x="230.88" y="266.00" width="85.98" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="273.87" y="293.00" text-anchor="middle" dominant-baseline="middle" fill="#333">End</text>
+      <rect x="32.49" y="8.00" width="95.26" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="80.12" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
     </g>
   </g>
 </svg>

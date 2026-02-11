@@ -1166,10 +1166,14 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
         .flat_map(|sg| sg.nodes.iter().map(|s| s.as_str()))
         .collect();
 
-    // Collect all shifts to apply: node_id → delta on cross-axis.
-    let mut node_shifts: HashMap<String, f64> = HashMap::new();
+    // Collect all shifts to apply: node_id → (delta on cross-axis, primary-axis distance).
+    // When a node is claimed by multiple subgraphs (e.g. it's a successor
+    // of one and a predecessor of another), keep the shift from the
+    // subgraph whose members are closest on the primary axis.
+    let mut node_shifts: HashMap<String, (f64, f64)> = HashMap::new();
 
-    for (sg_id, sg) in &diagram.subgraphs {
+    for sg_id in &diagram.subgraph_order {
+        let sg = &diagram.subgraphs[sg_id];
         let is_dir_override = sg.dir.is_some();
         let is_sg_as_node = sg_as_node_ids.contains(sg_id.as_str());
 
@@ -1284,10 +1288,16 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
             (lo, hi)
         };
 
-        // Shift both predecessors and successors toward the subgraph center,
-        // but only if the node is outside the subgraph bounds on the primary
-        // axis.  Nodes at the same rank as internal nodes (e.g. Logs beside
+        // Shift predecessors and successors toward the subgraph center,
+        // but only those outside the subgraph bounds on the primary axis.
+        // Nodes at the same rank as internal nodes (e.g. Logs beside
         // Database) would overlap after a cross-axis shift.
+        //
+        // To avoid collapsing multiple nodes onto the same position, compute
+        // a single uniform delta from the group centroid to the subgraph
+        // center.  This preserves relative ordering within the group.
+        let member_primary_center = (member_primary_min + member_primary_max) / 2.0;
+        let mut eligible: Vec<(String, f64, f64)> = Vec::new(); // (id, cross_center, primary_pos)
         for node_id in predecessors.iter().chain(successors.iter()) {
             if let Some(rect) = layout.nodes.get(&dagre::NodeId(node_id.clone())) {
                 let node_cy = rect.y + rect.height / 2.0;
@@ -1300,10 +1310,27 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
                 if inside_primary {
                     continue;
                 }
-                let node_center = if horizontal { node_cx } else { node_cy };
-                let delta = sg_center - node_center;
-                if delta.abs() >= 1.0 {
-                    node_shifts.insert(node_id.clone(), delta);
+                let cross = if horizontal { node_cx } else { node_cy };
+                let primary = if horizontal { node_cy } else { node_cx };
+                eligible.push((node_id.clone(), cross, primary));
+            }
+        }
+        if !eligible.is_empty() {
+            let centroid = eligible.iter().map(|(_, c, _)| *c).sum::<f64>() / eligible.len() as f64;
+            let delta = sg_center - centroid;
+            if delta.abs() >= 1.0 {
+                let primary_dist = eligible
+                    .iter()
+                    .map(|(_, _, p)| (*p - member_primary_center).abs())
+                    .fold(f64::INFINITY, f64::min);
+                for (id, _, _) in &eligible {
+                    if let Some(&(_, existing_dist)) = node_shifts.get(id) {
+                        if primary_dist < existing_dist {
+                            node_shifts.insert(id.clone(), (delta, primary_dist));
+                        }
+                    } else {
+                        node_shifts.insert(id.clone(), (delta, primary_dist));
+                    }
                 }
             }
         }
@@ -1314,7 +1341,7 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
     }
 
     // Apply node position shifts.
-    for (node_id, delta) in &node_shifts {
+    for (node_id, &(delta, _)) in &node_shifts {
         if let Some(rect) = layout.nodes.get_mut(&dagre::NodeId(node_id.clone())) {
             if horizontal {
                 rect.x += delta;
@@ -1326,8 +1353,8 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
 
     // Adjust edge points: interpolate shift from shifted endpoint to unshifted endpoint.
     for edge in &mut layout.edges {
-        let from_delta = node_shifts.get(edge.from.0.as_str()).copied();
-        let to_delta = node_shifts.get(edge.to.0.as_str()).copied();
+        let from_delta = node_shifts.get(edge.from.0.as_str()).map(|&(d, _)| d);
+        let to_delta = node_shifts.get(edge.to.0.as_str()).map(|&(d, _)| d);
 
         let n = edge.points.len();
         if n == 0 {
@@ -1389,7 +1416,7 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
 
     // Adjust self-edge points for shifted nodes.
     for se in &mut layout.self_edges {
-        if let Some(d) = node_shifts.get(se.node.0.as_str()) {
+        if let Some(&(d, _)) = node_shifts.get(se.node.0.as_str()) {
             for p in &mut se.points {
                 if horizontal {
                     p.x += d;
@@ -1403,8 +1430,8 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
     // Adjust label positions for edges with shifted endpoints.
     for (key, pos) in &mut layout.label_positions {
         if let Some(diag_edge) = diagram.edges.get(*key) {
-            let from_delta = node_shifts.get(diag_edge.from.as_str()).copied();
-            let to_delta = node_shifts.get(diag_edge.to.as_str()).copied();
+            let from_delta = node_shifts.get(diag_edge.from.as_str()).map(|&(d, _)| d);
+            let to_delta = node_shifts.get(diag_edge.to.as_str()).map(|&(d, _)| d);
             let avg_delta = match (from_delta, to_delta) {
                 (Some(d1), Some(d2)) => (d1 + d2) / 2.0,
                 (Some(d), None) | (None, Some(d)) => d / 2.0,
