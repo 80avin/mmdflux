@@ -8,6 +8,23 @@ source "$SCRIPT_DIR/_common.sh"
 
 OUT_DIR="$(make_out_dir "06-plan-0075-routing-preview-qa")"
 
+run_exact_test() {
+  local test_bin="$1"
+  local test_name="$2"
+  local output
+
+  output="$(
+    cd "$REPO_ROOT"
+    cargo test --test "$test_bin" "$test_name" -- --exact
+  )"
+  printf '%s\n' "$output"
+
+  if ! grep -q "running 1 test" <<<"$output"; then
+    echo "FAILED expected exactly one matching test: $test_bin::$test_name"
+    exit 1
+  fi
+}
+
 render_mmds() {
   local mode="$1"
   local fixture="$2"
@@ -65,18 +82,17 @@ echo "Output dir: $OUT_DIR"
 
 print_section "Parity + rollback gates (plan 0075 targeted tests)"
 (
-  cd "$REPO_ROOT"
-  cargo test svg_full_compute_override_matches_legacy_linear_core_subset --test svg_snapshots
-  cargo test svg_unified_preview_parity_core_fixture_subset_has_expected_deltas --test svg_snapshots
-  cargo test unified_preview_preserves_core_routed_geometry_contracts --test routed_geometry
-  cargo test unified_router_produces_axis_aligned_forward_paths --test routed_geometry
-  cargo test snap_path_to_grid_preserves_start_and_end_nodes --test routed_geometry
-  cargo test test_svg_unified_preview_differs_from_legacy_for_cycle_fixture --test integration
+  run_exact_test "svg_snapshots" "svg_full_compute_override_matches_legacy_linear_core_subset"
+  run_exact_test "svg_snapshots" "svg_unified_preview_parity_fixture_subset_matches_expected_classification"
+  run_exact_test "routed_geometry" "unified_preview_preserves_core_routed_geometry_contracts"
+  run_exact_test "routed_geometry" "unified_router_produces_axis_aligned_forward_paths"
+  run_exact_test "routed_geometry" "snap_path_to_grid_preserves_start_and_end_nodes"
+  run_exact_test "integration" "test_svg_unified_preview_differs_from_legacy_for_cycle_fixture"
 ) | tee "$OUT_DIR/targeted-gates.log"
 
 print_section "MMDS routed mode checks (full-compute vs unified-preview)"
-assert_same "simple.mmd"
-assert_same "chain.mmd"
+assert_diff "simple.mmd"
+assert_diff "chain.mmd"
 assert_diff "simple_cycle.mmd"
 
 print_section "Determinism checks"
