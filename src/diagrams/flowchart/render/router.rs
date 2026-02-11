@@ -1462,10 +1462,28 @@ pub fn compute_attachment_plan(
             tgt_face = subgraph_edge_face(&tgt_bounds, &src_bounds, edge_dir);
         }
 
-        // Extract cross-axis coordinate from approach point for sorting
-        let src_cross = match src_face {
-            NodeFace::Top | NodeFace::Bottom => src_approach.0,
-            NodeFace::Left | NodeFace::Right => src_approach.1,
+        // Extract cross-axis coordinate from approach point for sorting.
+        //
+        // For cross-boundary edges entering a direction-override subgraph,
+        // waypoint-based approach points cluster near the source (the
+        // waypoints were shifted/clipped at the subgraph border). Use the
+        // actual target node's draw position instead so that source ports
+        // are ordered to match the target positions and avoid crossovers.
+        let tgt_in_override = layout
+            .node_directions
+            .get(&edge.to)
+            .is_some_and(|d| *d != direction);
+        let src_cross = if tgt_in_override {
+            // Use actual target position for sorting on the source face.
+            match src_face {
+                NodeFace::Top | NodeFace::Bottom => tgt_bounds.center_x(),
+                NodeFace::Left | NodeFace::Right => tgt_bounds.center_y(),
+            }
+        } else {
+            match src_face {
+                NodeFace::Top | NodeFace::Bottom => src_approach.0,
+                NodeFace::Left | NodeFace::Right => src_approach.1,
+            }
         };
         let tgt_cross = match tgt_face {
             NodeFace::Top | NodeFace::Bottom => tgt_approach.0,

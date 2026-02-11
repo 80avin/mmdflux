@@ -2505,6 +2505,18 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         // Re-expand parent bounds after alignment may have moved nodes.
         expand_parent_subgraph_bounds(&diagram.subgraphs, &mut subgraph_bounds);
 
+        // --- Phase N: Ensure external-edge spacing for direction-override subgraphs ---
+        // Before clipping waypoints, shift direction-override subgraphs (border +
+        // member nodes) so there is room for horizontal edge routing between
+        // external predecessor/successor nodes and the subgraph border.
+        // Must run before waypoint clipping so the clip uses the shifted border.
+        ensure_external_edge_spacing(
+            diagram,
+            &mut draw_positions,
+            &mut node_bounds,
+            &mut subgraph_bounds,
+        );
+
         // Invalidate or adjust waypoints and label positions for edges touching
         // direction-override subgraphs. The main layout computed these for
         // the parent direction; after reconciliation the node positions have
@@ -2540,12 +2552,15 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         }
     }
 
-    // --- Phase N: Ensure external-edge spacing for direction-override subgraphs ---
-    // After sublayout reconciliation, direction-override subgraphs may end up
-    // with their border flush against external predecessor/successor nodes.
-    // Push the border inward (shrink) to guarantee at least 1 row of space
-    // for clean edge entry.
-    ensure_external_edge_spacing(diagram, &node_bounds, &mut subgraph_bounds);
+    // Re-expand canvas to fit any subgraphs/nodes shifted by Phase N.
+    for sb in subgraph_bounds.values() {
+        width = width.max(sb.x + sb.width + config.padding);
+        height = height.max(sb.y + sb.height + config.padding);
+    }
+    for nb in node_bounds.values() {
+        width = width.max(nb.x + nb.width + config.padding);
+        height = height.max(nb.y + nb.height + config.padding);
+    }
 
     let node_directions = geom.node_directions.clone();
 
@@ -3054,7 +3069,8 @@ fn shrink_subgraph_vertical_gaps(
 /// border inward so there is a 1-cell gap on the entry side.
 fn ensure_external_edge_spacing(
     diagram: &Diagram,
-    node_bounds: &HashMap<String, NodeBounds>,
+    draw_positions: &mut HashMap<String, (usize, usize)>,
+    node_bounds: &mut HashMap<String, NodeBounds>,
     subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
 ) {
     for (sg_id, sg) in &diagram.subgraphs {
@@ -3097,23 +3113,67 @@ fn ensure_external_edge_spacing(
             }
         }
 
-        let entry = subgraph_bounds.get_mut(sg_id).unwrap();
-        // Top side: push border down if too close to predecessor bottom.
+        // Top side: shift entire subgraph down if too close to predecessor bottom.
+        // Use +4 to leave room for horizontal edge routing + 1 clear row
+        // above the subgraph border.
         if let Some(pred_bottom) = max_pred_bottom {
-            let min_y = pred_bottom + 2;
-            if entry.y < min_y {
-                let adjust = min_y - entry.y;
-                entry.y = min_y;
-                entry.height = entry.height.saturating_sub(adjust);
+            let min_y = pred_bottom + 4;
+            let current_y = subgraph_bounds[sg_id].y;
+            if current_y < min_y {
+                let adjust = min_y - current_y;
+                // Shift the subgraph bounds down (keep height, move y).
+                subgraph_bounds.get_mut(sg_id).unwrap().y = min_y;
+                // Shift all member nodes down by the same amount.
+                for member_id in &sg.nodes {
+                    if let Some(nb) = node_bounds.get_mut(member_id) {
+                        nb.y += adjust;
+                    }
+                    if let Some(pos) = draw_positions.get_mut(member_id) {
+                        pos.1 += adjust;
+                    }
+                }
+                // Shift nested child subgraph bounds down too.
+                let children: Vec<String> = diagram
+                    .subgraphs
+                    .iter()
+                    .filter(|(cid, _)| *cid != sg_id && sg_node_set.contains(cid.as_str()))
+                    .map(|(cid, _)| cid.clone())
+                    .collect();
+                for child_id in &children {
+                    if let Some(cb) = subgraph_bounds.get_mut(child_id) {
+                        cb.y += adjust;
+                    }
+                }
             }
         }
-        // Bottom side: shrink height if border too close to successor top.
+        // Bottom side: shift entire subgraph up if border too close to successor top.
         if let Some(succ_top) = min_succ_top {
-            let max_bottom = succ_top.saturating_sub(2);
-            let current_bottom = entry.y + entry.height.saturating_sub(1);
+            let max_bottom = succ_top.saturating_sub(4);
+            let sb = &subgraph_bounds[sg_id];
+            let current_bottom = sb.y + sb.height.saturating_sub(1);
             if current_bottom > max_bottom {
                 let adjust = current_bottom - max_bottom;
-                entry.height = entry.height.saturating_sub(adjust);
+                subgraph_bounds.get_mut(sg_id).unwrap().y =
+                    subgraph_bounds[sg_id].y.saturating_sub(adjust);
+                for member_id in &sg.nodes {
+                    if let Some(nb) = node_bounds.get_mut(member_id) {
+                        nb.y = nb.y.saturating_sub(adjust);
+                    }
+                    if let Some(pos) = draw_positions.get_mut(member_id) {
+                        pos.1 = pos.1.saturating_sub(adjust);
+                    }
+                }
+                let children: Vec<String> = diagram
+                    .subgraphs
+                    .iter()
+                    .filter(|(cid, _)| *cid != sg_id && sg_node_set.contains(cid.as_str()))
+                    .map(|(cid, _)| cid.clone())
+                    .collect();
+                for child_id in &children {
+                    if let Some(cb) = subgraph_bounds.get_mut(child_id) {
+                        cb.y = cb.y.saturating_sub(adjust);
+                    }
+                }
             }
         }
     }
