@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use mmdflux::diagram::{OutputFormat, RenderConfig};
+use mmdflux::diagram::{OutputFormat, RenderConfig, SvgEdgePathStyle};
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::registry::DiagramInstance;
 use mmdflux::render::{RenderOptions, render_svg};
@@ -41,6 +41,15 @@ fn render_svg_fixture(name: &str) -> String {
     let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
     let diagram = build_diagram(&flowchart);
     render_svg(&diagram, &RenderOptions::default_svg())
+}
+
+fn render_svg_fixture_with_curve(name: &str, curve: SvgEdgePathStyle) -> String {
+    let input = load_fixture(name);
+    let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
+    let diagram = build_diagram(&flowchart);
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_curve = curve;
+    render_svg(&diagram, &options)
 }
 
 fn render_svg_mmds_fixture(name: &str) -> String {
@@ -87,6 +96,14 @@ fn snapshot_path(stem: &str) -> PathBuf {
         .join(format!("{stem}.svg"))
 }
 
+fn orthogonal_snapshot_path(stem: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("svg-snapshots")
+        .join("flowchart-orthogonal")
+        .join(format!("{stem}.svg"))
+}
+
 fn mmds_snapshot_path(stem: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -110,6 +127,26 @@ fn assert_snapshot(fixture: &str) {
     let expected = fs::read_to_string(&path)
         .unwrap_or_else(|_| panic!("Missing snapshot: {}", path.display()));
     assert_eq!(output, expected, "Snapshot mismatch for {fixture}");
+}
+
+fn assert_orthogonal_snapshot(fixture: &str) {
+    let stem = fixture.trim_end_matches(".mmd");
+    let output = render_svg_fixture_with_curve(fixture, SvgEdgePathStyle::Orthogonal);
+    let path = orthogonal_snapshot_path(stem);
+
+    if std::env::var("GENERATE_SVG_SNAPSHOTS").is_ok() {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(&path, &output).unwrap();
+    }
+
+    let expected = fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("Missing snapshot: {}", path.display()));
+    assert_eq!(
+        output, expected,
+        "Orthogonal snapshot mismatch for {fixture}"
+    );
 }
 
 fn assert_mmds_snapshot(fixture: &str, snapshot_stem: &str) {
@@ -188,4 +225,15 @@ fn direct_and_mmds_replay_match_for_subgraph_endpoint_fixture_set() {
 #[test]
 fn positioned_mmds_svg_snapshot_routed_basic() {
     assert_mmds_snapshot("positioned/routed-basic.json", "routed-basic");
+}
+
+#[test]
+fn svg_snapshot_orthogonal_fixture_subset() {
+    for fixture in [
+        "simple.mmd",
+        "fan_out.mmd",
+        "subgraph_direction_cross_boundary.mmd",
+    ] {
+        assert_orthogonal_snapshot(fixture);
+    }
 }

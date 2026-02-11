@@ -37,6 +37,35 @@ fn extract_node_x_positions(svg: &str) -> HashMap<String, f64> {
     positions
 }
 
+fn edge_path_data(svg: &str) -> Vec<String> {
+    svg.lines()
+        .map(str::trim)
+        .filter(|line| {
+            line.starts_with("<path d=\"")
+                && (line.contains("marker-end=") || line.contains("marker-start="))
+        })
+        .filter_map(|line| {
+            let start = line.find("d=\"")?;
+            let after = &line[start + 3..];
+            let end = after.find('"')?;
+            Some(after[..end].to_string())
+        })
+        .collect()
+}
+
+fn parse_linear_path_points(path_data: &str) -> Vec<(f64, f64)> {
+    path_data
+        .split_whitespace()
+        .filter_map(|token| {
+            let token = token.trim_start_matches('M').trim_start_matches('L');
+            let (x, y) = token.split_once(',')?;
+            let x = x.parse::<f64>().ok()?;
+            let y = y.parse::<f64>().ok()?;
+            Some((x, y))
+        })
+        .collect()
+}
+
 #[test]
 fn render_svg_basic_flowchart_has_svg_root() {
     let input = "graph TD\nA[Start] --> B[End]\n";
@@ -57,6 +86,35 @@ fn svg_edge_path_style_parses_orthogonal() {
         SvgEdgePathStyle::parse("orthogonal").unwrap(),
         SvgEdgePathStyle::Orthogonal
     );
+}
+
+#[test]
+fn svg_orthogonal_mode_renders_axis_aligned_path_commands() {
+    let input = "graph TD\nA --> B\nA --> C\n";
+    let flowchart = parse_flowchart(input).unwrap();
+    let diagram = build_diagram(&flowchart);
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_curve = SvgEdgePathStyle::Orthogonal;
+    let svg = render_svg(&diagram, &options);
+
+    assert!(!svg.contains("NaN"));
+
+    let edge_paths = edge_path_data(&svg);
+    assert!(
+        !edge_paths.is_empty(),
+        "expected edge path data in SVG output"
+    );
+    for d in edge_paths {
+        let points = parse_linear_path_points(&d);
+        assert!(
+            points.windows(2).all(|segment| {
+                (segment[0].0 - segment[1].0).abs() < 0.001
+                    || (segment[0].1 - segment[1].1).abs() < 0.001
+            }),
+            "orthogonal path should be axis-aligned, got {d}"
+        );
+    }
 }
 
 #[test]

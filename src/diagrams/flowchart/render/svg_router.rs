@@ -14,7 +14,8 @@ pub use super::route_policy::{
     build_override_node_map, effective_edge_direction as effective_edge_direction_svg,
 };
 use super::routing_core::{
-    Face, edge_faces as shared_edge_faces, point_on_face_float as shared_point_on_face_float,
+    Face, build_orthogonal_path_float, edge_faces as shared_edge_faces,
+    point_on_face_float as shared_point_on_face_float,
 };
 use crate::dagre::{LayoutResult, NodeId, Point, Rect};
 use crate::diagrams::flowchart::geometry::FRect;
@@ -58,42 +59,10 @@ fn entry_point(rect: &Rect, direction: Direction) -> Point {
 pub fn route_svg_edge_direct(from_rect: &Rect, to_rect: &Rect, direction: Direction) -> Vec<Point> {
     let start = exit_point(from_rect, direction);
     let end = entry_point(to_rect, direction);
-
-    let is_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
-    let aligned = if is_vertical {
-        (start.x - end.x).abs() < 0.5
-    } else {
-        (start.y - end.y).abs() < 0.5
-    };
-
-    if aligned {
-        vec![start, end]
-    } else {
-        // L-shaped elbow: go along primary axis to midpoint, then turn
-        if is_vertical {
-            let mid_y = (start.y + end.y) / 2.0;
-            vec![
-                start,
-                Point {
-                    x: start.x,
-                    y: mid_y,
-                },
-                Point { x: end.x, y: mid_y },
-                end,
-            ]
-        } else {
-            let mid_x = (start.x + end.x) / 2.0;
-            vec![
-                start,
-                Point {
-                    x: mid_x,
-                    y: start.y,
-                },
-                Point { x: mid_x, y: end.y },
-                end,
-            ]
-        }
-    }
+    build_orthogonal_path_float(start.into(), end.into(), direction, &[])
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 /// Route an edge with explicit port fractions for exit and entry faces.
@@ -110,39 +79,10 @@ fn route_svg_edge_ported(
 ) -> Vec<Point> {
     let start = point_on_face(from_rect, exit_face(direction), from_port);
     let end = point_on_face(to_rect, entry_face(direction), to_port);
-
-    let is_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
-    let aligned = if is_vertical {
-        (start.x - end.x).abs() < 0.5
-    } else {
-        (start.y - end.y).abs() < 0.5
-    };
-
-    if aligned {
-        vec![start, end]
-    } else if is_vertical {
-        let mid_y = (start.y + end.y) / 2.0;
-        vec![
-            start,
-            Point {
-                x: start.x,
-                y: mid_y,
-            },
-            Point { x: end.x, y: mid_y },
-            end,
-        ]
-    } else {
-        let mid_x = (start.x + end.x) / 2.0;
-        vec![
-            start,
-            Point {
-                x: mid_x,
-                y: start.y,
-            },
-            Point { x: mid_x, y: end.y },
-            end,
-        ]
-    }
+    build_orthogonal_path_float(start.into(), end.into(), direction, &[])
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 /// Route an edge that crosses a subgraph boundary.

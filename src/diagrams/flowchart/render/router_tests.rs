@@ -2,7 +2,7 @@ use super::super::layout::{LayoutConfig, compute_layout_direct};
 use super::*;
 use crate::diagrams::flowchart::geometry::{FPoint, FRect};
 use crate::diagrams::flowchart::render::routing_core::{
-    Face, classify_face_float, edge_faces, point_on_face_float,
+    Face, build_orthogonal_path_float, classify_face_float, edge_faces, point_on_face_float,
 };
 use crate::graph::{Diagram, Node};
 use crate::render::intersect::NodeFace;
@@ -1107,4 +1107,18 @@ fn routing_core_face_conversions_are_explicit_and_lossless() {
     assert_eq!(Face::Bottom.to_node_face(), NodeFace::Bottom);
     assert_eq!(Face::Left.to_node_face(), NodeFace::Left);
     assert_eq!(Face::Right.to_node_face(), NodeFace::Right);
+}
+
+#[test]
+fn routing_core_build_orthogonal_path_float_emits_axis_aligned_segments() {
+    let points = build_orthogonal_path_float(
+        FPoint::new(10.0, 10.0),
+        FPoint::new(80.0, 60.0),
+        Direction::TopDown,
+        &[],
+    );
+
+    assert!(points.windows(2).all(|seg| {
+        (seg[0].x - seg[1].x).abs() < f64::EPSILON || (seg[0].y - seg[1].y).abs() < f64::EPSILON
+    }));
 }

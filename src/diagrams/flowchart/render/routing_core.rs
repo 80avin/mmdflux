@@ -83,3 +83,55 @@ pub(crate) fn point_on_face_float(rect: FRect, face: Face, fraction: f64) -> FPo
         Face::Right => FPoint::new(rect.x + rect.width, rect.y + rect.height * fraction),
     }
 }
+
+/// Build an orthogonal polyline in float space from start to end through optional waypoints.
+///
+/// Diagonal spans are split into two elbows using midpoint routing on the
+/// diagram's primary axis to keep paths axis-aligned and symmetric.
+pub(crate) fn build_orthogonal_path_float(
+    start: FPoint,
+    end: FPoint,
+    direction: Direction,
+    waypoints: &[FPoint],
+) -> Vec<FPoint> {
+    const ALIGN_EPS: f64 = 0.5;
+    const DUP_EPS: f64 = 0.000_001;
+
+    let primary_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
+    let mut control_points: Vec<FPoint> = Vec::with_capacity(waypoints.len() + 2);
+    control_points.push(start);
+    control_points.extend_from_slice(waypoints);
+    control_points.push(end);
+
+    let mut output: Vec<FPoint> = Vec::with_capacity(control_points.len() * 3);
+    output.push(start);
+
+    for target in control_points.into_iter().skip(1) {
+        let current = output.last().copied().unwrap_or(start);
+
+        if (current.x - target.x).abs() < DUP_EPS && (current.y - target.y).abs() < DUP_EPS {
+            continue;
+        }
+
+        let x_aligned = (current.x - target.x).abs() < ALIGN_EPS;
+        let y_aligned = (current.y - target.y).abs() < ALIGN_EPS;
+        if x_aligned || y_aligned {
+            output.push(target);
+            continue;
+        }
+
+        if primary_vertical {
+            let mid_y = (current.y + target.y) / 2.0;
+            output.push(FPoint::new(current.x, mid_y));
+            output.push(FPoint::new(target.x, mid_y));
+        } else {
+            let mid_x = (current.x + target.x) / 2.0;
+            output.push(FPoint::new(mid_x, current.y));
+            output.push(FPoint::new(mid_x, target.y));
+        }
+        output.push(target);
+    }
+
+    output.dedup_by(|a, b| (a.x - b.x).abs() < DUP_EPS && (a.y - b.y).abs() < DUP_EPS);
+    output
+}

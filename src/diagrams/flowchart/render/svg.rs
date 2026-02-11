@@ -8,6 +8,7 @@ use super::layout::{
     build_dagre_layout, center_override_subgraphs, compute_sublayouts, dagre_config_for_layout,
     expand_parent_bounds_dagre, reconcile_sublayouts_dagre, resolve_sublayout_overlaps,
 };
+use super::routing_core::build_orthogonal_path_float;
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use crate::dagre::{LayoutResult, Point, Rect};
@@ -799,7 +800,13 @@ fn render_edges(
             points = fix_corner_points(&points);
         }
         points = apply_marker_offsets(&points, edge);
-        let d = path_from_points(&points, scale, edge_curve, edge_curve_radius);
+        let d = path_from_points(
+            &points,
+            diagram.direction,
+            scale,
+            edge_curve,
+            edge_curve_radius,
+        );
         if d.is_empty() {
             continue;
         }
@@ -1853,6 +1860,7 @@ fn edge_marker_attrs(edge: &Edge) -> String {
 
 fn path_from_points(
     points: &[Point],
+    direction: Direction,
     scale: f64,
     curve: SvgEdgePathStyle,
     curve_radius: f64,
@@ -1860,6 +1868,24 @@ fn path_from_points(
     if points.is_empty() {
         return String::new();
     }
+    let points: Vec<Point> = if matches!(curve, SvgEdgePathStyle::Orthogonal) {
+        let start: geometry::FPoint = points[0].into();
+        let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
+        let waypoints: Vec<geometry::FPoint> = points
+            .iter()
+            .copied()
+            .skip(1)
+            .take(points.len().saturating_sub(2))
+            .map(Into::into)
+            .collect();
+        build_orthogonal_path_float(start, end, direction, &waypoints)
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    } else {
+        points.to_vec()
+    };
+
     let scaled: Vec<(f64, f64)> = points
         .iter()
         .map(|point| (point.x * scale, point.y * scale))
@@ -1868,7 +1894,6 @@ fn path_from_points(
         SvgEdgePathStyle::Basis => path_from_points_basis(&scaled),
         SvgEdgePathStyle::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
         SvgEdgePathStyle::Linear => path_from_points_linear(&scaled),
-        // Orthogonal path construction is introduced in a follow-up task.
         SvgEdgePathStyle::Orthogonal => path_from_points_linear(&scaled),
     }
 }
