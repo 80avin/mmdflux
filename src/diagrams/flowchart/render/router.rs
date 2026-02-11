@@ -649,7 +649,7 @@ fn route_edge_direct(
     direction: Direction,
     src_attach_override: Option<(usize, usize)>,
     tgt_attach_override: Option<(usize, usize)>,
-    _src_first_vertical: bool,
+    src_first_vertical: bool,
 ) -> Option<RoutedEdge> {
     // For direct routing, use the other node's center as the "approach point"
     let empty_waypoints: &[(usize, usize)] = &[];
@@ -722,11 +722,40 @@ fn route_edge_direct(
             Direction::RightLeft
         };
     }
-    segments.extend(build_orthogonal_path_for_direction(
-        start,
-        end,
-        path_direction,
-    ));
+    // When src_first_vertical is false (horizontal-first stagger), turn
+    // horizontal one row after the source so sibling edges separate early.
+    if !src_first_vertical
+        && matches!(path_direction, Direction::TopDown | Direction::BottomTop)
+        && start.x != end.x
+        && start.y != end.y
+    {
+        let mid_y = if matches!(path_direction, Direction::TopDown) {
+            start.y + 1
+        } else {
+            start.y.saturating_sub(1)
+        };
+        segments.push(Segment::Vertical {
+            x: start.x,
+            y_start: start.y,
+            y_end: mid_y,
+        });
+        segments.push(Segment::Horizontal {
+            y: mid_y,
+            x_start: start.x,
+            x_end: end.x,
+        });
+        segments.push(Segment::Vertical {
+            x: end.x,
+            y_start: mid_y,
+            y_end: end.y,
+        });
+    } else {
+        segments.extend(build_orthogonal_path_for_direction(
+            start,
+            end,
+            path_direction,
+        ));
+    }
 
     // Determine entry direction: use canonical direction when start == end
     // (zero-length path produces a degenerate segment that can't indicate direction)
@@ -1548,6 +1577,27 @@ pub fn compute_attachment_plan(
         let mut left_lane = 0usize;
         let mut right_lane = 0usize;
 
+        // Count override-targeting edges (no waypoints) for separate lane staggering.
+        let mut override_left_count = 0usize;
+        let mut override_right_count = 0usize;
+        for &(i, is_source, cross, has_wps) in &sorted {
+            if is_source && !has_wps {
+                let tgt_in_override = layout
+                    .node_directions
+                    .get(&edges[i].to)
+                    .is_some_and(|d| *d != direction);
+                if tgt_in_override {
+                    if cross as isize >= center_cross {
+                        override_right_count += 1;
+                    } else {
+                        override_left_count += 1;
+                    }
+                }
+            }
+        }
+        let mut override_left_lane = 0usize;
+        let mut override_right_lane = 0usize;
+
         for (idx, &(edge_i, is_source, cross, has_wps)) in sorted.iter().enumerate() {
             let point = points[idx];
             let entry = overrides.entry(edge_i).or_insert(AttachmentOverride {
@@ -1571,6 +1621,38 @@ pub fn compute_attachment_plan(
                         } else {
                             entry.source_first_vertical = left_lane % 2 == 1;
                             left_lane += 1;
+                        }
+                    }
+                } else if should_consider && !has_wps {
+                    // For edges targeting direction-override subgraphs
+                    // (waypoints removed), stagger so the farther edge
+                    // turns horizontal first to avoid overlap.
+                    let tgt_in_override = layout
+                        .node_directions
+                        .get(&edges[edge_i].to)
+                        .is_some_and(|d| *d != direction);
+                    if tgt_in_override {
+                        let side = if cross as isize >= center_cross {
+                            1
+                        } else {
+                            -1
+                        };
+                        let side_count = if side > 0 {
+                            override_right_count
+                        } else {
+                            override_left_count
+                        };
+                        if side_count > 1 {
+                            // Reversed alternation: first in sort (closer)
+                            // goes vertical-first (late), second (farther)
+                            // goes horizontal-first (early).
+                            if side > 0 {
+                                entry.source_first_vertical = override_right_lane % 2 == 0;
+                                override_right_lane += 1;
+                            } else {
+                                entry.source_first_vertical = override_left_lane % 2 == 0;
+                                override_left_lane += 1;
+                            }
                         }
                     }
                 }
