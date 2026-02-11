@@ -101,6 +101,8 @@ fn lollipop_relations_render_all_participating_classes() {
 
     assert!(output.contains("Class02"));
     assert!(output.contains("foo"));
+    assert!(!output.contains("│ bar │"));
+    assert!(!output.contains("│ foo │"));
 }
 
 #[test]

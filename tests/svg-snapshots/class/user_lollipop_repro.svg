@@ -21,8 +21,8 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M78.37,262.00 L78.37,266.17 C78.37,270.33 78.37,278.67 86.32,287.47 C94.28,296.27 110.19,305.54 118.15,310.18 L126.10,314.81" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
-      <path d="M256.85,166.00 L256.85,186.17 C256.85,206.33 256.85,246.67 248.90,271.47 C240.94,296.27 225.03,305.54 217.07,310.18 L209.12,314.81" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
+      <path d="M78.37,262.00 L78.37,266.17 C78.37,270.33 78.37,278.67 88.82,288.93 C99.28,299.18 120.19,311.37 130.65,317.46 L141.10,323.55" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
+      <path d="M256.85,166.00 L256.85,186.17 C256.85,206.33 256.85,246.67 246.40,272.93 C235.94,299.18 215.03,311.37 204.57,317.46 L194.12,323.55" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
       <path d="M78.37,62.00 L78.37,66.17 C78.37,70.33 78.37,78.67 78.37,87.00 C78.37,95.33 78.37,103.67 78.37,107.83 L78.37,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#circlehead)" />
     </g>
     <g class="edgeLabels">
@@ -36,9 +36,7 @@
       <text x="23.00" y="235.00" text-anchor="start" dominant-baseline="middle" fill="#333">draw()</text>
       <rect x="198.74" y="112.00" width="116.24" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="256.85" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Class02</text>
-      <rect x="126.10" y="312.00" width="83.01" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="167.61" y="339.00" text-anchor="middle" dominant-baseline="middle" fill="#333">bar</text>
-      <rect x="36.86" y="8.00" width="83.01" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
       <text x="78.37" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">foo</text>
     </g>
   </g>

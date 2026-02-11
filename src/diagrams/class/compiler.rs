@@ -3,6 +3,8 @@
 //! Maps classes to graph nodes and relationships to graph edges,
 //! preserving class diagram semantics through edge styles and arrows.
 
+use std::collections::HashSet;
+
 use super::parser::ast::{ClassModel, ClassRelationType};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke, Subgraph};
 
@@ -13,6 +15,7 @@ use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke, Subgrap
 /// map to edges with style/arrow metadata based on their type.
 pub fn compile(model: &ClassModel) -> Diagram {
     let mut diagram = Diagram::new(class_direction(model.direction.as_deref()));
+    let lollipop_interfaces = lollipop_interface_nodes(model);
 
     for class in &model.classes {
         let mut header: Vec<String> = class
@@ -41,11 +44,13 @@ pub fn compile(model: &ClassModel) -> Diagram {
             parts.join("\n")
         };
 
-        diagram.add_node(
-            Node::new(&class.name)
-                .with_label(label)
-                .with_shape(Shape::Rectangle),
-        );
+        let shape = if lollipop_interfaces.contains(&class.name) {
+            Shape::TextBlock
+        } else {
+            Shape::Rectangle
+        };
+
+        diagram.add_node(Node::new(&class.name).with_label(label).with_shape(shape));
     }
 
     apply_namespaces(model, &mut diagram);
@@ -84,6 +89,39 @@ fn class_direction(direction: Option<&str>) -> Direction {
         Some("TB") => Direction::TopDown,
         _ => Direction::TopDown,
     }
+}
+
+fn lollipop_interface_nodes(model: &ClassModel) -> HashSet<String> {
+    let mut candidates = HashSet::new();
+    let mut keep_box = HashSet::new();
+
+    for rel in &model.relations {
+        if rel.relation_type == ClassRelationType::Lollipop {
+            if rel.marker_start {
+                candidates.insert(rel.from.clone());
+            } else {
+                keep_box.insert(rel.from.clone());
+            }
+
+            if rel.marker_end {
+                candidates.insert(rel.to.clone());
+            } else {
+                keep_box.insert(rel.to.clone());
+            }
+        } else {
+            keep_box.insert(rel.from.clone());
+            keep_box.insert(rel.to.clone());
+        }
+    }
+
+    for class in &model.classes {
+        if !class.annotations.is_empty() || !class.members.is_empty() {
+            keep_box.insert(class.name.clone());
+        }
+    }
+
+    candidates.retain(|name| !keep_box.contains(name));
+    candidates
 }
 
 fn apply_namespaces(model: &ClassModel, diagram: &mut Diagram) {
@@ -241,6 +279,8 @@ mod tests {
         let diagram = compile_class("classDiagram\nClass01 --() bar");
         assert_eq!(diagram.edges[0].arrow_end, Arrow::Circle);
         assert_eq!(diagram.edges[0].arrow_start, Arrow::None);
+        assert_eq!(diagram.nodes["bar"].shape, Shape::TextBlock);
+        assert_eq!(diagram.nodes["Class01"].shape, Shape::Rectangle);
     }
 
     #[test]
@@ -248,6 +288,14 @@ mod tests {
         let diagram = compile_class("classDiagram\nfoo ()-- Class01");
         assert_eq!(diagram.edges[0].arrow_start, Arrow::Circle);
         assert_eq!(diagram.edges[0].arrow_end, Arrow::None);
+        assert_eq!(diagram.nodes["foo"].shape, Shape::TextBlock);
+        assert_eq!(diagram.nodes["Class01"].shape, Shape::Rectangle);
+    }
+
+    #[test]
+    fn compiler_lollipop_endpoint_in_non_lollipop_relation_stays_boxed() {
+        let diagram = compile_class("classDiagram\nService --() InterfaceA\nInterfaceA --> Repo");
+        assert_eq!(diagram.nodes["InterfaceA"].shape, Shape::Rectangle);
     }
 
     #[test]
