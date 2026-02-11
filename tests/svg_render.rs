@@ -58,11 +58,11 @@ fn edge_path_data(svg: &str) -> Vec<String> {
         .collect()
 }
 
-fn parse_linear_path_points(path_data: &str) -> Vec<(f64, f64)> {
+fn parse_svg_path_points(path_data: &str) -> Vec<(f64, f64)> {
     path_data
         .split_whitespace()
         .filter_map(|token| {
-            let token = token.trim_start_matches('M').trim_start_matches('L');
+            let token = token.trim_start_matches(|c: char| c.is_ascii_alphabetic());
             let (x, y) = token.split_once(',')?;
             let x = x.parse::<f64>().ok()?;
             let y = y.parse::<f64>().ok()?;
@@ -74,7 +74,7 @@ fn parse_linear_path_points(path_data: &str) -> Vec<(f64, f64)> {
 fn total_svg_edge_segments(svg: &str) -> usize {
     edge_path_data(svg)
         .iter()
-        .map(|d| parse_linear_path_points(d).len().saturating_sub(1))
+        .map(|d| parse_svg_path_points(d).len().saturating_sub(1))
         .sum()
 }
 
@@ -111,6 +111,20 @@ fn has_immediate_axis_backtrack(points: &[(f64, f64)]) -> bool {
             _ => false,
         }
     })
+}
+
+fn has_primary_axis_backtrack(points: &[(f64, f64)], direction: mmdflux::Direction) -> bool {
+    const EPS: f64 = 0.001;
+    if points.len() < 2 {
+        return false;
+    }
+
+    match direction {
+        mmdflux::Direction::TopDown => points.windows(2).any(|seg| seg[1].1 < seg[0].1 - EPS),
+        mmdflux::Direction::BottomTop => points.windows(2).any(|seg| seg[1].1 > seg[0].1 + EPS),
+        mmdflux::Direction::LeftRight => points.windows(2).any(|seg| seg[1].0 < seg[0].0 - EPS),
+        mmdflux::Direction::RightLeft => points.windows(2).any(|seg| seg[1].0 > seg[0].0 + EPS),
+    }
 }
 
 fn parse_attr_f64(line: &str, attr: &str) -> Option<f64> {
@@ -167,7 +181,7 @@ fn edge_path_for_svg_order(
         .position(|idx| *idx == edge_index)
         .expect("edge index should be visible in SVG");
     let paths = edge_path_data(svg);
-    parse_linear_path_points(
+    parse_svg_path_points(
         paths
             .get(svg_position)
             .expect("edge path should exist at visible edge position"),
@@ -214,7 +228,7 @@ fn svg_orthogonal_mode_renders_axis_aligned_path_commands() {
         "expected edge path data in SVG output"
     );
     for d in edge_paths {
-        let points = parse_linear_path_points(&d);
+        let points = parse_svg_path_points(&d);
         assert!(
             points.windows(2).all(|segment| {
                 (segment[0].0 - segment[1].0).abs() < 0.001
@@ -443,6 +457,96 @@ fn svg_orthogonal_unified_preview_does_not_add_short_staircase_jogs_after_adjust
     assert!(
         svg_segments <= routed_segments + 1,
         "SVG conversion should not add staircase jogs for Bmid -> F: routed_segments={routed_segments}, svg_segments={svg_segments}, svg_points={points:?}"
+    );
+}
+
+#[test]
+fn svg_linear_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("multi_subgraph_direction_override.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+    let edge_index = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Bmid" && edge.to == "F")
+        .expect("fixture should contain edge Bmid -> F")
+        .index;
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Linear;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+
+    assert!(
+        !has_primary_axis_backtrack(&points, diagram.direction),
+        "Bmid -> F should not backtrack along TD primary axis in linear SVG: {points:?}"
+    );
+}
+
+#[test]
+fn svg_basis_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("multi_subgraph_direction_override.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+    let edge_index = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Bmid" && edge.to == "F")
+        .expect("fixture should contain edge Bmid -> F")
+        .index;
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Basis;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+
+    assert!(
+        !has_primary_axis_backtrack(&points, diagram.direction),
+        "Bmid -> F should not backtrack along TD primary axis in basis SVG: {points:?}"
+    );
+}
+
+#[test]
+fn svg_rounded_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("multi_subgraph_direction_override.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+    let edge_index = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Bmid" && edge.to == "F")
+        .expect("fixture should contain edge Bmid -> F")
+        .index;
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Rounded;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+
+    assert!(
+        !has_primary_axis_backtrack(&points, diagram.direction),
+        "Bmid -> F should not backtrack along TD primary axis in rounded SVG: {points:?}"
     );
 }
 

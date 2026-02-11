@@ -146,7 +146,15 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 
     let override_nodes = svg_router::build_override_node_map(diagram);
 
-    render_svg_with_geometry_context(diagram, options, &geom, &rerouted_edges, &override_nodes)
+    let routing_mode = options.routing_mode.unwrap_or(RoutingMode::FullCompute);
+    render_svg_with_geometry_context(
+        diagram,
+        options,
+        &geom,
+        &rerouted_edges,
+        &override_nodes,
+        routing_mode,
+    )
 }
 
 /// Render SVG directly from precomputed graph geometry.
@@ -161,7 +169,14 @@ pub fn render_svg_from_geometry(
     let rerouted_edges =
         rerouted_edge_indexes_for_mode(geom, routing_mode, options.svg.edge_path_style);
     let override_nodes = svg_router::build_override_node_map(diagram);
-    render_svg_with_geometry_context(diagram, options, geom, &rerouted_edges, &override_nodes)
+    render_svg_with_geometry_context(
+        diagram,
+        options,
+        geom,
+        &rerouted_edges,
+        &override_nodes,
+        routing_mode,
+    )
 }
 
 fn rerouted_edge_indexes_for_mode(
@@ -200,6 +215,7 @@ fn render_svg_with_geometry_context(
     geom: &GraphGeometry,
     rerouted_edges: &HashSet<usize>,
     override_nodes: &HashMap<String, String>,
+    routing_mode: RoutingMode,
 ) -> String {
     let svg_options = &options.svg;
     let scale = svg_options.scale;
@@ -235,6 +251,7 @@ fn render_svg_with_geometry_context(
         geom,
         &self_edge_paths,
         rerouted_edges,
+        routing_mode,
         svg_options.edge_path_style,
         svg_options.edge_path_radius,
         scale,
@@ -777,6 +794,7 @@ fn render_edges(
     geom: &GraphGeometry,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     rerouted_edges: &std::collections::HashSet<usize>,
+    routing_mode: RoutingMode,
     edge_path_style: SvgEdgePathStyle,
     edge_path_radius: f64,
     scale: f64,
@@ -840,9 +858,14 @@ fn render_edges(
         if matches!(edge_path_style, SvgEdgePathStyle::Linear) {
             points = fix_corner_points(&points);
         }
+        let enforce_primary_axis_no_backtrack = matches!(routing_mode, RoutingMode::UnifiedPreview)
+            && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal);
         points = apply_marker_offsets(
             &points,
             edge,
+            diagram.direction,
+            !matches!(edge_path_style, SvgEdgePathStyle::Linear),
+            enforce_primary_axis_no_backtrack,
             matches!(edge_path_style, SvgEdgePathStyle::Orthogonal),
         );
         let d = path_from_points(
@@ -2235,7 +2258,14 @@ fn find_adjacent_point(point_a: Point, point_b: Point, distance: f64) -> Point {
     }
 }
 
-fn apply_marker_offsets(points: &[Point], edge: &Edge, preserve_orthogonal: bool) -> Vec<Point> {
+fn apply_marker_offsets(
+    points: &[Point],
+    edge: &Edge,
+    direction: Direction,
+    allow_interior_nudges: bool,
+    enforce_primary_axis_no_backtrack: bool,
+    preserve_orthogonal: bool,
+) -> Vec<Point> {
     if points.len() < 2 {
         return points.to_vec();
     }
@@ -2272,12 +2302,11 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge, preserve_orthogonal: bool
         end_offset = end_offset.min((end_support - MIN_ENDPOINT_SUPPORT).max(0.0));
     }
 
+    let mut out = Vec::with_capacity(points.len());
     let start = points[0];
     let end = points[points.len() - 1];
     let direction_x = if start.x < end.x { "left" } else { "right" };
     let direction_y = if start.y < end.y { "down" } else { "up" };
-
-    let mut out = Vec::with_capacity(points.len());
     for (i, point) in points.iter().enumerate() {
         let mut offset_x = 0.0;
         if i == 0 && start_offset > 0.0 {
@@ -2297,7 +2326,7 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge, preserve_orthogonal: bool
         let diff_in_y_start = (point.y - start.y).abs();
         let extra_room = 1.0;
 
-        if !preserve_orthogonal {
+        if allow_interior_nudges && !preserve_orthogonal {
             if end_offset > 0.0
                 && diff_end < end_offset
                 && diff_end > 0.0
@@ -2340,7 +2369,7 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge, preserve_orthogonal: bool
         let diff_start_y = (point.y - start.y).abs();
         let diff_in_x_start = (point.x - start.x).abs();
 
-        if !preserve_orthogonal {
+        if allow_interior_nudges && !preserve_orthogonal {
             if end_offset > 0.0
                 && diff_end_y < end_offset
                 && diff_end_y > 0.0
@@ -2366,13 +2395,91 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge, preserve_orthogonal: bool
             }
         }
 
+        if enforce_primary_axis_no_backtrack && !preserve_orthogonal && i == points.len() - 1 {
+            match direction {
+                Direction::TopDown => offset_y = offset_y.max(0.0),
+                Direction::BottomTop => offset_y = offset_y.min(0.0),
+                Direction::LeftRight => offset_x = offset_x.max(0.0),
+                Direction::RightLeft => offset_x = offset_x.min(0.0),
+            }
+        }
+
         out.push(Point {
             x: point.x + offset_x,
             y: point.y + offset_y,
         });
     }
 
+    if enforce_primary_axis_no_backtrack && !preserve_orthogonal {
+        enforce_primary_axis_tail_contracts(&mut out, direction, 8.0);
+    }
+
     out
+}
+
+fn enforce_primary_axis_tail_contracts(
+    points: &mut [Point],
+    direction: Direction,
+    min_terminal_support: f64,
+) {
+    if points.len() < 2 || min_terminal_support <= 0.0 {
+        return;
+    }
+
+    let n = points.len();
+    let end_idx = n - 1;
+    let penult_idx = n - 2;
+
+    match direction {
+        Direction::TopDown => {
+            let target_penult_y = points[end_idx].y - min_terminal_support;
+            if points[penult_idx].y > target_penult_y {
+                points[penult_idx].y = target_penult_y;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].y > points[penult_idx].y {
+                    points[pre_idx].y = points[penult_idx].y;
+                }
+            }
+        }
+        Direction::BottomTop => {
+            let target_penult_y = points[end_idx].y + min_terminal_support;
+            if points[penult_idx].y < target_penult_y {
+                points[penult_idx].y = target_penult_y;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].y < points[penult_idx].y {
+                    points[pre_idx].y = points[penult_idx].y;
+                }
+            }
+        }
+        Direction::LeftRight => {
+            let target_penult_x = points[end_idx].x - min_terminal_support;
+            if points[penult_idx].x > target_penult_x {
+                points[penult_idx].x = target_penult_x;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].x > points[penult_idx].x {
+                    points[pre_idx].x = points[penult_idx].x;
+                }
+            }
+        }
+        Direction::RightLeft => {
+            let target_penult_x = points[end_idx].x + min_terminal_support;
+            if points[penult_idx].x < target_penult_x {
+                points[penult_idx].x = target_penult_x;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].x < points[penult_idx].x {
+                    points[pre_idx].x = points[penult_idx].x;
+                }
+            }
+        }
+    }
 }
 
 fn enforce_min_orthogonal_endpoint_support(
