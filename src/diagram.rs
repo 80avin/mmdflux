@@ -333,12 +333,12 @@ pub trait GraphLayoutEngine: Send + Sync {
 /// Ignored for text/ASCII output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PathDetail {
-    /// All routed waypoints.
+    /// All routed waypoints (default).
+    #[default]
     Full,
     /// Remove redundant points while preserving path shape.
     Compact,
-    /// Start, midpoint, and end only (3 points, default).
-    #[default]
+    /// Start, midpoint, and end only (3 points).
     Simplified,
     /// Start and end only (2 points).
     Endpoints,

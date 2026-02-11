@@ -18,8 +18,8 @@ print_section "Targeted parity/determinism/path-detail gates"
   cargo test --test svg_snapshots svg_unified_preview_parity_fixture_subset_matches_expected_classification -- --exact
   cargo test --test svg_snapshots unified_preview_svg_output_is_deterministic_for_fixture_subset -- --exact
   cargo test --test mmds_json unified_preview_mmds_routed_output_is_deterministic_for_fixture_subset -- --exact
-  cargo test --test svg_render routed_svg_defaults_to_simplified_path_detail -- --exact
-  cargo test --test mmds_json routed_mmds_defaults_to_simplified_path_detail -- --exact
+  cargo test --test svg_render routed_svg_defaults_to_full_path_detail -- --exact
+  cargo test --test mmds_json routed_mmds_defaults_to_full_path_detail -- --exact
   cargo test --test svg_render path_detail_monotonicity_holds_full_compact_simplified -- --exact
   cargo test --test mmds_json path_detail_monotonicity_holds_full_compact_simplified -- --exact
 ) | tee "$OUT_DIR/targeted-gates.log"

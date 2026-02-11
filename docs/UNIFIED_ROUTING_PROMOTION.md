@@ -49,7 +49,7 @@ This is the decision record for known output differences when unified routing is
   - `svg_full_compute_override_matches_legacy_linear_core_subset`
 - `tests/mmds_json.rs`:
   - `unified_preview_mmds_routed_output_is_deterministic_for_fixture_subset`
-  - `routed_mmds_defaults_to_simplified_path_detail`
+  - `routed_mmds_defaults_to_full_path_detail`
 
 ## Follow-Up Planning Items (Required Before Graph-Family Promotion)
 

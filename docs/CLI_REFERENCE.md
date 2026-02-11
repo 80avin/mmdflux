@@ -165,9 +165,9 @@ mmdflux --format mmds --geometry-level routed --path-detail compact diagram.mmd
 
 | Value        | Waypoints kept                 |
 | ------------ | ------------------------------ |
-| `full`       | All routed waypoints           |
+| `full`       | All routed waypoints (default) |
 | `compact`    | Shape-preserving reduced path  |
-| `simplified` | Start, midpoint, and end only (default) |
+| `simplified` | Start, midpoint, and end only  |
 | `endpoints`  | Start and end only             |
 
 For the full spec, validation contract, and capability matrix, see [mmds.md](mmds.md).

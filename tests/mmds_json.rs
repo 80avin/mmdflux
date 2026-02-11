@@ -235,7 +235,7 @@ fn mmds_compact_path_detail_sits_between_full_and_simplified() {
 }
 
 #[test]
-fn routed_mmds_defaults_to_simplified_path_detail() {
+fn routed_mmds_defaults_to_full_path_detail() {
     let input = flowchart_fixture("multi_subgraph_direction_override.mmd");
     let render_for = |path_detail: Option<PathDetail>| {
         let mut instance = FlowchartInstance::new();
@@ -262,19 +262,19 @@ fn routed_mmds_defaults_to_simplified_path_detail() {
     };
 
     let default = render_for(None);
-    let simplified = render_for(Some(PathDetail::Simplified));
     let full = render_for(Some(PathDetail::Full));
+    let simplified = render_for(Some(PathDetail::Simplified));
     let default_len = edge_len(&default);
-    let simplified_len = edge_len(&simplified);
     let full_len = edge_len(&full);
+    let simplified_len = edge_len(&simplified);
 
     assert_eq!(
-        default_len, simplified_len,
-        "default routed MMDS path detail should match simplified output"
+        default_len, full_len,
+        "default routed MMDS path detail should match full output"
     );
     assert!(
-        full_len > default_len,
-        "full detail should preserve more points than default: full={full_len}, default={default_len}"
+        default_len > simplified_len,
+        "default full detail should preserve more points than simplified: default={default_len}, simplified={simplified_len}"
     );
 }
 

@@ -188,11 +188,11 @@ impl From<GeometryLevelArg> for GeometryLevel {
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
 enum PathDetailArg {
-    /// All routed waypoints
+    /// All routed waypoints (default)
     Full,
     /// Remove redundant interior points while preserving path shape
     Compact,
-    /// Start, midpoint, and end only (default)
+    /// Start, midpoint, and end only
     Simplified,
     /// Start and end only
     Endpoints,

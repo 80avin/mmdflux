@@ -206,7 +206,7 @@ fn svg_compact_path_detail_sits_between_full_and_simplified_for_unified_preview(
 }
 
 #[test]
-fn routed_svg_defaults_to_simplified_path_detail() {
+fn routed_svg_defaults_to_full_path_detail() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -228,25 +228,25 @@ fn routed_svg_defaults_to_simplified_path_detail() {
     let default_svg = render_svg(&diagram, &default_options);
     let default_points = edge_path_for_svg_order(&diagram, &default_svg, edge_index);
 
-    let mut simplified_options = default_options.clone();
-    simplified_options.path_detail = PathDetail::Simplified;
-    let simplified_svg = render_svg(&diagram, &simplified_options);
-    let simplified_points = edge_path_for_svg_order(&diagram, &simplified_svg, edge_index);
-
     let mut full_options = default_options;
     full_options.path_detail = PathDetail::Full;
     let full_svg = render_svg(&diagram, &full_options);
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
 
+    let mut simplified_options = full_options;
+    simplified_options.path_detail = PathDetail::Simplified;
+    let simplified_svg = render_svg(&diagram, &simplified_options);
+    let simplified_points = edge_path_for_svg_order(&diagram, &simplified_svg, edge_index);
+
     assert_eq!(
-        default_points, simplified_points,
-        "default routed SVG path detail should match simplified output"
+        default_points, full_points,
+        "default routed SVG path detail should match full output"
     );
     assert!(
-        full_points.len() > default_points.len(),
-        "full detail should preserve more points than default: full={}, default={}",
-        full_points.len(),
-        default_points.len()
+        default_points.len() > simplified_points.len(),
+        "default full detail should preserve more points than simplified: default={}, simplified={}",
+        default_points.len(),
+        simplified_points.len()
     );
 }
 
