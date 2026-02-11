@@ -92,6 +92,42 @@ fn segment_axis(a: (f64, f64), b: (f64, f64)) -> Option<char> {
     }
 }
 
+fn parse_attr_f64(line: &str, attr: &str) -> Option<f64> {
+    let marker = format!("{attr}=\"");
+    let start = line.find(&marker)? + marker.len();
+    let rest = &line[start..];
+    let end = rest.find('"')?;
+    rest[..end].parse::<f64>().ok()
+}
+
+fn node_rect_for_label(svg: &str, label: &str) -> Option<(f64, f64, f64, f64)> {
+    let (text_x, text_y) = svg.lines().find_map(|line| {
+        if !line.contains("<text") || !line.contains(&format!(">{label}<")) {
+            return None;
+        }
+        Some((parse_attr_f64(line, "x")?, parse_attr_f64(line, "y")?))
+    })?;
+
+    svg.lines().find_map(|line| {
+        if !line.contains("<rect ")
+            || !line.contains("stroke=\"#333\"")
+            || !line.contains("fill=\"white\"")
+        {
+            return None;
+        }
+        let x = parse_attr_f64(line, "x")?;
+        let y = parse_attr_f64(line, "y")?;
+        let width = parse_attr_f64(line, "width")?;
+        let height = parse_attr_f64(line, "height")?;
+        let inside = text_x >= x && text_x <= x + width && text_y >= y && text_y <= y + height;
+        if inside {
+            Some((x, y, width, height))
+        } else {
+            None
+        }
+    })
+}
+
 fn edge_path_for_svg_order(
     diagram: &mmdflux::Diagram,
     svg: &str,
@@ -327,8 +363,17 @@ fn svg_orthogonal_unified_preview_preserves_clear_terminal_stem_into_arrowhead()
         "Bmid -> F terminal segment should point downward into F (arrow-support direction), got prev={prev:?}, end={end:?}, points={points:?}"
     );
     assert!(
-        stem_len >= 2.0,
-        "Bmid -> F terminal stem should remain visually clear (>= 2px), got {stem_len} with {points:?}"
+        stem_len >= 6.0,
+        "Bmid -> F terminal stem should remain clearly larger than the arrow pullback budget (>= 6px), got {stem_len} with {points:?}"
+    );
+
+    let (_fx, fy, _fw, _fh) = node_rect_for_label(&svg, "f").expect("expected SVG rect for node f");
+    let expected_endpoint_y = fy - 4.0;
+    assert!(
+        (end.1 - expected_endpoint_y).abs() <= 0.5,
+        "Bmid -> F endpoint should be pulled back so arrow tip touches F border: endpoint_y={}, expected_y={} (f_top={fy}) points={points:?}",
+        end.1,
+        expected_endpoint_y
     );
 }
 

@@ -2253,10 +2253,19 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge, preserve_orthogonal: bool
         Arrow::Cross | Arrow::Circle | Arrow::None => 0.0,
     };
 
+    let mut points = points.to_vec();
     if preserve_orthogonal {
+        // Keep endpoint support visibly longer than marker pullback so the
+        // terminal stem remains readable in orthogonal mode.
+        const MIN_ENDPOINT_SUPPORT: f64 = 6.0;
+        points = enforce_min_orthogonal_endpoint_support(
+            &points,
+            start_offset + MIN_ENDPOINT_SUPPORT,
+            end_offset + MIN_ENDPOINT_SUPPORT,
+        );
+
         // Keep a visible endpoint stem in orthogonal mode so marker pullback
         // cannot invert the terminal segment direction.
-        const MIN_ENDPOINT_SUPPORT: f64 = 2.0;
         let start_support = segment_manhattan_len(points[0], points[1]);
         let end_support = segment_manhattan_len(points[points.len() - 2], points[points.len() - 1]);
         start_offset = start_offset.min((start_support - MIN_ENDPOINT_SUPPORT).max(0.0));
@@ -2364,6 +2373,85 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge, preserve_orthogonal: bool
     }
 
     out
+}
+
+fn enforce_min_orthogonal_endpoint_support(
+    points: &[Point],
+    min_start_support: f64,
+    min_end_support: f64,
+) -> Vec<Point> {
+    let mut adjusted = points.to_vec();
+    extend_endpoint_support(&mut adjusted, true, min_start_support);
+    extend_endpoint_support(&mut adjusted, false, min_end_support);
+    adjusted
+}
+
+fn extend_endpoint_support(points: &mut Vec<Point>, at_start: bool, min_support: f64) {
+    if points.len() < 2 || min_support <= 0.0 {
+        return;
+    }
+
+    let (anchor_idx, adjacent_idx, before_adjacent_idx) = if at_start {
+        (0usize, 1usize, Some(2usize))
+    } else {
+        let n = points.len();
+        (n - 1, n - 2, n.checked_sub(3))
+    };
+
+    let anchor = points[anchor_idx];
+    let adjacent = points[adjacent_idx];
+    let Some(axis) = segment_axis(adjacent, anchor) else {
+        return;
+    };
+    let current_support = segment_manhattan_len(adjacent, anchor);
+    if current_support >= min_support {
+        return;
+    }
+
+    let new_adjacent = match axis {
+        SegmentAxis::Vertical => {
+            let sign = if anchor.y >= adjacent.y { 1.0 } else { -1.0 };
+            Point {
+                x: anchor.x,
+                y: anchor.y - sign * min_support,
+            }
+        }
+        SegmentAxis::Horizontal => {
+            let sign = if anchor.x >= adjacent.x { 1.0 } else { -1.0 };
+            Point {
+                x: anchor.x - sign * min_support,
+                y: anchor.y,
+            }
+        }
+    };
+
+    points[adjacent_idx] = new_adjacent;
+    let Some(before_adjacent_idx) = before_adjacent_idx else {
+        return;
+    };
+
+    let before_adjacent = points[before_adjacent_idx];
+    if segment_axis(before_adjacent, new_adjacent).is_some() {
+        return;
+    }
+
+    let elbow = match axis {
+        SegmentAxis::Vertical => Point {
+            x: before_adjacent.x,
+            y: new_adjacent.y,
+        },
+        SegmentAxis::Horizontal => Point {
+            x: new_adjacent.x,
+            y: before_adjacent.y,
+        },
+    };
+
+    if at_start {
+        points.insert(2, elbow);
+    } else {
+        let insert_at = points.len() - 2;
+        points.insert(insert_at, elbow);
+    }
 }
 
 fn marker_offset_component(point_a: Point, point_b: Point, offset: f64, use_x: bool) -> f64 {
