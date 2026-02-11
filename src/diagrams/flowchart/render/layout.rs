@@ -1297,7 +1297,9 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
         // a single uniform delta from the group centroid to the subgraph
         // center.  This preserves relative ordering within the group.
         let member_primary_center = (member_primary_min + member_primary_max) / 2.0;
+        let pred_set: HashSet<&str> = predecessors.iter().map(|s| s.as_str()).collect();
         let mut eligible: Vec<(String, f64, f64)> = Vec::new(); // (id, cross_center, primary_pos)
+        let mut eligible_pred_crosses: Vec<f64> = Vec::new();
         for node_id in predecessors.iter().chain(successors.iter()) {
             if let Some(rect) = layout.nodes.get(&dagre::NodeId(node_id.clone())) {
                 let node_cy = rect.y + rect.height / 2.0;
@@ -1313,15 +1315,36 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
                 let cross = if horizontal { node_cx } else { node_cy };
                 let primary = if horizontal { node_cy } else { node_cx };
                 eligible.push((node_id.clone(), cross, primary));
+                if pred_set.contains(node_id.as_str()) {
+                    eligible_pred_crosses.push(cross);
+                }
             }
         }
         if !eligible.is_empty() {
             let centroid = eligible.iter().map(|(_, c, _)| *c).sum::<f64>() / eligible.len() as f64;
 
-            if is_dir_override {
-                // Direction-override subgraphs: shift the subgraph toward the
-                // external centroid (the external nodes are well-constrained by
-                // dagre; the subgraph is not).
+            // Determine shift direction: when the external predecessor
+            // centroid falls outside the subgraph's cross-axis bounds, the
+            // subgraph is mispositioned and should move toward the centroid.
+            // When the predecessor centroid is inside the bounds (or there
+            // are no predecessors), the subgraph is well-placed and external
+            // nodes should shift toward the subgraph center instead.
+            // Use predecessors (not successors) for the inside/outside check
+            // because predecessor positions drive incoming-edge routing.
+            let (sg_cross_min, sg_cross_max) = if horizontal {
+                (sg_bounds.x, sg_bounds.x + sg_bounds.width)
+            } else {
+                (sg_bounds.y, sg_bounds.y + sg_bounds.height)
+            };
+            let shift_subgraph = is_dir_override && !eligible_pred_crosses.is_empty() && {
+                let pred_centroid =
+                    eligible_pred_crosses.iter().sum::<f64>() / eligible_pred_crosses.len() as f64;
+                pred_centroid < sg_cross_min || pred_centroid > sg_cross_max
+            };
+
+            if shift_subgraph {
+                // Direction-override subgraph is mispositioned: shift the
+                // subgraph toward the external centroid.
                 let delta = centroid - sg_center;
                 if delta.abs() >= 1.0 {
                     let primary_dist = eligible
