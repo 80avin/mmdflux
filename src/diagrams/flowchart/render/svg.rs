@@ -1868,6 +1868,8 @@ fn path_from_points(
         SvgEdgePathStyle::Basis => path_from_points_basis(&scaled),
         SvgEdgePathStyle::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
         SvgEdgePathStyle::Linear => path_from_points_linear(&scaled),
+        // Orthogonal path construction is introduced in a follow-up task.
+        SvgEdgePathStyle::Orthogonal => path_from_points_linear(&scaled),
     }
 }
 

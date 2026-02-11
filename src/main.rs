@@ -77,7 +77,7 @@ struct Cli {
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
 
-    /// SVG edge curve style (basis, linear, or rounded)
+    /// SVG edge curve style (basis, linear, rounded, or orthogonal)
     #[arg(long, value_enum)]
     svg_edge_curve: Option<EdgeCurveArg>,
 
@@ -151,6 +151,7 @@ enum EdgeCurveArg {
     Basis,
     Linear,
     Rounded,
+    Orthogonal,
 }
 
 impl From<EdgeCurveArg> for SvgEdgePathStyle {
@@ -159,6 +160,7 @@ impl From<EdgeCurveArg> for SvgEdgePathStyle {
             EdgeCurveArg::Basis => SvgEdgePathStyle::Basis,
             EdgeCurveArg::Linear => SvgEdgePathStyle::Linear,
             EdgeCurveArg::Rounded => SvgEdgePathStyle::Rounded,
+            EdgeCurveArg::Orthogonal => SvgEdgePathStyle::Orthogonal,
         }
     }
 }

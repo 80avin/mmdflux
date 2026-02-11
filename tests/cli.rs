@@ -69,6 +69,15 @@ fn cli_svg_format_renders_flowchart() {
 }
 
 #[test]
+fn cli_accepts_svg_edge_curve_orthogonal() {
+    mmdflux()
+        .args(["--format", "svg", "--svg-edge-curve", "orthogonal"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
 fn cli_svg_format_errors_for_pie() {
     mmdflux()
         .args(["--format", "svg"])

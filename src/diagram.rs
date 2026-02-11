@@ -43,6 +43,7 @@ pub enum SvgEdgePathStyle {
     Basis,
     Linear,
     Rounded,
+    Orthogonal,
 }
 
 impl std::fmt::Display for OutputFormat {
@@ -89,6 +90,7 @@ impl std::fmt::Display for SvgEdgePathStyle {
             SvgEdgePathStyle::Basis => write!(f, "basis"),
             SvgEdgePathStyle::Linear => write!(f, "linear"),
             SvgEdgePathStyle::Rounded => write!(f, "rounded"),
+            SvgEdgePathStyle::Orthogonal => write!(f, "orthogonal"),
         }
     }
 }
@@ -100,6 +102,7 @@ impl SvgEdgePathStyle {
             "basis" => Ok(SvgEdgePathStyle::Basis),
             "linear" => Ok(SvgEdgePathStyle::Linear),
             "rounded" => Ok(SvgEdgePathStyle::Rounded),
+            "orthogonal" => Ok(SvgEdgePathStyle::Orthogonal),
             _ => Err(RenderError {
                 message: format!("unknown svg edge path style: {s:?}"),
             }),

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use mmdflux::diagram::{OutputFormat, RenderConfig};
+use mmdflux::diagram::{OutputFormat, RenderConfig, SvgEdgePathStyle};
 use mmdflux::registry::DiagramInstance;
 use mmdflux::render::{RenderOptions, render_svg};
 use mmdflux::{build_diagram, parse_flowchart};
@@ -49,6 +49,14 @@ fn render_svg_basic_flowchart_has_svg_root() {
     assert!(svg.contains("<text"));
     assert!(svg.contains("Start"));
     assert!(svg.contains("End"));
+}
+
+#[test]
+fn svg_edge_path_style_parses_orthogonal() {
+    assert_eq!(
+        SvgEdgePathStyle::parse("orthogonal").unwrap(),
+        SvgEdgePathStyle::Orthogonal
+    );
 }
 
 #[test]
