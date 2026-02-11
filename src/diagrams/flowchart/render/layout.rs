@@ -2545,7 +2545,40 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                     && let Some(wps) = edge_waypoints_final.get(&key).cloned()
                 {
                     let clipped = clip_waypoints_to_subgraph(&wps, bounds, from_in, to_in);
-                    edge_waypoints_final.insert(key, clipped);
+                    // For incoming edges, check if the clipped waypoints
+                    // end on the wrong subgraph face. After the centering
+                    // shift, waypoints can end up on a side border when
+                    // the source is above/below (or vice versa). When the
+                    // entry face doesn't match the source position, the
+                    // waypoints are stale and should be removed.
+                    if to_in && !from_in {
+                        let stale = node_bounds.get(&edge.from).is_some_and(|src_nb| {
+                            clipped.last().is_some_and(|last| {
+                                let src_cy = src_nb.y + src_nb.height / 2;
+                                let src_cx = src_nb.x + src_nb.width / 2;
+                                let on_top = last.1 == bounds.y;
+                                let on_bottom =
+                                    last.1 == bounds.y + bounds.height.saturating_sub(1);
+                                let on_left = last.0 == bounds.x;
+                                let on_right = last.0 == bounds.x + bounds.width.saturating_sub(1);
+                                // Source above → expect top entry
+                                (src_cy < bounds.y && !on_top)
+                                // Source below → expect bottom entry
+                                || (src_cy > bounds.y + bounds.height && !on_bottom)
+                                // Source left → expect left entry
+                                || (src_cx < bounds.x && !on_left)
+                                // Source right → expect right entry
+                                || (src_cx > bounds.x + bounds.width && !on_right)
+                            })
+                        });
+                        if stale {
+                            edge_waypoints_final.remove(&key);
+                        } else {
+                            edge_waypoints_final.insert(key, clipped);
+                        }
+                    } else {
+                        edge_waypoints_final.insert(key, clipped);
+                    }
                 }
                 edge_label_positions_converted.remove(&key);
             }
