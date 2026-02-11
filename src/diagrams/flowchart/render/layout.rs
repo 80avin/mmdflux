@@ -292,6 +292,61 @@ where
             }
         }
 
+        // Chain disconnected components with synthetic edges so dagre spreads
+        // all nodes along the sub-layout's primary axis.  Without this, nodes
+        // with no internal edges collapse into rank 0.
+        //
+        // Find connected components via union-find, then link the last node of
+        // each component (in declaration order) to the first node of the next.
+        let leaf_ids: Vec<&str> = sg
+            .nodes
+            .iter()
+            .filter(|n| !diagram.is_subgraph(n) && diagram.nodes.contains_key(n.as_str()))
+            .map(|s| s.as_str())
+            .collect();
+        if leaf_ids.len() > 1 {
+            let id_to_idx: HashMap<&str, usize> = leaf_ids
+                .iter()
+                .enumerate()
+                .map(|(i, id)| (*id, i))
+                .collect();
+            let mut parent: Vec<usize> = (0..leaf_ids.len()).collect();
+            let find = |parent: &mut Vec<usize>, mut x: usize| -> usize {
+                while parent[x] != x {
+                    parent[x] = parent[parent[x]];
+                    x = parent[x];
+                }
+                x
+            };
+            for edge in &diagram.edges {
+                if let (Some(&a), Some(&b)) = (
+                    id_to_idx.get(edge.from.as_str()),
+                    id_to_idx.get(edge.to.as_str()),
+                ) {
+                    let ra = find(&mut parent, a);
+                    let rb = find(&mut parent, b);
+                    if ra != rb {
+                        parent[ra] = rb;
+                    }
+                }
+            }
+            // Walk leaf_ids in declaration order; when the component changes,
+            // add a synthetic edge from the previous node to the current one.
+            let mut prev_component = find(&mut parent, 0);
+            for i in 1..leaf_ids.len() {
+                let comp = find(&mut parent, i);
+                if comp != prev_component {
+                    sub_graph.add_edge(leaf_ids[i - 1], leaf_ids[i]);
+                    // Merge so subsequent nodes in the same component don't
+                    // create redundant edges.
+                    let rc = find(&mut parent, comp);
+                    let rp = find(&mut parent, prev_component);
+                    parent[rc] = rp;
+                }
+                prev_component = find(&mut parent, i);
+            }
+        }
+
         // Use parent config but override direction
         let sub_config = DagreConfig {
             direction: dagre_direction,
