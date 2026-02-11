@@ -551,6 +551,53 @@ fn svg_rounded_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
 }
 
 #[test]
+fn svg_non_orth_unified_preview_keeps_endpoint_pulled_back_for_visible_arrow_tip() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("multi_subgraph_direction_override.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+    let edge_index = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Bmid" && edge.to == "F")
+        .expect("fixture should contain edge Bmid -> F")
+        .index;
+
+    let styles = [
+        SvgEdgePathStyle::Linear,
+        SvgEdgePathStyle::Rounded,
+        SvgEdgePathStyle::Basis,
+    ];
+
+    for style in styles {
+        let mut options = RenderOptions::default_svg();
+        options.svg.edge_path_style = style;
+        options.routing_mode = Some(RoutingMode::UnifiedPreview);
+        options.path_detail = PathDetail::Full;
+        let svg = render_svg(&diagram, &options);
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+        let end = points
+            .last()
+            .copied()
+            .expect("Bmid -> F should have SVG path points");
+        let (_fx, fy, _fw, _fh) =
+            node_rect_for_label(&svg, "f").expect("expected SVG rect for node f");
+        let expected_endpoint_y = fy - 4.0;
+
+        assert!(
+            (end.1 - expected_endpoint_y).abs() <= 0.5,
+            "non-orth {style:?} endpoint should be pulled back so arrow tip lands on F border: endpoint_y={}, expected_y={} (f_top={fy}) points={points:?}",
+            end.1,
+            expected_endpoint_y
+        );
+    }
+}
+
+#[test]
 fn render_svg_edge_styles_and_labels() {
     let input = "graph TD\nA ==>|yes| B\nB -.->|no| C\nC <--> D\n";
     let flowchart = parse_flowchart(input).unwrap();

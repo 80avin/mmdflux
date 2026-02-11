@@ -2393,15 +2393,6 @@ fn apply_marker_offsets(
             }
         }
 
-        if enforce_primary_axis_no_backtrack && !preserve_orthogonal && i == points.len() - 1 {
-            match direction {
-                Direction::TopDown => offset_y = offset_y.max(0.0),
-                Direction::BottomTop => offset_y = offset_y.min(0.0),
-                Direction::LeftRight => offset_x = offset_x.max(0.0),
-                Direction::RightLeft => offset_x = offset_x.min(0.0),
-            }
-        }
-
         out.push(Point {
             x: point.x + offset_x,
             y: point.y + offset_y,
