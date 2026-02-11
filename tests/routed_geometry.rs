@@ -32,6 +32,39 @@ fn layout_fixture(name: &str) -> (mmdflux::Diagram, GraphGeometry) {
     layout_test(&input)
 }
 
+const ROUTE_EPS: f64 = 0.000_001;
+
+fn approx_eq(a: f64, b: f64) -> bool {
+    (a - b).abs() <= ROUTE_EPS
+}
+
+fn segment_is_axis_aligned(a: FPoint, b: FPoint) -> bool {
+    approx_eq(a.x, b.x) || approx_eq(a.y, b.y)
+}
+
+fn segment_is_non_degenerate(a: FPoint, b: FPoint) -> bool {
+    !approx_eq(a.x, b.x) || !approx_eq(a.y, b.y)
+}
+
+fn bend_count(path: &[FPoint]) -> usize {
+    path.len().saturating_sub(2)
+}
+
+fn effective_edge_direction_for_test(
+    node_directions: &std::collections::HashMap<String, mmdflux::Direction>,
+    from: &str,
+    to: &str,
+    fallback: mmdflux::Direction,
+) -> mmdflux::Direction {
+    let src_dir = node_directions.get(from).copied().unwrap_or(fallback);
+    let tgt_dir = node_directions.get(to).copied().unwrap_or(fallback);
+    if src_dir == tgt_dir {
+        src_dir
+    } else {
+        fallback
+    }
+}
+
 // -----------------------------------------------------------------------
 // Task 1.1: Routed geometry contract tests
 // -----------------------------------------------------------------------
@@ -272,4 +305,187 @@ fn unified_preview_preserves_core_routed_geometry_contracts() {
             );
         }
     }
+}
+
+#[test]
+fn unified_route_contracts_are_axis_aligned_and_non_degenerate() {
+    let (diagram, geom) = layout_fixture("simple_cycle.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    for edge in &routed.edges {
+        assert!(
+            edge.path.len() >= 2,
+            "edge {} -> {} has too few points: {:?}",
+            edge.from,
+            edge.to,
+            edge.path
+        );
+
+        for seg in edge.path.windows(2) {
+            let a = seg[0];
+            let b = seg[1];
+            assert!(
+                segment_is_axis_aligned(a, b),
+                "edge {} -> {} contains diagonal segment: {:?}",
+                edge.from,
+                edge.to,
+                edge.path
+            );
+            assert!(
+                segment_is_non_degenerate(a, b),
+                "edge {} -> {} contains duplicate or zero-length segment: {:?}",
+                edge.from,
+                edge.to,
+                edge.path
+            );
+        }
+    }
+}
+
+#[test]
+fn unified_route_contracts_preserve_terminal_support_segment() {
+    let (diagram, geom) = layout_fixture("ampersand.mmd");
+    assert_eq!(geom.direction, mmdflux::Direction::TopDown);
+
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    for edge in routed.edges.iter().filter(|edge| !edge.is_backward) {
+        assert!(
+            edge.path.len() >= 2,
+            "edge {} -> {} must have at least two points",
+            edge.from,
+            edge.to
+        );
+        let prev = edge.path[edge.path.len() - 2];
+        let end = edge.path[edge.path.len() - 1];
+        let dx = (end.x - prev.x).abs();
+        let dy = (end.y - prev.y).abs();
+
+        assert!(
+            dy > ROUTE_EPS,
+            "edge {} -> {} terminal segment is zero-length: {:?}",
+            edge.from,
+            edge.to,
+            edge.path
+        );
+        assert!(
+            dx <= ROUTE_EPS,
+            "edge {} -> {} terminal segment is not vertical in TD: {:?}",
+            edge.from,
+            edge.to,
+            edge.path
+        );
+    }
+}
+
+#[test]
+fn unified_route_contracts_are_deterministic_for_repeated_runs() {
+    let (diagram, geom) = layout_fixture("multi_subgraph_direction_override.mmd");
+    let first = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let second = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    assert_eq!(first.edges.len(), second.edges.len());
+    for (lhs, rhs) in first.edges.iter().zip(second.edges.iter()) {
+        assert_eq!(lhs.index, rhs.index);
+        assert_eq!(lhs.from, rhs.from);
+        assert_eq!(lhs.to, rhs.to);
+        assert_eq!(lhs.path, rhs.path);
+    }
+}
+
+// -----------------------------------------------------------------------
+// Task 1.2: Shared float-route heuristics
+// -----------------------------------------------------------------------
+
+#[test]
+fn shared_builder_prefers_terminal_segment_matching_layout_entry_axis() {
+    let (diagram, geom) = layout_fixture("direction_override.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    for edge in routed.edges.iter().filter(|edge| !edge.is_backward) {
+        let expected_direction = effective_edge_direction_for_test(
+            &geom.node_directions,
+            &edge.from,
+            &edge.to,
+            geom.direction,
+        );
+        let prev = edge.path[edge.path.len() - 2];
+        let end = edge.path[edge.path.len() - 1];
+        let x_aligned = approx_eq(prev.x, end.x);
+        let y_aligned = approx_eq(prev.y, end.y);
+
+        match expected_direction {
+            mmdflux::Direction::TopDown | mmdflux::Direction::BottomTop => assert!(
+                x_aligned && !y_aligned,
+                "edge {} -> {} should enter on vertical terminal segment for {:?}, got {:?}",
+                edge.from,
+                edge.to,
+                expected_direction,
+                edge.path
+            ),
+            mmdflux::Direction::LeftRight | mmdflux::Direction::RightLeft => assert!(
+                y_aligned && !x_aligned,
+                "edge {} -> {} should enter on horizontal terminal segment for {:?}, got {:?}",
+                edge.from,
+                edge.to,
+                expected_direction,
+                edge.path
+            ),
+        }
+    }
+}
+
+#[test]
+fn shared_builder_reduces_midfield_jogs_for_large_horizontal_offset_edges() {
+    let (diagram, geom) = layout_fixture("decision.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let edge = routed
+        .edges
+        .iter()
+        .find(|edge| edge.from == "B" && edge.to == "D")
+        .expect("expected B -> D edge in decision fixture");
+    let horizontal_offset = (edge.path[0].x - edge.path[edge.path.len() - 1].x).abs();
+
+    assert!(
+        horizontal_offset > 30.0,
+        "test fixture no longer has large horizontal offset: {horizontal_offset}"
+    );
+    assert!(
+        bend_count(&edge.path) <= 2,
+        "expected congestion heuristic to reduce bends for B -> D, got path {:?}",
+        edge.path
+    );
+}
+
+#[test]
+fn shared_builder_keeps_alignment_tolerance_stable_for_near_aligned_points() {
+    let (diagram, mut geom) = layout_test("graph TD\nA-->B");
+    let hint = geom.edges[0]
+        .layout_path_hint
+        .clone()
+        .expect("layout path hint should exist");
+    let start = hint[0];
+    let end = hint[hint.len() - 1];
+    let y_span = end.y - start.y;
+
+    geom.edges[0].layout_path_hint = Some(vec![
+        start,
+        FPoint::new(start.x + 0.4, start.y + y_span * 0.33),
+        FPoint::new(start.x - 0.4, start.y + y_span * 0.66),
+        end,
+    ]);
+
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let edge = &routed.edges[0];
+    assert!(
+        bend_count(&edge.path) <= 2,
+        "near-aligned jitter should not produce extra elbows, got {:?}",
+        edge.path
+    );
+    assert!(
+        edge.path
+            .windows(2)
+            .all(|seg| segment_is_axis_aligned(seg[0], seg[1])),
+        "near-aligned jitter produced non-orthogonal segment: {:?}",
+        edge.path
+    );
 }

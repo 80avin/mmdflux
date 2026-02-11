@@ -426,15 +426,17 @@ pub(crate) fn point_on_face_float(rect: FRect, face: Face, fraction: f64) -> FPo
 ///
 /// Diagonal spans are split into two elbows using midpoint routing on the
 /// diagram's primary axis to keep paths axis-aligned and symmetric.
+pub(crate) const ROUTE_ALIGN_EPS: f64 = 0.5;
+pub(crate) const ROUTE_POINT_EPS: f64 = 0.000_001;
+pub(crate) const LARGE_HORIZONTAL_OFFSET_THRESHOLD: usize = 15;
+const MIN_TERMINAL_SUPPORT: f64 = 1.0;
+
 pub(crate) fn build_orthogonal_path_float(
     start: FPoint,
     end: FPoint,
     direction: Direction,
     waypoints: &[FPoint],
 ) -> Vec<FPoint> {
-    const ALIGN_EPS: f64 = 0.5;
-    const DUP_EPS: f64 = 0.000_001;
-
     let primary_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
     let mut control_points: Vec<FPoint> = Vec::with_capacity(waypoints.len() + 2);
     control_points.push(start);
@@ -447,14 +449,25 @@ pub(crate) fn build_orthogonal_path_float(
     for target in control_points.into_iter().skip(1) {
         let current = output.last().copied().unwrap_or(start);
 
-        if (current.x - target.x).abs() < DUP_EPS && (current.y - target.y).abs() < DUP_EPS {
+        if (current.x - target.x).abs() < ROUTE_POINT_EPS
+            && (current.y - target.y).abs() < ROUTE_POINT_EPS
+        {
             continue;
         }
 
-        let x_aligned = (current.x - target.x).abs() < ALIGN_EPS;
-        let y_aligned = (current.y - target.y).abs() < ALIGN_EPS;
-        if x_aligned || y_aligned {
-            output.push(target);
+        let x_aligned = (current.x - target.x).abs() < ROUTE_ALIGN_EPS;
+        let y_aligned = (current.y - target.y).abs() < ROUTE_ALIGN_EPS;
+        if x_aligned && y_aligned {
+            continue;
+        }
+
+        if x_aligned {
+            output.push(FPoint::new(current.x, target.y));
+            continue;
+        }
+
+        if y_aligned {
+            output.push(FPoint::new(target.x, current.y));
             continue;
         }
 
@@ -470,6 +483,177 @@ pub(crate) fn build_orthogonal_path_float(
         output.push(target);
     }
 
-    output.dedup_by(|a, b| (a.x - b.x).abs() < DUP_EPS && (a.y - b.y).abs() < DUP_EPS);
+    output.dedup_by(|a, b| {
+        (a.x - b.x).abs() < ROUTE_POINT_EPS && (a.y - b.y).abs() < ROUTE_POINT_EPS
+    });
     output
+}
+
+/// Enforce shared polyline contracts used by routed-preview outputs.
+///
+/// Contracts:
+/// - no adjacent duplicate points
+/// - no zero-length segments
+/// - no redundant collinear interior points
+/// - non-zero terminal support segment on the primary axis
+pub(crate) fn normalize_orthogonal_route_contracts(
+    points: &[FPoint],
+    direction: Direction,
+) -> Vec<FPoint> {
+    if points.len() <= 1 {
+        return points.to_vec();
+    }
+
+    let mut normalized = dedupe_adjacent_points(points);
+    if normalized.len() <= 1 {
+        return normalized;
+    }
+
+    normalized = remove_collinear_points(&normalized);
+    normalized = reduce_midfield_jogs_for_large_horizontal_offset(&normalized, direction);
+    ensure_terminal_support_segment(&mut normalized, direction);
+    normalized = dedupe_adjacent_points(&normalized);
+    remove_collinear_points(&normalized)
+}
+
+fn dedupe_adjacent_points(points: &[FPoint]) -> Vec<FPoint> {
+    let mut deduped = Vec::with_capacity(points.len());
+    for point in points {
+        let keep = deduped.last().is_none_or(|prev: &FPoint| {
+            (prev.x - point.x).abs() > ROUTE_POINT_EPS || (prev.y - point.y).abs() > ROUTE_POINT_EPS
+        });
+        if keep {
+            deduped.push(*point);
+        }
+    }
+    deduped
+}
+
+fn remove_collinear_points(points: &[FPoint]) -> Vec<FPoint> {
+    if points.len() <= 2 {
+        return points.to_vec();
+    }
+
+    let mut result = Vec::with_capacity(points.len());
+    result.push(points[0]);
+    for idx in 1..(points.len() - 1) {
+        let prev = result.last().copied().expect("result is non-empty");
+        let curr = points[idx];
+        let next = points[idx + 1];
+
+        let dx1 = curr.x - prev.x;
+        let dy1 = curr.y - prev.y;
+        let dx2 = next.x - curr.x;
+        let dy2 = next.y - curr.y;
+        let cross = dx1 * dy2 - dy1 * dx2;
+        let dot = dx1 * dx2 + dy1 * dy2;
+        let collinear_same_direction = cross.abs() <= ROUTE_POINT_EPS && dot >= -ROUTE_POINT_EPS;
+
+        if !collinear_same_direction {
+            result.push(curr);
+        }
+    }
+    result.push(*points.last().expect("points has at least two elements"));
+    result
+}
+
+fn ensure_terminal_support_segment(points: &mut Vec<FPoint>, direction: Direction) {
+    if points.len() < 2 {
+        return;
+    }
+
+    let primary_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
+    let end = *points.last().expect("len >= 2");
+    let prev = points[points.len() - 2];
+
+    if primary_vertical {
+        let already_supported =
+            (prev.x - end.x).abs() <= ROUTE_POINT_EPS && (prev.y - end.y).abs() > ROUTE_POINT_EPS;
+        if already_supported {
+            return;
+        }
+
+        if (prev.y - end.y).abs() > ROUTE_POINT_EPS {
+            points.insert(points.len() - 1, FPoint::new(end.x, prev.y));
+            return;
+        }
+
+        let support_y = match direction {
+            Direction::TopDown => end.y - MIN_TERMINAL_SUPPORT,
+            Direction::BottomTop => end.y + MIN_TERMINAL_SUPPORT,
+            _ => end.y - MIN_TERMINAL_SUPPORT,
+        };
+        points.insert(points.len() - 1, FPoint::new(prev.x, support_y));
+        points.insert(points.len() - 1, FPoint::new(end.x, support_y));
+    } else {
+        let already_supported =
+            (prev.y - end.y).abs() <= ROUTE_POINT_EPS && (prev.x - end.x).abs() > ROUTE_POINT_EPS;
+        if already_supported {
+            return;
+        }
+
+        if (prev.x - end.x).abs() > ROUTE_POINT_EPS {
+            points.insert(points.len() - 1, FPoint::new(prev.x, end.y));
+            return;
+        }
+
+        let support_x = match direction {
+            Direction::LeftRight => end.x - MIN_TERMINAL_SUPPORT,
+            Direction::RightLeft => end.x + MIN_TERMINAL_SUPPORT,
+            _ => end.x - MIN_TERMINAL_SUPPORT,
+        };
+        points.insert(points.len() - 1, FPoint::new(support_x, prev.y));
+        points.insert(points.len() - 1, FPoint::new(support_x, end.y));
+    }
+}
+
+fn reduce_midfield_jogs_for_large_horizontal_offset(
+    points: &[FPoint],
+    direction: Direction,
+) -> Vec<FPoint> {
+    if !matches!(direction, Direction::TopDown | Direction::BottomTop) || points.len() <= 4 {
+        return points.to_vec();
+    }
+
+    let start = points[0];
+    let end = *points.last().expect("points has at least two elements");
+    let horizontal_offset = (start.x - end.x).abs();
+    if horizontal_offset <= LARGE_HORIZONTAL_OFFSET_THRESHOLD as f64 {
+        return points.to_vec();
+    }
+
+    let mid_y = preferred_mid_y_for_vertical_layout(start, end, direction);
+    vec![
+        start,
+        FPoint::new(start.x, mid_y),
+        FPoint::new(end.x, mid_y),
+        end,
+    ]
+}
+
+fn preferred_mid_y_for_vertical_layout(start: FPoint, end: FPoint, direction: Direction) -> f64 {
+    let mut mid_y = (start.y + end.y) / 2.0;
+
+    if (start.x - end.x).abs() > LARGE_HORIZONTAL_OFFSET_THRESHOLD as f64 {
+        let target_mid = match direction {
+            Direction::TopDown => end.y - (MIN_TERMINAL_SUPPORT * 2.0),
+            Direction::BottomTop => end.y + (MIN_TERMINAL_SUPPORT * 2.0),
+            _ => mid_y,
+        };
+        mid_y = match direction {
+            Direction::TopDown => target_mid.max(mid_y),
+            Direction::BottomTop => target_mid.min(mid_y),
+            _ => mid_y,
+        };
+    }
+
+    if (mid_y - end.y).abs() <= ROUTE_POINT_EPS {
+        mid_y = if start.y > end.y {
+            end.y + MIN_TERMINAL_SUPPORT
+        } else {
+            end.y - MIN_TERMINAL_SUPPORT
+        };
+    }
+
+    mid_y
 }

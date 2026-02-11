@@ -6,8 +6,9 @@ use std::collections::HashMap;
 
 use super::layout::{Layout, SelfEdgeDrawData, SubgraphBounds};
 use super::routing_core::{
-    Face as SharedFace, edge_faces as shared_edge_faces,
-    plan_attachments as shared_plan_attachments,
+    Face as SharedFace,
+    LARGE_HORIZONTAL_OFFSET_THRESHOLD as SHARED_LARGE_HORIZONTAL_OFFSET_THRESHOLD,
+    edge_faces as shared_edge_faces, plan_attachments as shared_plan_attachments,
 };
 use super::shape::NodeBounds;
 use crate::graph::{Arrow, Direction, Edge, Shape, Stroke};
@@ -956,11 +957,6 @@ fn entry_direction_from_segments(segments: &[Segment]) -> AttachDirection {
     }
 }
 
-/// Minimum horizontal offset (in characters) to trigger side-preference routing.
-/// When an edge has horizontal offset greater than this threshold, we use
-/// asymmetric routing to avoid the congested middle region of the diagram.
-const LARGE_HORIZONTAL_OFFSET_THRESHOLD: usize = 15;
-
 /// Build an orthogonal path that ends with a segment matching the approach direction.
 ///
 /// The final segment orientation determines the arrow direction:
@@ -1065,7 +1061,7 @@ fn compute_mid_y_for_vertical_layout(start: Point, end: Point, direction: Direct
     let horizontal_offset = start.x.abs_diff(end.x);
 
     // Check if this edge has a large horizontal offset
-    let mut mid_y = if horizontal_offset > LARGE_HORIZONTAL_OFFSET_THRESHOLD {
+    let mut mid_y = if horizontal_offset > SHARED_LARGE_HORIZONTAL_OFFSET_THRESHOLD {
         // Determine if source is to the right of target (right-to-left routing)
         let is_right_to_left = start.x > end.x;
 

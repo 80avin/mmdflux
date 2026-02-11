@@ -4,9 +4,10 @@
 //! deterministic grid snap adapter for text-oriented consumption.
 
 use super::route_policy::effective_edge_direction;
-use super::routing_core::build_orthogonal_path_float;
+use super::routing_core::{build_orthogonal_path_float, normalize_orthogonal_route_contracts};
 use crate::diagrams::flowchart::geometry::{FPoint, GraphGeometry, RoutedEdgeGeometry};
 use crate::graph::Diagram;
+use crate::graph::Direction;
 
 /// Preview options for unified float-first routing.
 #[derive(Debug, Clone, Copy)]
@@ -38,11 +39,18 @@ pub(crate) fn route_edges_unified(
         .iter()
         .map(|edge| {
             let is_backward = geometry.reversed_edges.contains(&edge.index);
-            let mut path = if is_backward && options.backward_fallback_to_hints {
-                build_path_from_hints(edge, geometry)
+            let edge_direction = effective_edge_direction(
+                &geometry.node_directions,
+                &edge.from,
+                &edge.to,
+                geometry.direction,
+            );
+            let route_direction = if is_backward && options.backward_fallback_to_hints {
+                geometry.direction
             } else {
-                build_unified_path(edge, geometry)
+                edge_direction
             };
+            let mut path = build_unified_path(edge, geometry, route_direction);
 
             if let Some((sx, sy)) = options.grid_snap {
                 path = snap_path_to_grid(&path, sx, sy);
@@ -65,23 +73,10 @@ pub(crate) fn route_edges_unified(
 fn build_unified_path(
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
     geometry: &GraphGeometry,
+    direction: Direction,
 ) -> Vec<FPoint> {
     let control_points = build_path_from_hints(edge, geometry);
-    if control_points.len() < 2 {
-        return control_points;
-    }
-
-    let edge_direction = effective_edge_direction(
-        &geometry.node_directions,
-        &edge.from,
-        &edge.to,
-        geometry.direction,
-    );
-    let start = control_points[0];
-    let end = control_points[control_points.len() - 1];
-    let waypoints: Vec<FPoint> = control_points[1..control_points.len() - 1].to_vec();
-
-    build_orthogonal_path_float(start, end, edge_direction, &waypoints)
+    build_contracted_path(&control_points, direction)
 }
 
 pub(crate) fn build_path_from_hints(
@@ -125,4 +120,16 @@ pub(crate) fn snap_path_to_grid(path: &[FPoint], scale_x: f64, scale_y: f64) -> 
     path.iter()
         .map(|p| FPoint::new((p.x / sx).round() * sx, (p.y / sy).round() * sy))
         .collect()
+}
+
+fn build_contracted_path(control_points: &[FPoint], direction: Direction) -> Vec<FPoint> {
+    if control_points.len() < 2 {
+        return control_points.to_vec();
+    }
+
+    let start = control_points[0];
+    let end = control_points[control_points.len() - 1];
+    let waypoints = &control_points[1..(control_points.len() - 1)];
+    let orthogonal = build_orthogonal_path_float(start, end, direction, waypoints);
+    normalize_orthogonal_route_contracts(&orthogonal, direction)
 }
