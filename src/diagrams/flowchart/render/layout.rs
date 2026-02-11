@@ -1655,6 +1655,27 @@ where
         }
     }
 
+    // Edges internal to a direction-override subgraph are handled by the
+    // sub-layout, not the main compound layout.  Including them here would
+    // force the subgraph to span multiple ranks along the root direction,
+    // producing excessive vertical (or horizontal) spacing that persists
+    // even after reconciliation shrinks the subgraph.
+    let dir_override_internal: HashSet<usize> = {
+        let mut set = HashSet::new();
+        for sg in diagram.subgraphs.values() {
+            if sg.dir.is_none() {
+                continue;
+            }
+            let members: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+            for (idx, edge) in diagram.edges.iter().enumerate() {
+                if members.contains(edge.from.as_str()) && members.contains(edge.to.as_str()) {
+                    set.insert(idx);
+                }
+            }
+        }
+        set
+    };
+
     let mut edge_labels: HashMap<usize, dagre::normalize::EdgeLabelInfo> = HashMap::new();
     for (edge_idx, edge) in diagram.edges.iter().enumerate() {
         let weight = if edge.stroke == Stroke::Invisible {
@@ -1662,7 +1683,12 @@ where
         } else {
             1.0
         };
-        dgraph.add_edge_full(edge.from.as_str(), edge.to.as_str(), weight, edge.minlen);
+        if dir_override_internal.contains(&edge_idx) {
+            // Keep connectivity but don't force rank separation.
+            dgraph.add_edge_full(edge.from.as_str(), edge.to.as_str(), weight, 0);
+        } else {
+            dgraph.add_edge_full(edge.from.as_str(), edge.to.as_str(), weight, edge.minlen);
+        }
         if let Some((label_width, label_height)) = edge_label_dims(edge) {
             edge_labels.insert(
                 edge_idx,

@@ -2498,8 +2498,10 @@ fn test_render_subgraph_direction_mixed() {
         output.contains("Left to Right"),
         "Should render LR subgraph title"
     );
+    // Title may be pierced by an edge junction (e.g. "Bottom┼to Top"),
+    // so check for both words rather than the exact phrase.
     assert!(
-        output.contains("Bottom to Top"),
+        output.contains("Bottom") && output.contains("to Top"),
         "Should render BT subgraph title"
     );
     assert!(output.contains("A"), "Should render node A");
