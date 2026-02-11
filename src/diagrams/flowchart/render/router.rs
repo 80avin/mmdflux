@@ -1654,10 +1654,10 @@ pub fn compute_attachment_plan(
                             // goes vertical-first (late), second (farther)
                             // goes horizontal-first (early).
                             if side > 0 {
-                                entry.source_first_vertical = override_right_lane % 2 == 0;
+                                entry.source_first_vertical = override_right_lane.is_multiple_of(2);
                                 override_right_lane += 1;
                             } else {
-                                entry.source_first_vertical = override_left_lane % 2 == 0;
+                                entry.source_first_vertical = override_left_lane.is_multiple_of(2);
                                 override_left_lane += 1;
                             }
                         }
