@@ -1,8 +1,4 @@
 //! Shared routing primitives used by text and SVG routing paths.
-//!
-//! This module is introduced ahead of router migration. Some helpers remain
-//! temporarily unused until follow-up tasks wire both routers to this surface.
-#![allow(dead_code)]
 
 use crate::diagrams::flowchart::geometry::{FPoint, FRect};
 use crate::graph::Direction;
@@ -29,6 +25,7 @@ impl Face {
     }
 
     /// Convert text router face type to the shared routing-core face.
+    #[cfg(test)]
     pub(crate) fn from_node_face(face: NodeFace) -> Self {
         match face {
             NodeFace::Top => Face::Top,

@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use super::layout::{Layout, SelfEdgeDrawData, SubgraphBounds};
+use super::routing_core::edge_faces as shared_edge_faces;
 use super::shape::NodeBounds;
 use crate::graph::{Arrow, Direction, Edge, Shape, Stroke};
 use crate::render::intersect::{
@@ -907,17 +908,8 @@ fn clamp_to_boundary(point: (usize, usize), bounds: &NodeBounds) -> Point {
 /// Forward edges exit the "downstream" face and enter the "upstream" face.
 /// Backward edges reverse these faces.
 fn edge_faces(direction: Direction, is_backward: bool) -> (NodeFace, NodeFace) {
-    let (forward_src, forward_tgt) = match direction {
-        Direction::TopDown => (NodeFace::Bottom, NodeFace::Top),
-        Direction::BottomTop => (NodeFace::Top, NodeFace::Bottom),
-        Direction::LeftRight => (NodeFace::Right, NodeFace::Left),
-        Direction::RightLeft => (NodeFace::Left, NodeFace::Right),
-    };
-    if is_backward {
-        (forward_tgt, forward_src)
-    } else {
-        (forward_src, forward_tgt)
-    }
+    let (src, tgt) = shared_edge_faces(direction, is_backward);
+    (src.to_node_face(), tgt.to_node_face())
 }
 
 /// Offset an attachment point by 1 cell in the direction of the given face.

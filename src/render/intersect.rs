@@ -8,6 +8,8 @@
 //! This is a key part of the dagre/Sugiyama framework that enables edges to
 //! fan out naturally from nodes rather than overlapping at the center.
 
+use crate::diagrams::flowchart::geometry::{FPoint, FRect};
+use crate::diagrams::flowchart::render::routing_core::classify_face_float as shared_classify_face_float;
 use crate::diagrams::flowchart::render::shape::NodeBounds;
 use crate::graph::Shape;
 
@@ -34,30 +36,16 @@ pub fn classify_face(
     approach_point: (usize, usize),
     _shape: Shape,
 ) -> NodeFace {
-    let cx = bounds.center_x() as f64;
-    let cy = bounds.center_y() as f64;
-    let dx = approach_point.0 as f64 - cx;
-    let dy = approach_point.1 as f64 - cy;
+    let center = FPoint::new(bounds.center_x() as f64, bounds.center_y() as f64);
+    let rect = FRect::new(
+        bounds.x as f64,
+        bounds.y as f64,
+        bounds.width as f64,
+        bounds.height as f64,
+    );
+    let approach = FPoint::new(approach_point.0 as f64, approach_point.1 as f64);
 
-    if dx.abs() < 0.5 && dy.abs() < 0.5 {
-        return NodeFace::Bottom; // default when approach == center
-    }
-
-    let half_w = bounds.width as f64 / 2.0;
-    let half_h = bounds.height as f64 / 2.0;
-
-    // Same comparison as intersect_rect: steep => top/bottom, shallow => left/right
-    if dy.abs() * half_w > dx.abs() * half_h {
-        if dy < 0.0 {
-            NodeFace::Top
-        } else {
-            NodeFace::Bottom
-        }
-    } else if dx < 0.0 {
-        NodeFace::Left
-    } else {
-        NodeFace::Right
-    }
+    shared_classify_face_float(center, rect, approach).to_node_face()
 }
 
 /// Compute N evenly-spaced attachment positions along a face.

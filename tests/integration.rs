@@ -2714,3 +2714,27 @@ fn mmds_integration_fixture_matrix() {
         );
     }
 }
+
+#[test]
+fn classify_face_matches_expected_common_approaches() {
+    use mmdflux::render::NodeBounds;
+    use mmdflux::render::intersect::{NodeFace, classify_face};
+
+    let bounds = NodeBounds {
+        x: 10,
+        y: 10,
+        width: 20,
+        height: 10,
+        dagre_center_x: None,
+        dagre_center_y: None,
+    };
+
+    assert_eq!(
+        classify_face(&bounds, (20, 0), Shape::Rectangle),
+        NodeFace::Top
+    );
+    assert_eq!(
+        classify_face(&bounds, (35, 15), Shape::Rectangle),
+        NodeFace::Right
+    );
+}

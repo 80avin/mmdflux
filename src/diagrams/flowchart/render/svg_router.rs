@@ -13,36 +13,21 @@ pub use super::route_policy::build_node_directions as build_node_directions_svg;
 pub use super::route_policy::{
     build_override_node_map, effective_edge_direction as effective_edge_direction_svg,
 };
+use super::routing_core::{
+    Face, edge_faces as shared_edge_faces, point_on_face_float as shared_point_on_face_float,
+};
 use crate::dagre::{LayoutResult, NodeId, Point, Rect};
+use crate::diagrams::flowchart::geometry::FRect;
 use crate::graph::{Diagram, Direction};
-
-/// Which side of a rectangle an edge attaches to.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-enum Face {
-    Top,
-    Bottom,
-    Left,
-    Right,
-}
 
 /// The face an edge exits from in the given flow direction.
 fn exit_face(direction: Direction) -> Face {
-    match direction {
-        Direction::TopDown => Face::Bottom,
-        Direction::BottomTop => Face::Top,
-        Direction::LeftRight => Face::Right,
-        Direction::RightLeft => Face::Left,
-    }
+    shared_edge_faces(direction, false).0
 }
 
 /// The face an edge enters through in the given flow direction.
 fn entry_face(direction: Direction) -> Face {
-    match direction {
-        Direction::TopDown => Face::Top,
-        Direction::BottomTop => Face::Bottom,
-        Direction::LeftRight => Face::Left,
-        Direction::RightLeft => Face::Right,
-    }
+    shared_edge_faces(direction, false).1
 }
 
 /// Compute a point on a face at the given fraction (0.0 = start, 0.5 = center, 1.0 = end).
@@ -50,24 +35,8 @@ fn entry_face(direction: Direction) -> Face {
 /// For horizontal faces (Top/Bottom), fraction runs left-to-right.
 /// For vertical faces (Left/Right), fraction runs top-to-bottom.
 fn point_on_face(rect: &Rect, face: Face, fraction: f64) -> Point {
-    match face {
-        Face::Top => Point {
-            x: rect.x + rect.width * fraction,
-            y: rect.y,
-        },
-        Face::Bottom => Point {
-            x: rect.x + rect.width * fraction,
-            y: rect.y + rect.height,
-        },
-        Face::Left => Point {
-            x: rect.x,
-            y: rect.y + rect.height * fraction,
-        },
-        Face::Right => Point {
-            x: rect.x + rect.width,
-            y: rect.y + rect.height * fraction,
-        },
-    }
+    let rect = FRect::from(*rect);
+    shared_point_on_face_float(rect, face, fraction).into()
 }
 
 /// Compute the exit point from a rectangular node along a given direction (center of face).
@@ -1030,6 +999,24 @@ mod tests {
         let right_mid = point_on_face(&rect, Face::Right, 0.5);
         assert!((right_mid.x - 130.0).abs() < 0.01);
         assert!((right_mid.y - 120.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_point_on_face_clamps_fraction_bounds() {
+        let rect = Rect {
+            x: 50.0,
+            y: 100.0,
+            width: 80.0,
+            height: 40.0,
+        };
+
+        let below_zero = point_on_face(&rect, Face::Top, -1.0);
+        assert!((below_zero.x - 50.0).abs() < 0.01);
+        assert!((below_zero.y - 100.0).abs() < 0.01);
+
+        let above_one = point_on_face(&rect, Face::Left, 2.0);
+        assert!((above_one.x - 50.0).abs() < 0.01);
+        assert!((above_one.y - 140.0).abs() < 0.01);
     }
 
     #[test]
