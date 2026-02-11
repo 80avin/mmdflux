@@ -825,6 +825,9 @@ fn render_edges(
         } else {
             adjust_edge_points_for_shapes(diagram, geom, edge, &points)
         };
+        if matches!(path_detail, PathDetail::Compact) {
+            points = compact_visual_staircases(&points, 12.0);
+        }
         // Only densify corners for linear edges; basis and rounded
         // handle smoothing natively from sparse waypoints.
         if matches!(edge_path_style, SvgEdgePathStyle::Linear) {
@@ -837,6 +840,7 @@ fn render_edges(
             scale,
             edge_path_style,
             edge_path_radius,
+            path_detail,
         );
         if d.is_empty() {
             continue;
@@ -855,6 +859,83 @@ fn point_inside_rect(rect: &Rect, point: Point) -> bool {
         && point.x < rect.x + rect.width - eps
         && point.y > rect.y + eps
         && point.y < rect.y + rect.height - eps
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SegmentAxis {
+    Horizontal,
+    Vertical,
+}
+
+fn segment_axis(start: Point, end: Point) -> Option<SegmentAxis> {
+    const EPS: f64 = 1e-6;
+    let dx = (start.x - end.x).abs();
+    let dy = (start.y - end.y).abs();
+    if dx <= EPS && dy > EPS {
+        Some(SegmentAxis::Vertical)
+    } else if dy <= EPS && dx > EPS {
+        Some(SegmentAxis::Horizontal)
+    } else {
+        None
+    }
+}
+
+fn segment_manhattan_len(start: Point, end: Point) -> f64 {
+    (start.x - end.x).abs() + (start.y - end.y).abs()
+}
+
+fn compact_visual_staircases(points: &[Point], short_tol: f64) -> Vec<Point> {
+    if points.len() < 4 {
+        return points.to_vec();
+    }
+
+    let mut compacted = points.to_vec();
+    let mut i = 0usize;
+    while i + 3 < compacted.len() {
+        let p0 = compacted[i];
+        let p1 = compacted[i + 1];
+        let p2 = compacted[i + 2];
+        let p3 = compacted[i + 3];
+
+        let a1 = segment_axis(p0, p1);
+        let a2 = segment_axis(p1, p2);
+        let a3 = segment_axis(p2, p3);
+
+        let Some(first_axis) = a1 else {
+            i += 1;
+            continue;
+        };
+        let Some(middle_axis) = a2 else {
+            i += 1;
+            continue;
+        };
+        let Some(last_axis) = a3 else {
+            i += 1;
+            continue;
+        };
+
+        if first_axis != last_axis || first_axis == middle_axis {
+            i += 1;
+            continue;
+        }
+
+        let l1 = segment_manhattan_len(p0, p1);
+        let l2 = segment_manhattan_len(p1, p2);
+        let l3 = segment_manhattan_len(p2, p3);
+        if l1 > short_tol || l2 > short_tol || l3 > short_tol {
+            i += 1;
+            continue;
+        }
+
+        let replacement = match first_axis {
+            SegmentAxis::Vertical => Point { x: p0.x, y: p3.y },
+            SegmentAxis::Horizontal => Point { x: p3.x, y: p0.y },
+        };
+        compacted.splice(i + 1..=i + 2, [replacement]);
+        i = i.saturating_sub(1);
+    }
+
+    compacted
 }
 
 fn segment_rect_intersection(start: Point, end: Point, rect: &Rect) -> Option<Point> {
@@ -1895,6 +1976,7 @@ fn path_from_points(
     scale: f64,
     curve: SvgEdgePathStyle,
     curve_radius: f64,
+    path_detail: PathDetail,
 ) -> String {
     if points.is_empty() {
         return String::new();
@@ -1915,6 +1997,11 @@ fn path_from_points(
             .collect()
     } else {
         points.to_vec()
+    };
+    let points = if matches!(path_detail, PathDetail::Compact) {
+        compact_visual_staircases(&points, 12.0)
+    } else {
+        points
     };
 
     let scaled: Vec<(f64, f64)> = points
