@@ -51,7 +51,7 @@ impl DiagramInstance for FlowchartInstance {
         };
 
         // Route runtime selection through the engine abstraction.
-        let engine_result = super::engine::layout_with_selected_engine(diagram, config)?;
+        let engine_result = super::engine::layout_with_selected_engine(diagram, config, format)?;
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;

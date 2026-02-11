@@ -51,7 +51,7 @@ impl DiagramInstance for ClassInstance {
         options.output_format = format;
 
         if matches!(format, OutputFormat::Mmds) {
-            let engine_result = layout_with_selected_engine(diagram, config)?;
+            let engine_result = layout_with_selected_engine(diagram, config, format)?;
             let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
                 Some(routing::route_graph_geometry(
                     diagram,
@@ -72,7 +72,7 @@ impl DiagramInstance for ClassInstance {
         }
 
         if matches!(format, OutputFormat::Svg) && selected_engine != LayoutEngineId::Dagre {
-            let engine_result = layout_with_selected_engine(diagram, config)?;
+            let engine_result = layout_with_selected_engine(diagram, config, format)?;
             let routed = routing::route_graph_geometry(
                 diagram,
                 &engine_result.geometry,

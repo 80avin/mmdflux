@@ -5,10 +5,41 @@
 
 use super::geometry::{self, GraphGeometry};
 use super::render::layout::build_dagre_layout;
+use super::render::svg::svg_node_dimensions;
+use super::render::svg_metrics::SvgTextMetrics;
 use crate::diagram::{
-    EngineCapabilities, EngineConfig, GraphLayoutEngine, LayoutEngineId, RenderConfig, RenderError,
+    EngineCapabilities, EngineConfig, GraphLayoutEngine, LayoutEngineId, OutputFormat,
+    RenderConfig, RenderError,
 };
 use crate::graph::Diagram;
+use crate::render::SvgOptions;
+
+/// Measurement mode controls whether layout uses text-grid character
+/// dimensions or SVG pixel dimensions for node sizing.
+#[derive(Debug, Clone)]
+pub enum MeasurementMode {
+    /// Text-grid character dimensions (for text/ascii rendering).
+    Text,
+    /// SVG pixel dimensions (for MMDS and SVG output).
+    Svg(SvgTextMetrics),
+}
+
+impl MeasurementMode {
+    /// Determine the measurement mode from the output format.
+    pub fn for_format(format: OutputFormat, config: &RenderConfig) -> Self {
+        match format {
+            OutputFormat::Mmds | OutputFormat::Svg => {
+                let defaults = SvgOptions::default();
+                let font_size = defaults.font_size;
+                let node_padding_x = config.svg_node_padding_x.unwrap_or(defaults.node_padding_x);
+                let node_padding_y = config.svg_node_padding_y.unwrap_or(defaults.node_padding_y);
+                let metrics = SvgTextMetrics::new(font_size, node_padding_x, node_padding_y);
+                MeasurementMode::Svg(metrics)
+            }
+            _ => MeasurementMode::Text,
+        }
+    }
+}
 
 fn text_edge_label_dimensions(label: &str) -> (f64, f64) {
     let lines: Vec<&str> = label.split('\n').collect();
@@ -24,8 +55,25 @@ fn text_edge_label_dimensions(label: &str) -> (f64, f64) {
 /// Dagre (Sugiyama) layout engine.
 ///
 /// Wraps the existing dagre layout pipeline behind the `GraphLayoutEngine` trait.
-/// Node dimensions and edge label dimensions are provided via callbacks at construction.
-pub struct DagreLayoutEngine;
+/// Measurement mode determines whether node/edge dimensions are computed in
+/// text-grid characters or SVG pixels.
+pub struct DagreLayoutEngine {
+    mode: MeasurementMode,
+}
+
+impl DagreLayoutEngine {
+    /// Create a dagre engine with text-grid measurement (default for text output).
+    pub fn text() -> Self {
+        Self {
+            mode: MeasurementMode::Text,
+        }
+    }
+
+    /// Create a dagre engine with the specified measurement mode.
+    pub fn with_mode(mode: MeasurementMode) -> Self {
+        Self { mode }
+    }
+}
 
 impl GraphLayoutEngine for DagreLayoutEngine {
     type Input = Diagram;
@@ -54,19 +102,31 @@ impl GraphLayoutEngine for DagreLayoutEngine {
         let layout_config = layout_config_from_dagre(dagre_cfg, diagram);
 
         let direction = diagram.direction;
-        let result = build_dagre_layout(
-            diagram,
-            &layout_config,
-            |node| {
-                let (w, h) = crate::render::node_dimensions(node, direction);
-                (w as f64, h as f64)
-            },
-            |edge| {
-                edge.label
-                    .as_ref()
-                    .map(|label| text_edge_label_dimensions(label))
-            },
-        );
+        let result = match &self.mode {
+            MeasurementMode::Text => build_dagre_layout(
+                diagram,
+                &layout_config,
+                |node| {
+                    let (w, h) = crate::render::node_dimensions(node, direction);
+                    (w as f64, h as f64)
+                },
+                |edge| {
+                    edge.label
+                        .as_ref()
+                        .map(|label| text_edge_label_dimensions(label))
+                },
+            ),
+            MeasurementMode::Svg(metrics) => build_dagre_layout(
+                diagram,
+                &layout_config,
+                |node| svg_node_dimensions(metrics, node, direction),
+                |edge| {
+                    edge.label
+                        .as_ref()
+                        .map(|label| metrics.edge_label_dimensions(label))
+                },
+            ),
+        };
 
         Ok(geometry::from_dagre_layout(&result, diagram))
     }
@@ -86,34 +146,48 @@ pub struct EngineLayoutResult {
 /// Resolve the configured flowchart layout engine and execute it.
 ///
 /// Uses the `GraphEngineRegistry` for engine lookup. Dagre is the default
-/// when no engine is specified. Returns the layout geometry along with the
-/// routing mode determined by engine capabilities.
+/// when no engine is specified. The output format determines the measurement
+/// mode: MMDS and SVG use pixel dimensions, text uses character dimensions.
 pub fn layout_with_selected_engine(
     diagram: &Diagram,
     config: &RenderConfig,
+    format: OutputFormat,
 ) -> Result<EngineLayoutResult, RenderError> {
     use crate::diagram::RoutingMode;
-    use crate::engines::graph::GraphEngineRegistry;
 
     let engine_id = config.layout_engine.unwrap_or(LayoutEngineId::Dagre);
 
     engine_id.check_available()?;
 
-    let registry = GraphEngineRegistry::default();
-    let engine = registry.get(engine_id).ok_or_else(|| RenderError {
-        message: format!("no adapter registered for engine: {engine_id}"),
-    })?;
-
-    let routing_mode = RoutingMode::for_capabilities(&engine.capabilities());
-
-    let engine_config = EngineConfig::Dagre(config.layout.clone());
-    let geometry = engine.layout(diagram, &engine_config)?;
-
-    Ok(EngineLayoutResult {
-        engine_id,
-        geometry,
-        routing_mode,
-    })
+    match engine_id {
+        LayoutEngineId::Dagre => {
+            let mode = MeasurementMode::for_format(format, config);
+            let engine = DagreLayoutEngine::with_mode(mode);
+            let routing_mode = RoutingMode::for_capabilities(&engine.capabilities());
+            let engine_config = EngineConfig::Dagre(config.layout.clone());
+            let geometry = engine.layout(diagram, &engine_config)?;
+            Ok(EngineLayoutResult {
+                engine_id,
+                geometry,
+                routing_mode,
+            })
+        }
+        _ => {
+            use crate::engines::graph::GraphEngineRegistry;
+            let registry = GraphEngineRegistry::default();
+            let engine = registry.get(engine_id).ok_or_else(|| RenderError {
+                message: format!("no adapter registered for engine: {engine_id}"),
+            })?;
+            let routing_mode = RoutingMode::for_capabilities(&engine.capabilities());
+            let engine_config = EngineConfig::Dagre(config.layout.clone());
+            let geometry = engine.layout(diagram, &engine_config)?;
+            Ok(EngineLayoutResult {
+                engine_id,
+                geometry,
+                routing_mode,
+            })
+        }
+    }
 }
 
 /// Build a flowchart LayoutConfig from dagre config parameters.
@@ -157,13 +231,13 @@ mod tests {
 
     #[test]
     fn dagre_engine_name() {
-        let engine = DagreLayoutEngine;
+        let engine = DagreLayoutEngine::text();
         assert_eq!(engine.name(), "dagre");
     }
 
     #[test]
     fn dagre_engine_capabilities() {
-        let engine = DagreLayoutEngine;
+        let engine = DagreLayoutEngine::text();
         let caps = engine.capabilities();
         assert!(!caps.routes_edges);
         assert!(caps.supports_subgraphs);
@@ -172,7 +246,7 @@ mod tests {
 
     #[test]
     fn dagre_engine_layout_simple_graph() {
-        let engine = DagreLayoutEngine;
+        let engine = DagreLayoutEngine::text();
 
         let input = "graph TD\nA-->B";
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
@@ -189,7 +263,7 @@ mod tests {
 
     #[test]
     fn dagre_engine_layout_with_subgraphs() {
-        let engine = DagreLayoutEngine;
+        let engine = DagreLayoutEngine::text();
 
         let input = "graph TD\nsubgraph sg1[Group]\nA-->B\nend\nC-->A";
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
@@ -205,9 +279,33 @@ mod tests {
     }
 
     #[test]
+    fn dagre_engine_svg_mode_produces_larger_dimensions() {
+        let text_engine = DagreLayoutEngine::text();
+        let svg_engine = DagreLayoutEngine::with_mode(MeasurementMode::Svg(SvgTextMetrics::new(
+            16.0, 15.0, 15.0,
+        )));
+
+        let input = "graph TD\nA-->B";
+        let flowchart = crate::parser::parse_flowchart(input).unwrap();
+        let diagram = crate::graph::build_diagram(&flowchart);
+
+        let config = EngineConfig::Dagre(crate::dagre::types::LayoutConfig::default());
+        let text_geom = text_engine.layout(&diagram, &config).unwrap();
+        let svg_geom = svg_engine.layout(&diagram, &config).unwrap();
+
+        // SVG dimensions should be significantly larger than text dimensions
+        let text_w = text_geom.nodes["A"].rect.width;
+        let svg_w = svg_geom.nodes["A"].rect.width;
+        assert!(
+            svg_w > text_w * 3.0,
+            "SVG width ({svg_w}) should be much larger than text width ({text_w})"
+        );
+    }
+
+    #[test]
     fn dagre_engine_is_object_safe() {
         let engine: Box<dyn GraphLayoutEngine<Input = Diagram, Output = GraphGeometry>> =
-            Box::new(DagreLayoutEngine);
+            Box::new(DagreLayoutEngine::text());
         assert_eq!(engine.name(), "dagre");
     }
 
@@ -217,7 +315,9 @@ mod tests {
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
 
-        let result = layout_with_selected_engine(&diagram, &RenderConfig::default()).unwrap();
+        let result =
+            layout_with_selected_engine(&diagram, &RenderConfig::default(), OutputFormat::Text)
+                .unwrap();
         assert_eq!(result.geometry.nodes.len(), 2);
         assert_eq!(
             result.routing_mode,
@@ -235,7 +335,7 @@ mod tests {
             ..RenderConfig::default()
         };
 
-        let result = layout_with_selected_engine(&diagram, &config).unwrap();
+        let result = layout_with_selected_engine(&diagram, &config, OutputFormat::Text).unwrap();
         assert_eq!(result.geometry.edges.len(), 1);
         assert_eq!(
             result.routing_mode,
@@ -254,7 +354,7 @@ mod tests {
             ..RenderConfig::default()
         };
 
-        let err = layout_with_selected_engine(&diagram, &config).unwrap_err();
+        let err = layout_with_selected_engine(&diagram, &config, OutputFormat::Text).unwrap_err();
         assert!(
             err.message.contains("engine-elk") || err.message.contains("not available"),
             "error should be actionable: {}",

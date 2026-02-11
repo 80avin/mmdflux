@@ -236,25 +236,28 @@ fn floats_eq(a: f64, b: f64) -> bool {
 fn check_layout(direct: &Diagram, roundtrip: &Diagram) -> TierResult {
     let config = RenderConfig::default();
 
-    let direct_geom = match layout_with_selected_engine(direct, &config) {
-        Ok(result) => result.geometry,
-        Err(e) => {
-            return TierResult {
-                tier: "layout",
-                status: TierStatus::Fail(format!("direct layout failed: {e}")),
-            };
-        }
-    };
+    let direct_geom =
+        match layout_with_selected_engine(direct, &config, mmdflux::diagram::OutputFormat::Text) {
+            Ok(result) => result.geometry,
+            Err(e) => {
+                return TierResult {
+                    tier: "layout",
+                    status: TierStatus::Fail(format!("direct layout failed: {e}")),
+                };
+            }
+        };
 
-    let roundtrip_geom = match layout_with_selected_engine(roundtrip, &config) {
-        Ok(result) => result.geometry,
-        Err(e) => {
-            return TierResult {
-                tier: "layout",
-                status: TierStatus::Fail(format!("roundtrip layout failed: {e}")),
-            };
-        }
-    };
+    let roundtrip_geom =
+        match layout_with_selected_engine(roundtrip, &config, mmdflux::diagram::OutputFormat::Text)
+        {
+            Ok(result) => result.geometry,
+            Err(e) => {
+                return TierResult {
+                    tier: "layout",
+                    status: TierStatus::Fail(format!("roundtrip layout failed: {e}")),
+                };
+            }
+        };
 
     let mismatches = compare_geometry(&direct_geom, &roundtrip_geom);
 

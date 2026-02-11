@@ -450,7 +450,11 @@ fn push_subgraph_from_subgraph(
     }
 }
 
-fn svg_node_dimensions(metrics: &SvgTextMetrics, node: &Node, direction: Direction) -> (f64, f64) {
+pub(crate) fn svg_node_dimensions(
+    metrics: &SvgTextMetrics,
+    node: &Node,
+    direction: Direction,
+) -> (f64, f64) {
     let (label_w, label_h) = metrics.measure_text_with_padding(&node.label, 0.0, 0.0);
 
     let (mut width, mut height) = match node.shape {

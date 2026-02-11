@@ -12,7 +12,7 @@ use mmdflux::{EngineConfig, GraphLayoutEngine, RoutingMode, build_diagram, parse
 fn layout_test(input: &str) -> (mmdflux::Diagram, GraphGeometry) {
     let fc = parse_flowchart(input).unwrap();
     let diagram = build_diagram(&fc);
-    let engine = DagreLayoutEngine;
+    let engine = DagreLayoutEngine::text();
     let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
     let geom = engine.layout(&diagram, &config).unwrap();
     (diagram, geom)
