@@ -1,6 +1,11 @@
 use super::super::layout::{LayoutConfig, compute_layout_direct};
 use super::*;
+use crate::diagrams::flowchart::geometry::{FPoint, FRect};
+use crate::diagrams::flowchart::render::routing_core::{
+    Face, classify_face_float, edge_faces, point_on_face_float,
+};
 use crate::graph::{Diagram, Node};
+use crate::render::intersect::NodeFace;
 
 fn simple_td_diagram() -> Diagram {
     let mut diagram = Diagram::new(Direction::TopDown);
@@ -1015,4 +1020,91 @@ fn point_at_offset_zero_length_segment() {
         y_end: 10,
     };
     assert_eq!(seg.point_at_offset(0), Point { x: 5, y: 10 });
+}
+
+#[test]
+fn routing_core_edge_faces_all_directions_forward_and_backward() {
+    assert_eq!(
+        edge_faces(Direction::TopDown, false),
+        (Face::Bottom, Face::Top)
+    );
+    assert_eq!(
+        edge_faces(Direction::TopDown, true),
+        (Face::Top, Face::Bottom)
+    );
+
+    assert_eq!(
+        edge_faces(Direction::BottomTop, false),
+        (Face::Top, Face::Bottom)
+    );
+    assert_eq!(
+        edge_faces(Direction::BottomTop, true),
+        (Face::Bottom, Face::Top)
+    );
+
+    assert_eq!(
+        edge_faces(Direction::LeftRight, false),
+        (Face::Right, Face::Left)
+    );
+    assert_eq!(
+        edge_faces(Direction::LeftRight, true),
+        (Face::Left, Face::Right)
+    );
+
+    assert_eq!(
+        edge_faces(Direction::RightLeft, false),
+        (Face::Left, Face::Right)
+    );
+    assert_eq!(
+        edge_faces(Direction::RightLeft, true),
+        (Face::Right, Face::Left)
+    );
+}
+
+#[test]
+fn routing_core_classify_face_float_prefers_major_axis() {
+    let center = FPoint::new(50.0, 50.0);
+    let rect = FRect::new(40.0, 40.0, 20.0, 20.0);
+    assert_eq!(
+        classify_face_float(center, rect, FPoint::new(50.0, 10.0)),
+        Face::Top
+    );
+    assert_eq!(
+        classify_face_float(center, rect, FPoint::new(90.0, 50.0)),
+        Face::Right
+    );
+}
+
+#[test]
+fn routing_core_point_on_face_float_uses_fraction_and_clamps() {
+    let rect = FRect::new(10.0, 20.0, 40.0, 20.0);
+    assert_eq!(
+        point_on_face_float(rect, Face::Top, 0.0),
+        FPoint::new(10.0, 20.0)
+    );
+    assert_eq!(
+        point_on_face_float(rect, Face::Top, 1.0),
+        FPoint::new(50.0, 20.0)
+    );
+    assert_eq!(
+        point_on_face_float(rect, Face::Right, -2.0),
+        FPoint::new(50.0, 20.0)
+    );
+    assert_eq!(
+        point_on_face_float(rect, Face::Left, 2.0),
+        FPoint::new(10.0, 40.0)
+    );
+}
+
+#[test]
+fn routing_core_face_conversions_are_explicit_and_lossless() {
+    assert_eq!(Face::from_node_face(NodeFace::Top), Face::Top);
+    assert_eq!(Face::from_node_face(NodeFace::Bottom), Face::Bottom);
+    assert_eq!(Face::from_node_face(NodeFace::Left), Face::Left);
+    assert_eq!(Face::from_node_face(NodeFace::Right), Face::Right);
+
+    assert_eq!(Face::Top.to_node_face(), NodeFace::Top);
+    assert_eq!(Face::Bottom.to_node_face(), NodeFace::Bottom);
+    assert_eq!(Face::Left.to_node_face(), NodeFace::Left);
+    assert_eq!(Face::Right.to_node_face(), NodeFace::Right);
 }
