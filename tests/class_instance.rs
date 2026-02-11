@@ -106,6 +106,19 @@ fn lollipop_relations_render_all_participating_classes() {
 }
 
 #[test]
+fn lollipop_same_name_interfaces_render_as_distinct_endpoints() {
+    let mut instance = ClassInstance::new();
+    let input = "classDiagram\nService --() InterfaceA\nClient --() InterfaceA";
+    instance.parse(input).unwrap();
+    let output = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+
+    assert_eq!(output.matches("InterfaceA").count(), 2);
+    assert!(!output.contains("│ InterfaceA │"));
+}
+
+#[test]
 fn namespace_blocks_render_namespace_titles() {
     let mut instance = ClassInstance::new();
     let input = "\

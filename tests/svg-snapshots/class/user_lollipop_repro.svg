@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 322.97 374.00" style="max-width: 322.97px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 291.36 374.00" style="max-width: 291.36px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
@@ -21,23 +21,24 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M78.37,262.00 L78.37,266.17 C78.37,270.33 78.37,278.67 88.82,288.93 C99.28,299.18 120.19,311.37 130.65,317.46 L141.10,323.55" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
-      <path d="M256.85,166.00 L256.85,186.17 C256.85,206.33 256.85,246.67 246.40,272.93 C235.94,299.18 215.03,311.37 204.57,317.46 L194.12,323.55" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
-      <path d="M78.37,62.00 L78.37,66.17 C78.37,70.33 78.37,78.67 78.37,87.00 C78.37,95.33 78.37,103.67 78.37,107.83 L78.37,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#circlehead)" />
+      <path d="M212.99,262.00 L212.99,266.17 C212.99,270.33 212.99,278.67 212.99,287.00 C212.99,295.33 212.99,303.67 212.99,307.83 L212.99,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
+      <path d="M66.12,62.00 L66.12,66.17 C66.12,70.33 66.12,78.67 66.12,87.00 C66.12,95.33 66.12,103.67 66.12,107.83 L66.12,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
+      <path d="M212.99,62.00 L212.99,66.17 C212.99,70.33 212.99,78.67 212.99,87.00 C212.99,95.33 212.99,103.67 212.99,107.83 L212.99,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#circlehead)" />
     </g>
     <g class="edgeLabels">
     </g>
     <g class="nodes">
-      <rect x="8.00" y="112.00" width="140.74" height="150.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="78.37" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Class01</text>
-      <line x1="8.00" y1="163.00" x2="148.74" y2="163.00" stroke="#333" stroke-width="1.00" />
-      <text x="23.00" y="187.00" text-anchor="start" dominant-baseline="middle" fill="#333">int amount</text>
-      <line x1="8.00" y1="211.00" x2="148.74" y2="211.00" stroke="#333" stroke-width="1.00" />
-      <text x="23.00" y="235.00" text-anchor="start" dominant-baseline="middle" fill="#333">draw()</text>
-      <rect x="198.74" y="112.00" width="116.24" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="256.85" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Class02</text>
-      <text x="167.61" y="339.00" text-anchor="middle" dominant-baseline="middle" fill="#333">bar</text>
-      <text x="78.37" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">foo</text>
+      <rect x="142.63" y="112.00" width="140.74" height="150.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="212.99" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Class01</text>
+      <line x1="142.63" y1="163.00" x2="283.36" y2="163.00" stroke="#333" stroke-width="1.00" />
+      <text x="157.63" y="187.00" text-anchor="start" dominant-baseline="middle" fill="#333">int amount</text>
+      <line x1="142.63" y1="211.00" x2="283.36" y2="211.00" stroke="#333" stroke-width="1.00" />
+      <text x="157.63" y="235.00" text-anchor="start" dominant-baseline="middle" fill="#333">draw()</text>
+      <rect x="8.00" y="8.00" width="116.24" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="66.12" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Class02</text>
+      <text x="212.99" y="339.00" text-anchor="middle" dominant-baseline="middle" fill="#333">bar</text>
+      <text x="66.12" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">bar</text>
+      <text x="212.99" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">foo</text>
     </g>
   </g>
 </svg>

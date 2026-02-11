@@ -15,9 +15,13 @@ use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke, Subgrap
 /// map to edges with style/arrow metadata based on their type.
 pub fn compile(model: &ClassModel) -> Diagram {
     let mut diagram = Diagram::new(class_direction(model.direction.as_deref()));
-    let lollipop_interfaces = lollipop_interface_nodes(model);
+    let marker_only_lollipop_interfaces = lollipop_interface_nodes(model);
 
     for class in &model.classes {
+        if marker_only_lollipop_interfaces.contains(&class.name) {
+            continue;
+        }
+
         let mut header: Vec<String> = class
             .annotations
             .iter()
@@ -44,18 +48,16 @@ pub fn compile(model: &ClassModel) -> Diagram {
             parts.join("\n")
         };
 
-        let shape = if lollipop_interfaces.contains(&class.name) {
-            Shape::TextBlock
-        } else {
-            Shape::Rectangle
-        };
-
-        diagram.add_node(Node::new(&class.name).with_label(label).with_shape(shape));
+        diagram.add_node(
+            Node::new(&class.name)
+                .with_label(label)
+                .with_shape(Shape::Rectangle),
+        );
     }
 
     apply_namespaces(model, &mut diagram);
 
-    for rel in &model.relations {
+    for (relation_index, rel) in model.relations.iter().enumerate() {
         let (stroke, marker_arrow) = relation_style(rel.relation_type);
         let arrow_start = if rel.marker_start {
             marker_arrow
@@ -67,7 +69,36 @@ pub fn compile(model: &ClassModel) -> Diagram {
         } else {
             Arrow::None
         };
-        let mut edge = Edge::new(&rel.from, &rel.to)
+        let from_node_id = if rel.relation_type == ClassRelationType::Lollipop
+            && rel.marker_start
+            && marker_only_lollipop_interfaces.contains(&rel.from)
+        {
+            let id = format!("__mmdflux_lollipop_{relation_index}_start");
+            diagram.add_node(
+                Node::new(&id)
+                    .with_label(rel.from.clone())
+                    .with_shape(Shape::TextBlock),
+            );
+            id
+        } else {
+            rel.from.clone()
+        };
+        let to_node_id = if rel.relation_type == ClassRelationType::Lollipop
+            && rel.marker_end
+            && marker_only_lollipop_interfaces.contains(&rel.to)
+        {
+            let id = format!("__mmdflux_lollipop_{relation_index}_end");
+            diagram.add_node(
+                Node::new(&id)
+                    .with_label(rel.to.clone())
+                    .with_shape(Shape::TextBlock),
+            );
+            id
+        } else {
+            rel.to.clone()
+        };
+
+        let mut edge = Edge::new(&from_node_id, &to_node_id)
             .with_stroke(stroke)
             .with_arrows(arrow_start, arrow_end);
 
@@ -279,7 +310,10 @@ mod tests {
         let diagram = compile_class("classDiagram\nClass01 --() bar");
         assert_eq!(diagram.edges[0].arrow_end, Arrow::Circle);
         assert_eq!(diagram.edges[0].arrow_start, Arrow::None);
-        assert_eq!(diagram.nodes["bar"].shape, Shape::TextBlock);
+        assert!(!diagram.nodes.contains_key("bar"));
+        let endpoint = &diagram.nodes[&diagram.edges[0].to];
+        assert_eq!(endpoint.shape, Shape::TextBlock);
+        assert_eq!(endpoint.label, "bar");
         assert_eq!(diagram.nodes["Class01"].shape, Shape::Rectangle);
     }
 
@@ -288,7 +322,10 @@ mod tests {
         let diagram = compile_class("classDiagram\nfoo ()-- Class01");
         assert_eq!(diagram.edges[0].arrow_start, Arrow::Circle);
         assert_eq!(diagram.edges[0].arrow_end, Arrow::None);
-        assert_eq!(diagram.nodes["foo"].shape, Shape::TextBlock);
+        assert!(!diagram.nodes.contains_key("foo"));
+        let endpoint = &diagram.nodes[&diagram.edges[0].from];
+        assert_eq!(endpoint.shape, Shape::TextBlock);
+        assert_eq!(endpoint.label, "foo");
         assert_eq!(diagram.nodes["Class01"].shape, Shape::Rectangle);
     }
 
@@ -296,6 +333,21 @@ mod tests {
     fn compiler_lollipop_endpoint_in_non_lollipop_relation_stays_boxed() {
         let diagram = compile_class("classDiagram\nService --() InterfaceA\nInterfaceA --> Repo");
         assert_eq!(diagram.nodes["InterfaceA"].shape, Shape::Rectangle);
+    }
+
+    #[test]
+    fn compiler_lollipop_same_name_endpoints_are_distinct_nodes() {
+        let diagram =
+            compile_class("classDiagram\nService --() InterfaceA\nClient --() InterfaceA");
+
+        let interface_nodes: Vec<_> = diagram
+            .nodes
+            .values()
+            .filter(|n| n.label == "InterfaceA")
+            .collect();
+        assert_eq!(interface_nodes.len(), 2);
+        assert_ne!(diagram.edges[0].to, diagram.edges[1].to);
+        assert!(!diagram.nodes.contains_key("InterfaceA"));
     }
 
     #[test]
