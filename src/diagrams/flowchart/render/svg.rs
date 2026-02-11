@@ -11,7 +11,7 @@ use super::layout::{
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use crate::dagre::{LayoutResult, Point, Rect};
-use crate::diagram::{PathDetail, RoutingMode, SvgEdgeCurve};
+use crate::diagram::{PathDetail, RoutingMode, SvgEdgePathStyle};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 use crate::render::{RenderOptions, layout_config_for_diagram};
 
@@ -734,7 +734,7 @@ fn render_edges(
     geom: &GraphGeometry,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     rerouted_edges: &std::collections::HashSet<usize>,
-    edge_curve: SvgEdgeCurve,
+    edge_curve: SvgEdgePathStyle,
     edge_curve_radius: f64,
     scale: f64,
     path_detail: PathDetail,
@@ -795,7 +795,7 @@ fn render_edges(
         };
         // Only densify corners for linear edges; basis and rounded
         // handle smoothing natively from sparse waypoints.
-        if matches!(edge_curve, SvgEdgeCurve::Linear) {
+        if matches!(edge_curve, SvgEdgePathStyle::Linear) {
             points = fix_corner_points(&points);
         }
         points = apply_marker_offsets(&points, edge);
@@ -1854,7 +1854,7 @@ fn edge_marker_attrs(edge: &Edge) -> String {
 fn path_from_points(
     points: &[Point],
     scale: f64,
-    curve: SvgEdgeCurve,
+    curve: SvgEdgePathStyle,
     curve_radius: f64,
 ) -> String {
     if points.is_empty() {
@@ -1865,9 +1865,9 @@ fn path_from_points(
         .map(|point| (point.x * scale, point.y * scale))
         .collect();
     match curve {
-        SvgEdgeCurve::Basis => path_from_points_basis(&scaled),
-        SvgEdgeCurve::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
-        SvgEdgeCurve::Linear => path_from_points_linear(&scaled),
+        SvgEdgePathStyle::Basis => path_from_points_basis(&scaled),
+        SvgEdgePathStyle::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
+        SvgEdgePathStyle::Linear => path_from_points_linear(&scaled),
     }
 }
 

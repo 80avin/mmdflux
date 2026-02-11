@@ -4,6 +4,7 @@
 //! multiple diagram types with different parsers, layout engines, and renderers.
 
 use std::error::Error;
+use std::str::FromStr;
 
 /// Diagram family classification.
 ///
@@ -36,9 +37,9 @@ pub enum OutputFormat {
     Mermaid,
 }
 
-/// SVG edge curve style.
+/// SVG edge path style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SvgEdgeCurve {
+pub enum SvgEdgePathStyle {
     Basis,
     Linear,
     Rounded,
@@ -53,6 +54,64 @@ impl std::fmt::Display for OutputFormat {
             OutputFormat::Mmds => write!(f, "mmds"),
             OutputFormat::Mermaid => write!(f, "mermaid"),
         }
+    }
+}
+
+impl OutputFormat {
+    /// Parse output format from user-provided text.
+    ///
+    /// Accepts `json` as an alias for `mmds`.
+    pub fn parse(s: &str) -> Result<Self, RenderError> {
+        match normalize_enum_token(s).as_str() {
+            "text" => Ok(OutputFormat::Text),
+            "ascii" => Ok(OutputFormat::Ascii),
+            "svg" => Ok(OutputFormat::Svg),
+            "mmds" | "json" => Ok(OutputFormat::Mmds),
+            "mermaid" => Ok(OutputFormat::Mermaid),
+            _ => Err(RenderError {
+                message: format!("unknown output format: {s:?}"),
+            }),
+        }
+    }
+}
+
+impl FromStr for OutputFormat {
+    type Err = RenderError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        OutputFormat::parse(s)
+    }
+}
+
+impl std::fmt::Display for SvgEdgePathStyle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SvgEdgePathStyle::Basis => write!(f, "basis"),
+            SvgEdgePathStyle::Linear => write!(f, "linear"),
+            SvgEdgePathStyle::Rounded => write!(f, "rounded"),
+        }
+    }
+}
+
+impl SvgEdgePathStyle {
+    /// Parse SVG edge path style from user-provided text.
+    pub fn parse(s: &str) -> Result<Self, RenderError> {
+        match normalize_enum_token(s).as_str() {
+            "basis" => Ok(SvgEdgePathStyle::Basis),
+            "linear" => Ok(SvgEdgePathStyle::Linear),
+            "rounded" => Ok(SvgEdgePathStyle::Rounded),
+            _ => Err(RenderError {
+                message: format!("unknown svg edge path style: {s:?}"),
+            }),
+        }
+    }
+}
+
+impl FromStr for SvgEdgePathStyle {
+    type Err = RenderError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        SvgEdgePathStyle::parse(s)
     }
 }
 
@@ -167,6 +226,14 @@ impl LayoutEngineId {
     }
 }
 
+impl FromStr for LayoutEngineId {
+    type Err = RenderError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        LayoutEngineId::parse(s)
+    }
+}
+
 impl std::fmt::Display for LayoutEngineId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -270,6 +337,38 @@ pub enum PathDetail {
     Endpoints,
 }
 
+impl std::fmt::Display for PathDetail {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PathDetail::Full => write!(f, "full"),
+            PathDetail::Simplified => write!(f, "simplified"),
+            PathDetail::Endpoints => write!(f, "endpoints"),
+        }
+    }
+}
+
+impl PathDetail {
+    /// Parse path detail level from user-provided text.
+    pub fn parse(s: &str) -> Result<Self, RenderError> {
+        match normalize_enum_token(s).as_str() {
+            "full" => Ok(PathDetail::Full),
+            "simplified" => Ok(PathDetail::Simplified),
+            "endpoints" => Ok(PathDetail::Endpoints),
+            _ => Err(RenderError {
+                message: format!("unknown path detail: {s:?}"),
+            }),
+        }
+    }
+}
+
+impl FromStr for PathDetail {
+    type Err = RenderError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        PathDetail::parse(s)
+    }
+}
+
 impl PathDetail {
     /// Simplify a path according to the detail level.
     ///
@@ -306,6 +405,36 @@ pub enum GeometryLevel {
     Routed,
 }
 
+impl std::fmt::Display for GeometryLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GeometryLevel::Layout => write!(f, "layout"),
+            GeometryLevel::Routed => write!(f, "routed"),
+        }
+    }
+}
+
+impl GeometryLevel {
+    /// Parse MMDS geometry level from user-provided text.
+    pub fn parse(s: &str) -> Result<Self, RenderError> {
+        match normalize_enum_token(s).as_str() {
+            "layout" => Ok(GeometryLevel::Layout),
+            "routed" => Ok(GeometryLevel::Routed),
+            _ => Err(RenderError {
+                message: format!("unknown geometry level: {s:?}"),
+            }),
+        }
+    }
+}
+
+impl FromStr for GeometryLevel {
+    type Err = RenderError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        GeometryLevel::parse(s)
+    }
+}
+
 /// Configuration for rendering.
 #[derive(Debug, Clone, Default)]
 pub struct RenderConfig {
@@ -314,9 +443,8 @@ pub struct RenderConfig {
     /// Layout engine selection.
     ///
     /// - `None` => default (dagre)
-    /// - `Some("dagre")` => explicit dagre
-    /// - Any other value => unsupported engine error
-    pub layout_engine: Option<String>,
+    /// - `Some(LayoutEngineId::Dagre)` => explicit dagre
+    pub layout_engine: Option<LayoutEngineId>,
     /// Cluster (subgraph) rank separation override.
     pub cluster_ranksep: Option<f64>,
     /// Padding around content.
@@ -324,7 +452,7 @@ pub struct RenderConfig {
     /// SVG-specific: scale factor.
     pub svg_scale: Option<f64>,
     /// SVG-specific: edge curve style.
-    pub svg_edge_curve: Option<SvgEdgeCurve>,
+    pub svg_edge_curve: Option<SvgEdgePathStyle>,
     /// SVG-specific: edge curve radius (px) for rounded corners.
     pub svg_edge_curve_radius: Option<f64>,
     /// SVG-specific: diagram padding (px).
@@ -367,4 +495,8 @@ impl From<&str> for RenderError {
             message: message.to_string(),
         }
     }
+}
+
+fn normalize_enum_token(value: &str) -> String {
+    value.trim().to_ascii_lowercase().replace('_', "-")
 }

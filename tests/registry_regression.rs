@@ -1,6 +1,6 @@
 //! Parity checks between the direct render API and registry instance API.
 
-use mmdflux::diagram::{OutputFormat, RenderConfig};
+use mmdflux::diagram::{LayoutEngineId, OutputFormat, RenderConfig};
 use mmdflux::registry::default_registry;
 use mmdflux::render::{RenderOptions, render};
 use mmdflux::{build_diagram, parse_flowchart};
@@ -120,7 +120,7 @@ fn regression_engine_selection_via_registry() {
         .render(
             OutputFormat::Text,
             &RenderConfig {
-                layout_engine: Some("dagre".to_string()),
+                layout_engine: Some(LayoutEngineId::Dagre),
                 ..Default::default()
             },
         )
@@ -131,7 +131,7 @@ fn regression_engine_selection_via_registry() {
     let err = instance.render(
         OutputFormat::Text,
         &RenderConfig {
-            layout_engine: Some("elk".to_string()),
+            layout_engine: Some(LayoutEngineId::Elk),
             ..Default::default()
         },
     );
@@ -205,7 +205,7 @@ fn dagre_stability_engine_selection_consistent() {
             .render(
                 OutputFormat::Text,
                 &RenderConfig {
-                    layout_engine: Some("dagre".to_string()),
+                    layout_engine: Some(LayoutEngineId::Dagre),
                     ..Default::default()
                 },
             )
@@ -291,7 +291,7 @@ fn class_engine_selection_default_matches_explicit_dagre() {
         .render(
             OutputFormat::Text,
             &RenderConfig {
-                layout_engine: Some("dagre".to_string()),
+                layout_engine: Some(LayoutEngineId::Dagre),
                 ..Default::default()
             },
         )

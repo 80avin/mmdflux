@@ -1,4 +1,4 @@
-use mmdflux::diagram::{OutputFormat, RenderConfig};
+use mmdflux::diagram::{LayoutEngineId, OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::registry::DiagramInstance;
 
@@ -221,7 +221,7 @@ fn engine_selection_explicit_dagre_matches_default() {
         .unwrap();
 
     let dagre_config = RenderConfig {
-        layout_engine: Some("dagre".to_string()),
+        layout_engine: Some(LayoutEngineId::Dagre),
         ..Default::default()
     };
     let dagre_output = instance.render(OutputFormat::Text, &dagre_config).unwrap();
@@ -236,7 +236,7 @@ fn engine_selection_unavailable_engine_errors() {
     instance.parse("graph TD\nA-->B").unwrap();
 
     let config = RenderConfig {
-        layout_engine: Some("elk".to_string()),
+        layout_engine: Some(LayoutEngineId::Elk),
         ..Default::default()
     };
     let result = instance.render(OutputFormat::Text, &config);
@@ -250,33 +250,11 @@ fn engine_selection_unavailable_engine_errors() {
 }
 
 #[test]
-fn engine_selection_unknown_engine_errors() {
-    let mut instance = FlowchartInstance::new();
-    instance.parse("graph TD\nA-->B").unwrap();
-
-    let config = RenderConfig {
-        layout_engine: Some("nonexistent".to_string()),
-        ..Default::default()
-    };
-    let result = instance.render(OutputFormat::Text, &config);
-    assert!(result.is_err());
-    let err = result.unwrap_err();
+fn engine_selection_unknown_engine_rejected_at_parse_boundary() {
+    let err = LayoutEngineId::parse("nonexistent").unwrap_err();
     assert!(
         err.message.contains("unknown layout engine"),
         "error should mention unknown engine: {}",
         err.message
     );
-}
-
-#[test]
-fn engine_selection_unknown_engine_svg_errors() {
-    let mut instance = FlowchartInstance::new();
-    instance.parse("graph TD\nA-->B").unwrap();
-
-    let config = RenderConfig {
-        layout_engine: Some("does-not-exist".to_string()),
-        ..Default::default()
-    };
-    let result = instance.render(OutputFormat::Svg, &config);
-    assert!(result.is_err());
 }

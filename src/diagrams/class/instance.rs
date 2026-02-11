@@ -44,18 +44,8 @@ impl DiagramInstance for ClassInstance {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
 
-        let selected_engine = match config
-            .layout_engine
-            .as_deref()
-            .filter(|s| !s.trim().is_empty())
-        {
-            Some(engine) => {
-                let id = LayoutEngineId::parse(engine)?;
-                id.check_available()?;
-                id
-            }
-            None => LayoutEngineId::Dagre,
-        };
+        let selected_engine = config.layout_engine.unwrap_or(LayoutEngineId::Dagre);
+        selected_engine.check_available()?;
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;

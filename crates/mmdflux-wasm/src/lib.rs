@@ -1,5 +1,8 @@
 use mmdflux::dagre::Ranker;
-use mmdflux::diagram::{GeometryLevel, OutputFormat, PathDetail, RenderConfig, SvgEdgeCurve};
+use mmdflux::diagram::{
+    GeometryLevel, LayoutEngineId, OutputFormat, PathDetail, RenderConfig, RenderError,
+    SvgEdgePathStyle,
+};
 use mmdflux::registry::default_registry;
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
@@ -98,7 +101,6 @@ impl WasmRenderConfig {
     fn into_render_config(self) -> Result<RenderConfig, JsError> {
         let mut config = RenderConfig::default();
 
-        config.layout_engine = self.layout_engine;
         config.cluster_ranksep = self.cluster_ranksep;
         config.padding = self.padding;
         config.svg_scale = self.svg_scale;
@@ -107,6 +109,10 @@ impl WasmRenderConfig {
         config.svg_node_padding_x = self.svg_node_padding_x;
         config.svg_node_padding_y = self.svg_node_padding_y;
 
+        if let Some(layout_engine) = self.layout_engine {
+            config.layout_engine =
+                Some(LayoutEngineId::parse(&layout_engine).map_err(|err| js_error(err.message))?);
+        }
         if let Some(show_ids) = self.show_ids {
             config.show_ids = show_ids;
         }
@@ -142,40 +148,19 @@ impl WasmRenderConfig {
 }
 
 fn parse_output_format(value: &str) -> Result<OutputFormat, JsError> {
-    match normalized(value).as_str() {
-        "text" => Ok(OutputFormat::Text),
-        "ascii" => Ok(OutputFormat::Ascii),
-        "svg" => Ok(OutputFormat::Svg),
-        "mmds" | "json" => Ok(OutputFormat::Mmds),
-        "mermaid" => Ok(OutputFormat::Mermaid),
-        _ => Err(js_error(format!("unknown output format: {value}"))),
-    }
+    parse_via_render_error(value)
 }
 
-fn parse_svg_edge_curve(value: &str) -> Result<SvgEdgeCurve, JsError> {
-    match normalized(value).as_str() {
-        "basis" => Ok(SvgEdgeCurve::Basis),
-        "linear" => Ok(SvgEdgeCurve::Linear),
-        "rounded" => Ok(SvgEdgeCurve::Rounded),
-        _ => Err(js_error(format!("unknown svg edge curve: {value}"))),
-    }
+fn parse_svg_edge_curve(value: &str) -> Result<SvgEdgePathStyle, JsError> {
+    parse_via_render_error(value)
 }
 
 fn parse_geometry_level(value: &str) -> Result<GeometryLevel, JsError> {
-    match normalized(value).as_str() {
-        "layout" => Ok(GeometryLevel::Layout),
-        "routed" => Ok(GeometryLevel::Routed),
-        _ => Err(js_error(format!("unknown geometry level: {value}"))),
-    }
+    parse_via_render_error(value)
 }
 
 fn parse_path_detail(value: &str) -> Result<PathDetail, JsError> {
-    match normalized(value).as_str() {
-        "full" => Ok(PathDetail::Full),
-        "simplified" => Ok(PathDetail::Simplified),
-        "endpoints" => Ok(PathDetail::Endpoints),
-        _ => Err(js_error(format!("unknown path detail: {value}"))),
-    }
+    parse_via_render_error(value)
 }
 
 fn parse_ranker(value: &str) -> Result<Ranker, JsError> {
@@ -188,6 +173,15 @@ fn parse_ranker(value: &str) -> Result<Ranker, JsError> {
 
 fn normalized(value: &str) -> String {
     value.trim().to_ascii_lowercase().replace('_', "-")
+}
+
+fn parse_via_render_error<T>(value: &str) -> Result<T, JsError>
+where
+    T: std::str::FromStr<Err = RenderError>,
+{
+    value
+        .parse::<T>()
+        .map_err(|err| js_error(err.message.to_string()))
 }
 
 fn js_error(message: impl Into<String>) -> JsError {

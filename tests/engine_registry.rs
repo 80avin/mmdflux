@@ -162,8 +162,9 @@ fn render_with_engine(input: &str, engine: &str) -> Result<String, RenderError> 
     instance
         .parse(input)
         .expect("parse should succeed in test helper");
+    let engine = LayoutEngineId::parse(engine)?;
     let config = RenderConfig {
-        layout_engine: Some(engine.to_string()),
+        layout_engine: Some(engine),
         ..Default::default()
     };
     instance.render(OutputFormat::Text, &config)

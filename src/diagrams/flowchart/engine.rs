@@ -95,10 +95,7 @@ pub fn layout_with_selected_engine(
     use crate::diagram::RoutingMode;
     use crate::engines::graph::GraphEngineRegistry;
 
-    let engine_id = match config.layout_engine.as_deref() {
-        None | Some("") => LayoutEngineId::Dagre,
-        Some(s) => LayoutEngineId::parse(s)?,
-    };
+    let engine_id = config.layout_engine.unwrap_or(LayoutEngineId::Dagre);
 
     engine_id.check_available()?;
 
@@ -156,7 +153,7 @@ fn layout_config_from_dagre(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagram::{GraphLayoutEngine, RenderConfig};
+    use crate::diagram::{GraphLayoutEngine, LayoutEngineId, RenderConfig};
 
     #[test]
     fn dagre_engine_name() {
@@ -234,7 +231,7 @@ mod tests {
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
         let config = RenderConfig {
-            layout_engine: Some("dagre".to_string()),
+            layout_engine: Some(LayoutEngineId::Dagre),
             ..RenderConfig::default()
         };
 
@@ -253,7 +250,7 @@ mod tests {
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
         let config = RenderConfig {
-            layout_engine: Some("elk".to_string()),
+            layout_engine: Some(LayoutEngineId::Elk),
             ..RenderConfig::default()
         };
 
@@ -266,16 +263,8 @@ mod tests {
     }
 
     #[test]
-    fn selected_engine_rejects_unknown_engine() {
-        let input = "graph TD\nA-->B";
-        let flowchart = crate::parser::parse_flowchart(input).unwrap();
-        let diagram = crate::graph::build_diagram(&flowchart);
-        let config = RenderConfig {
-            layout_engine: Some("nonexistent".to_string()),
-            ..RenderConfig::default()
-        };
-
-        let err = layout_with_selected_engine(&diagram, &config).unwrap_err();
+    fn selected_engine_rejects_unknown_engine_at_parse_boundary() {
+        let err = crate::diagram::LayoutEngineId::parse("nonexistent").unwrap_err();
         assert!(
             err.message.contains("unknown layout engine"),
             "error should mention unknown: {}",

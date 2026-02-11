@@ -38,8 +38,9 @@ fn elk_engine_reports_edge_routing_capability() {
 fn render_with_engine(input: &str, engine: &str) -> Result<String, RenderError> {
     let mut instance = FlowchartInstance::new();
     instance.parse(input).expect("parse should succeed");
+    let engine = LayoutEngineId::parse(engine)?;
     let config = RenderConfig {
-        layout_engine: Some(engine.to_string()),
+        layout_engine: Some(engine),
         ..Default::default()
     };
     instance.render(OutputFormat::Text, &config)

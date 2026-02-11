@@ -1,4 +1,4 @@
-use mmdflux::diagram::{OutputFormat, RenderConfig};
+use mmdflux::diagram::{LayoutEngineId, OutputFormat, RenderConfig};
 use mmdflux::diagrams::class::ClassInstance;
 use mmdflux::registry::DiagramInstance;
 
@@ -153,18 +153,8 @@ fn class_instance_via_registry() {
 }
 
 #[test]
-fn class_instance_unknown_engine_errors() {
-    let mut instance = ClassInstance::new();
-    instance.parse("classDiagram\nA --> B").unwrap();
-    let result = instance.render(
-        OutputFormat::Text,
-        &RenderConfig {
-            layout_engine: Some("nonexistent".to_string()),
-            ..RenderConfig::default()
-        },
-    );
-    assert!(result.is_err());
-    let err = result.unwrap_err();
+fn class_instance_unknown_engine_rejected_at_parse_boundary() {
+    let err = LayoutEngineId::parse("nonexistent").unwrap_err();
     assert!(err.message.contains("unknown layout engine"));
 }
 
@@ -175,7 +165,7 @@ fn class_instance_known_non_dagre_engine_errors_cleanly() {
     let result = instance.render(
         OutputFormat::Text,
         &RenderConfig {
-            layout_engine: Some("cose".to_string()),
+            layout_engine: Some(LayoutEngineId::Cose),
             ..RenderConfig::default()
         },
     );

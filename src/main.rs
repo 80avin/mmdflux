@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use clap::{Parser, ValueEnum};
 use mmdflux::dagre::Ranker;
 use mmdflux::diagram::{
-    GeometryLevel, LayoutConfig, OutputFormat, PathDetail, RenderConfig, SvgEdgeCurve,
+    GeometryLevel, LayoutConfig, LayoutEngineId, OutputFormat, PathDetail, RenderConfig,
+    SvgEdgePathStyle,
 };
 use mmdflux::registry::default_registry;
 
@@ -152,12 +153,12 @@ enum EdgeCurveArg {
     Rounded,
 }
 
-impl From<EdgeCurveArg> for SvgEdgeCurve {
+impl From<EdgeCurveArg> for SvgEdgePathStyle {
     fn from(arg: EdgeCurveArg) -> Self {
         match arg {
-            EdgeCurveArg::Basis => SvgEdgeCurve::Basis,
-            EdgeCurveArg::Linear => SvgEdgeCurve::Linear,
-            EdgeCurveArg::Rounded => SvgEdgeCurve::Rounded,
+            EdgeCurveArg::Basis => SvgEdgePathStyle::Basis,
+            EdgeCurveArg::Linear => SvgEdgePathStyle::Linear,
+            EdgeCurveArg::Rounded => SvgEdgePathStyle::Rounded,
         }
     }
 }
@@ -232,6 +233,21 @@ fn main() -> io::Result<()> {
     }
 
     // Build render config from CLI options
+    let layout_engine = match cli
+        .layout_engine
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+    {
+        Some(raw) => match LayoutEngineId::parse(raw) {
+            Ok(id) => Some(id),
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
     let config = RenderConfig {
         layout: LayoutConfig {
             node_sep: cli.node_spacing.unwrap_or(50.0),
@@ -241,7 +257,7 @@ fn main() -> io::Result<()> {
             ranker: cli.ranker.into(),
             ..LayoutConfig::default()
         },
-        layout_engine: cli.layout_engine.clone(),
+        layout_engine,
         cluster_ranksep: cli.cluster_ranksep,
         padding: cli.padding,
         svg_scale: cli.svg_scale,

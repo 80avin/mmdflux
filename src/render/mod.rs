@@ -12,7 +12,7 @@ pub use canvas::Canvas;
 use canvas::{Cell, Connections};
 pub use chars::CharSet;
 
-use crate::diagram::{OutputFormat, PathDetail, RenderConfig, SvgEdgeCurve};
+use crate::diagram::{OutputFormat, PathDetail, RenderConfig, SvgEdgePathStyle};
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
 };
@@ -73,7 +73,7 @@ pub struct SvgOptions {
     pub font_size: f64,
     pub node_padding_x: f64,
     pub node_padding_y: f64,
-    pub edge_curve: SvgEdgeCurve,
+    pub edge_curve: SvgEdgePathStyle,
     pub edge_curve_radius: f64,
     pub diagram_padding: f64,
 }
@@ -87,7 +87,7 @@ impl Default for SvgOptions {
             font_size,
             node_padding_x: 15.0,
             node_padding_y: 15.0,
-            edge_curve: SvgEdgeCurve::Basis,
+            edge_curve: SvgEdgePathStyle::Basis,
             edge_curve_radius: 5.0,
             diagram_padding: 8.0,
         }
