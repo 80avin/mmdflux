@@ -134,7 +134,7 @@ impl Default for RenderOptions {
             margin: None,
             cluster_ranksep: None,
             padding: None,
-            path_detail: PathDetail::Full,
+            path_detail: PathDetail::default(),
             routing_mode: None,
         }
     }

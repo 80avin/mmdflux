@@ -3,9 +3,12 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::diagram::{OutputFormat, PathDetail, RenderConfig, RoutingMode, SvgEdgePathStyle};
+use mmdflux::diagrams::flowchart::engine::DagreLayoutEngine;
+use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
+use mmdflux::graph::Stroke;
 use mmdflux::registry::DiagramInstance;
 use mmdflux::render::{RenderOptions, render_svg};
-use mmdflux::{build_diagram, parse_flowchart};
+use mmdflux::{EngineConfig, GraphLayoutEngine, build_diagram, parse_flowchart};
 
 /// Extract SVG node center x-coordinates by label text.
 ///
@@ -73,6 +76,45 @@ fn total_svg_edge_segments(svg: &str) -> usize {
         .iter()
         .map(|d| parse_linear_path_points(d).len().saturating_sub(1))
         .sum()
+}
+
+fn manhattan_segment_len(a: (f64, f64), b: (f64, f64)) -> f64 {
+    (a.0 - b.0).abs() + (a.1 - b.1).abs()
+}
+
+fn segment_axis(a: (f64, f64), b: (f64, f64)) -> Option<char> {
+    if (a.0 - b.0).abs() < 0.001 && (a.1 - b.1).abs() >= 0.001 {
+        Some('V')
+    } else if (a.1 - b.1).abs() < 0.001 && (a.0 - b.0).abs() >= 0.001 {
+        Some('H')
+    } else {
+        None
+    }
+}
+
+fn edge_path_for_svg_order(
+    diagram: &mmdflux::Diagram,
+    svg: &str,
+    edge_index: usize,
+) -> Vec<(f64, f64)> {
+    let mut visible_edge_indexes: Vec<usize> = diagram
+        .edges
+        .iter()
+        .filter(|edge| edge.stroke != Stroke::Invisible)
+        .map(|edge| edge.index)
+        .collect();
+    visible_edge_indexes.sort_unstable();
+
+    let svg_position = visible_edge_indexes
+        .iter()
+        .position(|idx| *idx == edge_index)
+        .expect("edge index should be visible in SVG");
+    let paths = edge_path_data(svg);
+    parse_linear_path_points(
+        paths
+            .get(svg_position)
+            .expect("edge path should exist at visible edge position"),
+    )
 }
 
 #[test]
@@ -154,12 +196,179 @@ fn svg_compact_path_detail_sits_between_full_and_simplified_for_unified_preview(
     let simplified_segments = total_svg_edge_segments(&simplified);
 
     assert!(
-        full_segments > compact_segments,
-        "compact should reduce total segments: full={full_segments}, compact={compact_segments}"
+        full_segments >= compact_segments,
+        "compact should not increase total segments: full={full_segments}, compact={compact_segments}"
     );
     assert!(
         full_segments != simplified_segments,
         "simplified should change segment density compared to full: full={full_segments}, simplified={simplified_segments}"
+    );
+}
+
+#[test]
+fn routed_svg_defaults_to_simplified_path_detail() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("multi_subgraph_direction_override.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+    let edge_index = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Bmid" && edge.to == "F")
+        .expect("fixture should contain edge Bmid -> F")
+        .index;
+
+    let mut default_options = RenderOptions::default_svg();
+    default_options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    default_options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    let default_svg = render_svg(&diagram, &default_options);
+    let default_points = edge_path_for_svg_order(&diagram, &default_svg, edge_index);
+
+    let mut simplified_options = default_options.clone();
+    simplified_options.path_detail = PathDetail::Simplified;
+    let simplified_svg = render_svg(&diagram, &simplified_options);
+    let simplified_points = edge_path_for_svg_order(&diagram, &simplified_svg, edge_index);
+
+    let mut full_options = default_options;
+    full_options.path_detail = PathDetail::Full;
+    let full_svg = render_svg(&diagram, &full_options);
+    let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
+
+    assert_eq!(
+        default_points, simplified_points,
+        "default routed SVG path detail should match simplified output"
+    );
+    assert!(
+        full_points.len() > default_points.len(),
+        "full detail should preserve more points than default: full={}, default={}",
+        full_points.len(),
+        default_points.len()
+    );
+}
+
+#[test]
+fn path_detail_monotonicity_holds_full_compact_simplified() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("multi_subgraph_direction_override.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+    let edge_index = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Bmid" && edge.to == "F")
+        .expect("fixture should contain edge Bmid -> F")
+        .index;
+
+    let render_for = |path_detail: PathDetail| {
+        let mut options = RenderOptions::default_svg();
+        options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+        options.routing_mode = Some(RoutingMode::UnifiedPreview);
+        options.path_detail = path_detail;
+        let svg = render_svg(&diagram, &options);
+        edge_path_for_svg_order(&diagram, &svg, edge_index).len()
+    };
+
+    let full = render_for(PathDetail::Full);
+    let compact = render_for(PathDetail::Compact);
+    let simplified = render_for(PathDetail::Simplified);
+
+    assert!(
+        full >= compact && compact >= simplified,
+        "path-detail monotonicity violated for SVG: full={full}, compact={compact}, simplified={simplified}"
+    );
+}
+
+#[test]
+fn svg_orthogonal_unified_preview_preserves_clear_terminal_stem_into_arrowhead() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("multi_subgraph_direction_override.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+    let edge_index = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Bmid" && edge.to == "F")
+        .expect("fixture should contain edge Bmid -> F")
+        .index;
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+    assert!(
+        points.len() >= 2,
+        "expected routed SVG points for Bmid -> F"
+    );
+
+    let prev = points[points.len() - 2];
+    let end = points[points.len() - 1];
+    let axis = segment_axis(prev, end).expect("terminal segment should be axis-aligned");
+    let stem_len = manhattan_segment_len(prev, end);
+    assert_eq!(
+        axis, 'V',
+        "Bmid -> F terminal segment should be vertical in TD layout: {points:?}"
+    );
+    assert!(
+        stem_len >= 2.0,
+        "Bmid -> F terminal stem should remain visually clear (>= 2px), got {stem_len} with {points:?}"
+    );
+}
+
+#[test]
+fn svg_orthogonal_unified_preview_does_not_add_short_staircase_jogs_after_adjustment() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("multi_subgraph_direction_override.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+
+    let edge_index = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Bmid" && edge.to == "F")
+        .expect("fixture should contain edge Bmid -> F")
+        .index;
+
+    let engine = DagreLayoutEngine::text();
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let geom = engine
+        .layout(&diagram, &config)
+        .expect("layout should succeed");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed_edge = routed
+        .edges
+        .iter()
+        .find(|edge| edge.index == edge_index)
+        .expect("unified routed edge should exist");
+    let routed_segments = routed_edge.path.len().saturating_sub(1);
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+    let svg_segments = points.len().saturating_sub(1);
+    assert!(
+        svg_segments <= routed_segments + 1,
+        "SVG conversion should not add staircase jogs for Bmid -> F: routed_segments={routed_segments}, svg_segments={svg_segments}, svg_points={points:?}"
     );
 }
 

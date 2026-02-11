@@ -138,6 +138,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     } else {
         geom
     };
+    if options.routing_mode == Some(RoutingMode::UnifiedPreview)
+        && matches!(options.svg.edge_path_style, SvgEdgePathStyle::Orthogonal)
+    {
+        rerouted_edges.extend(geom.edges.iter().map(|edge| edge.index));
+    }
 
     let override_nodes = svg_router::build_override_node_map(diagram);
 
@@ -153,7 +158,8 @@ pub fn render_svg_from_geometry(
     geom: &GraphGeometry,
     routing_mode: RoutingMode,
 ) -> String {
-    let rerouted_edges = rerouted_edge_indexes_for_mode(geom, routing_mode);
+    let rerouted_edges =
+        rerouted_edge_indexes_for_mode(geom, routing_mode, options.svg.edge_path_style);
     let override_nodes = svg_router::build_override_node_map(diagram);
     render_svg_with_geometry_context(diagram, options, geom, &rerouted_edges, &override_nodes)
 }
@@ -161,14 +167,19 @@ pub fn render_svg_from_geometry(
 fn rerouted_edge_indexes_for_mode(
     geom: &GraphGeometry,
     routing_mode: RoutingMode,
+    edge_path_style: SvgEdgePathStyle,
 ) -> HashSet<usize> {
     match routing_mode {
         // Pass-through paths are already positioned by the layout engine
         // and should not receive extra shape clipping.
         RoutingMode::PassThroughClip => geom.edges.iter().map(|e| e.index).collect(),
-        // Unified preview currently keeps legacy clipping/shape adjustment
-        // semantics in the SVG renderer to constrain rollout risk.
-        RoutingMode::UnifiedPreview | RoutingMode::FullCompute => HashSet::new(),
+        // Unified preview routes already encode endpoint intent and should not
+        // be shape-adjusted again in SVG.
+        RoutingMode::UnifiedPreview if matches!(edge_path_style, SvgEdgePathStyle::Orthogonal) => {
+            geom.edges.iter().map(|e| e.index).collect()
+        }
+        RoutingMode::UnifiedPreview => HashSet::new(),
+        RoutingMode::FullCompute => HashSet::new(),
     }
 }
 
@@ -780,7 +791,6 @@ fn render_edges(
                 .as_ref()
                 .map(|ps| ps.iter().map(|p| (*p).into()).collect())
                 .unwrap_or_default();
-            let points = path_detail.simplify_with_coords(&points, |point| (point.x, point.y));
             (edge.index, points)
         })
         .collect();
@@ -825,15 +835,16 @@ fn render_edges(
         } else {
             adjust_edge_points_for_shapes(diagram, geom, edge, &points)
         };
-        if matches!(path_detail, PathDetail::Compact) {
-            points = compact_visual_staircases(&points, 12.0);
-        }
         // Only densify corners for linear edges; basis and rounded
         // handle smoothing natively from sparse waypoints.
         if matches!(edge_path_style, SvgEdgePathStyle::Linear) {
             points = fix_corner_points(&points);
         }
-        points = apply_marker_offsets(&points, edge);
+        points = apply_marker_offsets(
+            &points,
+            edge,
+            matches!(edge_path_style, SvgEdgePathStyle::Orthogonal),
+        );
         let d = path_from_points(
             &points,
             diagram.direction,
@@ -1988,29 +1999,35 @@ fn path_from_points(
     if points.is_empty() {
         return String::new();
     }
-    let points: Vec<Point> = if matches!(curve, SvgEdgePathStyle::Orthogonal) {
-        let start: geometry::FPoint = points[0].into();
-        let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
-        let waypoints: Vec<geometry::FPoint> = points
-            .iter()
-            .copied()
-            .skip(1)
-            .take(points.len().saturating_sub(2))
-            .map(Into::into)
-            .collect();
-        build_orthogonal_path_float(start, end, direction, &waypoints)
-            .into_iter()
-            .map(Into::into)
-            .collect()
-    } else {
-        points.to_vec()
+    let points: Vec<Point> =
+        if matches!(curve, SvgEdgePathStyle::Orthogonal) && !points_are_axis_aligned(points) {
+            let start: geometry::FPoint = points[0].into();
+            let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
+            let waypoints: Vec<geometry::FPoint> = points
+                .iter()
+                .copied()
+                .skip(1)
+                .take(points.len().saturating_sub(2))
+                .map(Into::into)
+                .collect();
+            build_orthogonal_path_float(start, end, direction, &waypoints)
+                .into_iter()
+                .map(Into::into)
+                .collect()
+        } else {
+            points.to_vec()
+        };
+    let points = match path_detail {
+        PathDetail::Full => points,
+        PathDetail::Compact => {
+            let compacted = compact_visual_staircases(&points, 12.0);
+            PathDetail::Compact.simplify_with_coords(&compacted, |point| (point.x, point.y))
+        }
+        PathDetail::Simplified if matches!(curve, SvgEdgePathStyle::Orthogonal) => {
+            simplify_orthogonal_points(&points, direction)
+        }
+        _ => path_detail.simplify_with_coords(&points, |point| (point.x, point.y)),
     };
-    let points = if matches!(path_detail, PathDetail::Compact) {
-        compact_visual_staircases(&points, 12.0)
-    } else {
-        points
-    };
-
     let scaled: Vec<(f64, f64)> = points
         .iter()
         .map(|point| (point.x * scale, point.y * scale))
@@ -2021,6 +2038,30 @@ fn path_from_points(
         SvgEdgePathStyle::Linear => path_from_points_linear(&scaled),
         SvgEdgePathStyle::Orthogonal => path_from_points_linear(&scaled),
     }
+}
+
+fn simplify_orthogonal_points(points: &[Point], direction: Direction) -> Vec<Point> {
+    if points.len() <= 2 {
+        return points.to_vec();
+    }
+
+    let start = points[0];
+    let end = points[points.len() - 1];
+    if segment_axis(start, end).is_some() {
+        return vec![start, end];
+    }
+
+    let elbow = match direction {
+        Direction::TopDown | Direction::BottomTop => Point {
+            x: start.x,
+            y: end.y,
+        },
+        Direction::LeftRight | Direction::RightLeft => Point {
+            x: end.x,
+            y: start.y,
+        },
+    };
+    vec![start, elbow, end]
 }
 
 fn adjust_edge_points_for_shapes(
@@ -2171,6 +2212,15 @@ fn fix_corner_points(points: &[Point]) -> Vec<Point> {
     out
 }
 
+fn points_are_axis_aligned(points: &[Point]) -> bool {
+    if points.len() < 2 {
+        return true;
+    }
+    points
+        .windows(2)
+        .all(|seg| segment_axis(seg[0], seg[1]).is_some())
+}
+
 fn find_adjacent_point(point_a: Point, point_b: Point, distance: f64) -> Point {
     let x_diff = point_b.x - point_a.x;
     let y_diff = point_b.y - point_a.y;
@@ -2185,7 +2235,7 @@ fn find_adjacent_point(point_a: Point, point_b: Point, distance: f64) -> Point {
     }
 }
 
-fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
+fn apply_marker_offsets(points: &[Point], edge: &Edge, preserve_orthogonal: bool) -> Vec<Point> {
     if points.len() < 2 {
         return points.to_vec();
     }
@@ -2228,25 +2278,30 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
         let diff_in_y_start = (point.y - start.y).abs();
         let extra_room = 1.0;
 
-        if end_offset > 0.0 && diff_end < end_offset && diff_end > 0.0 && diff_in_y_end < end_offset
-        {
-            let mut adjustment = end_offset + extra_room - diff_end;
-            if direction_x == "right" {
-                adjustment *= -1.0;
+        if !preserve_orthogonal {
+            if end_offset > 0.0
+                && diff_end < end_offset
+                && diff_end > 0.0
+                && diff_in_y_end < end_offset
+            {
+                let mut adjustment = end_offset + extra_room - diff_end;
+                if direction_x == "right" {
+                    adjustment *= -1.0;
+                }
+                offset_x -= adjustment;
             }
-            offset_x -= adjustment;
-        }
 
-        if start_offset > 0.0
-            && diff_start < start_offset
-            && diff_start > 0.0
-            && diff_in_y_start < start_offset
-        {
-            let mut adjustment = start_offset + extra_room - diff_start;
-            if direction_x == "right" {
-                adjustment *= -1.0;
+            if start_offset > 0.0
+                && diff_start < start_offset
+                && diff_start > 0.0
+                && diff_in_y_start < start_offset
+            {
+                let mut adjustment = start_offset + extra_room - diff_start;
+                if direction_x == "right" {
+                    adjustment *= -1.0;
+                }
+                offset_x += adjustment;
             }
-            offset_x += adjustment;
         }
 
         let mut offset_y = 0.0;
@@ -2266,28 +2321,30 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
         let diff_start_y = (point.y - start.y).abs();
         let diff_in_x_start = (point.x - start.x).abs();
 
-        if end_offset > 0.0
-            && diff_end_y < end_offset
-            && diff_end_y > 0.0
-            && diff_in_x_end < end_offset
-        {
-            let mut adjustment = end_offset + extra_room - diff_end_y;
-            if direction_y == "up" {
-                adjustment *= -1.0;
+        if !preserve_orthogonal {
+            if end_offset > 0.0
+                && diff_end_y < end_offset
+                && diff_end_y > 0.0
+                && diff_in_x_end < end_offset
+            {
+                let mut adjustment = end_offset + extra_room - diff_end_y;
+                if direction_y == "up" {
+                    adjustment *= -1.0;
+                }
+                offset_y -= adjustment;
             }
-            offset_y -= adjustment;
-        }
 
-        if start_offset > 0.0
-            && diff_start_y < start_offset
-            && diff_start_y > 0.0
-            && diff_in_x_start < start_offset
-        {
-            let mut adjustment = start_offset + extra_room - diff_start_y;
-            if direction_y == "up" {
-                adjustment *= -1.0;
+            if start_offset > 0.0
+                && diff_start_y < start_offset
+                && diff_start_y > 0.0
+                && diff_in_x_start < start_offset
+            {
+                let mut adjustment = start_offset + extra_room - diff_start_y;
+                if direction_y == "up" {
+                    adjustment *= -1.0;
+                }
+                offset_y += adjustment;
             }
-            offset_y += adjustment;
         }
 
         out.push(Point {

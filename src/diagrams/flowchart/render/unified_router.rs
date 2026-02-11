@@ -6,8 +6,7 @@
 use super::route_policy::effective_edge_direction;
 use super::routing_core::{build_orthogonal_path_float, normalize_orthogonal_route_contracts};
 use crate::diagrams::flowchart::geometry::{FPoint, GraphGeometry, RoutedEdgeGeometry};
-use crate::graph::Diagram;
-use crate::graph::Direction;
+use crate::graph::{Diagram, Direction};
 
 /// Preview options for unified float-first routing.
 #[derive(Debug, Clone, Copy)]

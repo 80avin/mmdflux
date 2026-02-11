@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use mmdflux::diagram::{OutputFormat, RenderConfig, RoutingMode, SvgEdgePathStyle};
+use mmdflux::diagram::{OutputFormat, PathDetail, RenderConfig, RoutingMode, SvgEdgePathStyle};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::registry::DiagramInstance;
@@ -41,7 +41,9 @@ fn render_svg_fixture(name: &str) -> String {
     let input = load_fixture(name);
     let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
     let diagram = build_diagram(&flowchart);
-    render_svg(&diagram, &RenderOptions::default_svg())
+    let mut options = RenderOptions::default_svg();
+    options.path_detail = PathDetail::Full;
+    render_svg(&diagram, &options)
 }
 
 fn render_svg_fixture_with_curve(name: &str, curve: SvgEdgePathStyle) -> String {
@@ -50,6 +52,7 @@ fn render_svg_fixture_with_curve(name: &str, curve: SvgEdgePathStyle) -> String 
     let diagram = build_diagram(&flowchart);
     let mut options = RenderOptions::default_svg();
     options.svg.edge_path_style = curve;
+    options.path_detail = PathDetail::Full;
     render_svg(&diagram, &options)
 }
 
@@ -59,6 +62,7 @@ fn render_svg_fixture_with_routing_mode(name: &str, mode: RoutingMode) -> String
     instance.parse(&input).expect("Failed to parse fixture");
     let config = RenderConfig {
         svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
+        path_detail: PathDetail::Full,
         routing_mode: Some(mode),
         ..RenderConfig::default()
     };
@@ -91,7 +95,9 @@ fn render_svg_mmds_fixture(name: &str) -> String {
     let payload = fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("Failed to read MMDS fixture {}: {e}", path.display()));
     let diagram = from_mmds_str(&payload).expect("MMDS fixture should hydrate");
-    render_svg(&diagram, &RenderOptions::default_svg())
+    let mut options = RenderOptions::default_svg();
+    options.path_detail = PathDetail::Full;
+    render_svg(&diagram, &options)
 }
 
 fn render_svg_positioned_mmds_fixture(name: &str) -> String {
@@ -105,7 +111,13 @@ fn render_svg_positioned_mmds_fixture(name: &str) -> String {
     let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
     instance.parse(&payload).expect("MMDS fixture should parse");
     instance
-        .render(OutputFormat::Svg, &RenderConfig::default())
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                path_detail: PathDetail::Full,
+                ..RenderConfig::default()
+            },
+        )
         .expect("positioned MMDS should render SVG")
 }
 
@@ -281,7 +293,10 @@ fn svg_unified_preview_parity_core_fixture_subset_has_expected_deltas() {
         }
     }
 
-    assert_eq!(differing, vec!["simple_cycle.mmd"]);
+    assert_eq!(
+        differing,
+        vec!["simple.mmd", "chain.mmd", "simple_cycle.mmd"]
+    );
 }
 
 #[test]

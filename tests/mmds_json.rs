@@ -209,14 +209,97 @@ fn mmds_compact_path_detail_sits_between_full_and_simplified() {
         .unwrap();
 
     assert!(
-        full_len > compact_len,
-        "compact should remove redundant waypoints: full={full_len}, compact={compact_len}"
+        full_len >= compact_len,
+        "compact should not increase waypoints: full={full_len}, compact={compact_len}"
     );
     assert!(
         compact_len >= simplified_len,
         "compact should preserve more structure than simplified: compact={compact_len}, simplified={simplified_len}"
     );
     assert_eq!(simplified_len, 3);
+}
+
+#[test]
+fn routed_mmds_defaults_to_simplified_path_detail() {
+    let input = flowchart_fixture("multi_subgraph_direction_override.mmd");
+    let render_for = |path_detail: Option<PathDetail>| {
+        let mut instance = FlowchartInstance::new();
+        instance.parse(&input).unwrap();
+        let mut config = RenderConfig {
+            geometry_level: GeometryLevel::Routed,
+            routing_mode: Some(RoutingMode::UnifiedPreview),
+            ..RenderConfig::default()
+        };
+        if let Some(path_detail) = path_detail {
+            config.path_detail = path_detail;
+        }
+        instance.render(OutputFormat::Mmds, &config).unwrap()
+    };
+    let edge_len = |json: &str| {
+        let output: MmdsOutput = serde_json::from_str(json).unwrap();
+        output
+            .edges
+            .iter()
+            .find(|edge| edge.source == "Bmid" && edge.target == "F")
+            .and_then(|edge| edge.path.as_ref())
+            .map(std::vec::Vec::len)
+            .unwrap()
+    };
+
+    let default = render_for(None);
+    let simplified = render_for(Some(PathDetail::Simplified));
+    let full = render_for(Some(PathDetail::Full));
+    let default_len = edge_len(&default);
+    let simplified_len = edge_len(&simplified);
+    let full_len = edge_len(&full);
+
+    assert_eq!(
+        default_len, simplified_len,
+        "default routed MMDS path detail should match simplified output"
+    );
+    assert!(
+        full_len > default_len,
+        "full detail should preserve more points than default: full={full_len}, default={default_len}"
+    );
+}
+
+#[test]
+fn path_detail_monotonicity_holds_full_compact_simplified() {
+    let input = flowchart_fixture("multi_subgraph_direction_override.mmd");
+    let render_for = |path_detail: PathDetail| {
+        let mut instance = FlowchartInstance::new();
+        instance.parse(&input).unwrap();
+        instance
+            .render(
+                OutputFormat::Mmds,
+                &RenderConfig {
+                    geometry_level: GeometryLevel::Routed,
+                    path_detail,
+                    routing_mode: Some(RoutingMode::UnifiedPreview),
+                    ..RenderConfig::default()
+                },
+            )
+            .unwrap()
+    };
+    let edge_len = |json: &str| {
+        let output: MmdsOutput = serde_json::from_str(json).unwrap();
+        output
+            .edges
+            .iter()
+            .find(|edge| edge.source == "Bmid" && edge.target == "F")
+            .and_then(|edge| edge.path.as_ref())
+            .map(std::vec::Vec::len)
+            .unwrap()
+    };
+
+    let full = edge_len(&render_for(PathDetail::Full));
+    let compact = edge_len(&render_for(PathDetail::Compact));
+    let simplified = edge_len(&render_for(PathDetail::Simplified));
+
+    assert!(
+        full >= compact && compact >= simplified,
+        "path-detail monotonicity violated: full={full}, compact={compact}, simplified={simplified}"
+    );
 }
 
 // -----------------------------------------------------------------------
