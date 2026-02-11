@@ -2,7 +2,8 @@ use super::super::layout::{LayoutConfig, compute_layout_direct};
 use super::*;
 use crate::diagrams::flowchart::geometry::{FPoint, FRect};
 use crate::diagrams::flowchart::render::routing_core::{
-    Face, build_orthogonal_path_float, classify_face_float, edge_faces, point_on_face_float,
+    Face, build_orthogonal_path_float, classify_face_float, edge_faces, plan_attachments,
+    point_on_face_float,
 };
 use crate::graph::{Diagram, Node};
 use crate::render::intersect::NodeFace;
@@ -1121,4 +1122,79 @@ fn routing_core_build_orthogonal_path_float_emits_axis_aligned_segments() {
     assert!(points.windows(2).all(|seg| {
         (seg[0].x - seg[1].x).abs() < f64::EPSILON || (seg[0].y - seg[1].y).abs() < f64::EPSILON
     }));
+}
+
+#[test]
+fn plan_attachments_spreads_edges_monotonically_on_same_face() {
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(Node::new("A"));
+    diagram.add_node(Node::new("B"));
+    diagram.add_node(Node::new("C"));
+    diagram.add_node(Node::new("D"));
+    diagram.add_edge(Edge::new("A", "B"));
+    diagram.add_edge(Edge::new("A", "C"));
+    diagram.add_edge(Edge::new("A", "D"));
+
+    let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+    let plan = plan_attachments(&diagram.edges, &layout, Direction::TopDown);
+    let fractions = plan.source_fractions_for("A", Face::Bottom);
+
+    assert!(
+        fractions.windows(2).all(|w| w[0] <= w[1]),
+        "source fractions must be monotonic: {fractions:?}"
+    );
+}
+
+#[test]
+fn plan_attachments_is_stable_for_equal_cross_axis_positions() {
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(Node::new("A"));
+    diagram.add_node(Node::new("B"));
+    diagram.add_edge(Edge::new("A", "B"));
+    diagram.add_edge(Edge::new("A", "B"));
+    diagram.add_edge(Edge::new("A", "B"));
+
+    let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+    let first = plan_attachments(&diagram.edges, &layout, Direction::TopDown);
+    let second = plan_attachments(&diagram.edges, &layout, Direction::TopDown);
+
+    assert_eq!(first, second);
+}
+
+#[test]
+fn shared_planner_adapter_spreads_fan_in_arrivals() {
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(Node::new("A"));
+    diagram.add_node(Node::new("B"));
+    diagram.add_node(Node::new("C"));
+    diagram.add_node(Node::new("D"));
+    diagram.add_node(Node::new("E"));
+    diagram.add_node(Node::new("F"));
+    diagram.add_edge(Edge::new("A", "B"));
+    diagram.add_edge(Edge::new("A", "C"));
+    diagram.add_edge(Edge::new("A", "D"));
+    diagram.add_edge(Edge::new("A", "E"));
+    diagram.add_edge(Edge::new("A", "F"));
+
+    let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+    let overrides =
+        compute_attachment_plan_from_shared_planner(&diagram.edges, &layout, Direction::TopDown);
+
+    let mut src_x: Vec<usize> = diagram
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A")
+        .filter_map(|edge| {
+            overrides
+                .get(&edge.index)
+                .and_then(|ov| ov.source.map(|p| p.0))
+        })
+        .collect();
+    src_x.sort_unstable();
+    src_x.dedup();
+
+    assert!(
+        src_x.len() > 1,
+        "fan-in/fan-out source attachments should be spread: {src_x:?}"
+    );
 }

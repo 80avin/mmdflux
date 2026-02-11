@@ -678,6 +678,14 @@ mod spreading {
         assert_distinct_arrival_x("five_fan_in.mmd", "F");
     }
 
+    #[test]
+    fn fan_in_arrival_points_remain_spread_after_shared_attachment_planner() {
+        let output = render_fixture("five_fan_in.mmd");
+        assert!(output.contains("A"));
+        assert!(output.contains("Target"));
+        assert_distinct_arrival_x("five_fan_in.mmd", "F");
+    }
+
     // --- Departure-side spreading ---
 
     #[test]
@@ -2581,6 +2589,20 @@ fn test_subgraph_direction_nested_both_layout() {
         layout.node_directions.get("D"),
         Some(&Direction::TopDown),
         "D should get root TD direction"
+    );
+}
+
+#[test]
+fn test_route_policy_effective_edge_direction_with_nested_override_fixture() {
+    let (diagram, layout) = layout_fixture("subgraph_direction_nested_both.mmd");
+
+    assert_eq!(
+        layout.effective_edge_direction("A", "B", diagram.direction),
+        Direction::BottomTop
+    );
+    assert_eq!(
+        layout.effective_edge_direction("C", "A", diagram.direction),
+        Direction::LeftRight
     );
 }
 

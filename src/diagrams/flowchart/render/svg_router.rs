@@ -14,7 +14,8 @@ pub use super::route_policy::{
     build_override_node_map, effective_edge_direction as effective_edge_direction_svg,
 };
 use super::routing_core::{
-    Face, build_orthogonal_path_float, edge_faces as shared_edge_faces,
+    AttachmentCandidate, AttachmentSide, Face, build_orthogonal_path_float,
+    edge_faces as shared_edge_faces, plan_attachment_candidates,
     point_on_face_float as shared_point_on_face_float,
 };
 use crate::dagre::{LayoutResult, NodeId, Point, Rect};
@@ -83,6 +84,15 @@ fn route_svg_edge_ported(
         .into_iter()
         .map(Into::into)
         .collect()
+}
+
+fn svg_spread_fraction_from_plan(fraction: f64, group_size: usize) -> f64 {
+    if group_size <= 1 {
+        0.5
+    } else {
+        let margin = 0.25; // keep away from corners, matching prior SVG behavior
+        margin + (1.0 - 2.0 * margin) * fraction
+    }
 }
 
 /// Route an edge that crosses a subgraph boundary.
@@ -250,66 +260,59 @@ pub fn reroute_override_edges(
         }
     }
 
-    // --- Pass 2: Compute port fractions for shared faces ---
-    // Group edges by (node_id, face). Each entry records the pending index
-    // and the cross-axis coordinate of the "other end" node (for sort order).
-    let mut face_edges: HashMap<(String, Face), Vec<(usize, f64)>> = HashMap::new();
-
+    // --- Pass 2: Compute port fractions for shared faces via shared planner ---
+    let mut planner_inputs: Vec<AttachmentCandidate> = Vec::with_capacity(pending.len() * 2);
     for (pi, pr) in pending.iter().enumerate() {
         let from_rect = layout.nodes.get(&NodeId(pr.from_id.clone()));
         let to_rect = layout.nodes.get(&NodeId(pr.to_id.clone()));
         if let (Some(fr), Some(tr)) = (from_rect, to_rect) {
             let horizontal_face = matches!(pr.direction, Direction::TopDown | Direction::BottomTop);
-
-            // Exit face of from-node: sort by target's cross-axis position
-            let ef = exit_face(pr.direction);
             let exit_sort = if horizontal_face {
                 tr.x + tr.width / 2.0
             } else {
                 tr.y + tr.height / 2.0
             };
-            face_edges
-                .entry((pr.from_id.clone(), ef))
-                .or_default()
-                .push((pi, exit_sort));
-
-            // Entry face of to-node: sort by source's cross-axis position
-            let enf = entry_face(pr.direction);
             let entry_sort = if horizontal_face {
                 fr.x + fr.width / 2.0
             } else {
                 fr.y + fr.height / 2.0
             };
-            face_edges
-                .entry((pr.to_id.clone(), enf))
-                .or_default()
-                .push((pi, entry_sort));
+
+            planner_inputs.push(AttachmentCandidate {
+                edge_index: pi,
+                node_id: pr.from_id.clone(),
+                side: AttachmentSide::Source,
+                face: exit_face(pr.direction),
+                cross_axis: exit_sort,
+            });
+            planner_inputs.push(AttachmentCandidate {
+                edge_index: pi,
+                node_id: pr.to_id.clone(),
+                side: AttachmentSide::Target,
+                face: entry_face(pr.direction),
+                cross_axis: entry_sort,
+            });
         }
     }
+
+    let attachment_plan = plan_attachment_candidates(planner_inputs);
 
     let mut from_fractions: Vec<f64> = vec![0.5; pending.len()];
     let mut to_fractions: Vec<f64> = vec![0.5; pending.len()];
 
-    for ((node_id, face), mut entries) in face_edges {
-        if entries.len() <= 1 {
-            continue; // single edge on face: keep center (0.5)
-        }
-
-        // Sort by cross-axis position of the other endpoint node
-        entries.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-
-        let n = entries.len();
-        let margin = 0.25; // keep 25% away from corners
-
-        for (rank, &(pi, _)) in entries.iter().enumerate() {
-            let frac = margin + (1.0 - 2.0 * margin) * (rank as f64) / ((n - 1) as f64);
-
-            let pr = &pending[pi];
-            let is_exit = pr.from_id == node_id && exit_face(pr.direction) == face;
-            if is_exit {
-                from_fractions[pi] = frac;
-            } else {
-                to_fractions[pi] = frac;
+    for (pi, pr) in pending.iter().enumerate() {
+        if let Some(edge_plan) = attachment_plan.edge(pi) {
+            if let Some(source) = edge_plan.source {
+                from_fractions[pi] = svg_spread_fraction_from_plan(
+                    source.fraction,
+                    attachment_plan.group_size(&pr.from_id, source.face),
+                );
+            }
+            if let Some(target) = edge_plan.target {
+                to_fractions[pi] = svg_spread_fraction_from_plan(
+                    target.fraction,
+                    attachment_plan.group_size(&pr.to_id, target.face),
+                );
             }
         }
     }

@@ -49,6 +49,8 @@ pub fn build_node_directions(diagram: &Diagram) -> HashMap<String, Direction> {
 ///
 /// If both endpoints share the same direction override, returns that direction.
 /// Otherwise returns the fallback (diagram root direction).
+///
+/// Shared policy entry point for text/SVG routing and shared attachment planning.
 pub fn effective_edge_direction(
     node_directions: &HashMap<String, Direction>,
     from: &str,

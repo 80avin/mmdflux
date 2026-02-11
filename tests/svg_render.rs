@@ -206,6 +206,18 @@ fn render_svg_direction_override_cross_boundary_remains_nan_free() {
 }
 
 #[test]
+fn cross_boundary_direction_override_edges_still_render_without_nan() {
+    let input =
+        std::fs::read_to_string("tests/fixtures/flowchart/subgraph_direction_cross_boundary.mmd")
+            .unwrap();
+    let flowchart = parse_flowchart(&input).unwrap();
+    let diagram = build_diagram(&flowchart);
+    let svg = render_svg(&diagram, &RenderOptions::default_svg());
+
+    assert!(!svg.contains("NaN"));
+}
+
+#[test]
 fn render_svg_direction_override_mixed() {
     // subgraph_direction_mixed.mmd: Two subgraphs with different direction overrides
     let input =
