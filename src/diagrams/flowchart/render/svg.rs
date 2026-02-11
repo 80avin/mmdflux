@@ -2257,7 +2257,7 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge, preserve_orthogonal: bool
     if preserve_orthogonal {
         // Keep endpoint support visibly longer than marker pullback so the
         // terminal stem remains readable in orthogonal mode.
-        const MIN_ENDPOINT_SUPPORT: f64 = 6.0;
+        const MIN_ENDPOINT_SUPPORT: f64 = 12.0;
         points = enforce_min_orthogonal_endpoint_support(
             &points,
             start_offset + MIN_ENDPOINT_SUPPORT,
@@ -2391,11 +2391,11 @@ fn extend_endpoint_support(points: &mut Vec<Point>, at_start: bool, min_support:
         return;
     }
 
-    let (anchor_idx, adjacent_idx, before_adjacent_idx) = if at_start {
-        (0usize, 1usize, Some(2usize))
+    let (anchor_idx, adjacent_idx, before_adjacent_idx, before_before_adjacent_idx) = if at_start {
+        (0usize, 1usize, Some(2usize), Some(3usize))
     } else {
         let n = points.len();
-        (n - 1, n - 2, n.checked_sub(3))
+        (n - 1, n - 2, n.checked_sub(3), n.checked_sub(4))
     };
 
     let anchor = points[anchor_idx];
@@ -2432,6 +2432,22 @@ fn extend_endpoint_support(points: &mut Vec<Point>, at_start: bool, min_support:
 
     let before_adjacent = points[before_adjacent_idx];
     if segment_axis(before_adjacent, new_adjacent).is_some() {
+        return;
+    }
+
+    // Prefer shifting the elbow coordinate (when possible) over inserting a
+    // new jog segment; this avoids tiny backtracks near turns.
+    let mut shifted_before = before_adjacent;
+    match axis {
+        SegmentAxis::Vertical => shifted_before.y = new_adjacent.y,
+        SegmentAxis::Horizontal => shifted_before.x = new_adjacent.x,
+    }
+    let keeps_adjacent_axis = segment_axis(shifted_before, new_adjacent).is_some();
+    let keeps_prev_axis = before_before_adjacent_idx
+        .and_then(|idx| points.get(idx).copied())
+        .is_none_or(|prev| segment_axis(prev, shifted_before).is_some());
+    if keeps_adjacent_axis && keeps_prev_axis {
+        points[before_adjacent_idx] = shifted_before;
         return;
     }
 

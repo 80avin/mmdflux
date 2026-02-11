@@ -92,6 +92,27 @@ fn segment_axis(a: (f64, f64), b: (f64, f64)) -> Option<char> {
     }
 }
 
+fn has_immediate_axis_backtrack(points: &[(f64, f64)]) -> bool {
+    points.windows(3).any(|triple| {
+        let a = triple[0];
+        let b = triple[1];
+        let c = triple[2];
+        match (segment_axis(a, b), segment_axis(b, c)) {
+            (Some('V'), Some('V')) => {
+                let dy1 = b.1 - a.1;
+                let dy2 = c.1 - b.1;
+                dy1.abs() > 0.001 && dy2.abs() > 0.001 && dy1.signum() != dy2.signum()
+            }
+            (Some('H'), Some('H')) => {
+                let dx1 = b.0 - a.0;
+                let dx2 = c.0 - b.0;
+                dx1.abs() > 0.001 && dx2.abs() > 0.001 && dx1.signum() != dx2.signum()
+            }
+            _ => false,
+        }
+    })
+}
+
 fn parse_attr_f64(line: &str, attr: &str) -> Option<f64> {
     let marker = format!("{attr}=\"");
     let start = line.find(&marker)? + marker.len();
@@ -363,8 +384,12 @@ fn svg_orthogonal_unified_preview_preserves_clear_terminal_stem_into_arrowhead()
         "Bmid -> F terminal segment should point downward into F (arrow-support direction), got prev={prev:?}, end={end:?}, points={points:?}"
     );
     assert!(
-        stem_len >= 6.0,
-        "Bmid -> F terminal stem should remain clearly larger than the arrow pullback budget (>= 6px), got {stem_len} with {points:?}"
+        !has_immediate_axis_backtrack(&points),
+        "Bmid -> F path should not include an immediate axis backtrack near the elbow: {points:?}"
+    );
+    assert!(
+        stem_len >= 8.0,
+        "Bmid -> F terminal stem should retain extra buffer beyond arrow pullback (>= 8px), got {stem_len} with {points:?}"
     );
 
     let (_fx, fy, _fw, _fh) = node_rect_for_label(&svg, "f").expect("expected SVG rect for node f");
