@@ -397,6 +397,11 @@ fn reconcile_sublayouts_draw(
             .then_with(|| a.cmp(b))
     });
 
+    // Build cross-boundary edge maps for directional padding.
+    let parent_map = build_subgraph_parent_map(&diagram.subgraphs);
+    let incoming_map = build_subgraph_incoming_map(&diagram.subgraphs, &diagram.edges, &parent_map);
+    let outgoing_map = build_subgraph_outgoing_map(&diagram.subgraphs, &diagram.edges, &parent_map);
+
     for sg_id in sorted_sg_ids {
         let sublayout = &sublayouts[sg_id];
         let sg = &diagram.subgraphs[sg_id];
@@ -528,13 +533,29 @@ fn reconcile_sublayouts_draw(
         let sub_draw_w = sub_draw_max_x - sub_draw_min_x;
         let sub_draw_h = sub_draw_max_y - sub_draw_min_y;
 
-        // Padding around sub-layout content within the subgraph border
-        let border_pad = 2; // 1 for border char + 1 for spacing
-        let title_pad = if !sg.title.trim().is_empty() { 1 } else { 0 };
+        // Padding around sub-layout content within the subgraph border.
+        // Each side gets 1 char for the border itself.  An extra spacing row
+        // is added only on sides where cross-boundary edges route through,
+        // so blank rows are eliminated on sides with no routing.
+        let has_incoming = incoming_map.get(sg_id).copied().unwrap_or(false);
+        let has_outgoing = outgoing_map.get(sg_id).copied().unwrap_or(false);
+        let (top_pad, bottom_pad) = match diagram.direction {
+            Direction::TopDown => (
+                if has_incoming { 2 } else { 1 },
+                if has_outgoing { 2 } else { 1 },
+            ),
+            Direction::BottomTop => (
+                if has_outgoing { 2 } else { 1 },
+                if has_incoming { 2 } else { 1 },
+            ),
+            _ => (2, 2),
+        };
+        let left_pad = 2;
+        let right_pad = 2;
 
         // Compute the total subgraph bounds needed
-        let sg_needed_w = sub_draw_w + 2 * border_pad;
-        let sg_needed_h = sub_draw_h + 2 * border_pad + title_pad;
+        let sg_needed_w = sub_draw_w + left_pad + right_pad;
+        let sg_needed_h = sub_draw_h + top_pad + bottom_pad;
 
         // Enforce title-width minimum
         let min_title_width = if !sg.title.trim().is_empty() {
@@ -553,8 +574,8 @@ fn reconcile_sublayouts_draw(
         let new_sg_y = sg_cy.saturating_sub(sg_needed_h / 2);
 
         // Offset to place sub-layout content within the new subgraph bounds
-        let content_x = new_sg_x + border_pad + (sg_final_w - sg_needed_w) / 2;
-        let content_y = new_sg_y + border_pad + title_pad;
+        let content_x = new_sg_x + left_pad + (sg_final_w - sg_needed_w) / 2;
+        let content_y = new_sg_y + top_pad;
 
         let offset_x = content_x.saturating_sub(sub_draw_min_x);
         let offset_y = content_y.saturating_sub(sub_draw_min_y);
@@ -3064,25 +3085,24 @@ fn shrink_subgraph_vertical_gaps(
 
         let has_incoming = incoming_map.get(&sg_id).copied().unwrap_or(false);
         let has_outgoing = outgoing_map.get(&sg_id).copied().unwrap_or(false);
-        let needs_gap = has_incoming || has_outgoing;
-        let incoming_gap = if needs_gap { 1 } else { 0 };
-        let outgoing_gap = 0;
 
+        // Each side needs 1 row of gap only if cross-boundary edges route
+        // through it; blank rows without routing should be eliminated.
         let (min_top_gap, min_bottom_gap) = match direction {
             Direction::TopDown => (
-                if has_incoming { incoming_gap } else { 0 },
-                if has_outgoing { outgoing_gap } else { 0 },
+                if has_incoming { 1 } else { 0 },
+                if has_outgoing { 1 } else { 0 },
             ),
             Direction::BottomTop => (
-                if has_outgoing { outgoing_gap } else { 0 },
-                if has_incoming { incoming_gap } else { 0 },
+                if has_outgoing { 1 } else { 0 },
+                if has_incoming { 1 } else { 0 },
             ),
             _ => (0, 0),
         };
 
-        let base_target = top_gap.min(bottom_gap);
-        let desired_top = base_target.max(min_top_gap);
-        let desired_bottom = base_target.max(min_bottom_gap);
+        // Only shrink; never expand beyond the current gap.
+        let desired_top = min_top_gap.min(top_gap);
+        let desired_bottom = min_bottom_gap.min(bottom_gap);
         let shrink_top = top_gap.saturating_sub(desired_top);
         let shrink_bottom = bottom_gap.saturating_sub(desired_bottom);
         let expand_top = desired_top.saturating_sub(top_gap);

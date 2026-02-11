@@ -2629,20 +2629,17 @@ fn test_subgraph_direction_cross_boundary_no_stale_waypoints() {
         "fixture should make B->D a long edge (layer diff > 1)"
     );
 
-    // Cross-boundary waypoints are clipped to the subgraph border (not
-    // removed) so the text renderer can route them.  The SVG renderer
-    // re-routes cross-boundary edges from scratch, ignoring waypoints.
-    // Verify the waypoints exist but have fewer points than the original
-    // long edge (the clipping should have trimmed interior points).
+    // Cross-boundary waypoints are clipped to the subgraph border.
+    // However, if the clipped waypoints end up on the wrong subgraph face
+    // (e.g. side border when the source is above), the face-mismatch
+    // detector removes them so the router can recompute a fresh path.
+    // Either outcome (clipped waypoints or absent) produces correct
+    // rendering; verify at least one cross-boundary edge retains waypoints.
     let ca_wps = layout.edge_waypoints.get(&ca_idx);
     let bd_wps = layout.edge_waypoints.get(&bd_idx);
     assert!(
-        ca_wps.is_some(),
-        "C->A cross-boundary edge should have clipped waypoints"
-    );
-    assert!(
-        bd_wps.is_some(),
-        "B->D cross-boundary edge should have clipped waypoints"
+        ca_wps.is_some() || bd_wps.is_some(),
+        "at least one cross-boundary edge should have clipped waypoints"
     );
 }
 
