@@ -392,6 +392,40 @@ fn unified_route_contracts_are_deterministic_for_repeated_runs() {
     }
 }
 
+#[test]
+fn unified_preview_multi_subgraph_bmid_to_f_keeps_terminal_support_clearance() {
+    let (diagram, geom) = layout_fixture("multi_subgraph_direction_override.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let edge = routed
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Bmid" && edge.to == "F")
+        .expect("fixture should contain Bmid -> F");
+
+    assert!(
+        edge.path.len() >= 2,
+        "Bmid -> F should have routed path points: {:?}",
+        edge.path
+    );
+
+    let prev = edge.path[edge.path.len() - 2];
+    let end = edge.path[edge.path.len() - 1];
+    let dx = (end.x - prev.x).abs();
+    let dy = (end.y - prev.y).abs();
+
+    assert!(
+        dx <= ROUTE_EPS,
+        "Bmid -> F terminal segment should stay vertical in TD: {:?}",
+        edge.path
+    );
+    assert!(
+        dy >= 10.0,
+        "Bmid -> F terminal support should preserve >=10px clearance before endpoint: dy={dy}, path={:?}",
+        edge.path
+    );
+}
+
 // -----------------------------------------------------------------------
 // Task 1.2: Shared float-route heuristics
 // -----------------------------------------------------------------------

@@ -138,9 +138,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     } else {
         geom
     };
-    if options.routing_mode == Some(RoutingMode::UnifiedPreview)
-        && matches!(options.svg.edge_path_style, SvgEdgePathStyle::Orthogonal)
-    {
+    if options.routing_mode == Some(RoutingMode::UnifiedPreview) {
         rerouted_edges.extend(geom.edges.iter().map(|edge| edge.index));
     }
 
@@ -189,11 +187,11 @@ fn rerouted_edge_indexes_for_mode(
         // and should not receive extra shape clipping.
         RoutingMode::PassThroughClip => geom.edges.iter().map(|e| e.index).collect(),
         // Unified preview routes already encode endpoint intent and should not
-        // be shape-adjusted again in SVG.
-        RoutingMode::UnifiedPreview if matches!(edge_path_style, SvgEdgePathStyle::Orthogonal) => {
+        // be shape-adjusted again in SVG (all path styles).
+        RoutingMode::UnifiedPreview => {
+            let _ = edge_path_style;
             geom.edges.iter().map(|e| e.index).collect()
         }
-        RoutingMode::UnifiedPreview => HashSet::new(),
         RoutingMode::FullCompute => HashSet::new(),
     }
 }
