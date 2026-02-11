@@ -130,6 +130,33 @@ node scripts/dump-dagre-order.js input.json
 | `MMDFLUX_DEBUG_ORDER=1`         | Enable order debug tracing               |
 | `MMDFLUX_DEBUG_BK_TRACE=1`      | Trace Brandes-Köpf coordinate assignment |
 
+## Unified Routing Preview
+
+Phase 4 of plan 0075 adds an explicit unified-routing preview path for flowchart
+SVG and routed MMDS outputs:
+
+```bash
+# Preview unified float-first routing (SVG)
+cargo run -- -f svg --routing-mode unified-preview --svg-edge-curve linear diagram.mmd
+
+# Roll back to legacy routing behavior (default)
+cargo run -- -f svg --svg-edge-curve linear diagram.mmd
+```
+
+Notes:
+- Default rendering remains legacy unless `--routing-mode unified-preview` is set.
+- `--routing-mode full-compute` is the explicit legacy override.
+- The parity harness currently tracks a known linear-SVG delta on
+  `simple_cycle.mmd` for unified preview.
+
+### Preview Parity Gates
+
+```bash
+cargo test svg_unified_preview_parity_core_fixture_subset_has_expected_deltas --test svg_snapshots
+cargo test svg_full_compute_override_matches_legacy_linear_core_subset --test svg_snapshots
+cargo test unified_preview_preserves_core_routed_geometry_contracts --test routed_geometry
+```
+
 ## Troubleshooting
 
 ### "Dagre not found" error

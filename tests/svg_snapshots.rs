@@ -1,7 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use mmdflux::diagram::{OutputFormat, RenderConfig, SvgEdgePathStyle};
+use mmdflux::diagram::{OutputFormat, RenderConfig, RoutingMode, SvgEdgePathStyle};
+use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::registry::DiagramInstance;
 use mmdflux::render::{RenderOptions, render_svg};
@@ -50,6 +51,20 @@ fn render_svg_fixture_with_curve(name: &str, curve: SvgEdgePathStyle) -> String 
     let mut options = RenderOptions::default_svg();
     options.svg.edge_curve = curve;
     render_svg(&diagram, &options)
+}
+
+fn render_svg_fixture_with_routing_mode(name: &str, mode: RoutingMode) -> String {
+    let input = load_fixture(name);
+    let mut instance = FlowchartInstance::new();
+    instance.parse(&input).expect("Failed to parse fixture");
+    let config = RenderConfig {
+        svg_edge_curve: Some(SvgEdgePathStyle::Linear),
+        routing_mode: Some(mode),
+        ..RenderConfig::default()
+    };
+    instance
+        .render(OutputFormat::Svg, &config)
+        .expect("Failed to render SVG fixture")
 }
 
 fn render_svg_mmds_fixture(name: &str) -> String {
@@ -235,5 +250,33 @@ fn svg_snapshot_orthogonal_fixture_subset() {
         "subgraph_direction_cross_boundary.mmd",
     ] {
         assert_orthogonal_snapshot(fixture);
+    }
+}
+
+#[test]
+fn svg_unified_preview_parity_core_fixture_subset_has_expected_deltas() {
+    let fixtures = ["simple.mmd", "chain.mmd", "simple_cycle.mmd"];
+    let mut differing: Vec<&str> = Vec::new();
+
+    for fixture in fixtures {
+        let legacy = render_svg_fixture_with_routing_mode(fixture, RoutingMode::FullCompute);
+        let unified = render_svg_fixture_with_routing_mode(fixture, RoutingMode::UnifiedPreview);
+        if legacy != unified {
+            differing.push(fixture);
+        }
+    }
+
+    assert_eq!(differing, vec!["simple_cycle.mmd"]);
+}
+
+#[test]
+fn svg_full_compute_override_matches_legacy_linear_core_subset() {
+    for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
+        let legacy = render_svg_fixture_with_curve(fixture, SvgEdgePathStyle::Linear);
+        let full_compute = render_svg_fixture_with_routing_mode(fixture, RoutingMode::FullCompute);
+        assert_eq!(
+            full_compute, legacy,
+            "full-compute override should preserve legacy SVG for fixture {fixture}"
+        );
     }
 }

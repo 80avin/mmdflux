@@ -287,6 +287,8 @@ pub enum RoutingMode {
     FullCompute,
     /// Engine provides routed edge paths; apply clipping and spacing only.
     PassThroughClip,
+    /// Preview float-first unified routing with guarded fallback behavior.
+    UnifiedPreview,
 }
 
 impl RoutingMode {
@@ -470,6 +472,8 @@ pub struct RenderConfig {
     pub geometry_level: GeometryLevel,
     /// Path detail level for edge waypoints (MMDS and SVG).
     pub path_detail: PathDetail,
+    /// Optional routing mode override for routed-geometry preview/testing.
+    pub routing_mode: Option<RoutingMode>,
 }
 
 /// Error type for rendering failures.

@@ -3,9 +3,12 @@
 //! Verifies that `route_graph_geometry` produces correct `RoutedGraphGeometry`
 //! from engine-produced `GraphGeometry`.
 
+use std::fs;
+use std::path::Path;
+
 use mmdflux::diagrams::flowchart::engine::DagreLayoutEngine;
 use mmdflux::diagrams::flowchart::geometry::*;
-use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
+use mmdflux::diagrams::flowchart::routing::{route_graph_geometry, snap_path_to_grid_preview};
 use mmdflux::{EngineConfig, GraphLayoutEngine, RoutingMode, build_diagram, parse_flowchart};
 
 /// Parse input and produce (Diagram, GraphGeometry) via the dagre engine.
@@ -16,6 +19,17 @@ fn layout_test(input: &str) -> (mmdflux::Diagram, GraphGeometry) {
     let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
     let geom = engine.layout(&diagram, &config).unwrap();
     (diagram, geom)
+}
+
+fn layout_fixture(name: &str) -> (mmdflux::Diagram, GraphGeometry) {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join(name);
+    let input = fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
+    layout_test(&input)
 }
 
 // -----------------------------------------------------------------------
@@ -186,5 +200,76 @@ fn routed_edges_preserve_subgraph_references() {
         .find(|e| e.from_subgraph.is_some() || e.to_subgraph.is_some())
     {
         assert!(e.to_subgraph.is_some() || e.from_subgraph.is_some());
+    }
+}
+
+// -----------------------------------------------------------------------
+// Task 4.1: Unified preview routing contracts
+// -----------------------------------------------------------------------
+
+#[test]
+fn unified_router_produces_axis_aligned_forward_paths() {
+    let (diagram, geom) = layout_test("graph TD\nA-->B\nA-->C\nB-->D\nC-->D");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    for edge in routed.edges.iter().filter(|edge| !edge.is_backward) {
+        assert!(
+            edge.path
+                .windows(2)
+                .all(|seg| seg[0].x == seg[1].x || seg[0].y == seg[1].y),
+            "edge {} -> {} has diagonal segment in unified preview: {:?}",
+            edge.from,
+            edge.to,
+            edge.path
+        );
+    }
+}
+
+#[test]
+fn snap_path_to_grid_preserves_start_and_end_nodes() {
+    let path = vec![
+        FPoint::new(10.2, 20.8),
+        FPoint::new(10.2, 40.4),
+        FPoint::new(35.7, 40.4),
+    ];
+    let snapped = snap_path_to_grid_preview(&path, 1.0, 1.0);
+
+    assert_eq!(snapped.first(), Some(&FPoint::new(10.0, 21.0)));
+    assert_eq!(snapped.last(), Some(&FPoint::new(36.0, 40.0)));
+}
+
+#[test]
+fn unified_preview_preserves_core_routed_geometry_contracts() {
+    for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
+        let (diagram, geom) = layout_fixture(fixture);
+        let legacy = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+        assert_eq!(
+            unified.edges.len(),
+            legacy.edges.len(),
+            "edge count diverged for fixture {fixture}"
+        );
+        assert_eq!(
+            unified.self_edges.len(),
+            legacy.self_edges.len(),
+            "self-edge count diverged for fixture {fixture}"
+        );
+
+        for (u, l) in unified.edges.iter().zip(legacy.edges.iter()) {
+            assert_eq!(u.index, l.index, "edge index mismatch in fixture {fixture}");
+            assert_eq!(u.from, l.from, "edge source mismatch in fixture {fixture}");
+            assert_eq!(u.to, l.to, "edge target mismatch in fixture {fixture}");
+            assert_eq!(
+                u.is_backward, l.is_backward,
+                "backward-edge flag mismatch in fixture {fixture}"
+            );
+            assert!(
+                u.path.len() >= 2,
+                "unified path too short for {} -> {} in fixture {fixture}",
+                u.from,
+                u.to
+            );
+        }
     }
 }

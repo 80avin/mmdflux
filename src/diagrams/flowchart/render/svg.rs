@@ -147,13 +147,23 @@ pub fn render_svg_from_geometry(
     geom: &GraphGeometry,
     routing_mode: RoutingMode,
 ) -> String {
-    let rerouted_edges: HashSet<usize> = if routing_mode == RoutingMode::PassThroughClip {
-        geom.edges.iter().map(|e| e.index).collect()
-    } else {
-        HashSet::new()
-    };
+    let rerouted_edges = rerouted_edge_indexes_for_mode(geom, routing_mode);
     let override_nodes = svg_router::build_override_node_map(diagram);
     render_svg_with_geometry_context(diagram, options, geom, &rerouted_edges, &override_nodes)
+}
+
+fn rerouted_edge_indexes_for_mode(
+    geom: &GraphGeometry,
+    routing_mode: RoutingMode,
+) -> HashSet<usize> {
+    match routing_mode {
+        // Pass-through paths are already positioned by the layout engine
+        // and should not receive extra shape clipping.
+        RoutingMode::PassThroughClip => geom.edges.iter().map(|e| e.index).collect(),
+        // Unified preview currently keeps legacy clipping/shape adjustment
+        // semantics in the SVG renderer to constrain rollout risk.
+        RoutingMode::UnifiedPreview | RoutingMode::FullCompute => HashSet::new(),
+    }
 }
 
 fn render_svg_with_geometry_context(

@@ -1,7 +1,9 @@
 //! Flowchart diagram instance implementation.
 
 use super::routing;
-use crate::diagram::{GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig, RenderError};
+use crate::diagram::{
+    GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig, RenderError, RoutingMode,
+};
 use crate::graph::{Diagram, build_diagram};
 use crate::mmds::to_mmds_json;
 use crate::parser::parse_flowchart;
@@ -57,11 +59,12 @@ impl DiagramInstance for FlowchartInstance {
         options.output_format = format;
 
         if matches!(format, OutputFormat::Mmds) {
+            let routing_mode = config.routing_mode.unwrap_or(engine_result.routing_mode);
             let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
                 Some(routing::route_graph_geometry(
                     diagram,
                     &engine_result.geometry,
-                    engine_result.routing_mode,
+                    routing_mode,
                 ))
             } else {
                 None
@@ -75,20 +78,23 @@ impl DiagramInstance for FlowchartInstance {
             );
         }
 
-        if matches!(format, OutputFormat::Svg) && engine_result.engine_id != LayoutEngineId::Dagre {
-            let routed = routing::route_graph_geometry(
-                diagram,
-                &engine_result.geometry,
-                engine_result.routing_mode,
-            );
-            // Non-dagre SVG: inject routed paths into geometry for rendering.
-            let geom = inject_routed_paths(&engine_result.geometry, &routed);
-            return Ok(render_svg_from_geometry(
-                diagram,
-                &options,
-                &geom,
-                engine_result.routing_mode,
-            ));
+        if matches!(format, OutputFormat::Svg) {
+            let routing_mode = config.routing_mode.unwrap_or(engine_result.routing_mode);
+            let use_routed_geometry = engine_result.engine_id != LayoutEngineId::Dagre
+                || routing_mode == RoutingMode::UnifiedPreview;
+            if use_routed_geometry {
+                let routed =
+                    routing::route_graph_geometry(diagram, &engine_result.geometry, routing_mode);
+                // Route preview/non-dagre SVG through routed geometry so edge path
+                // selection is explicit and comparable across routing modes.
+                let geom = inject_routed_paths(&engine_result.geometry, &routed);
+                return Ok(render_svg_from_geometry(
+                    diagram,
+                    &options,
+                    &geom,
+                    routing_mode,
+                ));
+            }
         }
 
         if engine_result.engine_id != LayoutEngineId::Dagre {

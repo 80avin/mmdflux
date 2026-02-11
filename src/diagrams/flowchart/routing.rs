@@ -6,6 +6,9 @@
 //! - `PassThroughClip`: Use engine-provided paths directly.
 
 use super::geometry::*;
+use super::render::unified_router::{
+    UnifiedRoutingOptions, build_path_from_hints, route_edges_unified, snap_path_to_grid,
+};
 use crate::diagram::RoutingMode;
 use crate::graph::Diagram;
 
@@ -14,39 +17,40 @@ use crate::graph::Diagram;
 /// Consumes engine-agnostic `GraphGeometry` and produces `RoutedGraphGeometry`
 /// with polyline paths for every edge.
 pub fn route_graph_geometry(
-    _diagram: &Diagram,
+    diagram: &Diagram,
     geometry: &GraphGeometry,
     routing_mode: RoutingMode,
 ) -> RoutedGraphGeometry {
-    let edges: Vec<RoutedEdgeGeometry> = geometry
-        .edges
-        .iter()
-        .map(|edge| {
-            let path = match routing_mode {
-                RoutingMode::PassThroughClip => {
-                    // Engine provides complete paths; use them directly.
-                    edge.layout_path_hint
+    let edges: Vec<RoutedEdgeGeometry> = match routing_mode {
+        RoutingMode::UnifiedPreview => {
+            route_edges_unified(diagram, geometry, UnifiedRoutingOptions::preview())
+        }
+        RoutingMode::PassThroughClip | RoutingMode::FullCompute => geometry
+            .edges
+            .iter()
+            .map(|edge| {
+                let path = match routing_mode {
+                    RoutingMode::PassThroughClip => edge
+                        .layout_path_hint
                         .clone()
-                        .unwrap_or_else(|| build_path_from_hints(edge, geometry))
+                        .unwrap_or_else(|| build_path_from_hints(edge, geometry)),
+                    RoutingMode::FullCompute => build_path_from_hints(edge, geometry),
+                    RoutingMode::UnifiedPreview => unreachable!(),
+                };
+                let is_backward = geometry.reversed_edges.contains(&edge.index);
+                RoutedEdgeGeometry {
+                    index: edge.index,
+                    from: edge.from.clone(),
+                    to: edge.to.clone(),
+                    path,
+                    label_position: edge.label_position,
+                    is_backward,
+                    from_subgraph: edge.from_subgraph.clone(),
+                    to_subgraph: edge.to_subgraph.clone(),
                 }
-                RoutingMode::FullCompute => {
-                    // Engine provides layout hints only; build paths.
-                    build_path_from_hints(edge, geometry)
-                }
-            };
-            let is_backward = geometry.reversed_edges.contains(&edge.index);
-            RoutedEdgeGeometry {
-                index: edge.index,
-                from: edge.from.clone(),
-                to: edge.to.clone(),
-                path,
-                label_position: edge.label_position,
-                is_backward,
-                from_subgraph: edge.from_subgraph.clone(),
-                to_subgraph: edge.to_subgraph.clone(),
-            }
-        })
-        .collect();
+            })
+            .collect(),
+    };
 
     let self_edges: Vec<RoutedSelfEdge> = geometry
         .self_edges
@@ -68,36 +72,12 @@ pub fn route_graph_geometry(
     }
 }
 
-/// Build an edge path from layout hints (waypoints, node positions, path hints).
+/// Preview helper: snap a float path to a deterministic grid.
 ///
-/// Prefers `layout_path_hint` when available (e.g. dagre edge points).
-/// Falls back to node centers connected through waypoints.
-fn build_path_from_hints(edge: &LayoutEdge, geometry: &GraphGeometry) -> Vec<FPoint> {
-    // Prefer the layout path hint if available.
-    if let Some(ref path) = edge.layout_path_hint {
-        return path.clone();
-    }
-
-    // Build path from source center → waypoints → target center.
-    let mut path = Vec::new();
-
-    if let Some(from_node) = geometry.nodes.get(&edge.from) {
-        path.push(FPoint::new(
-            from_node.rect.center_x(),
-            from_node.rect.center_y(),
-        ));
-    }
-    for wp in &edge.waypoints {
-        path.push(*wp);
-    }
-    if let Some(to_node) = geometry.nodes.get(&edge.to) {
-        path.push(FPoint::new(
-            to_node.rect.center_x(),
-            to_node.rect.center_y(),
-        ));
-    }
-
-    path
+/// Exposed for routed-geometry contract tests while unified text integration
+/// is still behind preview rollout.
+pub fn snap_path_to_grid_preview(path: &[FPoint], scale_x: f64, scale_y: f64) -> Vec<FPoint> {
+    snap_path_to_grid(path, scale_x, scale_y)
 }
 
 #[cfg(test)]
@@ -262,5 +242,34 @@ mod tests {
         assert_eq!(routed.subgraphs.len(), 1);
         assert_eq!(routed.subgraphs["sg1"].title, "Group");
         assert_eq!(routed.direction, crate::graph::Direction::TopDown);
+    }
+
+    #[test]
+    fn unified_router_preview_paths_are_axis_aligned() {
+        let (diagram, geom) = simple_geometry();
+        let unified = route_edges_unified(&diagram, &geom, UnifiedRoutingOptions::preview());
+
+        assert!(!unified.is_empty());
+        for edge in unified.iter().filter(|edge| !edge.is_backward) {
+            assert!(
+                edge.path
+                    .windows(2)
+                    .all(|seg| seg[0].x == seg[1].x || seg[0].y == seg[1].y)
+            );
+        }
+    }
+
+    #[test]
+    fn snap_path_to_grid_deterministic_and_preserves_endpoints() {
+        let input = vec![
+            FPoint::new(5.4, 8.6),
+            FPoint::new(5.4, 12.3),
+            FPoint::new(14.7, 12.3),
+        ];
+        let snapped = snap_path_to_grid(&input, 1.0, 1.0);
+
+        assert_eq!(snapped.first(), Some(&FPoint::new(5.0, 9.0)));
+        assert_eq!(snapped.last(), Some(&FPoint::new(15.0, 12.0)));
+        assert_eq!(snapped, snap_path_to_grid(&input, 1.0, 1.0));
     }
 }

@@ -6,7 +6,7 @@ use clap::{Parser, ValueEnum};
 use mmdflux::dagre::Ranker;
 use mmdflux::diagram::{
     GeometryLevel, LayoutConfig, LayoutEngineId, OutputFormat, PathDetail, RenderConfig,
-    SvgEdgePathStyle,
+    RoutingMode, SvgEdgePathStyle,
 };
 use mmdflux::registry::default_registry;
 
@@ -102,6 +102,10 @@ struct Cli {
     /// Ignored for text/ASCII.
     #[arg(long, value_enum)]
     path_detail: Option<PathDetailArg>,
+
+    /// Routing mode override for routed-geometry preview.
+    #[arg(long, value_enum)]
+    routing_mode: Option<RoutingModeArg>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -202,6 +206,23 @@ impl From<PathDetailArg> for PathDetail {
     }
 }
 
+#[derive(Clone, Copy, ValueEnum, Debug)]
+enum RoutingModeArg {
+    FullCompute,
+    PassThroughClip,
+    UnifiedPreview,
+}
+
+impl From<RoutingModeArg> for RoutingMode {
+    fn from(arg: RoutingModeArg) -> Self {
+        match arg {
+            RoutingModeArg::FullCompute => RoutingMode::FullCompute,
+            RoutingModeArg::PassThroughClip => RoutingMode::PassThroughClip,
+            RoutingModeArg::UnifiedPreview => RoutingMode::UnifiedPreview,
+        }
+    }
+}
+
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
@@ -271,6 +292,7 @@ fn main() -> io::Result<()> {
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
         path_detail: cli.path_detail.map(Into::into).unwrap_or_default(),
+        routing_mode: cli.routing_mode.map(Into::into),
     };
 
     // Use registry for detection and rendering

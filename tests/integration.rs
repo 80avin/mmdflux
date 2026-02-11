@@ -6,12 +6,17 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::OutputFormat;
+use mmdflux::diagram::{OutputFormat, RenderConfig, SvgEdgePathStyle};
+use mmdflux::diagrams::flowchart::engine::DagreLayoutEngine;
+use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::render::{
     Layout, LayoutConfig, RenderOptions, compute_layout_direct, render, route_all_edges,
 };
-use mmdflux::{Diagram, Direction, Shape, build_diagram, default_registry, parse_flowchart};
+use mmdflux::{
+    Diagram, Direction, EngineConfig, GraphLayoutEngine, RoutingMode, Shape, build_diagram,
+    default_registry, parse_flowchart,
+};
 
 /// Load a fixture file by name from `tests/fixtures/flowchart/`.
 fn load_fixture(name: &str) -> String {
@@ -2603,6 +2608,70 @@ fn test_route_policy_effective_edge_direction_with_nested_override_fixture() {
     assert_eq!(
         layout.effective_edge_direction("C", "A", diagram.direction),
         Direction::LeftRight
+    );
+}
+
+#[test]
+fn test_unified_preview_routed_geometry_is_axis_aligned_for_forward_edges() {
+    let diagram = parse_and_build("simple.mmd");
+    let engine = DagreLayoutEngine::text();
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let geom = engine
+        .layout(&diagram, &config)
+        .expect("layout should succeed");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    for edge in routed.edges.iter().filter(|edge| !edge.is_backward) {
+        assert!(
+            edge.path
+                .windows(2)
+                .all(|seg| seg[0].x == seg[1].x || seg[0].y == seg[1].y),
+            "unified preview produced diagonal segment for {} -> {}: {:?}",
+            edge.from,
+            edge.to,
+            edge.path
+        );
+    }
+}
+
+#[test]
+fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
+    let input = load_fixture("simple_cycle.mmd");
+    let registry = default_registry();
+
+    let mut legacy = registry
+        .create("flowchart")
+        .expect("flowchart instance should exist");
+    legacy.parse(&input).expect("fixture should parse");
+    let legacy_output = legacy
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                svg_edge_curve: Some(SvgEdgePathStyle::Linear),
+                routing_mode: Some(RoutingMode::FullCompute),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("legacy render should succeed");
+
+    let mut unified = registry
+        .create("flowchart")
+        .expect("flowchart instance should exist");
+    unified.parse(&input).expect("fixture should parse");
+    let unified_output = unified
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                svg_edge_curve: Some(SvgEdgePathStyle::Linear),
+                routing_mode: Some(RoutingMode::UnifiedPreview),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("unified render should succeed");
+
+    assert_ne!(
+        legacy_output, unified_output,
+        "unified preview should route cycle fixture through a distinct path set"
     );
 }
 
