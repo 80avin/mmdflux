@@ -2240,18 +2240,28 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge, preserve_orthogonal: bool
         return points.to_vec();
     }
 
-    let start_offset = match edge.arrow_start {
+    let mut start_offset: f64 = match edge.arrow_start {
         Arrow::Normal | Arrow::OpenTriangle => 4.0,
         Arrow::Diamond | Arrow::OpenDiamond => 5.0,
         // Cross and circle markers have refX past the visible shape,
         // so the marker already sits before the endpoint — no pullback needed.
         Arrow::Cross | Arrow::Circle | Arrow::None => 0.0,
     };
-    let end_offset = match edge.arrow_end {
+    let mut end_offset: f64 = match edge.arrow_end {
         Arrow::Normal | Arrow::OpenTriangle => 4.0,
         Arrow::Diamond | Arrow::OpenDiamond => 5.0,
         Arrow::Cross | Arrow::Circle | Arrow::None => 0.0,
     };
+
+    if preserve_orthogonal {
+        // Keep a visible endpoint stem in orthogonal mode so marker pullback
+        // cannot invert the terminal segment direction.
+        const MIN_ENDPOINT_SUPPORT: f64 = 2.0;
+        let start_support = segment_manhattan_len(points[0], points[1]);
+        let end_support = segment_manhattan_len(points[points.len() - 2], points[points.len() - 1]);
+        start_offset = start_offset.min((start_support - MIN_ENDPOINT_SUPPORT).max(0.0));
+        end_offset = end_offset.min((end_support - MIN_ENDPOINT_SUPPORT).max(0.0));
+    }
 
     let start = points[0];
     let end = points[points.len() - 1];

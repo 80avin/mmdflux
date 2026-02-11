@@ -323,6 +323,10 @@ fn svg_orthogonal_unified_preview_preserves_clear_terminal_stem_into_arrowhead()
         "Bmid -> F terminal segment should be vertical in TD layout: {points:?}"
     );
     assert!(
+        end.1 > prev.1,
+        "Bmid -> F terminal segment should point downward into F (arrow-support direction), got prev={prev:?}, end={end:?}, points={points:?}"
+    );
+    assert!(
         stem_len >= 2.0,
         "Bmid -> F terminal stem should remain visually clear (>= 2px), got {stem_len} with {points:?}"
     );
