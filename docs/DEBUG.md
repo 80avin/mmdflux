@@ -137,10 +137,10 @@ SVG and routed MMDS outputs:
 
 ```bash
 # Preview unified float-first routing (SVG)
-cargo run -- -f svg --routing-mode unified-preview --svg-edge-curve linear diagram.mmd
+cargo run -- -f svg --routing-mode unified-preview --svg-edge-path-style linear diagram.mmd
 
 # Roll back to legacy routing behavior (default)
-cargo run -- -f svg --svg-edge-curve linear diagram.mmd
+cargo run -- -f svg --svg-edge-path-style linear diagram.mmd
 ```
 
 Notes:

@@ -17,10 +17,10 @@ struct WasmRenderConfig {
     padding: Option<usize>,
     #[serde(alias = "svgScale")]
     svg_scale: Option<f64>,
-    #[serde(alias = "svgEdgeCurve")]
-    svg_edge_curve: Option<String>,
-    #[serde(alias = "svgEdgeCurveRadius")]
-    svg_edge_curve_radius: Option<f64>,
+    #[serde(alias = "svgEdgePathStyle")]
+    svg_edge_path_style: Option<String>,
+    #[serde(alias = "svgEdgePathRadius")]
+    svg_edge_path_radius: Option<f64>,
     #[serde(alias = "svgDiagramPadding")]
     svg_diagram_padding: Option<f64>,
     #[serde(alias = "svgNodePaddingX")]
@@ -104,7 +104,7 @@ impl WasmRenderConfig {
         config.cluster_ranksep = self.cluster_ranksep;
         config.padding = self.padding;
         config.svg_scale = self.svg_scale;
-        config.svg_edge_curve_radius = self.svg_edge_curve_radius;
+        config.svg_edge_path_radius = self.svg_edge_path_radius;
         config.svg_diagram_padding = self.svg_diagram_padding;
         config.svg_node_padding_x = self.svg_node_padding_x;
         config.svg_node_padding_y = self.svg_node_padding_y;
@@ -116,8 +116,8 @@ impl WasmRenderConfig {
         if let Some(show_ids) = self.show_ids {
             config.show_ids = show_ids;
         }
-        if let Some(svg_edge_curve) = self.svg_edge_curve {
-            config.svg_edge_curve = Some(parse_svg_edge_curve(&svg_edge_curve)?);
+        if let Some(svg_edge_path_style) = self.svg_edge_path_style {
+            config.svg_edge_path_style = Some(parse_svg_edge_path_style(&svg_edge_path_style)?);
         }
         if let Some(geometry_level) = self.geometry_level {
             config.geometry_level = parse_geometry_level(&geometry_level)?;
@@ -151,7 +151,7 @@ fn parse_output_format(value: &str) -> Result<OutputFormat, JsError> {
     parse_via_render_error(value)
 }
 
-fn parse_svg_edge_curve(value: &str) -> Result<SvgEdgePathStyle, JsError> {
+fn parse_svg_edge_path_style(value: &str) -> Result<SvgEdgePathStyle, JsError> {
     parse_via_render_error(value)
 }
 

@@ -3,7 +3,7 @@
   "profiles": ["mmds-core-v1", "vendor.experimental-v9"],
   "extensions": {
     "org.vendor.experimental.v9": {
-      "edge_curve": "step",
+      "edge_path_style": "step",
       "label_layout": "compact"
     }
   },

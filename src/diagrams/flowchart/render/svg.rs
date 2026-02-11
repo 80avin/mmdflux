@@ -11,6 +11,7 @@ use super::layout::{
 use super::routing_core::build_orthogonal_path_float;
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
+use super::unified_router::{UnifiedRoutingOptions, route_edges_unified};
 use crate::dagre::{LayoutResult, Point, Rect};
 use crate::diagram::{PathDetail, RoutingMode, SvgEdgePathStyle};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
@@ -132,6 +133,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
     // From this point on, rendering reads from `geom` instead of `layout`.
     let geom = geometry::from_dagre_layout(&layout, diagram);
+    let geom = if options.routing_mode == Some(RoutingMode::UnifiedPreview) {
+        inject_unified_preview_paths(diagram, &geom)
+    } else {
+        geom
+    };
 
     let override_nodes = svg_router::build_override_node_map(diagram);
 
@@ -164,6 +170,17 @@ fn rerouted_edge_indexes_for_mode(
         // semantics in the SVG renderer to constrain rollout risk.
         RoutingMode::UnifiedPreview | RoutingMode::FullCompute => HashSet::new(),
     }
+}
+
+fn inject_unified_preview_paths(diagram: &Diagram, geom: &GraphGeometry) -> GraphGeometry {
+    let routed = route_edges_unified(diagram, geom, UnifiedRoutingOptions::preview());
+    let mut updated = geom.clone();
+    for edge in routed {
+        if let Some(layout_edge) = updated.edges.iter_mut().find(|e| e.index == edge.index) {
+            layout_edge.layout_path_hint = Some(edge.path);
+        }
+    }
+    updated
 }
 
 fn render_svg_with_geometry_context(
@@ -207,8 +224,8 @@ fn render_svg_with_geometry_context(
         geom,
         &self_edge_paths,
         rerouted_edges,
-        svg_options.edge_curve,
-        svg_options.edge_curve_radius,
+        svg_options.edge_path_style,
+        svg_options.edge_path_radius,
         scale,
         options.path_detail,
     );
@@ -749,8 +766,8 @@ fn render_edges(
     geom: &GraphGeometry,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     rerouted_edges: &std::collections::HashSet<usize>,
-    edge_curve: SvgEdgePathStyle,
-    edge_curve_radius: f64,
+    edge_path_style: SvgEdgePathStyle,
+    edge_path_radius: f64,
     scale: f64,
     path_detail: PathDetail,
 ) {
@@ -810,7 +827,7 @@ fn render_edges(
         };
         // Only densify corners for linear edges; basis and rounded
         // handle smoothing natively from sparse waypoints.
-        if matches!(edge_curve, SvgEdgePathStyle::Linear) {
+        if matches!(edge_path_style, SvgEdgePathStyle::Linear) {
             points = fix_corner_points(&points);
         }
         points = apply_marker_offsets(&points, edge);
@@ -818,8 +835,8 @@ fn render_edges(
             &points,
             diagram.direction,
             scale,
-            edge_curve,
-            edge_curve_radius,
+            edge_path_style,
+            edge_path_radius,
         );
         if d.is_empty() {
             continue;

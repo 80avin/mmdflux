@@ -2647,7 +2647,7 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                svg_edge_curve: Some(SvgEdgePathStyle::Linear),
+                svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
                 routing_mode: Some(RoutingMode::FullCompute),
                 ..RenderConfig::default()
             },
@@ -2662,7 +2662,7 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                svg_edge_curve: Some(SvgEdgePathStyle::Linear),
+                svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
                 routing_mode: Some(RoutingMode::UnifiedPreview),
                 ..RenderConfig::default()
             },

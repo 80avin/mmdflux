@@ -12,7 +12,7 @@ pub use canvas::Canvas;
 use canvas::{Cell, Connections};
 pub use chars::CharSet;
 
-use crate::diagram::{OutputFormat, PathDetail, RenderConfig, SvgEdgePathStyle};
+use crate::diagram::{OutputFormat, PathDetail, RenderConfig, RoutingMode, SvgEdgePathStyle};
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
 };
@@ -40,11 +40,11 @@ impl From<&RenderConfig> for RenderOptions {
         if let Some(padding_y) = config.svg_node_padding_y {
             svg.node_padding_y = padding_y;
         }
-        if let Some(curve) = config.svg_edge_curve {
-            svg.edge_curve = curve;
+        if let Some(path_style) = config.svg_edge_path_style {
+            svg.edge_path_style = path_style;
         }
-        if let Some(radius) = config.svg_edge_curve_radius {
-            svg.edge_curve_radius = radius;
+        if let Some(radius) = config.svg_edge_path_radius {
+            svg.edge_path_radius = radius;
         }
         if let Some(padding) = config.svg_diagram_padding {
             svg.diagram_padding = padding;
@@ -61,6 +61,7 @@ impl From<&RenderConfig> for RenderOptions {
             cluster_ranksep: config.cluster_ranksep,
             padding: config.padding,
             path_detail: config.path_detail,
+            routing_mode: config.routing_mode,
         }
     }
 }
@@ -73,8 +74,8 @@ pub struct SvgOptions {
     pub font_size: f64,
     pub node_padding_x: f64,
     pub node_padding_y: f64,
-    pub edge_curve: SvgEdgePathStyle,
-    pub edge_curve_radius: f64,
+    pub edge_path_style: SvgEdgePathStyle,
+    pub edge_path_radius: f64,
     pub diagram_padding: f64,
 }
 
@@ -87,8 +88,8 @@ impl Default for SvgOptions {
             font_size,
             node_padding_x: 15.0,
             node_padding_y: 15.0,
-            edge_curve: SvgEdgePathStyle::Basis,
-            edge_curve_radius: 5.0,
+            edge_path_style: SvgEdgePathStyle::Basis,
+            edge_path_radius: 5.0,
             diagram_padding: 8.0,
         }
     }
@@ -117,6 +118,8 @@ pub struct RenderOptions {
     pub padding: Option<usize>,
     /// Edge path detail level (MMDS and SVG only).
     pub path_detail: PathDetail,
+    /// Optional routing mode override for graph-family renderers.
+    pub routing_mode: Option<RoutingMode>,
 }
 
 impl Default for RenderOptions {
@@ -132,6 +135,7 @@ impl Default for RenderOptions {
             cluster_ranksep: None,
             padding: None,
             path_detail: PathDetail::Full,
+            routing_mode: None,
         }
     }
 }

@@ -49,7 +49,7 @@ fn render_svg_fixture_with_curve(name: &str, curve: SvgEdgePathStyle) -> String 
     let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
     let diagram = build_diagram(&flowchart);
     let mut options = RenderOptions::default_svg();
-    options.svg.edge_curve = curve;
+    options.svg.edge_path_style = curve;
     render_svg(&diagram, &options)
 }
 
@@ -58,13 +58,28 @@ fn render_svg_fixture_with_routing_mode(name: &str, mode: RoutingMode) -> String
     let mut instance = FlowchartInstance::new();
     instance.parse(&input).expect("Failed to parse fixture");
     let config = RenderConfig {
-        svg_edge_curve: Some(SvgEdgePathStyle::Linear),
+        svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
         routing_mode: Some(mode),
         ..RenderConfig::default()
     };
     instance
         .render(OutputFormat::Svg, &config)
         .expect("Failed to render SVG fixture")
+}
+
+fn parse_attr_f64(line: &str, attr: &str) -> Option<f64> {
+    let marker = format!("{attr}=\"");
+    let start = line.find(&marker)? + marker.len();
+    let rest = &line[start..];
+    let end = rest.find('"')?;
+    rest[..end].parse::<f64>().ok()
+}
+
+fn subgraph_rect_ys(svg: &str) -> Vec<f64> {
+    svg.lines()
+        .filter(|line| line.contains("class=\"subgraph\""))
+        .filter_map(|line| parse_attr_f64(line, "y"))
+        .collect()
 }
 
 fn render_svg_mmds_fixture(name: &str) -> String {
@@ -279,4 +294,35 @@ fn svg_full_compute_override_matches_legacy_linear_core_subset() {
             "full-compute override should preserve legacy SVG for fixture {fixture}"
         );
     }
+}
+
+#[test]
+fn svg_unified_preview_preserves_subgraph_vertical_order_on_multi_override_fixture() {
+    let legacy = render_svg_fixture_with_routing_mode(
+        "multi_subgraph_direction_override.mmd",
+        RoutingMode::FullCompute,
+    );
+    let unified = render_svg_fixture_with_routing_mode(
+        "multi_subgraph_direction_override.mmd",
+        RoutingMode::UnifiedPreview,
+    );
+
+    let legacy_ys = subgraph_rect_ys(&legacy);
+    let unified_ys = subgraph_rect_ys(&unified);
+    assert!(
+        legacy_ys.len() >= 2 && unified_ys.len() >= 2,
+        "expected at least two subgraph rects in fixture output"
+    );
+    // Top subgraph A should remain above bottom subgraph G.
+    assert!(
+        unified_ys[1] > unified_ys[0],
+        "unified preview collapsed subgraph ordering: ys={:?}",
+        unified_ys
+    );
+    // Unified preview should keep the same top-to-bottom ordering as legacy.
+    assert!(
+        legacy_ys[1] > legacy_ys[0],
+        "legacy output unexpectedly lacks top-to-bottom subgraph ordering: ys={:?}",
+        legacy_ys
+    );
 }

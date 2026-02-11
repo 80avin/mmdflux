@@ -69,12 +69,24 @@ fn cli_svg_format_renders_flowchart() {
 }
 
 #[test]
-fn cli_accepts_svg_edge_curve_orthogonal() {
+fn cli_accepts_svg_edge_path_style_orthogonal() {
+    mmdflux()
+        .args(["--format", "svg", "--svg-edge-path-style", "orthogonal"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_rejects_legacy_svg_edge_curve_flag() {
     mmdflux()
         .args(["--format", "svg", "--svg-edge-curve", "orthogonal"])
         .write_stdin("graph TD\nA-->B")
         .assert()
-        .success();
+        .failure()
+        .stderr(predicate::str::contains(
+            "unexpected argument '--svg-edge-curve' found",
+        ));
 }
 
 #[test]

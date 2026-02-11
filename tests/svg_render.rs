@@ -95,7 +95,7 @@ fn svg_orthogonal_mode_renders_axis_aligned_path_commands() {
     let diagram = build_diagram(&flowchart);
 
     let mut options = RenderOptions::default_svg();
-    options.svg.edge_curve = SvgEdgePathStyle::Orthogonal;
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
     let svg = render_svg(&diagram, &options);
 
     assert!(!svg.contains("NaN"));

@@ -456,10 +456,10 @@ pub struct RenderConfig {
     pub padding: Option<usize>,
     /// SVG-specific: scale factor.
     pub svg_scale: Option<f64>,
-    /// SVG-specific: edge curve style.
-    pub svg_edge_curve: Option<SvgEdgePathStyle>,
-    /// SVG-specific: edge curve radius (px) for rounded corners.
-    pub svg_edge_curve_radius: Option<f64>,
+    /// SVG-specific: edge path style.
+    pub svg_edge_path_style: Option<SvgEdgePathStyle>,
+    /// SVG-specific: edge path radius (px) for rounded corners.
+    pub svg_edge_path_radius: Option<f64>,
     /// SVG-specific: diagram padding (px).
     pub svg_diagram_padding: Option<f64>,
     /// SVG-specific: node padding on x-axis (px).

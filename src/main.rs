@@ -77,14 +77,14 @@ struct Cli {
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
 
-    /// SVG edge curve style (basis, linear, rounded, or orthogonal)
+    /// SVG edge path style (basis, linear, rounded, or orthogonal)
     #[arg(long, value_enum)]
-    svg_edge_curve: Option<EdgeCurveArg>,
+    svg_edge_path_style: Option<EdgePathStyleArg>,
 
-    /// SVG edge curve radius (px) for rounded corners.
+    /// SVG edge path radius (px) for rounded corners.
     /// Clamped to half the shortest adjacent segment length.
     #[arg(long)]
-    svg_edge_curve_radius: Option<f64>,
+    svg_edge_path_radius: Option<f64>,
 
     /// SVG diagram padding (px)
     #[arg(long)]
@@ -151,20 +151,20 @@ impl From<RankerArg> for Ranker {
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
-enum EdgeCurveArg {
+enum EdgePathStyleArg {
     Basis,
     Linear,
     Rounded,
     Orthogonal,
 }
 
-impl From<EdgeCurveArg> for SvgEdgePathStyle {
-    fn from(arg: EdgeCurveArg) -> Self {
+impl From<EdgePathStyleArg> for SvgEdgePathStyle {
+    fn from(arg: EdgePathStyleArg) -> Self {
         match arg {
-            EdgeCurveArg::Basis => SvgEdgePathStyle::Basis,
-            EdgeCurveArg::Linear => SvgEdgePathStyle::Linear,
-            EdgeCurveArg::Rounded => SvgEdgePathStyle::Rounded,
-            EdgeCurveArg::Orthogonal => SvgEdgePathStyle::Orthogonal,
+            EdgePathStyleArg::Basis => SvgEdgePathStyle::Basis,
+            EdgePathStyleArg::Linear => SvgEdgePathStyle::Linear,
+            EdgePathStyleArg::Rounded => SvgEdgePathStyle::Rounded,
+            EdgePathStyleArg::Orthogonal => SvgEdgePathStyle::Orthogonal,
         }
     }
 }
@@ -286,8 +286,8 @@ fn main() -> io::Result<()> {
         svg_scale: cli.svg_scale,
         svg_node_padding_x: cli.svg_node_padding_x,
         svg_node_padding_y: cli.svg_node_padding_y,
-        svg_edge_curve: cli.svg_edge_curve.map(Into::into),
-        svg_edge_curve_radius: cli.svg_edge_curve_radius,
+        svg_edge_path_style: cli.svg_edge_path_style.map(Into::into),
+        svg_edge_path_radius: cli.svg_edge_path_radius,
         svg_diagram_padding: cli.svg_diagram_padding,
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
