@@ -248,3 +248,36 @@ fn class_routed_mmds_honors_routing_mode_override_on_cycle() {
         "class routed MMDS cycle output should change under unified-preview override"
     );
 }
+
+#[test]
+fn class_svg_honors_routing_mode_override_on_cycle() {
+    let input = "classDiagram\nA --> B\nB --> C\nC --> A\n";
+    let mut instance = ClassInstance::new();
+    instance.parse(input).expect("class cycle should parse");
+
+    let full = instance
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                routing_mode: Some(RoutingMode::FullCompute),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("full-compute svg should render");
+    let unified = instance
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                routing_mode: Some(RoutingMode::UnifiedPreview),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("unified-preview svg should render");
+
+    assert!(full.starts_with("<svg"));
+    assert!(unified.starts_with("<svg"));
+    assert_ne!(
+        full, unified,
+        "class SVG cycle output should change under unified-preview override"
+    );
+}
