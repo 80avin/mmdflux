@@ -159,7 +159,9 @@ fn build_mmds_output(
                 && let Some(re) = routed.edges.iter().find(|e| e.index == i)
             {
                 let full_path: Vec<[f64; 2]> = re.path.iter().map(|p| [p.x, p.y]).collect();
-                mmds_edge.path = Some(path_detail.simplify(&full_path));
+                mmds_edge.path = Some(
+                    path_detail.simplify_with_coords(&full_path, |point| (point[0], point[1])),
+                );
                 mmds_edge.label_position =
                     re.label_position.map(|p| MmdsPosition { x: p.x, y: p.y });
                 mmds_edge.is_backward = Some(re.is_backward);

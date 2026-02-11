@@ -1,6 +1,6 @@
 use mmdflux::diagram::{
     DiagramFamily, DiagramModel, EngineCapabilities, EngineConfig, GraphLayoutEngine, OutputFormat,
-    RenderConfig, RenderError,
+    PathDetail, RenderConfig, RenderError,
 };
 
 #[test]
@@ -110,4 +110,9 @@ fn graph_layout_engine_trait_is_implementable() {
 fn graph_layout_engine_trait_is_object_safe() {
     let engine: Box<dyn GraphLayoutEngine<Input = String, Output = String>> = Box::new(StubEngine);
     assert_eq!(engine.name(), "stub");
+}
+
+#[test]
+fn path_detail_compact_parses() {
+    assert_eq!(PathDetail::parse("compact").unwrap(), PathDetail::Compact);
 }

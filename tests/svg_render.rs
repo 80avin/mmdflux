@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
-use mmdflux::diagram::{OutputFormat, RenderConfig, SvgEdgePathStyle};
+use mmdflux::diagram::{OutputFormat, PathDetail, RenderConfig, RoutingMode, SvgEdgePathStyle};
 use mmdflux::registry::DiagramInstance;
 use mmdflux::render::{RenderOptions, render_svg};
 use mmdflux::{build_diagram, parse_flowchart};
@@ -66,6 +68,13 @@ fn parse_linear_path_points(path_data: &str) -> Vec<(f64, f64)> {
         .collect()
 }
 
+fn total_svg_edge_segments(svg: &str) -> usize {
+    edge_path_data(svg)
+        .iter()
+        .map(|d| parse_linear_path_points(d).len().saturating_sub(1))
+        .sum()
+}
+
 #[test]
 fn render_svg_basic_flowchart_has_svg_root() {
     let input = "graph TD\nA[Start] --> B[End]\n";
@@ -115,6 +124,43 @@ fn svg_orthogonal_mode_renders_axis_aligned_path_commands() {
             "orthogonal path should be axis-aligned, got {d}"
         );
     }
+}
+
+#[test]
+fn svg_compact_path_detail_sits_between_full_and_simplified_for_unified_preview() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("multi_subgraph_direction_override.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+
+    let render_with = |path_detail: PathDetail| {
+        let mut options = RenderOptions::default_svg();
+        options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+        options.routing_mode = Some(RoutingMode::UnifiedPreview);
+        options.path_detail = path_detail;
+        render_svg(&diagram, &options)
+    };
+
+    let full = render_with(PathDetail::Full);
+    let compact = render_with(PathDetail::Compact);
+    let simplified = render_with(PathDetail::Simplified);
+
+    let full_segments = total_svg_edge_segments(&full);
+    let compact_segments = total_svg_edge_segments(&compact);
+    let simplified_segments = total_svg_edge_segments(&simplified);
+
+    assert!(
+        full_segments > compact_segments,
+        "compact should reduce total segments: full={full_segments}, compact={compact_segments}"
+    );
+    assert!(
+        full_segments != simplified_segments,
+        "simplified should change segment density compared to full: full={full_segments}, simplified={simplified_segments}"
+    );
 }
 
 #[test]

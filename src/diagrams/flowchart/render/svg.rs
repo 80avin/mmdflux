@@ -780,7 +780,7 @@ fn render_edges(
                 .as_ref()
                 .map(|ps| ps.iter().map(|p| (*p).into()).collect())
                 .unwrap_or_default();
-            let points = path_detail.simplify(&points);
+            let points = path_detail.simplify_with_coords(&points, |point| (point.x, point.y));
             (edge.index, points)
         })
         .collect();

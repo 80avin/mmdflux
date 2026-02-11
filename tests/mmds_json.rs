@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use mmdflux::diagram::{GeometryLevel, OutputFormat, RenderConfig};
+use mmdflux::diagram::{GeometryLevel, OutputFormat, PathDetail, RenderConfig, RoutingMode};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::mmds::MmdsOutput;
 use mmdflux::registry::DiagramInstance;
@@ -157,6 +157,66 @@ fn mmds_layout_node_shapes() {
     assert_eq!(shapes["B"], "round");
     assert_eq!(shapes["C"], "diamond");
     assert_eq!(shapes["D"], "stadium");
+}
+
+#[test]
+fn mmds_compact_path_detail_sits_between_full_and_simplified() {
+    let input = flowchart_fixture("multi_subgraph_direction_override.mmd");
+    let render_for = |path_detail: PathDetail| {
+        let mut instance = FlowchartInstance::new();
+        instance.parse(&input).unwrap();
+        instance
+            .render(
+                OutputFormat::Mmds,
+                &RenderConfig {
+                    geometry_level: GeometryLevel::Routed,
+                    path_detail,
+                    routing_mode: Some(RoutingMode::UnifiedPreview),
+                    ..RenderConfig::default()
+                },
+            )
+            .unwrap()
+    };
+
+    let full = render_for(PathDetail::Full);
+    let compact = render_for(PathDetail::Compact);
+    let simplified = render_for(PathDetail::Simplified);
+
+    let full: MmdsOutput = serde_json::from_str(&full).unwrap();
+    let compact: MmdsOutput = serde_json::from_str(&compact).unwrap();
+    let simplified: MmdsOutput = serde_json::from_str(&simplified).unwrap();
+
+    let full_len = full
+        .edges
+        .iter()
+        .find(|edge| edge.source == "Bmid" && edge.target == "F")
+        .and_then(|edge| edge.path.as_ref())
+        .map(std::vec::Vec::len)
+        .unwrap();
+    let compact_len = compact
+        .edges
+        .iter()
+        .find(|edge| edge.source == "Bmid" && edge.target == "F")
+        .and_then(|edge| edge.path.as_ref())
+        .map(std::vec::Vec::len)
+        .unwrap();
+    let simplified_len = simplified
+        .edges
+        .iter()
+        .find(|edge| edge.source == "Bmid" && edge.target == "F")
+        .and_then(|edge| edge.path.as_ref())
+        .map(std::vec::Vec::len)
+        .unwrap();
+
+    assert!(
+        full_len > compact_len,
+        "compact should remove redundant waypoints: full={full_len}, compact={compact_len}"
+    );
+    assert!(
+        compact_len >= simplified_len,
+        "compact should preserve more structure than simplified: compact={compact_len}, simplified={simplified_len}"
+    );
+    assert_eq!(simplified_len, 3);
 }
 
 // -----------------------------------------------------------------------

@@ -158,6 +158,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 # Reduce edge path detail for compact payloads
 mmdflux --format mmds --geometry-level routed --path-detail simplified diagram.mmd
 mmdflux --format mmds --geometry-level routed --path-detail endpoints diagram.mmd
+mmdflux --format mmds --geometry-level routed --path-detail compact diagram.mmd
 ```
 
 `--path-detail` values:
@@ -165,6 +166,7 @@ mmdflux --format mmds --geometry-level routed --path-detail endpoints diagram.mm
 | Value        | Waypoints kept                 |
 | ------------ | ------------------------------ |
 | `full`       | All routed waypoints (default) |
+| `compact`    | Shape-preserving reduced path  |
 | `simplified` | Start, midpoint, and end only  |
 | `endpoints`  | Start and end only             |
 

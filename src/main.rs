@@ -190,6 +190,8 @@ impl From<GeometryLevelArg> for GeometryLevel {
 enum PathDetailArg {
     /// All routed waypoints (default)
     Full,
+    /// Remove redundant interior points while preserving path shape
+    Compact,
     /// Start, midpoint, and end only
     Simplified,
     /// Start and end only
@@ -200,6 +202,7 @@ impl From<PathDetailArg> for PathDetail {
     fn from(arg: PathDetailArg) -> Self {
         match arg {
             PathDetailArg::Full => PathDetail::Full,
+            PathDetailArg::Compact => PathDetail::Compact,
             PathDetailArg::Simplified => PathDetail::Simplified,
             PathDetailArg::Endpoints => PathDetail::Endpoints,
         }

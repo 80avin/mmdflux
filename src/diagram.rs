@@ -336,6 +336,8 @@ pub enum PathDetail {
     /// All routed waypoints (default).
     #[default]
     Full,
+    /// Remove redundant points while preserving path shape.
+    Compact,
     /// Start, midpoint, and end only (3 points).
     Simplified,
     /// Start and end only (2 points).
@@ -346,6 +348,7 @@ impl std::fmt::Display for PathDetail {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PathDetail::Full => write!(f, "full"),
+            PathDetail::Compact => write!(f, "compact"),
             PathDetail::Simplified => write!(f, "simplified"),
             PathDetail::Endpoints => write!(f, "endpoints"),
         }
@@ -357,6 +360,7 @@ impl PathDetail {
     pub fn parse(s: &str) -> Result<Self, RenderError> {
         match normalize_enum_token(s).as_str() {
             "full" => Ok(PathDetail::Full),
+            "compact" => Ok(PathDetail::Compact),
             "simplified" => Ok(PathDetail::Simplified),
             "endpoints" => Ok(PathDetail::Endpoints),
             _ => Err(RenderError {
@@ -384,6 +388,7 @@ impl PathDetail {
     pub fn simplify<T: Clone>(&self, points: &[T]) -> Vec<T> {
         match self {
             PathDetail::Full => points.to_vec(),
+            PathDetail::Compact => points.to_vec(),
             PathDetail::Simplified if points.len() > 3 => {
                 let mid = points.len() / 2;
                 vec![
@@ -398,6 +403,72 @@ impl PathDetail {
             _ => points.to_vec(),
         }
     }
+
+    /// Simplify path points with coordinate-aware compacting.
+    ///
+    /// - `Compact` removes consecutive duplicates and strictly collinear
+    ///   interior points while preserving overall shape.
+    /// - Other variants behave the same as `simplify`.
+    pub fn simplify_with_coords<T: Clone>(
+        &self,
+        points: &[T],
+        coords: impl Fn(&T) -> (f64, f64),
+    ) -> Vec<T> {
+        match self {
+            PathDetail::Compact => compact_points(points, coords),
+            _ => self.simplify(points),
+        }
+    }
+}
+
+fn compact_points<T: Clone>(points: &[T], coords: impl Fn(&T) -> (f64, f64)) -> Vec<T> {
+    const EPS: f64 = 1e-6;
+
+    if points.len() <= 2 {
+        return points.to_vec();
+    }
+
+    let mut deduped = Vec::with_capacity(points.len());
+    for point in points {
+        let keep = deduped.last().is_none_or(|prev: &T| {
+            let (px, py) = coords(prev);
+            let (x, y) = coords(point);
+            (px - x).abs() > EPS || (py - y).abs() > EPS
+        });
+        if keep {
+            deduped.push(point.clone());
+        }
+    }
+
+    if deduped.len() <= 2 {
+        return deduped;
+    }
+
+    let mut result = Vec::with_capacity(deduped.len());
+    result.push(deduped[0].clone());
+    for idx in 1..(deduped.len() - 1) {
+        let prev = result.last().expect("result has first element");
+        let curr = &deduped[idx];
+        let next = &deduped[idx + 1];
+
+        let (px, py) = coords(prev);
+        let (cx, cy) = coords(curr);
+        let (nx, ny) = coords(next);
+
+        let dx1 = cx - px;
+        let dy1 = cy - py;
+        let dx2 = nx - cx;
+        let dy2 = ny - cy;
+        let cross = dx1 * dy2 - dy1 * dx2;
+        let dot = dx1 * dx2 + dy1 * dy2;
+        let collinear_same_direction = cross.abs() <= EPS && dot >= -EPS;
+
+        if !collinear_same_direction {
+            result.push(curr.clone());
+        }
+    }
+    result.push(deduped[deduped.len() - 1].clone());
+    result
 }
 
 /// MMDS geometry level for JSON output.

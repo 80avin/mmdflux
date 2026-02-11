@@ -319,6 +319,24 @@ fn cli_json_routed_level_includes_paths() {
 }
 
 #[test]
+fn cli_json_routed_level_accepts_path_detail_compact() {
+    mmdflux()
+        .args([
+            "--format",
+            "mmds",
+            "--geometry-level",
+            "routed",
+            "--path-detail",
+            "compact",
+        ])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"geometry_level\": \"routed\""))
+        .stdout(predicate::str::contains("\"path\""));
+}
+
+#[test]
 fn cli_json_class_diagram_produces_mmds() {
     mmdflux()
         .args(["--format", "mmds"])

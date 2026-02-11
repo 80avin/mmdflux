@@ -300,6 +300,7 @@ MMDS (Mermaid Diagram Specification) is a structured JSON interchange format (`s
   - **routed** — adds edge paths, label positions, backward markers, subgraph bounds
 - Path detail controlled by `--path-detail`:
   - **full** — all routed waypoints
+  - **compact** — remove redundant collinear waypoints
   - **simplified** — start, midpoint, end
   - **endpoints** — start and end only
 - MMDS can also be used as input — the `diagrams/mmds/` module hydrates JSON back into `GraphGeometry` for rendering
