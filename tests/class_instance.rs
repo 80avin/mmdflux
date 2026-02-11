@@ -1,4 +1,7 @@
-use mmdflux::diagram::{LayoutEngineId, OutputFormat, RenderConfig};
+use std::fs;
+use std::path::Path;
+
+use mmdflux::diagram::{GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig, RoutingMode};
 use mmdflux::diagrams::class::ClassInstance;
 use mmdflux::registry::DiagramInstance;
 
@@ -172,4 +175,76 @@ fn class_instance_known_non_dagre_engine_errors_cleanly() {
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert!(err.message.contains("not yet implemented"));
+}
+
+#[test]
+fn class_routed_mmds_honors_routing_mode_override() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("class")
+        .join("animal_hierarchy.mmd");
+    let input = fs::read_to_string(&fixture).expect("class fixture should read");
+
+    let mut instance = ClassInstance::new();
+    instance.parse(&input).expect("fixture should parse");
+
+    let full = instance
+        .render(
+            OutputFormat::Mmds,
+            &RenderConfig {
+                geometry_level: GeometryLevel::Routed,
+                routing_mode: Some(RoutingMode::FullCompute),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("full-compute mmds should render");
+    let unified = instance
+        .render(
+            OutputFormat::Mmds,
+            &RenderConfig {
+                geometry_level: GeometryLevel::Routed,
+                routing_mode: Some(RoutingMode::UnifiedPreview),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("unified-preview mmds should render");
+
+    assert_ne!(
+        full, unified,
+        "class routed MMDS should reflect routing-mode override semantics"
+    );
+}
+
+#[test]
+fn class_routed_mmds_honors_routing_mode_override_on_cycle() {
+    let input = "classDiagram\nA --> B\nB --> C\nC --> A\n";
+    let mut instance = ClassInstance::new();
+    instance.parse(input).expect("class cycle should parse");
+
+    let full = instance
+        .render(
+            OutputFormat::Mmds,
+            &RenderConfig {
+                geometry_level: GeometryLevel::Routed,
+                routing_mode: Some(RoutingMode::FullCompute),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("full-compute mmds should render");
+    let unified = instance
+        .render(
+            OutputFormat::Mmds,
+            &RenderConfig {
+                geometry_level: GeometryLevel::Routed,
+                routing_mode: Some(RoutingMode::UnifiedPreview),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("unified-preview mmds should render");
+
+    assert_ne!(
+        full, unified,
+        "class routed MMDS cycle output should change under unified-preview override"
+    );
 }
