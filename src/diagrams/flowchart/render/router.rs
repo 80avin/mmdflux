@@ -724,16 +724,23 @@ fn route_edge_direct(
     }
     // When src_first_vertical is false (horizontal-first stagger), turn
     // horizontal one row after the source so sibling edges separate early.
-    if !src_first_vertical
+    // Fall back to standard routing when the stagger would land on the
+    // target row (creating a turn+arrowhead on the same row, e.g. ┌▲).
+    let stagger_mid_y = if !src_first_vertical
         && matches!(path_direction, Direction::TopDown | Direction::BottomTop)
         && start.x != end.x
         && start.y != end.y
     {
-        let mid_y = if matches!(path_direction, Direction::TopDown) {
+        let mid = if matches!(path_direction, Direction::TopDown) {
             start.y + 1
         } else {
             start.y.saturating_sub(1)
         };
+        if mid != end.y { Some(mid) } else { None }
+    } else {
+        None
+    };
+    if let Some(mid_y) = stagger_mid_y {
         segments.push(Segment::Vertical {
             x: start.x,
             y_start: start.y,
