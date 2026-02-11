@@ -1317,19 +1317,77 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
         }
         if !eligible.is_empty() {
             let centroid = eligible.iter().map(|(_, c, _)| *c).sum::<f64>() / eligible.len() as f64;
-            let delta = sg_center - centroid;
-            if delta.abs() >= 1.0 {
-                let primary_dist = eligible
-                    .iter()
-                    .map(|(_, _, p)| (*p - member_primary_center).abs())
-                    .fold(f64::INFINITY, f64::min);
-                for (id, _, _) in &eligible {
-                    if let Some(&(_, existing_dist)) = node_shifts.get(id) {
-                        if primary_dist < existing_dist {
+
+            if is_dir_override {
+                // Direction-override subgraphs: shift the subgraph toward the
+                // external centroid (the external nodes are well-constrained by
+                // dagre; the subgraph is not).
+                let delta = centroid - sg_center;
+                if delta.abs() >= 1.0 {
+                    let primary_dist = eligible
+                        .iter()
+                        .map(|(_, _, p)| (*p - member_primary_center).abs())
+                        .fold(f64::INFINITY, f64::min);
+                    // Shift all member nodes.
+                    for member_id in &sg.nodes {
+                        if let Some(&(_, existing_dist)) = node_shifts.get(member_id) {
+                            if primary_dist < existing_dist {
+                                node_shifts.insert(member_id.clone(), (delta, primary_dist));
+                            }
+                        } else {
+                            node_shifts.insert(member_id.clone(), (delta, primary_dist));
+                        }
+                    }
+                    // Shift this subgraph's bounds.
+                    if let Some(bounds) = layout.subgraph_bounds.get_mut(sg_id) {
+                        if horizontal {
+                            bounds.x += delta;
+                        } else {
+                            bounds.y += delta;
+                        }
+                    }
+                    // Shift nested child subgraph bounds recursively.
+                    let mut children_to_shift: Vec<String> = diagram
+                        .subgraph_children(sg_id)
+                        .into_iter()
+                        .cloned()
+                        .collect();
+                    let mut idx = 0;
+                    while idx < children_to_shift.len() {
+                        let child_id = &children_to_shift[idx];
+                        if let Some(cb) = layout.subgraph_bounds.get_mut(child_id) {
+                            if horizontal {
+                                cb.x += delta;
+                            } else {
+                                cb.y += delta;
+                            }
+                        }
+                        let grandchildren: Vec<String> = diagram
+                            .subgraph_children(child_id)
+                            .into_iter()
+                            .cloned()
+                            .collect();
+                        children_to_shift.extend(grandchildren);
+                        idx += 1;
+                    }
+                }
+            } else {
+                // Subgraph-as-node: shift external nodes toward the subgraph
+                // center (existing behavior).
+                let delta = sg_center - centroid;
+                if delta.abs() >= 1.0 {
+                    let primary_dist = eligible
+                        .iter()
+                        .map(|(_, _, p)| (*p - member_primary_center).abs())
+                        .fold(f64::INFINITY, f64::min);
+                    for (id, _, _) in &eligible {
+                        if let Some(&(_, existing_dist)) = node_shifts.get(id) {
+                            if primary_dist < existing_dist {
+                                node_shifts.insert(id.clone(), (delta, primary_dist));
+                            }
+                        } else {
                             node_shifts.insert(id.clone(), (delta, primary_dist));
                         }
-                    } else {
-                        node_shifts.insert(id.clone(), (delta, primary_dist));
                     }
                 }
             }
@@ -2482,6 +2540,13 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         }
     }
 
+    // --- Phase N: Ensure external-edge spacing for direction-override subgraphs ---
+    // After sublayout reconciliation, direction-override subgraphs may end up
+    // with their border flush against external predecessor/successor nodes.
+    // Push the border inward (shrink) to guarantee at least 1 row of space
+    // for clean edge entry.
+    ensure_external_edge_spacing(diagram, &node_bounds, &mut subgraph_bounds);
+
     let node_directions = geom.node_directions.clone();
 
     Layout {
@@ -2976,6 +3041,82 @@ fn shrink_subgraph_vertical_gaps(
     }
 
     expand_parent_subgraph_bounds(subgraphs, subgraph_bounds);
+}
+
+/// Ensure at least 1 row/column of space between a direction-override
+/// subgraph border and external predecessor/successor nodes.
+///
+/// After sublayout reconciliation, the subgraph bounds are recomputed from
+/// the sublayout dimensions.  This can leave the border flush against nodes
+/// above (TD) or below (BT), making edge entry visually cluttered.
+///
+/// For each direction-override subgraph with external edges, this pushes the
+/// border inward so there is a 1-cell gap on the entry side.
+fn ensure_external_edge_spacing(
+    diagram: &Diagram,
+    node_bounds: &HashMap<String, NodeBounds>,
+    subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
+) {
+    for (sg_id, sg) in &diagram.subgraphs {
+        if sg.dir.is_none() {
+            continue;
+        }
+        let Some(sb) = subgraph_bounds.get(sg_id).cloned() else {
+            continue;
+        };
+        let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+
+        // Classify each external predecessor/successor by its position
+        // relative to the subgraph, not by the diagram's main direction.
+        // This avoids false positives for nested subgraphs whose parent
+        // has a different direction (e.g. inner BT inside outer LR).
+        let mut max_pred_bottom: Option<usize> = None; // preds above
+        let mut min_succ_top: Option<usize> = None; // succs below
+
+        for edge in &diagram.edges {
+            if sg_node_set.contains(edge.to.as_str())
+                && !sg_node_set.contains(edge.from.as_str())
+                && let Some(nb) = node_bounds.get(&edge.from)
+            {
+                let nb_cy = nb.y + nb.height / 2;
+                // Only count predecessors whose center is above the border.
+                if nb_cy < sb.y {
+                    let bottom = nb.y + nb.height.saturating_sub(1);
+                    max_pred_bottom = Some(max_pred_bottom.map_or(bottom, |c| c.max(bottom)));
+                }
+            }
+            if sg_node_set.contains(edge.from.as_str())
+                && !sg_node_set.contains(edge.to.as_str())
+                && let Some(nb) = node_bounds.get(&edge.to)
+            {
+                let nb_cy = nb.y + nb.height / 2;
+                let sg_bottom = sb.y + sb.height.saturating_sub(1);
+                if nb_cy > sg_bottom {
+                    min_succ_top = Some(min_succ_top.map_or(nb.y, |c| c.min(nb.y)));
+                }
+            }
+        }
+
+        let entry = subgraph_bounds.get_mut(sg_id).unwrap();
+        // Top side: push border down if too close to predecessor bottom.
+        if let Some(pred_bottom) = max_pred_bottom {
+            let min_y = pred_bottom + 2;
+            if entry.y < min_y {
+                let adjust = min_y - entry.y;
+                entry.y = min_y;
+                entry.height = entry.height.saturating_sub(adjust);
+            }
+        }
+        // Bottom side: shrink height if border too close to successor top.
+        if let Some(succ_top) = min_succ_top {
+            let max_bottom = succ_top.saturating_sub(2);
+            let current_bottom = entry.y + entry.height.saturating_sub(1);
+            if current_bottom > max_bottom {
+                let adjust = current_bottom - max_bottom;
+                entry.height = entry.height.saturating_sub(adjust);
+            }
+        }
+    }
 }
 
 fn shrink_subgraph_horizontal_gaps(
