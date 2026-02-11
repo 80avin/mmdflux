@@ -43,3 +43,6 @@ RUN_ID=local-check-1 ./scripts/tests/run-all.sh
 - `05-roundtrip-and-conformance.sh`
   - direct vs MMDS roundtrip render inspection
   - `just conformance` summary + targeted MMDS suites
+- `06-plan-0075-routing-preview-qa.sh`
+  - focused QA sweep for orthogonal routing unification preview
+  - parity/rollback gates, MMDS mode diffs, determinism checks, full regression gates

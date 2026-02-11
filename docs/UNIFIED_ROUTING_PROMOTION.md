@@ -1,0 +1,95 @@
+# Unified Routing Promotion Checklist
+
+Use this checklist when promoting unified routing from preview to the default behavior.
+
+This checklist assumes you are willing to ship breaking rendering deltas in a minor release.
+
+## Decision Record (Required)
+
+- [ ] Promotion scope is explicit:
+  - Flowchart only, or graph-family wide.
+- [ ] Backward-edge policy is explicit:
+  - Keep hint fallback as intentional behavior, or fully migrate backward-edge routing.
+- [ ] Accepted deltas are documented:
+  - Which fixtures can differ and why.
+- [ ] Rollback policy is documented:
+  - Keep `--routing-mode full-compute` available for at least one release.
+
+## Hard Gates (Must Pass)
+
+- [ ] Run the full plan-0075 QA script:
+
+```bash
+./scripts/tests/06-plan-0075-routing-preview-qa.sh
+```
+
+- [ ] Expand parity audit beyond core trio (`simple`, `chain`, `simple_cycle`) and classify each diff:
+  - `accepted-improvement`
+  - `accepted-neutral`
+  - `must-match-legacy`
+
+- [ ] Determinism confirmed for unified mode (same input, same output bytes):
+  - SVG (`--routing-mode unified-preview`)
+  - MMDS routed (`--routing-mode unified-preview`)
+
+- [ ] Full regression gates pass:
+
+```bash
+just test-file integration
+just test-file svg_render
+just test-file svg_snapshots
+just test-file routed_geometry
+cargo test svg_snapshot_all_fixtures
+cargo test svg_snapshot_orthogonal_fixture_subset
+just lint
+```
+
+## Known Follow-Ups To Resolve Or Explicitly Accept
+
+From archived plan 0075 findings:
+
+- [ ] `simple_cycle.mmd` linear-SVG delta in unified preview is accepted (or fixed):
+  - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-unified-preview-svg-linear-core-parity-delta-simple-cycle.md`
+- [ ] Backward-edge fallback is accepted (or replaced with full unified behavior):
+  - `plans/archive/0075-orthogonal-routing-unification/findings/note-unified-preview-backward-edge-fallback-uses-existing-hints.md`
+- [ ] Alignment tolerance (`0.5`) is accepted and regression-tested (or revised):
+  - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-orthogonal-builder-alignment-tolerance.md`
+- [ ] Direction-policy split between layout-aware and shared policy helpers is accepted (or unified):
+  - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-shared-attachment-adapters-need-legacy-direction-and-spread-semantics.md`
+
+## Code Change Checklist For Default Flip
+
+- [ ] Change default routing selection to unified mode for intended scope.
+- [ ] Keep CLI override behavior intact:
+  - `--routing-mode unified-preview`
+  - `--routing-mode full-compute`
+  - `--routing-mode pass-through-clip`
+- [ ] Keep rollback tests green:
+  - `svg_full_compute_override_matches_legacy_linear_core_subset`
+- [ ] Update docs to reflect new default:
+  - `docs/CLI_REFERENCE.md`
+  - `docs/DEBUG.md`
+  - `README.md`
+
+## Release Notes Template
+
+Copy into release notes/changelog:
+
+```text
+Routing default changed: unified routing is now the default for <scope>.
+
+This may change edge path geometry in some diagrams (notably cycle/backward-edge cases).
+Use --routing-mode full-compute to force legacy routing behavior during transition.
+
+Known accepted deltas:
+- <fixture/category>: <short reason>
+- <fixture/category>: <short reason>
+```
+
+## Recommended One-Release Transition Policy
+
+- Release N:
+  - Unified routing default ON.
+  - `full-compute` explicitly documented as rollback path.
+- Release N+1:
+  - Re-evaluate rollback path retention based on issue volume and fixture delta review.
