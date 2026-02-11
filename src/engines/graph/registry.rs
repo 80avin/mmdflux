@@ -47,7 +47,7 @@ impl Default for GraphEngineRegistry {
         let mut registry = Self {
             engines: HashMap::new(),
         };
-        registry.register(LayoutEngineId::Dagre, Box::new(DagreLayoutEngine));
+        registry.register(LayoutEngineId::Dagre, Box::new(DagreLayoutEngine::text()));
 
         #[cfg(feature = "engine-elk")]
         {

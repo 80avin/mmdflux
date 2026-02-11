@@ -558,7 +558,7 @@ mod tests {
 
         let fc = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&fc);
-        let engine = DagreLayoutEngine;
+        let engine = DagreLayoutEngine::text();
         let config = EngineConfig::Dagre(crate::dagre::types::LayoutConfig::default());
         let geom = engine.layout(&diagram, &config).unwrap();
         (diagram, geom)

@@ -160,6 +160,60 @@ fn mmds_layout_node_shapes() {
 }
 
 // -----------------------------------------------------------------------
+// Contract: MMDS coordinates are in SVG pixel space, not text-grid space
+// -----------------------------------------------------------------------
+
+#[test]
+fn mmds_node_sizes_are_in_svg_pixel_dimensions() {
+    // A rectangle node labeled "A" in text-grid space is ~5×3 characters.
+    // In SVG pixel space it should be roughly 40-80px wide and 40-60px tall.
+    // This test catches the bug where MMDS emits text-grid char dimensions
+    // instead of pixel dimensions.
+    let json = render_json("graph TD\nA-->B");
+    let output: MmdsOutput = serde_json::from_str(&json).unwrap();
+
+    let node_a = output.nodes.iter().find(|n| n.id == "A").unwrap();
+    assert!(
+        node_a.size.width > 20.0,
+        "node width {} should be in pixel space (>20px), not text-grid chars",
+        node_a.size.width
+    );
+    assert!(
+        node_a.size.height > 20.0,
+        "node height {} should be in pixel space (>20px), not text-grid chars",
+        node_a.size.height
+    );
+}
+
+#[test]
+fn mmds_routed_subgraph_bounds_are_reasonable() {
+    // Subgraph bounds should tightly wrap their children.
+    // A subgraph containing two nodes in TD layout should have a height
+    // proportional to the content, not spanning the full diagram.
+    let json = render_json_with_level(
+        "graph TD\nsubgraph sg1[Group]\nA-->B\nend\nC-->A",
+        GeometryLevel::Routed,
+    );
+    let output: MmdsOutput = serde_json::from_str(&json).unwrap();
+
+    let sg = &output.subgraphs[0];
+    let bounds = sg
+        .bounds
+        .as_ref()
+        .expect("routed subgraph should have bounds");
+    let diagram_height = output.metadata.bounds.height;
+
+    // Subgraph bounds height should be less than 80% of the total diagram height
+    // (it contains 2 of the 3 nodes, so it shouldn't span the whole thing).
+    assert!(
+        bounds.height < diagram_height * 0.8,
+        "subgraph height {} should be well under diagram height {} (not spanning full diagram)",
+        bounds.height,
+        diagram_height
+    );
+}
+
+// -----------------------------------------------------------------------
 // Contract: layout-level edges have NO geometry
 // -----------------------------------------------------------------------
 
