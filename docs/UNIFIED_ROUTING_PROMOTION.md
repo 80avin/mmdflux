@@ -6,13 +6,13 @@ This checklist assumes you are willing to ship breaking rendering deltas in a mi
 
 ## Decision Record (Required)
 
-- [ ] Promotion scope is explicit:
+- [x] Promotion scope is explicit:
   - Flowchart only, or graph-family wide.
-- [ ] Backward-edge policy is explicit:
+- [x] Backward-edge policy is explicit:
   - Keep hint fallback as intentional behavior, or fully migrate backward-edge routing.
-- [ ] Accepted deltas are documented:
+- [x] Accepted deltas are documented:
   - Which fixtures can differ and why.
-- [ ] Rollback policy is documented:
+- [x] Rollback policy is documented:
   - Keep `--routing-mode full-compute` available for at least one release.
 
 ## Current Decision (2026-02-11)
@@ -28,6 +28,24 @@ This checklist assumes you are willing to ship breaking rendering deltas in a mi
   - Keep backward-edge hint fallback as intentional release-N behavior.
 - [x] Rollback policy (current):
   - Keep `--routing-mode full-compute` documented and supported for at least one release after default flip.
+
+## Accepted Deltas (Release N, Flowchart Scope)
+
+This is the decision record for known output differences when unified routing is promoted.
+
+| Area | Classification | Decision | Notes |
+| ---- | -------------- | -------- | ----- |
+| Flowchart SVG linear, `simple_cycle.mmd` | accepted-neutral | Accept for Release N | Unified preview introduces forward-edge orthogonalization differences; covered by parity gate in `tests/svg_snapshots.rs`. |
+| Flowchart backward-edge routing behavior | accepted-design | Accept for Release N | Keep route-hint fallback as intentional behavior (stability-first) instead of forcing full backward-edge unification in this release. |
+| Flowchart SVG linear core subset (`simple.mmd`, `chain.mmd`) | must-match-legacy | Must match | Current parity gates require byte-identical outputs for these fixtures under rollback/full-compute expectations. |
+
+### Delta Evidence Sources
+
+- `plans/archive/0075-orthogonal-routing-unification/findings/discovery-unified-preview-svg-linear-core-parity-delta-simple-cycle.md`
+- `plans/archive/0075-orthogonal-routing-unification/findings/note-unified-preview-backward-edge-fallback-uses-existing-hints.md`
+- `tests/svg_snapshots.rs`:
+  - `svg_unified_preview_parity_core_fixture_subset_has_expected_deltas`
+  - `svg_full_compute_override_matches_legacy_linear_core_subset`
 
 ## Follow-Up Planning Items (Required Before Graph-Family Promotion)
 
@@ -72,9 +90,9 @@ just lint
 
 From archived plan 0075 findings:
 
-- [ ] `simple_cycle.mmd` linear-SVG delta in unified preview is accepted (or fixed):
+- [x] `simple_cycle.mmd` linear-SVG delta in unified preview is accepted (or fixed):
   - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-unified-preview-svg-linear-core-parity-delta-simple-cycle.md`
-- [ ] Backward-edge fallback is accepted (or replaced with full unified behavior):
+- [x] Backward-edge fallback is accepted (or replaced with full unified behavior):
   - `plans/archive/0075-orthogonal-routing-unification/findings/note-unified-preview-backward-edge-fallback-uses-existing-hints.md`
 - [ ] Alignment tolerance (`0.5`) is accepted and regression-tested (or revised):
   - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-orthogonal-builder-alignment-tolerance.md`
