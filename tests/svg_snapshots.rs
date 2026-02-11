@@ -8,6 +8,30 @@ use mmdflux::registry::DiagramInstance;
 use mmdflux::render::{RenderOptions, render_svg};
 use mmdflux::{build_diagram, parse_flowchart};
 
+const UNIFIED_PARITY_FIXTURE_SUBSET: &[&str] = &[
+    "simple.mmd",
+    "chain.mmd",
+    "simple_cycle.mmd",
+    "decision.mmd",
+    "fan_out.mmd",
+    "left_right.mmd",
+    "subgraph_direction_cross_boundary.mmd",
+    "multi_subgraph_direction_override.mmd",
+];
+
+const UNIFIED_PARITY_ACCEPTED_DELTAS: &[&str] = &[
+    "simple.mmd",
+    "chain.mmd",
+    "simple_cycle.mmd",
+    "decision.mmd",
+    "fan_out.mmd",
+    "left_right.mmd",
+    "subgraph_direction_cross_boundary.mmd",
+    "multi_subgraph_direction_override.mmd",
+];
+
+const UNIFIED_PARITY_MUST_MATCH: &[&str] = &[];
+
 fn list_fixtures() -> Vec<String> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -69,6 +93,30 @@ fn render_svg_fixture_with_routing_mode(name: &str, mode: RoutingMode) -> String
     instance
         .render(OutputFormat::Svg, &config)
         .expect("Failed to render SVG fixture")
+}
+
+fn render_svg_fixture_full_vs_unified(name: &str) -> (String, String) {
+    (
+        render_svg_fixture_with_routing_mode(name, RoutingMode::FullCompute),
+        render_svg_fixture_with_routing_mode(name, RoutingMode::UnifiedPreview),
+    )
+}
+
+fn assert_unified_parity_classification_is_complete() {
+    let mut classified: Vec<&str> = UNIFIED_PARITY_ACCEPTED_DELTAS
+        .iter()
+        .chain(UNIFIED_PARITY_MUST_MATCH.iter())
+        .copied()
+        .collect();
+    classified.sort_unstable();
+
+    let mut fixture_subset = UNIFIED_PARITY_FIXTURE_SUBSET.to_vec();
+    fixture_subset.sort_unstable();
+
+    assert_eq!(
+        classified, fixture_subset,
+        "fixture subset classification is incomplete or duplicated"
+    );
 }
 
 fn parse_attr_f64(line: &str, attr: &str) -> Option<f64> {
@@ -281,22 +329,42 @@ fn svg_snapshot_orthogonal_fixture_subset() {
 }
 
 #[test]
-fn svg_unified_preview_parity_core_fixture_subset_has_expected_deltas() {
-    let fixtures = ["simple.mmd", "chain.mmd", "simple_cycle.mmd"];
+fn svg_unified_preview_parity_fixture_subset_matches_expected_classification() {
+    assert_unified_parity_classification_is_complete();
+
     let mut differing: Vec<&str> = Vec::new();
 
-    for fixture in fixtures {
-        let legacy = render_svg_fixture_with_routing_mode(fixture, RoutingMode::FullCompute);
-        let unified = render_svg_fixture_with_routing_mode(fixture, RoutingMode::UnifiedPreview);
+    for fixture in UNIFIED_PARITY_FIXTURE_SUBSET {
+        let (legacy, unified) = render_svg_fixture_full_vs_unified(fixture);
         if legacy != unified {
             differing.push(fixture);
         }
     }
 
     assert_eq!(
-        differing,
-        vec!["simple.mmd", "chain.mmd", "simple_cycle.mmd"]
+        differing, UNIFIED_PARITY_ACCEPTED_DELTAS,
+        "accepted-delta set changed; reclassify fixture subset"
     );
+
+    for fixture in UNIFIED_PARITY_MUST_MATCH {
+        let (legacy, unified) = render_svg_fixture_full_vs_unified(fixture);
+        assert_eq!(
+            unified, legacy,
+            "fixture {fixture} is classified as must-match but diverged"
+        );
+    }
+}
+
+#[test]
+fn unified_preview_svg_output_is_deterministic_for_fixture_subset() {
+    for fixture in UNIFIED_PARITY_FIXTURE_SUBSET {
+        let first = render_svg_fixture_with_routing_mode(fixture, RoutingMode::UnifiedPreview);
+        let second = render_svg_fixture_with_routing_mode(fixture, RoutingMode::UnifiedPreview);
+        assert_eq!(
+            second, first,
+            "unified-preview SVG output is nondeterministic for fixture {fixture}"
+        );
+    }
 }
 
 #[test]

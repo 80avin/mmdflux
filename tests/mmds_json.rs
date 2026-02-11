@@ -40,6 +40,21 @@ fn render_json_with_level(input: &str, level: GeometryLevel) -> String {
     instance.render(OutputFormat::Mmds, &config).unwrap()
 }
 
+fn render_routed_mmds_with_mode(input: &str, mode: RoutingMode) -> String {
+    let mut instance = FlowchartInstance::new();
+    instance.parse(input).unwrap();
+    instance
+        .render(
+            OutputFormat::Mmds,
+            &RenderConfig {
+                geometry_level: GeometryLevel::Routed,
+                routing_mode: Some(mode),
+                ..RenderConfig::default()
+            },
+        )
+        .unwrap()
+}
+
 fn mmds_fixture(path: &str) -> Value {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -300,6 +315,25 @@ fn path_detail_monotonicity_holds_full_compact_simplified() {
         full >= compact && compact >= simplified,
         "path-detail monotonicity violated: full={full}, compact={compact}, simplified={simplified}"
     );
+}
+
+#[test]
+fn unified_preview_mmds_routed_output_is_deterministic_for_fixture_subset() {
+    for fixture in [
+        "simple.mmd",
+        "decision.mmd",
+        "fan_out.mmd",
+        "subgraph_direction_cross_boundary.mmd",
+        "multi_subgraph_direction_override.mmd",
+    ] {
+        let input = flowchart_fixture(fixture);
+        let first = render_routed_mmds_with_mode(&input, RoutingMode::UnifiedPreview);
+        let second = render_routed_mmds_with_mode(&input, RoutingMode::UnifiedPreview);
+        assert_eq!(
+            second, first,
+            "unified-preview MMDS routed output is nondeterministic for fixture {fixture}"
+        );
+    }
 }
 
 // -----------------------------------------------------------------------

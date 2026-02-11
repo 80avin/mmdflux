@@ -1,6 +1,6 @@
-# Unified Routing Promotion Checklist
+# Unified Routing Promotion Decision Record
 
-Use this checklist when promoting unified routing from preview to the default behavior.
+Use this decision record when promoting unified routing from preview to the default behavior.
 
 This checklist assumes you are willing to ship breaking rendering deltas in a minor release.
 
@@ -35,17 +35,21 @@ This is the decision record for known output differences when unified routing is
 
 | Area | Classification | Decision | Notes |
 | ---- | -------------- | -------- | ----- |
-| Flowchart SVG linear, `simple_cycle.mmd` | accepted-neutral | Accept for Release N | Unified preview introduces forward-edge orthogonalization differences; covered by parity gate in `tests/svg_snapshots.rs`. |
+| Flowchart SVG linear parity-classification subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`, `decision.mmd`, `fan_out.mmd`, `left_right.mmd`, `subgraph_direction_cross_boundary.mmd`, `multi_subgraph_direction_override.mmd`) | accepted-improvement | Accept for Release N | Unified-preview deltas are explicitly classified and test-enforced in `svg_unified_preview_parity_fixture_subset_matches_expected_classification`. |
 | Flowchart backward-edge routing behavior | accepted-design | Accept for Release N | Keep route-hint fallback as intentional behavior (stability-first) instead of forcing full backward-edge unification in this release. |
-| Flowchart SVG linear core subset (`simple.mmd`, `chain.mmd`) | must-match-legacy | Must match | Current parity gates require byte-identical outputs for these fixtures under rollback/full-compute expectations. |
+| Rollback parity guard (`--routing-mode full-compute`) for linear core subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`) | must-match-legacy | Must match | `svg_full_compute_override_matches_legacy_linear_core_subset` requires byte-identical legacy parity when rollback mode is selected. |
 
 ### Delta Evidence Sources
 
 - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-unified-preview-svg-linear-core-parity-delta-simple-cycle.md`
 - `plans/archive/0075-orthogonal-routing-unification/findings/note-unified-preview-backward-edge-fallback-uses-existing-hints.md`
 - `tests/svg_snapshots.rs`:
-  - `svg_unified_preview_parity_core_fixture_subset_has_expected_deltas`
+  - `svg_unified_preview_parity_fixture_subset_matches_expected_classification`
+  - `unified_preview_svg_output_is_deterministic_for_fixture_subset`
   - `svg_full_compute_override_matches_legacy_linear_core_subset`
+- `tests/mmds_json.rs`:
+  - `unified_preview_mmds_routed_output_is_deterministic_for_fixture_subset`
+  - `routed_mmds_defaults_to_simplified_path_detail`
 
 ## Follow-Up Planning Items (Required Before Graph-Family Promotion)
 
@@ -59,22 +63,21 @@ This is the decision record for known output differences when unified routing is
 
 ## Hard Gates (Must Pass)
 
-- [ ] Run the full plan-0075 QA script:
+- [x] Run the full plan-0076 QA script:
 
 ```bash
-./scripts/tests/06-plan-0075-routing-preview-qa.sh
+./scripts/tests/07-plan-0076-unified-routing-quality-qa.sh
 ```
 
-- [ ] Expand parity audit beyond core trio (`simple`, `chain`, `simple_cycle`) and classify each diff:
-  - `accepted-improvement`
-  - `accepted-neutral`
-  - `must-match-legacy`
+- [x] Expanded parity audit beyond core trio and classified fixture deltas:
+  - `accepted-improvement`: `simple.mmd`, `chain.mmd`, `simple_cycle.mmd`, `decision.mmd`, `fan_out.mmd`, `left_right.mmd`, `subgraph_direction_cross_boundary.mmd`, `multi_subgraph_direction_override.mmd`
+  - `must-match-legacy` rollback: full-compute override parity for `simple.mmd`, `chain.mmd`, `simple_cycle.mmd`
 
-- [ ] Determinism confirmed for unified mode (same input, same output bytes):
+- [x] Determinism confirmed for unified mode (same input, same output bytes):
   - SVG (`--routing-mode unified-preview`)
   - MMDS routed (`--routing-mode unified-preview`)
 
-- [ ] Full regression gates pass:
+- [x] Full regression gates pass:
 
 ```bash
 just test-file integration
@@ -94,10 +97,12 @@ From archived plan 0075 findings:
   - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-unified-preview-svg-linear-core-parity-delta-simple-cycle.md`
 - [x] Backward-edge fallback is accepted (or replaced with full unified behavior):
   - `plans/archive/0075-orthogonal-routing-unification/findings/note-unified-preview-backward-edge-fallback-uses-existing-hints.md`
-- [ ] Alignment tolerance (`0.5`) is accepted and regression-tested (or revised):
+- [x] Alignment tolerance (`0.5`) is accepted and regression-tested:
   - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-orthogonal-builder-alignment-tolerance.md`
-- [ ] Direction-policy split between layout-aware and shared policy helpers is accepted (or unified):
+  - Regression gate: `shared_builder_keeps_alignment_tolerance_stable_for_near_aligned_points` (`tests/routed_geometry.rs`)
+- [x] Direction-policy split between layout-aware and shared policy helpers is accepted for Release N:
   - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-shared-attachment-adapters-need-legacy-direction-and-spread-semantics.md`
+  - Release N keeps the current split with explicit fixture-level parity + rollback gates.
 
 ## Code Change Checklist For Default Flip
 
