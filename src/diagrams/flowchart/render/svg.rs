@@ -892,6 +892,13 @@ fn compact_visual_staircases(points: &[Point], short_tol: f64) -> Vec<Point> {
     let mut compacted = points.to_vec();
     let mut i = 0usize;
     while i + 3 < compacted.len() {
+        // Preserve start/end approach geometry so marker orientation keeps a
+        // clear supporting segment into/out of the endpoint.
+        if i == 0 || i + 3 >= compacted.len() - 1 {
+            i += 1;
+            continue;
+        }
+
         let p0 = compacted[i];
         let p1 = compacted[i + 1];
         let p2 = compacted[i + 2];
