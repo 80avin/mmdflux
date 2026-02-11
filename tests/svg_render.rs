@@ -188,6 +188,38 @@ fn edge_path_for_svg_order(
     )
 }
 
+fn load_flowchart_fixture_diagram(name: &str) -> mmdflux::Diagram {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join(name);
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    build_diagram(&flowchart)
+}
+
+fn render_fixture_svg(
+    diagram: &mmdflux::Diagram,
+    routing_mode: RoutingMode,
+    style: SvgEdgePathStyle,
+) -> String {
+    let mut options = RenderOptions::default_svg();
+    options.routing_mode = Some(routing_mode);
+    options.svg.edge_path_style = style;
+    options.path_detail = PathDetail::Full;
+    render_svg(diagram, &options)
+}
+
+fn edge_index(diagram: &mmdflux::Diagram, from: &str, to: &str) -> usize {
+    diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == from && edge.to == to)
+        .unwrap_or_else(|| panic!("expected edge {from} -> {to}"))
+        .index
+}
+
 #[test]
 fn render_svg_basic_flowchart_has_svg_root() {
     let input = "graph TD\nA[Start] --> B[End]\n";
@@ -595,6 +627,86 @@ fn svg_non_orth_unified_preview_keeps_endpoint_pulled_back_for_visible_arrow_tip
             expected_endpoint_y
         );
     }
+}
+
+#[test]
+fn unified_preview_diamond_boundary_clipping_matches_shape_boundary() {
+    let diagram = load_flowchart_fixture_diagram("decision.mmd");
+    let edge_index = edge_index(&diagram, "B", "D");
+
+    let full_svg = render_fixture_svg(&diagram, RoutingMode::FullCompute, SvgEdgePathStyle::Basis);
+    let unified_svg = render_fixture_svg(
+        &diagram,
+        RoutingMode::UnifiedPreview,
+        SvgEdgePathStyle::Basis,
+    );
+
+    let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
+    let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
+    let full_start = full_points[0];
+    let unified_start = unified_points[0];
+    let dx = (full_start.0 - unified_start.0).abs();
+    let dy = (full_start.1 - unified_start.1).abs();
+    let displacement = (dx * dx + dy * dy).sqrt();
+
+    assert!(
+        displacement <= 15.0,
+        "diamond exit clipping should avoid large endpoint displacement from full-compute (<=15px); full_start={full_start:?}, unified_start={unified_start:?}, displacement={displacement}, full_points={full_points:?}, unified_points={unified_points:?}"
+    );
+}
+
+#[test]
+fn unified_preview_subgraph_to_subgraph_edge_keeps_terminal_attachment() {
+    let diagram = load_flowchart_fixture_diagram("subgraph_to_subgraph_edge.mmd");
+    let edge_index = edge_index(&diagram, "API", "DB");
+
+    let full_svg = render_fixture_svg(&diagram, RoutingMode::FullCompute, SvgEdgePathStyle::Basis);
+    let unified_svg = render_fixture_svg(
+        &diagram,
+        RoutingMode::UnifiedPreview,
+        SvgEdgePathStyle::Basis,
+    );
+
+    let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
+    let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
+    let full_start = full_points[0];
+    let unified_start = unified_points[0];
+    let full_end = full_points[full_points.len() - 1];
+    let unified_end = unified_points[unified_points.len() - 1];
+
+    assert!(
+        (full_start.1 - unified_start.1).abs() <= 1.0 && (full_end.1 - unified_end.1).abs() <= 1.0,
+        "API -> DB should keep vertical attachment parity with full-compute; full_points={full_points:?}, unified_points={unified_points:?}"
+    );
+}
+
+#[test]
+fn unified_preview_inner_bt_subgraph_edge_does_not_collapse() {
+    let diagram = load_flowchart_fixture_diagram("subgraph_direction_nested_both.mmd");
+    let edge_index = edge_index(&diagram, "A", "B");
+
+    let full_svg = render_fixture_svg(&diagram, RoutingMode::FullCompute, SvgEdgePathStyle::Basis);
+    let unified_svg = render_fixture_svg(
+        &diagram,
+        RoutingMode::UnifiedPreview,
+        SvgEdgePathStyle::Basis,
+    );
+
+    let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
+    let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
+    let full_start = full_points[0];
+    let unified_start = unified_points[0];
+    let full_end = full_points[full_points.len() - 1];
+    let unified_end = unified_points[unified_points.len() - 1];
+    let full_span = (full_start.1 - full_end.1).abs();
+    let unified_span = (unified_start.1 - unified_end.1).abs();
+
+    assert!(
+        (full_start.1 - unified_start.1).abs() <= 1.0
+            && (full_end.1 - unified_end.1).abs() <= 1.0
+            && unified_span >= full_span - 1.0,
+        "A -> B in inner BT subgraph should preserve full-compute span; full_points={full_points:?}, unified_points={unified_points:?}, full_span={full_span}, unified_span={unified_span}"
+    );
 }
 
 #[test]

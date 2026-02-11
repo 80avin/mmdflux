@@ -8,6 +8,7 @@ use super::layout::{
     build_dagre_layout, center_override_subgraphs, compute_sublayouts, dagre_config_for_layout,
     expand_parent_bounds_dagre, reconcile_sublayouts_dagre, resolve_sublayout_overlaps,
 };
+use super::route_policy::effective_edge_direction;
 use super::routing_core::build_orthogonal_path_float;
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
@@ -828,6 +829,16 @@ fn render_edges(
             continue;
         }
         let mut points = points;
+        let edge_direction = if matches!(routing_mode, RoutingMode::UnifiedPreview) {
+            effective_edge_direction(
+                &geom.node_directions,
+                &edge.from,
+                &edge.to,
+                diagram.direction,
+            )
+        } else {
+            diagram.direction
+        };
         // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
         // edges whose endpoints already land on the subgraph border).
         if !rerouted_edges.contains(&index) {
@@ -843,13 +854,24 @@ fn render_edges(
             }
         }
 
-        // Rerouted edges already have border-snapped endpoints; skip shape
-        // adjustment (which assumes dagre center-to-center paths) but still
-        // apply marker offsets to pull endpoints back for clean arrowheads.
-        let mut points = if rerouted_edges.contains(&index) {
-            points
-        } else {
+        // Preserve prior rerouted-edge behavior for healthy paths, but still
+        // reclip when endpoints detach from expected faces or use non-rect
+        // shapes (diamond/hexagon).
+        let rerouted = rerouted_edges.contains(&index);
+        let should_adjust = !matches!(routing_mode, RoutingMode::PassThroughClip)
+            && (!rerouted
+                || (matches!(routing_mode, RoutingMode::UnifiedPreview)
+                    && should_adjust_rerouted_edge_endpoints(
+                        diagram,
+                        geom,
+                        edge,
+                        &points,
+                        edge_direction,
+                    )));
+        let mut points = if should_adjust {
             adjust_edge_points_for_shapes(diagram, geom, edge, &points)
+        } else {
+            points
         };
         // Only densify corners for linear edges; basis and rounded
         // handle smoothing natively from sparse waypoints.
@@ -861,7 +883,7 @@ fn render_edges(
         points = apply_marker_offsets(
             &points,
             edge,
-            diagram.direction,
+            edge_direction,
             !matches!(edge_path_style, SvgEdgePathStyle::Linear),
             enforce_primary_axis_no_backtrack,
             matches!(edge_path_style, SvgEdgePathStyle::Orthogonal),
@@ -2085,6 +2107,114 @@ fn simplify_orthogonal_points(points: &[Point], direction: Direction) -> Vec<Poi
     vec![start, elbow, end]
 }
 
+type EndpointShapeRect = (Rect, Shape);
+
+fn edge_endpoint_shape_rects(
+    diagram: &Diagram,
+    geom: &GraphGeometry,
+    edge: &Edge,
+) -> Option<(EndpointShapeRect, EndpointShapeRect)> {
+    let from = if let Some(sg_id) = edge.from_subgraph.as_ref() {
+        let sg_rect: Rect = geom.subgraphs.get(sg_id)?.rect.into();
+        (sg_rect, Shape::Rectangle)
+    } else {
+        let node_rect: Rect = geom.nodes.get(&edge.from)?.rect.into();
+        let node = diagram.nodes.get(&edge.from)?;
+        (node_rect, node.shape)
+    };
+
+    let to = if let Some(sg_id) = edge.to_subgraph.as_ref() {
+        let sg_rect: Rect = geom.subgraphs.get(sg_id)?.rect.into();
+        (sg_rect, Shape::Rectangle)
+    } else {
+        let node_rect: Rect = geom.nodes.get(&edge.to)?.rect.into();
+        let node = diagram.nodes.get(&edge.to)?;
+        (node_rect, node.shape)
+    };
+
+    Some((from, to))
+}
+
+fn should_adjust_rerouted_edge_endpoints(
+    diagram: &Diagram,
+    geom: &GraphGeometry,
+    edge: &Edge,
+    points: &[Point],
+    direction: Direction,
+) -> bool {
+    const EPS: f64 = 0.5;
+    if points.len() < 2 {
+        return false;
+    }
+
+    let Some(((from_rect, from_shape), (to_rect, to_shape))) =
+        edge_endpoint_shape_rects(diagram, geom, edge)
+    else {
+        return false;
+    };
+
+    if matches!(from_shape, Shape::Diamond | Shape::Hexagon)
+        || matches!(to_shape, Shape::Diamond | Shape::Hexagon)
+    {
+        return true;
+    }
+
+    endpoint_attachment_is_invalid(points[0], from_rect, direction, true, EPS)
+        || endpoint_attachment_is_invalid(points[points.len() - 1], to_rect, direction, false, EPS)
+}
+
+fn endpoint_attachment_is_invalid(
+    point: Point,
+    rect: Rect,
+    direction: Direction,
+    is_source: bool,
+    eps: f64,
+) -> bool {
+    const FACE_PROXIMITY: f64 = 6.0;
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+    if point.x < left - eps
+        || point.x > right + eps
+        || point.y < top - eps
+        || point.y > bottom + eps
+    {
+        return true;
+    }
+
+    match direction {
+        Direction::TopDown => {
+            if is_source {
+                (bottom - point.y) > FACE_PROXIMITY
+            } else {
+                (point.y - top) > FACE_PROXIMITY
+            }
+        }
+        Direction::BottomTop => {
+            if is_source {
+                (point.y - top) > FACE_PROXIMITY
+            } else {
+                (bottom - point.y) > FACE_PROXIMITY
+            }
+        }
+        Direction::LeftRight => {
+            if is_source {
+                (right - point.x) > FACE_PROXIMITY
+            } else {
+                (point.x - left) > FACE_PROXIMITY
+            }
+        }
+        Direction::RightLeft => {
+            if is_source {
+                (point.x - left) > FACE_PROXIMITY
+            } else {
+                (right - point.x) > FACE_PROXIMITY
+            }
+        }
+    }
+}
+
 fn adjust_edge_points_for_shapes(
     diagram: &Diagram,
     geom: &GraphGeometry,
@@ -2095,34 +2225,10 @@ fn adjust_edge_points_for_shapes(
         return points.to_vec();
     }
 
-    let (from_rect, from_shape): (Rect, Shape) = if let Some(sg_id) = edge.from_subgraph.as_ref() {
-        match geom.subgraphs.get(sg_id) {
-            Some(sg_geom) => (sg_geom.rect.into(), Shape::Rectangle),
-            None => return points.to_vec(),
-        }
-    } else {
-        let Some(pos_node) = geom.nodes.get(&edge.from) else {
-            return points.to_vec();
-        };
-        let Some(node) = diagram.nodes.get(&edge.from) else {
-            return points.to_vec();
-        };
-        (pos_node.rect.into(), node.shape)
-    };
-
-    let (to_rect, to_shape): (Rect, Shape) = if let Some(sg_id) = edge.to_subgraph.as_ref() {
-        match geom.subgraphs.get(sg_id) {
-            Some(sg_geom) => (sg_geom.rect.into(), Shape::Rectangle),
-            None => return points.to_vec(),
-        }
-    } else {
-        let Some(pos_node) = geom.nodes.get(&edge.to) else {
-            return points.to_vec();
-        };
-        let Some(node) = diagram.nodes.get(&edge.to) else {
-            return points.to_vec();
-        };
-        (pos_node.rect.into(), node.shape)
+    let Some(((from_rect, from_shape), (to_rect, to_shape))) =
+        edge_endpoint_shape_rects(diagram, geom, edge)
+    else {
+        return points.to_vec();
     };
 
     let mut adjusted = points.to_vec();
