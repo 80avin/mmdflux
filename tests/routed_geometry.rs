@@ -420,8 +420,8 @@ fn unified_preview_multi_subgraph_bmid_to_f_keeps_terminal_support_clearance() {
         edge.path
     );
     assert!(
-        dy >= 10.0,
-        "Bmid -> F terminal support should preserve >=10px clearance before endpoint: dy={dy}, path={:?}",
+        dy >= 12.0,
+        "Bmid -> F terminal support should preserve >=12px clearance before endpoint: dy={dy}, path={:?}",
         edge.path
     );
 }

@@ -429,7 +429,7 @@ pub(crate) fn point_on_face_float(rect: FRect, face: Face, fraction: f64) -> FPo
 pub(crate) const ROUTE_ALIGN_EPS: f64 = 0.5;
 pub(crate) const ROUTE_POINT_EPS: f64 = 0.000_001;
 pub(crate) const LARGE_HORIZONTAL_OFFSET_THRESHOLD: usize = 15;
-const MIN_TERMINAL_SUPPORT: f64 = 6.0;
+const MIN_TERMINAL_SUPPORT: f64 = 8.0;
 
 pub(crate) fn build_orthogonal_path_float(
     start: FPoint,
