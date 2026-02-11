@@ -15,6 +15,30 @@ This checklist assumes you are willing to ship breaking rendering deltas in a mi
 - [ ] Rollback policy is documented:
   - Keep `--routing-mode full-compute` available for at least one release.
 
+## Current Decision (2026-02-11)
+
+- [x] Promotion scope is explicit:
+  - **Release N scope: flowchart only.**
+  - **Graph-family wide promotion is deferred.**
+- [x] Why graph-family promotion is deferred:
+  - Class diagram DAGRE SVG path still uses legacy direct render path in `ClassInstance` and does not mirror flowchart unified-preview call-site routing.
+  - Class routed MMDS path currently uses engine-derived routing mode directly and does not apply `config.routing_mode` override semantics used by flowchart.
+  - Flowchart has explicit unified-vs-legacy parity/rollback harnesses; class currently has snapshot compliance coverage but no equivalent routing-mode parity gate.
+- [x] Backward-edge policy (current):
+  - Keep backward-edge hint fallback as intentional release-N behavior.
+- [x] Rollback policy (current):
+  - Keep `--routing-mode full-compute` documented and supported for at least one release after default flip.
+
+## Follow-Up Planning Items (Required Before Graph-Family Promotion)
+
+- [ ] Create follow-up implementation plan: **class routing-mode parity plumbing**
+  - Make class DAGRE SVG path honor explicit routing-mode override semantics consistently.
+  - Make class routed MMDS path honor explicit routing-mode override semantics consistently.
+- [ ] Create follow-up implementation plan: **class parity/rollback harness**
+  - Add class unified-vs-legacy routing-mode parity tests equivalent in intent to flowchart gates.
+- [ ] Create follow-up implementation plan: **graph-family default promotion**
+  - Promote unified routing default across class + flowchart only after the above two plans are complete.
+
 ## Hard Gates (Must Pass)
 
 - [ ] Run the full plan-0075 QA script:
