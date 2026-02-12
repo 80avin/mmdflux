@@ -529,7 +529,9 @@ pub(crate) fn normalize_orthogonal_route_contracts(
     normalized = remove_collinear_points(&normalized);
     normalized = reduce_midfield_jogs_for_large_horizontal_offset(&normalized, direction);
     normalized = compact_terminal_staircase(&normalized, direction);
+    normalized = remove_axial_turnbacks(&normalized);
     ensure_terminal_support_segment(&mut normalized, direction);
+    normalized = remove_axial_turnbacks(&normalized);
     normalized = dedupe_adjacent_points(&normalized);
     remove_collinear_points(&normalized)
 }
@@ -573,6 +575,48 @@ fn remove_collinear_points(points: &[FPoint]) -> Vec<FPoint> {
     }
     result.push(*points.last().expect("points has at least two elements"));
     result
+}
+
+fn remove_axial_turnbacks(points: &[FPoint]) -> Vec<FPoint> {
+    if points.len() <= 2 {
+        return points.to_vec();
+    }
+
+    let mut current = points.to_vec();
+    loop {
+        let mut changed = false;
+        let mut result = Vec::with_capacity(current.len());
+        result.push(current[0]);
+
+        for idx in 1..(current.len() - 1) {
+            let prev = *result.last().expect("result is non-empty");
+            let curr = current[idx];
+            let next = current[idx + 1];
+            let dx1 = curr.x - prev.x;
+            let dy1 = curr.y - prev.y;
+            let dx2 = next.x - curr.x;
+            let dy2 = next.y - curr.y;
+            let cross = dx1 * dy2 - dy1 * dx2;
+            let dot = dx1 * dx2 + dy1 * dy2;
+            let is_collinear = cross.abs() <= ROUTE_POINT_EPS;
+            let reverses_direction = dot < -ROUTE_POINT_EPS;
+            if is_collinear && reverses_direction {
+                changed = true;
+                continue;
+            }
+            result.push(curr);
+        }
+
+        result.push(*current.last().expect("points has at least two elements"));
+        let deduped = dedupe_adjacent_points(&result);
+        if !changed {
+            return deduped;
+        }
+        current = deduped;
+        if current.len() <= 2 {
+            return current;
+        }
+    }
 }
 
 fn ensure_terminal_support_segment(points: &mut Vec<FPoint>, direction: Direction) {
@@ -671,7 +715,9 @@ fn compact_terminal_staircase(points: &[FPoint], direction: Direction) -> Vec<FP
             && segment_sign(b.y - a.y) != 0
         {
             let elbow = FPoint::new(c.x, a.y);
-            if !points_equal(a, elbow) && !points_equal(elbow, d) {
+            let would_reverse_with_prefix =
+                would_introduce_axial_turnback_with_prefix(&compacted, len - 4, a, elbow);
+            if !points_equal(a, elbow) && !points_equal(elbow, d) && !would_reverse_with_prefix {
                 compacted.truncate(len - 3);
                 compacted.push(elbow);
                 compacted.push(d);
@@ -684,7 +730,9 @@ fn compact_terminal_staircase(points: &[FPoint], direction: Direction) -> Vec<FP
         && segment_sign(b.x - a.x) != 0
     {
         let elbow = FPoint::new(a.x, c.y);
-        if !points_equal(a, elbow) && !points_equal(elbow, d) {
+        let would_reverse_with_prefix =
+            would_introduce_axial_turnback_with_prefix(&compacted, len - 4, a, elbow);
+        if !points_equal(a, elbow) && !points_equal(elbow, d) && !would_reverse_with_prefix {
             compacted.truncate(len - 3);
             compacted.push(elbow);
             compacted.push(d);
@@ -692,6 +740,26 @@ fn compact_terminal_staircase(points: &[FPoint], direction: Direction) -> Vec<FP
     }
 
     compacted
+}
+
+fn would_introduce_axial_turnback_with_prefix(
+    points: &[FPoint],
+    anchor_idx: usize,
+    anchor: FPoint,
+    elbow: FPoint,
+) -> bool {
+    if anchor_idx == 0 || anchor_idx >= points.len() {
+        return false;
+    }
+
+    let prefix = points[anchor_idx - 1];
+    let dx1 = anchor.x - prefix.x;
+    let dy1 = anchor.y - prefix.y;
+    let dx2 = elbow.x - anchor.x;
+    let dy2 = elbow.y - anchor.y;
+    let cross = dx1 * dy2 - dy1 * dx2;
+    let dot = dx1 * dx2 + dy1 * dy2;
+    cross.abs() <= ROUTE_POINT_EPS && dot < -ROUTE_POINT_EPS
 }
 
 fn segment_is_vertical(start: FPoint, end: FPoint) -> bool {

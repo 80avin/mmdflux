@@ -78,12 +78,21 @@ fn build_unified_path(
     let control_points = build_path_from_hints(edge, geometry);
     let mut path = build_contracted_path(&control_points, direction);
     anchor_path_endpoints_to_endpoint_faces(&mut path, edge, geometry, direction, is_backward);
-    prefer_lateral_exit_for_off_center_primary_axis_sources(&mut path, edge, geometry, direction);
+    prefer_lateral_exit_for_off_center_primary_axis_sources(
+        &mut path,
+        edge,
+        geometry,
+        direction,
+        is_backward,
+    );
     ensure_endpoint_segments_axis_aligned(&mut path);
+    collapse_source_turnback_spikes(&mut path);
     if !is_backward {
         enforce_primary_axis_terminal_direction(&mut path, direction, 8.0);
     }
-    normalize_orthogonal_route_contracts(&path, direction)
+    let mut normalized = normalize_orthogonal_route_contracts(&path, direction);
+    collapse_source_turnback_spikes(&mut normalized);
+    normalize_orthogonal_route_contracts(&normalized, direction)
 }
 
 fn prefer_lateral_exit_for_off_center_primary_axis_sources(
@@ -91,12 +100,15 @@ fn prefer_lateral_exit_for_off_center_primary_axis_sources(
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
     geometry: &GraphGeometry,
     direction: Direction,
+    is_backward: bool,
 ) {
-    const EPS: f64 = 0.5;
     const MIN_OFF_CENTER_ABS: f64 = 1.0;
     const SEG_EPS: f64 = 0.000_001;
 
-    if path.len() < 4 || !matches!(direction, Direction::TopDown | Direction::BottomTop) {
+    if is_backward
+        || path.len() < 4
+        || !matches!(direction, Direction::TopDown | Direction::BottomTop)
+    {
         return;
     }
 
@@ -109,12 +121,6 @@ fn prefer_lateral_exit_for_off_center_primary_axis_sources(
     let start = path[0];
     let first = path[1];
     let second = path[2];
-    let on_top = (start.y - source_rect.y).abs() <= EPS;
-    let on_bottom = (start.y - (source_rect.y + source_rect.height)).abs() <= EPS;
-    if !on_top && !on_bottom {
-        return;
-    }
-
     let center_x = source_rect.x + source_rect.width / 2.0;
     let source_offset = (start.x - center_x).abs();
     if source_offset < MIN_OFF_CENTER_ABS {
@@ -129,12 +135,21 @@ fn prefer_lateral_exit_for_off_center_primary_axis_sources(
         return;
     }
 
-    let progresses_away = if on_bottom {
-        second.y > start.y + SEG_EPS
-    } else {
-        second.y < start.y - SEG_EPS
+    let progresses_along_primary = match direction {
+        Direction::TopDown => first.y > start.y + SEG_EPS,
+        Direction::BottomTop => first.y < start.y - SEG_EPS,
+        _ => false,
     };
-    if !progresses_away {
+    if !progresses_along_primary {
+        return;
+    }
+
+    let lateral_delta = second.x - first.x;
+    if lateral_delta.abs() <= SEG_EPS {
+        return;
+    }
+    let outward_sign = (start.x - center_x).signum();
+    if outward_sign.abs() <= SEG_EPS || lateral_delta.signum() != outward_sign {
         return;
     }
 
@@ -144,6 +159,31 @@ fn prefer_lateral_exit_for_off_center_primary_axis_sources(
     }
 
     path[1] = replacement;
+}
+
+fn collapse_source_turnback_spikes(path: &mut Vec<FPoint>) {
+    const SEG_EPS: f64 = 0.000_001;
+    if path.len() < 4 {
+        return;
+    }
+
+    let start = path[0];
+    let step = path[1];
+    let back = path[2];
+
+    let out_is_axis = (start.x - step.x).abs() <= SEG_EPS || (start.y - step.y).abs() <= SEG_EPS;
+    let back_is_axis = (step.x - back.x).abs() <= SEG_EPS || (step.y - back.y).abs() <= SEG_EPS;
+    if !out_is_axis || !back_is_axis {
+        return;
+    }
+    if points_match(start, back) {
+        let resume = path[3];
+        let collapsed_is_axis =
+            (start.x - resume.x).abs() <= SEG_EPS || (start.y - resume.y).abs() <= SEG_EPS;
+        if collapsed_is_axis && !points_match(start, resume) {
+            path.drain(1..3);
+        }
+    }
 }
 
 pub(crate) fn build_path_from_hints(

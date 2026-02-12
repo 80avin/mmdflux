@@ -6,10 +6,13 @@
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagrams::flowchart::engine::DagreLayoutEngine;
+use mmdflux::diagrams::flowchart::engine::{DagreLayoutEngine, MeasurementMode};
 use mmdflux::diagrams::flowchart::geometry::*;
 use mmdflux::diagrams::flowchart::routing::{route_graph_geometry, snap_path_to_grid_preview};
-use mmdflux::{EngineConfig, GraphLayoutEngine, RoutingMode, build_diagram, parse_flowchart};
+use mmdflux::{
+    EngineConfig, GraphLayoutEngine, OutputFormat, RenderConfig, RoutingMode, build_diagram,
+    parse_flowchart,
+};
 
 /// Parse input and produce (Diagram, GraphGeometry) via the dagre engine.
 fn layout_test(input: &str) -> (mmdflux::Diagram, GraphGeometry) {
@@ -32,6 +35,27 @@ fn layout_fixture(name: &str) -> (mmdflux::Diagram, GraphGeometry) {
     layout_test(&input)
 }
 
+fn layout_test_svg(input: &str) -> (mmdflux::Diagram, GraphGeometry) {
+    let fc = parse_flowchart(input).unwrap();
+    let diagram = build_diagram(&fc);
+    let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
+    let engine = DagreLayoutEngine::with_mode(mode);
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let geom = engine.layout(&diagram, &config).unwrap();
+    (diagram, geom)
+}
+
+fn layout_fixture_svg(name: &str) -> (mmdflux::Diagram, GraphGeometry) {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join(name);
+    let input = fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
+    layout_test_svg(&input)
+}
+
 const ROUTE_EPS: f64 = 0.000_001;
 
 fn approx_eq(a: f64, b: f64) -> bool {
@@ -44,6 +68,10 @@ fn segment_is_axis_aligned(a: FPoint, b: FPoint) -> bool {
 
 fn segment_is_non_degenerate(a: FPoint, b: FPoint) -> bool {
     !approx_eq(a.x, b.x) || !approx_eq(a.y, b.y)
+}
+
+fn points_approx_equal(a: FPoint, b: FPoint) -> bool {
+    approx_eq(a.x, b.x) && approx_eq(a.y, b.y)
 }
 
 fn bend_count(path: &[FPoint]) -> usize {
@@ -90,6 +118,49 @@ fn source_support_is_normal_to_attached_rect_face(
     let horizontal_segment = (start.y - next.y).abs() <= eps && (start.x - next.x).abs() > eps;
 
     (on_top || on_bottom) && vertical_segment || (on_left || on_right) && horizontal_segment
+}
+
+fn path_has_source_turnback_spike(path: &[FPoint]) -> bool {
+    if path.len() < 4 {
+        return false;
+    }
+
+    let p0 = path[0];
+    let p1 = path[1];
+    let p2 = path[2];
+
+    points_approx_equal(p0, p2)
+        && segment_is_axis_aligned(p0, p1)
+        && segment_is_axis_aligned(p1, p2)
+        && segment_is_non_degenerate(p0, p1)
+        && segment_is_non_degenerate(p1, p2)
+}
+
+fn path_has_immediate_axial_turnback(path: &[FPoint]) -> bool {
+    if path.len() < 3 {
+        return false;
+    }
+
+    path.windows(3).any(|w| {
+        let a = w[0];
+        let b = w[1];
+        let c = w[2];
+        if !segment_is_axis_aligned(a, b) || !segment_is_axis_aligned(b, c) {
+            return false;
+        }
+
+        let dx1 = b.x - a.x;
+        let dy1 = b.y - a.y;
+        let dx2 = c.x - b.x;
+        let dy2 = c.y - b.y;
+        let cross = dx1 * dy2 - dy1 * dx2;
+        if cross.abs() > ROUTE_EPS {
+            return false;
+        }
+
+        let dot = dx1 * dx2 + dy1 * dy2;
+        dot < -ROUTE_EPS
+    })
 }
 
 fn effective_edge_direction_for_test(
@@ -591,6 +662,184 @@ fn unified_route_contracts_prefer_lateral_exit_for_off_center_td_source_ports() 
             edge.path
         );
     }
+}
+
+#[test]
+fn unified_route_contracts_prefer_outward_first_source_exits_for_selected_fixtures() {
+    let td_cases: &[(&str, &[(&str, &str, f64)])] = &[
+        ("decision.mmd", &[("B", "D", 1.0)]),
+        ("complex.mmd", &[("B", "D", 5.0)]),
+        ("double_skip.mmd", &[("A", "D", 1.0)]),
+    ];
+
+    for (fixture, edges) in td_cases {
+        let (diagram, geom) = layout_fixture_svg(fixture);
+        assert_eq!(
+            geom.direction,
+            mmdflux::Direction::TopDown,
+            "fixture {fixture} should be TD for outward-first source contract"
+        );
+        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+        for (from, to, min_offset) in *edges {
+            let edge = routed
+                .edges
+                .iter()
+                .find(|edge| edge.from == *from && edge.to == *to)
+                .unwrap_or_else(|| panic!("fixture {fixture} missing edge {from} -> {to}"));
+            assert!(
+                edge.path.len() >= 2,
+                "fixture {fixture} edge {from} -> {to} should have at least two points: {:?}",
+                edge.path
+            );
+
+            let source_rect = geom
+                .nodes
+                .get(*from)
+                .unwrap_or_else(|| panic!("fixture {fixture} missing source node {from}"))
+                .rect;
+            let start = edge.path[0];
+            let next = edge.path[1];
+            let center_x = source_rect.x + source_rect.width / 2.0;
+            let source_offset = start.x - center_x;
+            assert!(
+                source_offset.abs() >= *min_offset,
+                "fixture expectation invalid: {from} -> {to} should start noticeably off-center (offset={source_offset}, min_offset={min_offset}) in {fixture}, path={:?}",
+                edge.path
+            );
+
+            let first_dx = next.x - start.x;
+            let first_dy = next.y - start.y;
+            if edge.path.len() >= 3 {
+                assert!(
+                    first_dy.abs() <= ROUTE_EPS && first_dx.abs() > ROUTE_EPS,
+                    "fixture {fixture} edge {from} -> {to} should leave source laterally first in TD when a bend is present: start={start:?}, next={next:?}, path={:?}",
+                    edge.path
+                );
+                assert!(
+                    first_dx.signum() == source_offset.signum(),
+                    "fixture {fixture} edge {from} -> {to} should move outward from source center on first segment: offset={source_offset}, first_dx={first_dx}, path={:?}",
+                    edge.path
+                );
+            } else {
+                assert!(
+                    first_dx.abs() <= ROUTE_EPS && first_dy.abs() > ROUTE_EPS,
+                    "fixture {fixture} edge {from} -> {to} compact direct path should remain a primary-axis source support segment in TD: start={start:?}, next={next:?}, path={:?}",
+                    edge.path
+                );
+            }
+        }
+    }
+
+    let (diagram, geom) = layout_fixture_svg("git_workflow.mmd");
+    assert_eq!(
+        geom.direction,
+        mmdflux::Direction::LeftRight,
+        "git_workflow fixture should be LR"
+    );
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    for (from, to) in [("Working", "Staging"), ("Local", "Remote")] {
+        let edge = routed
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("git_workflow missing edge {from} -> {to}"));
+        assert!(
+            edge.path.len() >= 2,
+            "git_workflow edge {from} -> {to} should have at least two points: {:?}",
+            edge.path
+        );
+        let start = edge.path[0];
+        let next = edge.path[1];
+        assert!(
+            (next.y - start.y).abs() <= ROUTE_EPS && (next.x - start.x).abs() > ROUTE_EPS,
+            "git_workflow edge {from} -> {to} should leave source on LR primary axis first: start={start:?}, next={next:?}, path={:?}",
+            edge.path
+        );
+    }
+}
+
+#[test]
+fn unified_route_contracts_avoid_source_turnback_spikes_for_selected_fixtures() {
+    let cases = [
+        ("decision.mmd", "A", "B"),
+        ("complex.mmd", "B", "D"),
+        ("double_skip.mmd", "A", "D"),
+        ("git_workflow.mmd", "Working", "Staging"),
+    ];
+
+    for (fixture, from, to) in cases {
+        let (diagram, geom) = layout_fixture_svg(fixture);
+        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let edge = routed
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture {fixture} missing edge {from} -> {to}"));
+        assert!(
+            !path_has_source_turnback_spike(&edge.path),
+            "fixture {fixture} edge {from} -> {to} should not contain source-local A-B-A turnback spike: path={:?}",
+            edge.path
+        );
+    }
+}
+
+#[test]
+fn unified_route_contracts_avoid_immediate_axial_turnbacks() {
+    let cases = [
+        ("multiple_cycles.mmd", "C", "A"),
+        ("git_workflow.mmd", "Remote", "Working"),
+    ];
+
+    for (fixture, from, to) in cases {
+        let (diagram, geom) = layout_fixture_svg(fixture);
+        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let edge = routed
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture {fixture} missing edge {from} -> {to}"));
+        assert!(
+            !path_has_immediate_axial_turnback(&edge.path),
+            "fixture {fixture} edge {from} -> {to} should not contain immediate axial turnbacks: path={:?}",
+            edge.path
+        );
+    }
+}
+
+#[test]
+fn unified_route_contracts_preserve_backward_cycle_outer_lane_clearance() {
+    const MIN_OUTER_LANE_CLEARANCE: f64 = 12.0;
+
+    let (diagram, geom) = layout_fixture_svg("multiple_cycles.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let edge = routed
+        .edges
+        .iter()
+        .find(|edge| edge.from == "C" && edge.to == "A")
+        .expect("multiple_cycles fixture missing edge C -> A");
+
+    assert!(
+        edge.path.len() >= 4,
+        "multiple_cycles C -> A should have enough routed points to form an outer return lane: path={:?}",
+        edge.path
+    );
+
+    let start = edge.path[0];
+    let end = *edge.path.last().expect("edge path is non-empty");
+    let baseline_max_x = start.x.max(end.x);
+    let route_max_x = edge
+        .path
+        .iter()
+        .map(|point| point.x)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let clearance = route_max_x - baseline_max_x;
+
+    assert!(
+        clearance >= MIN_OUTER_LANE_CLEARANCE,
+        "multiple_cycles C -> A should preserve an outer-lane lateral clearance (>= {MIN_OUTER_LANE_CLEARANCE}) instead of collapsing into a near-vertical return: clearance={clearance}, path={:?}",
+        edge.path
+    );
 }
 
 // -----------------------------------------------------------------------
