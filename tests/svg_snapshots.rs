@@ -33,6 +33,20 @@ const UNIFIED_PARITY_ACCEPTED_DELTAS: &[&str] = &[
 ];
 
 const UNIFIED_PARITY_MUST_MATCH: &[&str] = &[];
+const Q1_Q2_TOGGLE_FIXTURE_SUBSET: &[&str] = &[
+    "stacked_fan_in.mmd",
+    "fan_in.mmd",
+    "five_fan_in.mmd",
+    "multiple_cycles.mmd",
+    "http_request.mmd",
+    "git_workflow.mmd",
+];
+const Q1_Q2_TOGGLE_MUST_DIFF: &[&str] = &["fan_in.mmd", "five_fan_in.mmd", "http_request.mmd"];
+const Q1_Q2_TOGGLE_MUST_MATCH: &[&str] = &[
+    "stacked_fan_in.mmd",
+    "multiple_cycles.mmd",
+    "git_workflow.mmd",
+];
 const UNIFIED_FEEDBACK_BASELINE_FILE: &str = "docs/unified_feedback_baseline.tsv";
 const UNIFIED_FEEDBACK_BASELINE_COLUMNS: &[&str] = &[
     "fixture",
@@ -165,6 +179,23 @@ fn assert_unified_parity_classification_is_complete() {
     assert_eq!(
         classified, fixture_subset,
         "fixture subset classification is incomplete or duplicated"
+    );
+}
+
+fn assert_q1_q2_toggle_classification_is_complete() {
+    let mut classified: Vec<&str> = Q1_Q2_TOGGLE_MUST_DIFF
+        .iter()
+        .chain(Q1_Q2_TOGGLE_MUST_MATCH.iter())
+        .copied()
+        .collect();
+    classified.sort_unstable();
+
+    let mut fixture_subset = Q1_Q2_TOGGLE_FIXTURE_SUBSET.to_vec();
+    fixture_subset.sort_unstable();
+
+    assert_eq!(
+        classified, fixture_subset,
+        "Q1/Q2 toggle classification is incomplete or duplicated"
     );
 }
 
@@ -420,6 +451,88 @@ fn unified_preview_svg_output_is_deterministic_for_fixture_subset() {
         assert_eq!(
             second, first,
             "unified-preview SVG output is nondeterministic for fixture {fixture}"
+        );
+    }
+}
+
+#[test]
+fn q1_q2_outputs_are_deterministic_under_toggle_matrix() {
+    for fixture in Q1_Q2_TOGGLE_FIXTURE_SUBSET {
+        for q1_enabled in [true, false] {
+            let policies = RoutingPolicyToggles {
+                q1_overflow: q1_enabled,
+                ..RoutingPolicyToggles::all_enabled()
+            };
+            let first = render_svg_fixture_with_routing_mode_and_policies(
+                fixture,
+                RoutingMode::UnifiedPreview,
+                policies,
+            );
+            let second = render_svg_fixture_with_routing_mode_and_policies(
+                fixture,
+                RoutingMode::UnifiedPreview,
+                policies,
+            );
+            assert_eq!(
+                second, first,
+                "Q1/Q2 toggle matrix replay is nondeterministic for fixture {fixture} (q1={q1_enabled})"
+            );
+        }
+    }
+}
+
+#[test]
+fn q1_q2_toggle_matrix_fixture_subset_matches_expected_classification() {
+    assert_q1_q2_toggle_classification_is_complete();
+
+    let mut differing: Vec<&str> = Vec::new();
+    for fixture in Q1_Q2_TOGGLE_FIXTURE_SUBSET {
+        let on = render_svg_fixture_with_routing_mode_and_policies(
+            fixture,
+            RoutingMode::UnifiedPreview,
+            RoutingPolicyToggles {
+                q1_overflow: true,
+                ..RoutingPolicyToggles::all_enabled()
+            },
+        );
+        let off = render_svg_fixture_with_routing_mode_and_policies(
+            fixture,
+            RoutingMode::UnifiedPreview,
+            RoutingPolicyToggles {
+                q1_overflow: false,
+                ..RoutingPolicyToggles::all_enabled()
+            },
+        );
+        if on != off {
+            differing.push(fixture);
+        }
+    }
+
+    assert_eq!(
+        differing, Q1_Q2_TOGGLE_MUST_DIFF,
+        "Q1/Q2 toggle expected-delta set changed; reclassify fixture subset"
+    );
+
+    for fixture in Q1_Q2_TOGGLE_MUST_MATCH {
+        let on = render_svg_fixture_with_routing_mode_and_policies(
+            fixture,
+            RoutingMode::UnifiedPreview,
+            RoutingPolicyToggles {
+                q1_overflow: true,
+                ..RoutingPolicyToggles::all_enabled()
+            },
+        );
+        let off = render_svg_fixture_with_routing_mode_and_policies(
+            fixture,
+            RoutingMode::UnifiedPreview,
+            RoutingPolicyToggles {
+                q1_overflow: false,
+                ..RoutingPolicyToggles::all_enabled()
+            },
+        );
+        assert_eq!(
+            on, off,
+            "fixture {fixture} is classified as Q1 toggle must-match but diverged"
         );
     }
 }

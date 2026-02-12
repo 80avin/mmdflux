@@ -1365,3 +1365,138 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
         "only the backward conflict edge should occupy B's canonical right-backward lane: right_face_count={right_face_count}"
     );
 }
+
+#[test]
+fn q1_q2_interaction_fixture_matrix_matches_documented_face_policies() {
+    let q1_cases = [
+        ("stacked_fan_in.mmd", "C", 0usize),
+        ("fan_in.mmd", "D", 0usize),
+        ("five_fan_in.mmd", "F", 1usize),
+    ];
+
+    for (fixture, target, min_side_faces) in q1_cases {
+        let (diagram, geom) = layout_fixture_svg(fixture);
+        let routed = route_graph_geometry_with_policies(
+            &diagram,
+            &geom,
+            RoutingMode::UnifiedPreview,
+            RoutingPolicyToggles {
+                q1_overflow: true,
+                ..RoutingPolicyToggles::all_enabled()
+            },
+        );
+        let target_rect = geom
+            .nodes
+            .get(target)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {target}"))
+            .rect;
+
+        let inbound: Vec<_> = routed
+            .edges
+            .iter()
+            .filter(|edge| edge.to == target && !edge.is_backward)
+            .collect();
+        assert!(
+            !inbound.is_empty(),
+            "fixture {fixture} should have inbound edges to {target}"
+        );
+
+        let interior_count = inbound
+            .iter()
+            .filter(|edge| {
+                let end = edge
+                    .path
+                    .last()
+                    .copied()
+                    .expect("inbound edge should have endpoint");
+                point_inside_rect(target_rect, end)
+            })
+            .count();
+        assert_eq!(
+            interior_count,
+            0,
+            "fixture {fixture} should not place inbound endpoints inside target interior under Q1 policy (target={target}, routed={:?})",
+            inbound
+                .iter()
+                .map(|edge| (edge.from.as_str(), edge.path.clone()))
+                .collect::<Vec<_>>()
+        );
+
+        let side_face_count = inbound
+            .iter()
+            .filter(|edge| {
+                let end = edge
+                    .path
+                    .last()
+                    .copied()
+                    .expect("inbound edge should have endpoint");
+                matches!(point_on_target_face(target_rect, end), "left" | "right")
+            })
+            .count();
+
+        if min_side_faces == 0 {
+            assert_eq!(
+                side_face_count, 0,
+                "fixture {fixture} should stay on primary TD incoming face without overflow (target={target})"
+            );
+        } else {
+            assert!(
+                side_face_count >= min_side_faces,
+                "fixture {fixture} should spill overflow arrivals to side faces under Q1 policy: expected >= {min_side_faces}, actual={side_face_count}, target={target}"
+            );
+        }
+    }
+
+    let q2_cases = [
+        ("multiple_cycles.mmd", "C", "A", "right"),
+        ("http_request.mmd", "Response", "Client", "right"),
+        ("git_workflow.mmd", "Remote", "Working", "bottom"),
+    ];
+
+    for (fixture, from, to, expected_face) in q2_cases {
+        let (diagram, geom) = layout_fixture_svg(fixture);
+        let target_rect = geom
+            .nodes
+            .get(to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {to}"))
+            .rect;
+
+        let routed_q1_on = route_graph_geometry_with_policies(
+            &diagram,
+            &geom,
+            RoutingMode::UnifiedPreview,
+            RoutingPolicyToggles {
+                q1_overflow: true,
+                ..RoutingPolicyToggles::all_enabled()
+            },
+        );
+        let routed_q1_off = route_graph_geometry_with_policies(
+            &diagram,
+            &geom,
+            RoutingMode::UnifiedPreview,
+            RoutingPolicyToggles {
+                q1_overflow: false,
+                ..RoutingPolicyToggles::all_enabled()
+            },
+        );
+
+        for (mode_label, routed) in [("q1-on", &routed_q1_on), ("q1-off", &routed_q1_off)] {
+            let edge = routed
+                .edges
+                .iter()
+                .find(|edge| edge.from == from && edge.to == to)
+                .unwrap_or_else(|| panic!("fixture {fixture} missing edge {from} -> {to}"));
+            let end = edge
+                .path
+                .last()
+                .copied()
+                .expect("backward edge should have endpoint");
+            let end_face = point_on_target_face(target_rect, end);
+            assert_eq!(
+                end_face, expected_face,
+                "fixture {fixture} edge {from}->{to} should keep canonical backward face {expected_face} ({mode_label}); end={end:?}, path={:?}",
+                edge.path
+            );
+        }
+    }
+}

@@ -894,6 +894,7 @@ fn render_edges(
             &points,
             edge,
             edge_direction,
+            is_backward,
             !matches!(edge_path_style, SvgEdgePathStyle::Linear),
             enforce_primary_axis_no_backtrack,
             matches!(edge_path_style, SvgEdgePathStyle::Orthogonal),
@@ -2306,6 +2307,13 @@ fn endpoint_attachment_is_invalid(
         return true;
     }
 
+    if is_backward && !is_source {
+        return match direction {
+            Direction::TopDown | Direction::BottomTop => (right - point.x) > FACE_PROXIMITY,
+            Direction::LeftRight | Direction::RightLeft => (bottom - point.y) > FACE_PROXIMITY,
+        };
+    }
+
     let is_forward_source = is_source != is_backward;
 
     match direction {
@@ -2491,6 +2499,7 @@ fn apply_marker_offsets(
     points: &[Point],
     edge: &Edge,
     direction: Direction,
+    is_backward: bool,
     allow_interior_nudges: bool,
     enforce_primary_axis_no_backtrack: bool,
     preserve_orthogonal: bool,
@@ -2513,7 +2522,7 @@ fn apply_marker_offsets(
     };
 
     let mut points = points.to_vec();
-    if !preserve_orthogonal {
+    if !preserve_orthogonal && !is_backward {
         // Non-orth styles (linear/rounded/basis) can look visually cramped when
         // an orthogonal route ends with a short final elbow immediately before
         // the marker. Collapse that elbow into a direct terminal approach.

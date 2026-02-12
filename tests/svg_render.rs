@@ -1160,6 +1160,108 @@ fn svg_non_orth_unified_preview_q1_q2_conflict_keeps_backward_canonical_face() {
 }
 
 #[test]
+fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
+    let q1_cases = [
+        ("stacked_fan_in.mmd", "C", "Bot", 0usize),
+        ("fan_in.mmd", "D", "Target", 0usize),
+        ("five_fan_in.mmd", "F", "Target", 1usize),
+    ];
+
+    for (fixture_name, target_id, target_label, min_side_faces) in q1_cases {
+        let diagram = load_flowchart_fixture_diagram(fixture_name);
+        let mut options = RenderOptions::default_svg();
+        options.svg.edge_path_style = SvgEdgePathStyle::Linear;
+        options.routing_mode = Some(RoutingMode::UnifiedPreview);
+        options.path_detail = PathDetail::Full;
+        options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
+            q1_overflow: true,
+            ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
+        };
+
+        let svg = render_svg(&diagram, &options);
+        let rect = node_rect_for_label(&svg, target_label)
+            .unwrap_or_else(|| panic!("missing target rect for {target_label} in {fixture_name}"));
+        let inbound_indices: Vec<usize> = diagram
+            .edges
+            .iter()
+            .filter(|edge| edge.to == target_id)
+            .map(|edge| edge.index)
+            .collect();
+        assert!(
+            !inbound_indices.is_empty(),
+            "fixture {fixture_name} should have inbound edges to {target_id}"
+        );
+
+        let mut side_face_count = 0usize;
+        let mut interior_or_corner_count = 0usize;
+        for edge_index in inbound_indices {
+            let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+            let face = svg_terminal_approach_face(rect, &points);
+            if face == "interior_or_corner" {
+                interior_or_corner_count += 1;
+            }
+            if matches!(face, "left" | "right") {
+                side_face_count += 1;
+            }
+        }
+
+        assert_eq!(
+            interior_or_corner_count, 0,
+            "fixture {fixture_name} should keep inbound endpoints on a concrete target face under Q1 policy"
+        );
+        if min_side_faces == 0 {
+            assert_eq!(
+                side_face_count, 0,
+                "fixture {fixture_name} should stay on primary TD incoming face when overflow is not required"
+            );
+        } else {
+            assert!(
+                side_face_count >= min_side_faces,
+                "fixture {fixture_name} should spill overflow arrivals to side faces under Q1 policy: expected >= {min_side_faces}, actual={side_face_count}"
+            );
+        }
+    }
+
+    let q2_cases = [
+        ("multiple_cycles.mmd", "C", "A", "Top", "right"),
+        ("http_request.mmd", "Response", "Client", "Client", "right"),
+        (
+            "git_workflow.mmd",
+            "Remote",
+            "Working",
+            "Working Dir",
+            "bottom",
+        ),
+    ];
+
+    for (fixture_name, from, to, target_label, expected_face) in q2_cases {
+        let diagram = load_flowchart_fixture_diagram(fixture_name);
+        for (mode_label, q1_enabled) in [("q1-on", true), ("q1-off", false)] {
+            let mut options = RenderOptions::default_svg();
+            options.svg.edge_path_style = SvgEdgePathStyle::Linear;
+            options.routing_mode = Some(RoutingMode::UnifiedPreview);
+            options.path_detail = PathDetail::Full;
+            options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
+                q1_overflow: q1_enabled,
+                ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
+            };
+
+            let svg = render_svg(&diagram, &options);
+            let rect = node_rect_for_label(&svg, target_label).unwrap_or_else(|| {
+                panic!("missing target rect for {target_label} in {fixture_name}")
+            });
+            let edge_idx = edge_index(&diagram, from, to);
+            let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+            let face = svg_terminal_approach_face(rect, &points);
+            assert_eq!(
+                face, expected_face,
+                "fixture {fixture_name} edge {from}->{to} should keep canonical backward face {expected_face} ({mode_label}); points={points:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn svg_linear_unified_preview_self_loop_tail_does_not_collapse_upward_before_arrow() {
     let diagram = load_flowchart_fixture_diagram("self_loop_labeled.mmd");
     let edge_idx = edge_index(&diagram, "B", "B");

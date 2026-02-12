@@ -64,6 +64,31 @@ These specs are documented and test-scaffolded before runtime behavior changes.
   - `q1_q2_conflict.mmd` keeps `Q2 -> B` on the TD canonical right lane.
   - The same fixture enforces that exactly one inbound edge to `B` uses the right face.
 
+### Q1+Q2 Toggle Default Decision (Task 2.3)
+
+- Determinism matrix status:
+  - Pass (`SVG` + `Text`) for Q1 toggle replay (`on`/`off`) across:
+    - `stacked_fan_in.mmd`
+    - `fan_in.mmd`
+    - `five_fan_in.mmd`
+    - `multiple_cycles.mmd`
+    - `http_request.mmd`
+    - `git_workflow.mmd`
+- Toggle-delta classification under unified-preview linear SVG:
+  - `must-diff`: `fan_in.mmd`, `five_fan_in.mmd`, `http_request.mmd`
+  - `must-match`: `stacked_fan_in.mmd`, `multiple_cycles.mmd`, `git_workflow.mmd`
+- Decision:
+  - Keep Q1/Q2 behavior **default-enabled** for unified preview.
+  - Keep `--policy-q1 off` available as an explicit rollback/diagnostic override.
+- Evidence gates:
+  - `q1_q2_outputs_are_deterministic_under_toggle_matrix` (`tests/svg_snapshots.rs`)
+  - `q1_q2_toggle_matrix_fixture_subset_matches_expected_classification` (`tests/svg_snapshots.rs`)
+  - `q1_q2_outputs_are_deterministic_under_toggle_matrix_for_text_and_svg` (`tests/integration.rs`)
+  - Existing interaction contracts remain green:
+    - `q1_q2_interaction_fixture_matrix_matches_documented_face_policies`
+    - `svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces`
+    - `q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg`
+
 ### Q6 Non-ViewBox Metric Gate Spec (Task 0.4)
 
 - Sweep baseline must include non-viewBox route/label signals:

@@ -1161,17 +1161,109 @@ fn q1_q2_precedence_prefers_backward_channel_over_overflow_target_slot() {
     );
 
     assert_eq!(
-        resolve_q1_q2_face_conflict(Direction::TopDown, true, Some(Face::Right), Face::Right),
+        resolve_q1_q2_face_conflict(
+            Direction::TopDown,
+            true,
+            true,
+            Some(Face::Right),
+            Face::Right
+        ),
         Face::Right
     );
     assert_eq!(
-        resolve_q1_q2_face_conflict(Direction::TopDown, true, Some(Face::Top), Face::Top),
+        resolve_q1_q2_face_conflict(Direction::TopDown, true, true, Some(Face::Top), Face::Top),
         Face::Right
     );
     assert_eq!(
-        resolve_q1_q2_face_conflict(Direction::TopDown, false, Some(Face::Right), Face::Right),
+        resolve_q1_q2_face_conflict(
+            Direction::TopDown,
+            false,
+            false,
+            Some(Face::Right),
+            Face::Right
+        ),
         Face::Right
     );
+}
+
+#[test]
+fn q1_q2_precedence_resolver_is_stable_and_direction_aware() {
+    let cases = [
+        (
+            Direction::TopDown,
+            true,
+            true,
+            Some(Face::Right),
+            Face::Right,
+            Face::Right,
+        ),
+        (
+            Direction::TopDown,
+            false,
+            true,
+            Some(Face::Right),
+            Face::Right,
+            Face::Left,
+        ),
+        (
+            Direction::TopDown,
+            false,
+            true,
+            Some(Face::Left),
+            Face::Left,
+            Face::Left,
+        ),
+        (
+            Direction::LeftRight,
+            true,
+            true,
+            Some(Face::Bottom),
+            Face::Bottom,
+            Face::Bottom,
+        ),
+        (
+            Direction::LeftRight,
+            false,
+            true,
+            Some(Face::Bottom),
+            Face::Bottom,
+            Face::Top,
+        ),
+        (
+            Direction::LeftRight,
+            false,
+            false,
+            Some(Face::Bottom),
+            Face::Bottom,
+            Face::Bottom,
+        ),
+    ];
+
+    for (direction, is_backward, has_backward_conflict, overflow_face, proposed, expected) in cases
+    {
+        let first = resolve_q1_q2_face_conflict(
+            direction,
+            is_backward,
+            has_backward_conflict,
+            overflow_face,
+            proposed,
+        );
+        let second = resolve_q1_q2_face_conflict(
+            direction,
+            is_backward,
+            has_backward_conflict,
+            overflow_face,
+            proposed,
+        );
+        assert_eq!(
+            first, expected,
+            "resolver returned wrong face for direction={direction:?}, backward={is_backward}, conflict={has_backward_conflict}, overflow={overflow_face:?}, proposed={proposed:?}"
+        );
+        assert_eq!(
+            first, second,
+            "resolver must be deterministic across repeated evaluation"
+        );
+    }
 }
 
 #[test]

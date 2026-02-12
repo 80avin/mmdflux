@@ -2808,6 +2808,328 @@ fn mmds_integration_fixture_matrix() {
 }
 
 #[test]
+fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() {
+    fn edge_path_data(svg: &str) -> Vec<String> {
+        svg.lines()
+            .map(str::trim)
+            .filter(|line| {
+                line.starts_with("<path d=\"")
+                    && (line.contains("marker-end=") || line.contains("marker-start="))
+            })
+            .filter_map(|line| {
+                let start = line.find("d=\"")?;
+                let after = &line[start + 3..];
+                let end = after.find('"')?;
+                Some(after[..end].to_string())
+            })
+            .collect()
+    }
+
+    fn parse_svg_path_points(path_data: &str) -> Vec<(f64, f64)> {
+        path_data
+            .split_whitespace()
+            .filter_map(|token| {
+                let token = token.trim_start_matches(|c: char| c.is_ascii_alphabetic());
+                let (x, y) = token.split_once(',')?;
+                Some((x.parse::<f64>().ok()?, y.parse::<f64>().ok()?))
+            })
+            .collect()
+    }
+
+    fn parse_attr_f64(line: &str, attr: &str) -> Option<f64> {
+        let marker = format!("{attr}=\"");
+        let start = line.find(&marker)? + marker.len();
+        let rest = &line[start..];
+        let end = rest.find('"')?;
+        rest[..end].parse::<f64>().ok()
+    }
+
+    fn node_rect_for_label(svg: &str, label: &str) -> Option<(f64, f64, f64, f64)> {
+        let (text_x, text_y) = svg.lines().find_map(|line| {
+            if !line.contains("<text") || !line.contains(&format!(">{label}<")) {
+                return None;
+            }
+            Some((parse_attr_f64(line, "x")?, parse_attr_f64(line, "y")?))
+        })?;
+
+        svg.lines().find_map(|line| {
+            if !line.contains("<rect ")
+                || !line.contains("stroke=\"#333\"")
+                || !line.contains("fill=\"white\"")
+            {
+                return None;
+            }
+            let x = parse_attr_f64(line, "x")?;
+            let y = parse_attr_f64(line, "y")?;
+            let width = parse_attr_f64(line, "width")?;
+            let height = parse_attr_f64(line, "height")?;
+            let inside = text_x >= x && text_x <= x + width && text_y >= y && text_y <= y + height;
+            if inside {
+                Some((x, y, width, height))
+            } else {
+                None
+            }
+        })
+    }
+
+    fn svg_point_face(rect: (f64, f64, f64, f64), point: (f64, f64)) -> &'static str {
+        let eps = 0.5;
+        let (x, y, w, h) = rect;
+        let left = x;
+        let right = x + w;
+        let top = y;
+        let bottom = y + h;
+
+        let on_right = (point.0 - right).abs() <= eps;
+        let on_left = (point.0 - left).abs() <= eps;
+        let on_top = (point.1 - top).abs() <= eps;
+        let on_bottom = (point.1 - bottom).abs() <= eps;
+
+        if on_right && point.1 > top + eps && point.1 < bottom - eps {
+            "right"
+        } else if on_left && point.1 > top + eps && point.1 < bottom - eps {
+            "left"
+        } else if on_top && point.0 > left + eps && point.0 < right - eps {
+            "top"
+        } else if on_bottom && point.0 > left + eps && point.0 < right - eps {
+            "bottom"
+        } else if on_right {
+            "right"
+        } else if on_left {
+            "left"
+        } else {
+            "interior_or_corner"
+        }
+    }
+
+    fn svg_terminal_approach_face(
+        rect: (f64, f64, f64, f64),
+        points: &[(f64, f64)],
+    ) -> &'static str {
+        if points.is_empty() {
+            return "interior_or_corner";
+        }
+        let end = *points.last().expect("path should include endpoint");
+        let direct_face = svg_point_face(rect, end);
+        if direct_face != "interior_or_corner" {
+            return direct_face;
+        }
+        if points.len() < 2 {
+            return direct_face;
+        }
+        let prev = points[points.len() - 2];
+        let dx = end.0 - prev.0;
+        let dy = end.1 - prev.1;
+        if dx.abs() >= dy.abs() {
+            if dx > 0.0 {
+                "right"
+            } else if dx < 0.0 {
+                "left"
+            } else {
+                "interior_or_corner"
+            }
+        } else if dy > 0.0 {
+            "bottom"
+        } else if dy < 0.0 {
+            "top"
+        } else {
+            "interior_or_corner"
+        }
+    }
+
+    fn edge_path_for_svg_order(diagram: &Diagram, svg: &str, edge_index: usize) -> Vec<(f64, f64)> {
+        let mut visible_edge_indexes: Vec<usize> = diagram
+            .edges
+            .iter()
+            .filter(|edge| edge.stroke != mmdflux::graph::Stroke::Invisible)
+            .map(|edge| edge.index)
+            .collect();
+        visible_edge_indexes.sort_unstable();
+
+        let svg_position = visible_edge_indexes
+            .iter()
+            .position(|idx| *idx == edge_index)
+            .expect("edge index should be visible in SVG");
+        let paths = edge_path_data(svg);
+        parse_svg_path_points(
+            paths
+                .get(svg_position)
+                .expect("edge path should exist at visible edge position"),
+        )
+    }
+
+    let render_with_registry = |fixture_name: &str, format: OutputFormat, q1_enabled: bool| {
+        let input = load_fixture(fixture_name);
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(&input).expect("fixture should parse");
+        instance
+            .render(
+                format,
+                &RenderConfig {
+                    routing_mode: Some(RoutingMode::UnifiedPreview),
+                    svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
+                    routing_policies: RoutingPolicyToggles {
+                        q1_overflow: q1_enabled,
+                        ..RoutingPolicyToggles::all_enabled()
+                    },
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("render should succeed")
+    };
+
+    let q1_cases = [
+        ("stacked_fan_in.mmd", "C", "Bot", 0usize),
+        ("fan_in.mmd", "D", "Target", 0usize),
+        ("five_fan_in.mmd", "F", "Target", 1usize),
+    ];
+    for (fixture_name, target_id, target_label, min_side_faces) in q1_cases {
+        let diagram = parse_and_build(fixture_name);
+        let text = render_with_registry(fixture_name, OutputFormat::Text, true);
+        assert!(
+            text.contains(target_label),
+            "text output should contain target label {target_label} for {fixture_name}"
+        );
+        let svg = render_with_registry(fixture_name, OutputFormat::Svg, true);
+        let rect = node_rect_for_label(&svg, target_label)
+            .unwrap_or_else(|| panic!("missing target rect for {target_label} in {fixture_name}"));
+        let inbound_indices: Vec<usize> = diagram
+            .edges
+            .iter()
+            .filter(|edge| edge.to == target_id)
+            .map(|edge| edge.index)
+            .collect();
+        assert!(
+            !inbound_indices.is_empty(),
+            "fixture {fixture_name} should have inbound edges to {target_id}"
+        );
+
+        let mut side_face_count = 0usize;
+        let mut interior_or_corner_count = 0usize;
+        for edge_index in inbound_indices {
+            let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+            let face = svg_terminal_approach_face(rect, &points);
+            if face == "interior_or_corner" {
+                interior_or_corner_count += 1;
+            }
+            if matches!(face, "left" | "right") {
+                side_face_count += 1;
+            }
+        }
+
+        assert_eq!(
+            interior_or_corner_count, 0,
+            "fixture {fixture_name} should keep inbound endpoints on a concrete target face under Q1 policy"
+        );
+        if min_side_faces == 0 {
+            assert_eq!(
+                side_face_count, 0,
+                "fixture {fixture_name} should stay on primary TD incoming face when overflow is not required"
+            );
+        } else {
+            assert!(
+                side_face_count >= min_side_faces,
+                "fixture {fixture_name} should spill overflow arrivals to side faces under Q1 policy: expected >= {min_side_faces}, actual={side_face_count}"
+            );
+        }
+    }
+
+    let q2_cases = [
+        ("multiple_cycles.mmd", "C", "A", "Top", "right"),
+        ("http_request.mmd", "Response", "Client", "Client", "right"),
+        (
+            "git_workflow.mmd",
+            "Remote",
+            "Working",
+            "Working Dir",
+            "bottom",
+        ),
+    ];
+    for (fixture_name, from, to, target_label, expected_face) in q2_cases {
+        let diagram = parse_and_build(fixture_name);
+        for (mode_label, q1_enabled) in [("q1-on", true), ("q1-off", false)] {
+            let text = render_with_registry(fixture_name, OutputFormat::Text, q1_enabled);
+            assert!(
+                text.contains(target_label),
+                "text output should contain target label {target_label} for {fixture_name} ({mode_label})"
+            );
+            let svg = render_with_registry(fixture_name, OutputFormat::Svg, q1_enabled);
+            let rect = node_rect_for_label(&svg, target_label).unwrap_or_else(|| {
+                panic!("missing target rect for {target_label} in {fixture_name}")
+            });
+            let edge_index = diagram
+                .edges
+                .iter()
+                .find(|edge| edge.from == from && edge.to == to)
+                .unwrap_or_else(|| panic!("expected edge {from} -> {to} in {fixture_name}"))
+                .index;
+            let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+            let face = svg_terminal_approach_face(rect, &points);
+            assert_eq!(
+                face, expected_face,
+                "fixture {fixture_name} edge {from}->{to} should keep canonical backward face {expected_face} ({mode_label}); points={points:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn q1_q2_outputs_are_deterministic_under_toggle_matrix_for_text_and_svg() {
+    let fixtures = [
+        "stacked_fan_in.mmd",
+        "fan_in.mmd",
+        "five_fan_in.mmd",
+        "multiple_cycles.mmd",
+        "http_request.mmd",
+        "git_workflow.mmd",
+    ];
+
+    let render_with_registry = |fixture_name: &str, format: OutputFormat, q1_enabled: bool| {
+        let input = load_fixture(fixture_name);
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(&input).expect("fixture should parse");
+        instance
+            .render(
+                format,
+                &RenderConfig {
+                    routing_mode: Some(RoutingMode::UnifiedPreview),
+                    svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
+                    routing_policies: RoutingPolicyToggles {
+                        q1_overflow: q1_enabled,
+                        ..RoutingPolicyToggles::all_enabled()
+                    },
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("render should succeed")
+    };
+
+    for fixture in fixtures {
+        for q1_enabled in [true, false] {
+            let text_first = render_with_registry(fixture, OutputFormat::Text, q1_enabled);
+            let text_second = render_with_registry(fixture, OutputFormat::Text, q1_enabled);
+            assert_eq!(
+                text_second, text_first,
+                "Q1/Q2 toggle matrix replay is nondeterministic for text output fixture {fixture} (q1={q1_enabled})"
+            );
+
+            let svg_first = render_with_registry(fixture, OutputFormat::Svg, q1_enabled);
+            let svg_second = render_with_registry(fixture, OutputFormat::Svg, q1_enabled);
+            assert_eq!(
+                svg_second, svg_first,
+                "Q1/Q2 toggle matrix replay is nondeterministic for SVG output fixture {fixture} (q1={q1_enabled})"
+            );
+        }
+    }
+}
+
+#[test]
 fn full_compute_rollback_is_stable_across_policy_toggle_matrix_for_text_and_svg() {
     let input = load_fixture("simple_cycle.mmd");
     let policy_matrix = [

@@ -49,19 +49,43 @@ pub(crate) fn q2_backward_channel_face(direction: Direction) -> Face {
     }
 }
 
+/// Primary incoming target face for forward edges under Q1 policy.
+pub(crate) fn q1_primary_target_face(direction: Direction) -> Face {
+    match direction {
+        Direction::TopDown => Face::Top,
+        Direction::BottomTop => Face::Bottom,
+        Direction::LeftRight => Face::Left,
+        Direction::RightLeft => Face::Right,
+    }
+}
+
+fn q1_non_canonical_overflow_face(direction: Direction) -> Face {
+    match direction {
+        Direction::TopDown | Direction::BottomTop => Face::Left,
+        Direction::LeftRight | Direction::RightLeft => Face::Top,
+    }
+}
+
 /// Resolve a target/source face with explicit precedence when both Q1 overflow and
 /// Q2 backward channels are in contention.
 pub(crate) fn resolve_q1_q2_face_conflict(
     direction: Direction,
     is_backward: bool,
+    target_has_backward_conflict: bool,
     overflow_face: Option<Face>,
     proposed_face: Face,
 ) -> Face {
     if !is_backward || overflow_face.is_none() {
-        proposed_face
-    } else {
-        q2_backward_channel_face(direction)
+        if target_has_backward_conflict
+            && overflow_face.is_some()
+            && proposed_face == q2_backward_channel_face(direction)
+        {
+            return q1_non_canonical_overflow_face(direction);
+        }
+        return proposed_face;
     }
+
+    q2_backward_channel_face(direction)
 }
 
 /// Which face of a rectangular node an edge attaches to.
