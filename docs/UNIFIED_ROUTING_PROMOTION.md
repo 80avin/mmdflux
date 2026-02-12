@@ -205,6 +205,53 @@ From archived plan 0075 findings:
   - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-shared-attachment-adapters-need-legacy-direction-and-spread-semantics.md`
   - Release N keeps the current split with explicit fixture-level parity + rollback gates.
 
+### Final Fixture Classification (Task 5.1)
+
+This final classification is the promotion-time reference for gated behavior in
+Plan 0077.
+
+| Policy Area | Fixture Subset | Classification | Gate |
+| ---- | ---- | ---- | ---- |
+| Q1/Q2 toggle (unified preview, linear SVG) | `stacked_fan_in.mmd`, `fan_in.mmd`, `five_fan_in.mmd`, `multiple_cycles.mmd`, `http_request.mmd`, `git_workflow.mmd` | `must-diff`: `fan_in.mmd`, `five_fan_in.mmd`, `http_request.mmd`; `must-match`: `stacked_fan_in.mmd`, `multiple_cycles.mmd`, `git_workflow.mmd` | `q1_q2_toggle_matrix_fixture_subset_matches_expected_classification` |
+| Q4 toggle (unified preview, linear SVG) | `double_skip.mmd`, `skip_edge_collision.mmd`, `inline_label_flowchart.mmd` | `must-diff`: all listed fixtures; `must-match`: none in this subset | `q4_rank_span_toggle_fixture_subset_matches_expected_classification` |
+| Q5 monitor-only (styled segment minimum) | `edge_styles.mmd`, `inline_edge_labels.mmd` | monitor-only; escalate on violations | `q5_styled_segment_monitor_reports_actionable_summary_for_routed_geometry`, `q5_styled_segment_monitor_reports_actionable_summary_for_svg` |
+| Q3 text parity | `labeled_edges.mmd`, `inline_label_flowchart.mmd` | `must-match` between `unified-preview` and `full-compute` text output | `text_q3_fixtures_match_between_unified_preview_and_full_compute_modes` |
+| Rollback parity (legacy linear core) | `simple.mmd`, `chain.mmd`, `simple_cycle.mmd` | `must-match-legacy` under rollback mode | `svg_full_compute_override_matches_legacy_linear_core_subset` |
+
+Operational context and escalation notes remain tracked in:
+- `docs/UNIFIED_ISSUES.md`
+
+### Rollback Playbook (Task 5.1)
+
+Use this playbook if rollout metrics or fixture gates regress.
+
+1. Run the QA gate script and capture artifacts:
+
+```bash
+./scripts/tests/07-plan-0076-unified-routing-quality-qa.sh
+```
+
+2. Force legacy routing behavior for immediate rollback validation:
+
+```bash
+mmdflux --routing-mode full-compute <input.mmd>
+```
+
+3. Disable staged policies explicitly for diagnosis/containment:
+
+```bash
+mmdflux --routing-mode unified-preview --policy-q1 off --policy-q4 off --policy-q5 off <input.mmd>
+```
+
+4. Re-run targeted gates and compare with baseline classifications:
+  - `q1_q2_toggle_matrix_fixture_subset_matches_expected_classification`
+  - `q4_rank_span_toggle_fixture_subset_matches_expected_classification`
+  - `q5_styled_segment_monitor_reports_actionable_summary_for_svg`
+  - `svg_full_compute_override_matches_legacy_linear_core_subset`
+
+5. Keep `q4_rank_span_periphery` and `q5_style_min_segment` default-off until
+   gates are green and findings are resolved.
+
 ## Code Change Checklist For Default Flip
 
 - [ ] Change default routing selection to unified mode for intended scope.

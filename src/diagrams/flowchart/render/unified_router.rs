@@ -191,6 +191,7 @@ fn distance_point_to_path(point: FPoint, path: &[FPoint]) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_unified_path(
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
     geometry: &GraphGeometry,
@@ -358,7 +359,10 @@ fn apply_q4_rank_span_periphery_detour(
         Direction::TopDown | Direction::BottomTop => {
             let baseline_min = path[0].x.min(path[last].x);
             let baseline_max = path[0].x.max(path[last].x);
-            let route_min = path.iter().map(|point| point.x).fold(f64::INFINITY, f64::min);
+            let route_min = path
+                .iter()
+                .map(|point| point.x)
+                .fold(f64::INFINITY, f64::min);
             let route_max = path
                 .iter()
                 .map(|point| point.x)
@@ -417,7 +421,10 @@ fn apply_q4_rank_span_periphery_detour(
         Direction::LeftRight | Direction::RightLeft => {
             let baseline_min = path[0].y.min(path[last].y);
             let baseline_max = path[0].y.max(path[last].y);
-            let route_min = path.iter().map(|point| point.y).fold(f64::INFINITY, f64::min);
+            let route_min = path
+                .iter()
+                .map(|point| point.y)
+                .fold(f64::INFINITY, f64::min);
             let route_max = path
                 .iter()
                 .map(|point| point.y)
@@ -824,6 +831,7 @@ fn build_contracted_path(control_points: &[FPoint], direction: Direction) -> Vec
     normalize_orthogonal_route_contracts(&orthogonal, direction)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn anchor_path_endpoints_to_endpoint_faces(
     path: &mut [FPoint],
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
@@ -935,6 +943,7 @@ fn boundary_face_excluding_corners(point: FPoint, rect: FRect, eps: f64) -> Opti
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn clip_point_to_axis_face(
     endpoint: FPoint,
     adjacent: FPoint,

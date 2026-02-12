@@ -372,7 +372,8 @@ fn q5_style_segment_monitor_report_for_svg(
             {
                 continue;
             }
-            let is_styled = line.contains("stroke-dasharray") || line.contains("stroke-width=\"2.00\"");
+            let is_styled =
+                line.contains("stroke-dasharray") || line.contains("stroke-width=\"2.00\"");
             if !is_styled {
                 continue;
             }

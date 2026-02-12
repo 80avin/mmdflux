@@ -62,6 +62,7 @@ const Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX: f64 = 24.0;
 const Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX: f64 = 40.0;
 const Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX: f64 = 20.0;
 const UNIFIED_FEEDBACK_BASELINE_FILE: &str = "docs/unified_feedback_baseline.tsv";
+const UNIFIED_PROMOTION_RECORD_FILE: &str = "docs/UNIFIED_ROUTING_PROMOTION.md";
 const UNIFIED_FEEDBACK_BASELINE_COLUMNS: &[&str] = &[
     "fixture",
     "style",
@@ -283,12 +284,18 @@ fn route_envelope_dims(svg: &str) -> (f64, f64) {
         return (0.0, 0.0);
     }
 
-    let min_x = points.iter().map(|point| point.0).fold(f64::INFINITY, f64::min);
+    let min_x = points
+        .iter()
+        .map(|point| point.0)
+        .fold(f64::INFINITY, f64::min);
     let max_x = points
         .iter()
         .map(|point| point.0)
         .fold(f64::NEG_INFINITY, f64::max);
-    let min_y = points.iter().map(|point| point.1).fold(f64::INFINITY, f64::min);
+    let min_y = points
+        .iter()
+        .map(|point| point.1)
+        .fold(f64::INFINITY, f64::min);
     let max_y = points
         .iter()
         .map(|point| point.1)
@@ -408,6 +415,10 @@ fn mmds_snapshot_path(stem: &str) -> PathBuf {
 
 fn unified_feedback_baseline_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(UNIFIED_FEEDBACK_BASELINE_FILE)
+}
+
+fn unified_promotion_record_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(UNIFIED_PROMOTION_RECORD_FILE)
 }
 
 fn parse_tsv_record(line: &str) -> Vec<&str> {
@@ -774,7 +785,9 @@ fn q4_rank_span_policy_respects_q6_metric_gates_for_fixture_subset() {
 
         let (off_width, off_height) = route_envelope_dims(&q4_off);
         let (on_width, on_height) = route_envelope_dims(&q4_on);
-        let route_abs_delta = (on_width - off_width).abs().max((on_height - off_height).abs());
+        let route_abs_delta = (on_width - off_width)
+            .abs()
+            .max((on_height - off_height).abs());
         max_route_abs_delta = max_route_abs_delta.max(route_abs_delta);
 
         let off_labels = extract_edge_label_positions(&q4_off);
@@ -998,4 +1011,32 @@ fn q6_metrics_include_route_envelope_and_label_drift() {
         has_non_viewbox_signal,
         "Q6 baseline must include at least one non-viewBox route/label signal"
     );
+}
+
+#[test]
+fn promotion_record_has_fixture_classification_and_rollback_validation() {
+    let record_path = unified_promotion_record_path();
+    let raw = fs::read_to_string(&record_path).unwrap_or_else(|e| {
+        panic!(
+            "Failed to read promotion record {}: {e}",
+            record_path.display()
+        )
+    });
+
+    let required_markers = [
+        "### Final Fixture Classification (Task 5.1)",
+        "### Rollback Playbook (Task 5.1)",
+        "--routing-mode full-compute",
+        "--policy-q1 off",
+        "--policy-q4 off",
+        "--policy-q5 off",
+        "./scripts/tests/07-plan-0076-unified-routing-quality-qa.sh",
+    ];
+
+    for marker in required_markers {
+        assert!(
+            raw.contains(marker),
+            "promotion record is missing required marker: {marker}"
+        );
+    }
 }

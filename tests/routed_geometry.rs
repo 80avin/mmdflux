@@ -155,7 +155,10 @@ fn q5_style_segment_monitor_report_for_routed_geometry(
                 .iter()
                 .find(|candidate| candidate.index == edge.index)
                 .unwrap_or_else(|| {
-                    panic!("fixture {fixture} should route styled edge index {}", edge.index)
+                    panic!(
+                        "fixture {fixture} should route styled edge index {}",
+                        edge.index
+                    )
                 });
             let min_segment = min_segment_len(&routed_edge.path);
             scanned_styled_edges += 1;
@@ -363,7 +366,10 @@ fn lateral_detour_from_endpoint_axis(path: &[FPoint], direction: mmdflux::Direct
         mmdflux::Direction::TopDown | mmdflux::Direction::BottomTop => {
             let baseline_min = start.x.min(end.x);
             let baseline_max = start.x.max(end.x);
-            let route_min = path.iter().map(|point| point.x).fold(f64::INFINITY, f64::min);
+            let route_min = path
+                .iter()
+                .map(|point| point.x)
+                .fold(f64::INFINITY, f64::min);
             let route_max = path
                 .iter()
                 .map(|point| point.x)
@@ -375,7 +381,10 @@ fn lateral_detour_from_endpoint_axis(path: &[FPoint], direction: mmdflux::Direct
         mmdflux::Direction::LeftRight | mmdflux::Direction::RightLeft => {
             let baseline_min = start.y.min(end.y);
             let baseline_max = start.y.max(end.y);
-            let route_min = path.iter().map(|point| point.y).fold(f64::INFINITY, f64::min);
+            let route_min = path
+                .iter()
+                .map(|point| point.y)
+                .fold(f64::INFINITY, f64::min);
             let route_max = path
                 .iter()
                 .map(|point| point.y)
@@ -1661,9 +1670,10 @@ fn q4_rank_span_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
             .find(|edge| edge.from == from && edge.to == to)
             .unwrap_or_else(|| panic!("fixture {fixture} should contain edge {from} -> {to}"));
 
-        let rank_span = edge_rank_span_from_dagre_hints(&geom, edge_on.index).unwrap_or_else(|| {
-            panic!("fixture {fixture} edge {from}->{to} should have dagre rank metadata")
-        });
+        let rank_span =
+            edge_rank_span_from_dagre_hints(&geom, edge_on.index).unwrap_or_else(|| {
+                panic!("fixture {fixture} edge {from}->{to} should have dagre rank metadata")
+            });
         assert!(
             rank_span >= 2,
             "fixture contract invalid for Q4: {fixture} edge {from}->{to} must be a long-skip edge with rank_span>=2, got {rank_span}"

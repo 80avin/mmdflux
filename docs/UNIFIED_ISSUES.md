@@ -112,6 +112,21 @@ Escalation criteria:
 - Until escalation is approved, keep `q5_style_min_segment` default-off and use
   monitor output as release-gating telemetry only.
 
+## Task 5.1 Promotion + Rollback Finalization (2026-02-12)
+
+Final promotion-time fixture classifications and rollback commands are
+consolidated in:
+
+- `docs/UNIFIED_ROUTING_PROMOTION.md`
+  - `Final Fixture Classification (Task 5.1)`
+  - `Rollback Playbook (Task 5.1)`
+
+Policy posture carried into release gating:
+
+- `q4_rank_span_periphery` default-off; enable selectively with `--policy-q4 on`.
+- `q5_style_min_segment` monitor-only and default-off; keep escalations tied to
+  monitor violations.
+
 ## Task 0.2 Q1 Policy Spec (2026-02-12)
 
 Q1 overflow policy is now explicitly fixture-backed and documented as a Phase-0
