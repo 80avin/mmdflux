@@ -111,6 +111,75 @@ fn distance_point_to_path(point: FPoint, path: &[FPoint]) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
+#[derive(Debug)]
+struct Q5RoutedStyleMonitorReport {
+    scanned_styled_edges: usize,
+    violations: Vec<String>,
+    summary_line: String,
+}
+
+fn min_segment_len(path: &[FPoint]) -> f64 {
+    path.windows(2)
+        .map(|segment| point_distance(segment[0], segment[1]))
+        .fold(f64::INFINITY, f64::min)
+}
+
+fn q5_style_segment_monitor_report_for_routed_geometry(
+    fixtures: &[&str],
+    min_segment_threshold: f64,
+) -> Q5RoutedStyleMonitorReport {
+    use mmdflux::graph::Stroke;
+
+    let mut scanned_styled_edges = 0usize;
+    let mut violations = Vec::new();
+
+    for fixture in fixtures {
+        let (diagram, geom) = layout_fixture_svg(fixture);
+        let routed = route_graph_geometry_with_policies(
+            &diagram,
+            &geom,
+            RoutingMode::UnifiedPreview,
+            RoutingPolicyToggles {
+                q5_style_min_segment: true,
+                ..RoutingPolicyToggles::all_enabled()
+            },
+        );
+
+        for edge in diagram
+            .edges
+            .iter()
+            .filter(|edge| matches!(edge.stroke, Stroke::Dotted | Stroke::Thick))
+        {
+            let routed_edge = routed
+                .edges
+                .iter()
+                .find(|candidate| candidate.index == edge.index)
+                .unwrap_or_else(|| {
+                    panic!("fixture {fixture} should route styled edge index {}", edge.index)
+                });
+            let min_segment = min_segment_len(&routed_edge.path);
+            scanned_styled_edges += 1;
+            if min_segment < min_segment_threshold {
+                violations.push(format!(
+                    "{fixture} {}->{} stroke={:?} min_segment={min_segment:.2} threshold={min_segment_threshold:.2}",
+                    edge.from, edge.to, edge.stroke
+                ));
+            }
+        }
+    }
+
+    Q5RoutedStyleMonitorReport {
+        scanned_styled_edges,
+        summary_line: format!(
+            "q5_monitor_routed scanned={} violations={} threshold={:.2}",
+            scanned_styled_edges,
+            violations.len(),
+            min_segment_threshold
+        ),
+        violations,
+    }
+}
+
 fn labeled_edge_label_drift_failures(
     diagram: &mmdflux::Diagram,
     routed: &RoutedGraphGeometry,
@@ -1609,4 +1678,25 @@ fn q4_rank_span_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
             edge_on.path
         );
     }
+}
+
+#[test]
+fn q5_styled_segment_monitor_reports_actionable_summary_for_routed_geometry() {
+    let report = q5_style_segment_monitor_report_for_routed_geometry(
+        &["edge_styles.mmd", "inline_edge_labels.mmd"],
+        12.0,
+    );
+    assert!(
+        report.scanned_styled_edges > 0,
+        "Q5 monitor should scan at least one styled edge; report={report:?}"
+    );
+    assert!(
+        !report.summary_line.is_empty(),
+        "Q5 monitor should emit a stable summary line for CI parsing"
+    );
+    assert!(
+        report.violations.is_empty(),
+        "Q5 monitor detected styled-segment violations: {:#?}",
+        report
+    );
 }

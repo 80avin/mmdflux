@@ -87,6 +87,31 @@ Renderer semantics note:
 - The guard intent is the same in both renderers: stale anchors must not pull
   labels away from the active routed segment.
 
+## Task 4.1 Q5 Monitor-Only Checks (2026-02-12)
+
+Q5 remains monitor-only in this plan tranche. No runtime stretching/enforcement
+is applied yet.
+
+Active monitor checks:
+
+- Routed geometry monitor:
+  - `q5_styled_segment_monitor_reports_actionable_summary_for_routed_geometry`
+- SVG monitor:
+  - `q5_styled_segment_monitor_reports_actionable_summary_for_svg`
+
+Current monitor threshold:
+
+- Styled-path minimum segment length: `12px`
+
+Escalation criteria:
+
+- Any monitor violation in CI triggers issue/finding capture (do not silently
+  promote).
+- If violations persist across repeated sweeps/CI runs, escalate Q5 from
+  monitor-only to an enforcement task in a follow-up phase.
+- Until escalation is approved, keep `q5_style_min_segment` default-off and use
+  monitor output as release-gating telemetry only.
+
 ## Task 0.2 Q1 Policy Spec (2026-02-12)
 
 Q1 overflow policy is now explicitly fixture-backed and documented as a Phase-0

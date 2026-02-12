@@ -329,6 +329,88 @@ fn has_primary_axis_backtrack(points: &[(f64, f64)], direction: mmdflux::Directi
     }
 }
 
+#[derive(Debug)]
+struct Q5SvgStyleMonitorReport {
+    scanned_styled_paths: usize,
+    violations: Vec<String>,
+    summary_line: String,
+}
+
+fn min_svg_segment_len(points: &[(f64, f64)]) -> f64 {
+    points
+        .windows(2)
+        .map(|segment| {
+            let dx = segment[1].0 - segment[0].0;
+            let dy = segment[1].1 - segment[0].1;
+            (dx * dx + dy * dy).sqrt()
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
+fn q5_style_segment_monitor_report_for_svg(
+    fixtures: &[&str],
+    min_segment_threshold: f64,
+) -> Q5SvgStyleMonitorReport {
+    let mut scanned_styled_paths = 0usize;
+    let mut violations = Vec::new();
+
+    for fixture in fixtures {
+        let diagram = load_flowchart_fixture_diagram(fixture);
+        let mut options = RenderOptions::default_svg();
+        options.svg.edge_path_style = SvgEdgePathStyle::Linear;
+        options.routing_mode = Some(RoutingMode::UnifiedPreview);
+        options.path_detail = PathDetail::Full;
+        options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
+            q5_style_min_segment: true,
+            ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
+        };
+        let svg = render_svg(&diagram, &options);
+
+        for line in svg.lines().map(str::trim) {
+            if !line.starts_with("<path d=\"")
+                || !(line.contains("marker-end=") || line.contains("marker-start="))
+            {
+                continue;
+            }
+            let is_styled = line.contains("stroke-dasharray") || line.contains("stroke-width=\"2.00\"");
+            if !is_styled {
+                continue;
+            }
+
+            let Some(start) = line.find("d=\"") else {
+                continue;
+            };
+            let after = &line[start + 3..];
+            let Some(end) = after.find('"') else {
+                continue;
+            };
+            let points = parse_svg_path_points(&after[..end]);
+            if points.len() < 2 {
+                continue;
+            }
+
+            let min_segment = min_svg_segment_len(&points);
+            scanned_styled_paths += 1;
+            if min_segment < min_segment_threshold {
+                violations.push(format!(
+                    "{fixture} styled_path min_segment={min_segment:.2} threshold={min_segment_threshold:.2} path={points:?}"
+                ));
+            }
+        }
+    }
+
+    Q5SvgStyleMonitorReport {
+        scanned_styled_paths,
+        summary_line: format!(
+            "q5_monitor_svg scanned={} violations={} threshold={:.2}",
+            scanned_styled_paths,
+            violations.len(),
+            min_segment_threshold
+        ),
+        violations,
+    }
+}
+
 fn parse_attr_f64(line: &str, attr: &str) -> Option<f64> {
     let marker = format!("{attr}=\"");
     let start = line.find(&marker)? + marker.len();
@@ -1341,6 +1423,27 @@ fn svg_linear_q4_rank_span_toggle_keeps_short_inline_edge_stable() {
     assert_eq!(
         on_points, off_points,
         "Q4 rank-span toggle should not perturb short edge start->ingest in {fixture_name}; off_points={off_points:?}, on_points={on_points:?}"
+    );
+}
+
+#[test]
+fn q5_styled_segment_monitor_reports_actionable_summary_for_svg() {
+    let report = q5_style_segment_monitor_report_for_svg(
+        &["edge_styles.mmd", "inline_edge_labels.mmd"],
+        12.0,
+    );
+    assert!(
+        report.scanned_styled_paths > 0,
+        "Q5 SVG monitor should scan at least one styled path; report={report:?}"
+    );
+    assert!(
+        !report.summary_line.is_empty(),
+        "Q5 SVG monitor should emit a stable summary line for CI parsing"
+    );
+    assert!(
+        report.violations.is_empty(),
+        "Q5 SVG monitor detected styled-segment violations: {:#?}",
+        report
     );
 }
 
