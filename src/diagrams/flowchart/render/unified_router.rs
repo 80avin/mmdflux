@@ -81,19 +81,101 @@ pub(crate) fn route_edges_unified(
             if let Some((sx, sy)) = options.grid_snap {
                 path = snap_path_to_grid(&path, sx, sy);
             }
+            let label_position = if options.policy_toggles.q3_label_revalidation {
+                revalidate_label_anchor(edge.label_position, &path)
+            } else {
+                edge.label_position
+            };
 
             RoutedEdgeGeometry {
                 index: edge.index,
                 from: edge.from.clone(),
                 to: edge.to.clone(),
                 path,
-                label_position: edge.label_position,
+                label_position,
                 is_backward,
                 from_subgraph: edge.from_subgraph.clone(),
                 to_subgraph: edge.to_subgraph.clone(),
             }
         })
         .collect()
+}
+
+const Q3_LABEL_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
+const POINT_EPS: f64 = 0.000_001;
+
+fn revalidate_label_anchor(label_position: Option<FPoint>, path: &[FPoint]) -> Option<FPoint> {
+    let Some(anchor) = label_position else {
+        return route_derived_label_anchor(path);
+    };
+    let drift = distance_point_to_path(anchor, path);
+    if drift <= Q3_LABEL_REVALIDATION_MAX_DISTANCE {
+        return Some(anchor);
+    }
+    route_derived_label_anchor(path).or(Some(anchor))
+}
+
+fn route_derived_label_anchor(path: &[FPoint]) -> Option<FPoint> {
+    if path.is_empty() {
+        return None;
+    }
+    if path.len() == 1 {
+        return path.first().copied();
+    }
+
+    let total_len: f64 = path
+        .windows(2)
+        .map(|segment| point_distance(segment[0], segment[1]))
+        .sum();
+    if total_len <= POINT_EPS {
+        return path.get(path.len() / 2).copied();
+    }
+
+    let target = total_len / 2.0;
+    let mut traversed = 0.0;
+    for segment in path.windows(2) {
+        let a = segment[0];
+        let b = segment[1];
+        let seg_len = point_distance(a, b);
+        if seg_len <= POINT_EPS {
+            continue;
+        }
+        if traversed + seg_len >= target {
+            let t = (target - traversed) / seg_len;
+            return Some(FPoint::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t));
+        }
+        traversed += seg_len;
+    }
+    path.last().copied()
+}
+
+fn point_distance(a: FPoint, b: FPoint) -> f64 {
+    ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
+}
+
+fn distance_point_to_segment(point: FPoint, a: FPoint, b: FPoint) -> f64 {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let seg_len_sq = dx * dx + dy * dy;
+    if seg_len_sq <= POINT_EPS {
+        return point_distance(point, a);
+    }
+    let projection = ((point.x - a.x) * dx + (point.y - a.y) * dy) / seg_len_sq;
+    let t = projection.clamp(0.0, 1.0);
+    let closest = FPoint::new(a.x + t * dx, a.y + t * dy);
+    point_distance(point, closest)
+}
+
+fn distance_point_to_path(point: FPoint, path: &[FPoint]) -> f64 {
+    if path.is_empty() {
+        return f64::INFINITY;
+    }
+    if path.len() == 1 {
+        return point_distance(point, path[0]);
+    }
+    path.windows(2)
+        .map(|segment| distance_point_to_segment(point, segment[0], segment[1]))
+        .fold(f64::INFINITY, f64::min)
 }
 
 fn build_unified_path(

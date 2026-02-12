@@ -57,19 +57,10 @@ pub(crate) fn resolve_q1_q2_face_conflict(
     overflow_face: Option<Face>,
     proposed_face: Face,
 ) -> Face {
-    if !is_backward {
-        return proposed_face;
-    }
-
-    if overflow_face.is_none() {
-        return proposed_face;
-    }
-
-    let backward_face = q2_backward_channel_face(direction);
-    if proposed_face == backward_face {
-        backward_face
+    if !is_backward || overflow_face.is_none() {
+        proposed_face
     } else {
-        backward_face
+        q2_backward_channel_face(direction)
     }
 }
 

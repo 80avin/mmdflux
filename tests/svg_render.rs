@@ -71,6 +71,118 @@ fn parse_svg_path_points(path_data: &str) -> Vec<(f64, f64)> {
         .collect()
 }
 
+fn parse_svg_text_position_and_value(line: &str) -> Option<(f64, f64, String)> {
+    let line = line.trim();
+    if !line.starts_with("<text") {
+        return None;
+    }
+    let x = parse_attr_f64(line, "x")?;
+    let y = parse_attr_f64(line, "y")?;
+    let end = line.find("</text>")?;
+    let before = &line[..end];
+    let start = before.rfind('>')?;
+    let value = before[start + 1..].to_string();
+    Some((x, y, value))
+}
+
+fn extract_edge_label_positions(
+    svg: &str,
+    diagram: &mmdflux::Diagram,
+) -> Vec<(String, (f64, f64))> {
+    let mut remaining: HashMap<String, usize> = HashMap::new();
+    for edge in &diagram.edges {
+        if let Some(label) = &edge.label {
+            *remaining.entry(label.clone()).or_insert(0) += 1;
+        }
+    }
+
+    let mut labels = Vec::new();
+    for line in svg.lines() {
+        let Some((x, y, value)) = parse_svg_text_position_and_value(line) else {
+            continue;
+        };
+        let Some(count) = remaining.get_mut(&value) else {
+            continue;
+        };
+        if *count == 0 {
+            continue;
+        }
+        *count -= 1;
+        labels.push((value, (x, y)));
+    }
+    labels
+}
+
+fn euclidean_distance(a: (f64, f64), b: (f64, f64)) -> f64 {
+    ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
+}
+
+fn distance_point_to_svg_segment(point: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
+    let dx = b.0 - a.0;
+    let dy = b.1 - a.1;
+    let seg_len_sq = dx * dx + dy * dy;
+    if seg_len_sq <= 0.000_001 {
+        return euclidean_distance(point, a);
+    }
+
+    let projection = ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / seg_len_sq;
+    let t = projection.clamp(0.0, 1.0);
+    let closest = (a.0 + t * dx, a.1 + t * dy);
+    euclidean_distance(point, closest)
+}
+
+fn distance_point_to_svg_path(point: (f64, f64), path: &[(f64, f64)]) -> f64 {
+    if path.is_empty() {
+        return f64::INFINITY;
+    }
+    if path.len() == 1 {
+        return euclidean_distance(point, path[0]);
+    }
+    path.windows(2)
+        .map(|segment| distance_point_to_svg_segment(point, segment[0], segment[1]))
+        .fold(f64::INFINITY, f64::min)
+}
+
+fn q3_svg_label_drift_failures(
+    svg: &str,
+    diagram: &mmdflux::Diagram,
+    max_distance: f64,
+) -> Vec<String> {
+    let expected_labels = diagram
+        .edges
+        .iter()
+        .filter(|edge| edge.label.is_some())
+        .count();
+    let label_positions = extract_edge_label_positions(svg, diagram);
+    let paths: Vec<Vec<(f64, f64)>> = edge_path_data(svg)
+        .iter()
+        .map(|path| parse_svg_path_points(path))
+        .collect();
+
+    let mut failures = Vec::new();
+    if label_positions.len() != expected_labels {
+        failures.push(format!(
+            "edge-label extraction mismatch: expected={expected_labels}, extracted={}",
+            label_positions.len()
+        ));
+    }
+
+    for (label, point) in label_positions {
+        let drift = paths
+            .iter()
+            .map(|path| distance_point_to_svg_path(point, path))
+            .fold(f64::INFINITY, f64::min);
+        if drift > max_distance {
+            failures.push(format!(
+                "label {label:?} at ({:.2}, {:.2}) drift={drift:.2} exceeds {max_distance:.2}",
+                point.0, point.1
+            ));
+        }
+    }
+
+    failures
+}
+
 fn total_svg_edge_segments(svg: &str) -> usize {
     edge_path_data(svg)
         .iter()
@@ -455,6 +567,45 @@ fn routed_svg_defaults_to_full_path_detail() {
             default_points
         );
     }
+}
+
+const Q3_MAX_SVG_LABEL_DISTANCE_TO_ACTIVE_SEGMENT: f64 = 2.0;
+
+#[test]
+fn svg_orthogonal_unified_preview_labeled_edges_labels_remain_attached_to_active_segments() {
+    let diagram = load_flowchart_fixture_diagram("labeled_edges.mmd");
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    let failures =
+        q3_svg_label_drift_failures(&svg, &diagram, Q3_MAX_SVG_LABEL_DISTANCE_TO_ACTIVE_SEGMENT);
+    assert!(
+        failures.is_empty(),
+        "Q3 regression: labeled_edges rendered off-path edge labels:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn svg_orthogonal_unified_preview_inline_label_flowchart_labels_remain_attached_to_active_segments()
+{
+    let diagram = load_flowchart_fixture_diagram("inline_label_flowchart.mmd");
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    let failures =
+        q3_svg_label_drift_failures(&svg, &diagram, Q3_MAX_SVG_LABEL_DISTANCE_TO_ACTIVE_SEGMENT);
+    assert!(
+        failures.is_empty(),
+        "Q3 regression: inline_label_flowchart rendered off-path edge labels:\n{}",
+        failures.join("\n")
+    );
 }
 
 #[test]

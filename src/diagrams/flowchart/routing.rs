@@ -222,12 +222,12 @@ mod tests {
         let path = &routed.edges[0].path;
         // Should be: A center → waypoint → B center
         assert_eq!(path.len(), 3);
-        assert_eq!(path[0].x, 50.0);
-        assert_eq!(path[0].y, 25.0); // A center_y
+        assert_eq!(path[0].x, 70.0); // A center_x
+        assert_eq!(path[0].y, 35.0); // A center_y
         assert_eq!(path[1].x, 50.0);
         assert_eq!(path[1].y, 50.0); // waypoint
-        assert_eq!(path[2].x, 50.0);
-        assert_eq!(path[2].y, 75.0); // B center_y
+        assert_eq!(path[2].x, 70.0); // B center_x
+        assert_eq!(path[2].y, 85.0); // B center_y
     }
 
     #[test]

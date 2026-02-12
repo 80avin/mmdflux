@@ -330,7 +330,7 @@ impl Default for RoutingPolicyToggles {
     fn default() -> Self {
         Self {
             q1_overflow: true,
-            q3_label_revalidation: false,
+            q3_label_revalidation: true,
             q4_rank_span_periphery: false,
             q5_style_min_segment: false,
         }

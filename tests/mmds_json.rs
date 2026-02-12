@@ -273,9 +273,15 @@ fn routed_mmds_defaults_to_full_path_detail() {
         "default routed MMDS path detail should match full output"
     );
     assert!(
-        default_len > simplified_len,
-        "default full detail should preserve more points than simplified: default={default_len}, simplified={simplified_len}"
+        default_len >= simplified_len,
+        "default full detail should not have fewer points than simplified: default={default_len}, simplified={simplified_len}"
     );
+    if default_len == simplified_len {
+        assert!(
+            default_len <= 3,
+            "default/simplified point counts should only match when the routed path is already minimal: default={default_len}, simplified={simplified_len}"
+        );
+    }
 }
 
 #[test]

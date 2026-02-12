@@ -120,6 +120,7 @@ fn inject_routed_paths(geom: &GraphGeometry, routed: &RoutedGraphGeometry) -> Gr
             .find(|e| e.index == routed_edge.index)
         {
             layout_edge.layout_path_hint = Some(routed_edge.path.clone());
+            layout_edge.label_position = routed_edge.label_position;
         }
     }
     result

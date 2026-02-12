@@ -6,9 +6,12 @@
 use std::fs;
 use std::path::Path;
 
+use mmdflux::diagram::RoutingPolicyToggles;
 use mmdflux::diagrams::flowchart::engine::{DagreLayoutEngine, MeasurementMode};
 use mmdflux::diagrams::flowchart::geometry::*;
-use mmdflux::diagrams::flowchart::routing::{route_graph_geometry, snap_path_to_grid_preview};
+use mmdflux::diagrams::flowchart::routing::{
+    route_graph_geometry, route_graph_geometry_with_policies, snap_path_to_grid_preview,
+};
 use mmdflux::{
     EngineConfig, GraphLayoutEngine, OutputFormat, RenderConfig, RoutingMode, build_diagram,
     parse_flowchart,
@@ -76,6 +79,69 @@ fn points_approx_equal(a: FPoint, b: FPoint) -> bool {
 
 fn bend_count(path: &[FPoint]) -> usize {
     path.len().saturating_sub(2)
+}
+
+fn point_distance(a: FPoint, b: FPoint) -> f64 {
+    ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
+}
+
+fn distance_point_to_segment(point: FPoint, a: FPoint, b: FPoint) -> f64 {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let seg_len_sq = dx * dx + dy * dy;
+    if seg_len_sq <= ROUTE_EPS {
+        return point_distance(point, a);
+    }
+
+    let projection = ((point.x - a.x) * dx + (point.y - a.y) * dy) / seg_len_sq;
+    let t = projection.clamp(0.0, 1.0);
+    let closest = FPoint::new(a.x + t * dx, a.y + t * dy);
+    point_distance(point, closest)
+}
+
+fn distance_point_to_path(point: FPoint, path: &[FPoint]) -> f64 {
+    if path.is_empty() {
+        return f64::INFINITY;
+    }
+    if path.len() == 1 {
+        return point_distance(point, path[0]);
+    }
+    path.windows(2)
+        .map(|segment| distance_point_to_segment(point, segment[0], segment[1]))
+        .fold(f64::INFINITY, f64::min)
+}
+
+fn labeled_edge_label_drift_failures(
+    diagram: &mmdflux::Diagram,
+    routed: &RoutedGraphGeometry,
+    max_distance: f64,
+) -> Vec<String> {
+    let mut failures = Vec::new();
+    for edge in diagram.edges.iter().filter(|edge| edge.label.is_some()) {
+        let routed_edge = routed
+            .edges
+            .iter()
+            .find(|candidate| candidate.index == edge.index)
+            .unwrap_or_else(|| panic!("missing routed edge for index {}", edge.index));
+        let Some(label_position) = routed_edge.label_position else {
+            failures.push(format!(
+                "{} -> {} (index {}) has edge label but no routed label_position",
+                edge.from, edge.to, edge.index
+            ));
+            continue;
+        };
+        let drift = distance_point_to_path(label_position, &routed_edge.path);
+        if drift > max_distance {
+            failures.push(format!(
+                "{} -> {} label {:?} drift={drift:.2} exceeds {max_distance:.2}; label_position={label_position:?}, path={:?}",
+                edge.from,
+                edge.to,
+                edge.label,
+                routed_edge.path
+            ));
+        }
+    }
+    failures
 }
 
 fn point_inside_rect(rect: FRect, point: FPoint) -> bool {
@@ -255,6 +321,88 @@ fn routed_geometry_preserves_label_positions() {
     assert!(
         edge.label_position.is_some(),
         "labeled edge should have a label position"
+    );
+}
+
+const Q3_MAX_LABEL_DISTANCE_TO_ACTIVE_SEGMENT: f64 = 2.0;
+
+#[test]
+fn unified_labels_remain_attached_to_active_segments_labeled_edges() {
+    let (diagram, geom) = layout_fixture_svg("labeled_edges.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let failures = labeled_edge_label_drift_failures(
+        &diagram,
+        &routed,
+        Q3_MAX_LABEL_DISTANCE_TO_ACTIVE_SEGMENT,
+    );
+    assert!(
+        failures.is_empty(),
+        "Q3 regression: labeled_edges has off-path labels:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn unified_labels_remain_attached_to_active_segments_inline_label_flowchart() {
+    let (diagram, geom) = layout_fixture_svg("inline_label_flowchart.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let failures = labeled_edge_label_drift_failures(
+        &diagram,
+        &routed,
+        Q3_MAX_LABEL_DISTANCE_TO_ACTIVE_SEGMENT,
+    );
+    assert!(
+        failures.is_empty(),
+        "Q3 regression: inline_label_flowchart has off-path labels:\n{}",
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn stale_label_anchor_is_replaced_with_valid_route_anchor() {
+    let (diagram, geom) = layout_fixture_svg("labeled_edges.mmd");
+    let stale_edge_index = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Config" && edge.to == "Error")
+        .expect("fixture should contain Config -> Error")
+        .index;
+    let original_anchor = geom
+        .edges
+        .iter()
+        .find(|edge| edge.index == stale_edge_index)
+        .and_then(|edge| edge.label_position)
+        .expect("fixture should carry layout label anchor for Config -> Error");
+
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        RoutingMode::UnifiedPreview,
+        RoutingPolicyToggles {
+            q3_label_revalidation: true,
+            ..RoutingPolicyToggles::default()
+        },
+    );
+    let routed_edge = routed
+        .edges
+        .iter()
+        .find(|edge| edge.index == stale_edge_index)
+        .expect("routed geometry should contain Config -> Error");
+    let validated_anchor = routed_edge
+        .label_position
+        .expect("validated routed label anchor should be present");
+
+    let original_drift = distance_point_to_path(original_anchor, &routed_edge.path);
+    let validated_drift = distance_point_to_path(validated_anchor, &routed_edge.path);
+    assert!(
+        original_drift > Q3_MAX_LABEL_DISTANCE_TO_ACTIVE_SEGMENT,
+        "fixture contract invalid: original anchor should be stale for this test (drift={original_drift}, path={:?})",
+        routed_edge.path
+    );
+    assert!(
+        validated_drift <= Q3_MAX_LABEL_DISTANCE_TO_ACTIVE_SEGMENT,
+        "validated anchor should be on/near active segment after fallback (drift={validated_drift}, anchor={validated_anchor:?}, path={:?})",
+        routed_edge.path
     );
 }
 
@@ -695,7 +843,10 @@ fn unified_route_contracts_prefer_lateral_exit_for_off_center_td_source_ports() 
 
 #[test]
 fn unified_route_contracts_prefer_outward_first_source_exits_for_selected_fixtures() {
-    let td_cases: &[(&str, &[(&str, &str, f64)])] = &[
+    type EdgeExpectation = (&'static str, &'static str, f64);
+    type FixtureExpectations = (&'static str, &'static [EdgeExpectation]);
+
+    let td_cases: &[FixtureExpectations] = &[
         ("decision.mmd", &[("B", "D", 1.0)]),
         ("complex.mmd", &[("B", "D", 5.0)]),
         ("double_skip.mmd", &[("A", "D", 1.0)]),

@@ -207,6 +207,7 @@ fn inject_unified_preview_paths(
     for edge in routed {
         if let Some(layout_edge) = updated.edges.iter_mut().find(|e| e.index == edge.index) {
             layout_edge.layout_path_hint = Some(edge.path);
+            layout_edge.label_position = edge.label_position;
         }
     }
     updated
@@ -248,7 +249,7 @@ fn render_svg_with_geometry_context(
     render_defs(&mut writer, scale);
     writer.start_group_transform(offset_x, offset_y);
     render_subgraphs(&mut writer, diagram, geom, &metrics, scale);
-    render_edges(
+    let rendered_edge_paths = render_edges(
         &mut writer,
         diagram,
         geom,
@@ -265,6 +266,7 @@ fn render_svg_with_geometry_context(
         diagram,
         geom,
         &self_edge_paths,
+        &rendered_edge_paths,
         override_nodes,
         &metrics,
         scale,
@@ -802,7 +804,7 @@ fn render_edges(
     edge_path_radius: f64,
     scale: f64,
     path_detail: PathDetail,
-) {
+) -> HashMap<usize, Vec<Point>> {
     let mut edge_paths: Vec<(usize, Vec<Point>)> = geom
         .edges
         .iter()
@@ -824,6 +826,7 @@ fn render_edges(
     }));
     edge_paths.sort_by_key(|(index, _)| *index);
 
+    let mut rendered_paths: HashMap<usize, Vec<Point>> = HashMap::new();
     writer.start_group("edgePaths");
     for (index, points) in edge_paths {
         let Some(edge) = diagram.edges.get(index) else {
@@ -895,14 +898,10 @@ fn render_edges(
             enforce_primary_axis_no_backtrack,
             matches!(edge_path_style, SvgEdgePathStyle::Orthogonal),
         );
-        let d = path_from_points(
-            &points,
-            diagram.direction,
-            scale,
-            edge_path_style,
-            edge_path_radius,
-            path_detail,
-        );
+        let rendered_points =
+            points_for_svg_path(&points, diagram.direction, edge_path_style, path_detail);
+        let d =
+            path_from_prepared_points(&rendered_points, scale, edge_path_style, edge_path_radius);
         if d.is_empty() {
             continue;
         }
@@ -910,8 +909,10 @@ fn render_edges(
         attrs.push_str(&edge_marker_attrs(edge));
         let line = format!("<path d=\"{d}\"{attrs} />", d = d, attrs = attrs);
         writer.push_line(&line);
+        rendered_paths.insert(index, rendered_points);
     }
     writer.end_group();
+    rendered_paths
 }
 
 fn point_inside_rect(rect: &Rect, point: Point) -> bool {
@@ -1113,11 +1114,99 @@ fn clip_points_to_rect_end(points: &[Point], rect: &Rect) -> Vec<Point> {
     out
 }
 
+const Q3_LABEL_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
+const LABEL_POINT_EPS: f64 = 0.000_001;
+
+fn revalidate_svg_label_anchor(candidate: Point, rendered_path: Option<&[Point]>) -> Point {
+    let Some(path) = rendered_path else {
+        return candidate;
+    };
+    if path.is_empty() {
+        return candidate;
+    }
+
+    let drift = distance_point_to_svg_path(candidate, path);
+    if drift <= Q3_LABEL_REVALIDATION_MAX_DISTANCE {
+        return candidate;
+    }
+    svg_path_midpoint(path).unwrap_or(candidate)
+}
+
+fn point_distance_svg(a: Point, b: Point) -> f64 {
+    ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
+}
+
+fn distance_point_to_svg_segment(point: Point, a: Point, b: Point) -> f64 {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let seg_len_sq = dx * dx + dy * dy;
+    if seg_len_sq <= LABEL_POINT_EPS {
+        return point_distance_svg(point, a);
+    }
+    let projection = ((point.x - a.x) * dx + (point.y - a.y) * dy) / seg_len_sq;
+    let t = projection.clamp(0.0, 1.0);
+    let closest = Point {
+        x: a.x + t * dx,
+        y: a.y + t * dy,
+    };
+    point_distance_svg(point, closest)
+}
+
+fn distance_point_to_svg_path(point: Point, path: &[Point]) -> f64 {
+    if path.is_empty() {
+        return f64::INFINITY;
+    }
+    if path.len() == 1 {
+        return point_distance_svg(point, path[0]);
+    }
+    path.windows(2)
+        .map(|segment| distance_point_to_svg_segment(point, segment[0], segment[1]))
+        .fold(f64::INFINITY, f64::min)
+}
+
+fn svg_path_midpoint(path: &[Point]) -> Option<Point> {
+    if path.is_empty() {
+        return None;
+    }
+    if path.len() == 1 {
+        return path.first().copied();
+    }
+    let total_len: f64 = path
+        .windows(2)
+        .map(|segment| point_distance_svg(segment[0], segment[1]))
+        .sum();
+    if total_len <= LABEL_POINT_EPS {
+        return path.get(path.len() / 2).copied();
+    }
+
+    let target = total_len / 2.0;
+    let mut traversed = 0.0;
+    for segment in path.windows(2) {
+        let a = segment[0];
+        let b = segment[1];
+        let seg_len = point_distance_svg(a, b);
+        if seg_len <= LABEL_POINT_EPS {
+            continue;
+        }
+        if traversed + seg_len >= target {
+            let t = (target - traversed) / seg_len;
+            return Some(Point {
+                x: a.x + (b.x - a.x) * t,
+                y: a.y + (b.y - a.y) * t,
+            });
+        }
+        traversed += seg_len;
+    }
+    path.last().copied()
+}
+
+#[allow(clippy::too_many_arguments)]
 fn render_edge_labels(
     writer: &mut SvgWriter,
     diagram: &Diagram,
     geom: &GraphGeometry,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
+    rendered_edge_paths: &HashMap<usize, Vec<Point>>,
     override_nodes: &HashMap<String, String>,
     metrics: &SvgTextMetrics,
     scale: f64,
@@ -1159,7 +1248,15 @@ fn render_edge_labels(
         } else {
             None
         }
-        .or_else(|| fallback_label_position(geom, edge_idx, self_edge_paths));
+        .or_else(|| fallback_label_position(geom, edge_idx, self_edge_paths))
+        .map(|candidate| {
+            revalidate_svg_label_anchor(
+                candidate,
+                rendered_edge_paths
+                    .get(&edge_idx)
+                    .map(|path| path.as_slice()),
+            )
+        });
         let Some(point) = position else {
             continue;
         };
@@ -2038,16 +2135,14 @@ fn edge_marker_attrs(edge: &Edge) -> String {
     attrs
 }
 
-fn path_from_points(
+fn points_for_svg_path(
     points: &[Point],
     direction: Direction,
-    scale: f64,
     curve: SvgEdgePathStyle,
-    curve_radius: f64,
     path_detail: PathDetail,
-) -> String {
+) -> Vec<Point> {
     if points.is_empty() {
-        return String::new();
+        return Vec::new();
     }
     let points: Vec<Point> =
         if matches!(curve, SvgEdgePathStyle::Orthogonal) && !points_are_axis_aligned(points) {
@@ -2067,7 +2162,7 @@ fn path_from_points(
         } else {
             points.to_vec()
         };
-    let points = match path_detail {
+    match path_detail {
         PathDetail::Full => points,
         PathDetail::Compact => {
             let compacted = compact_visual_staircases(&points, 12.0);
@@ -2077,7 +2172,18 @@ fn path_from_points(
             simplify_orthogonal_points(&points, direction)
         }
         _ => path_detail.simplify_with_coords(&points, |point| (point.x, point.y)),
-    };
+    }
+}
+
+fn path_from_prepared_points(
+    points: &[Point],
+    scale: f64,
+    curve: SvgEdgePathStyle,
+    curve_radius: f64,
+) -> String {
+    if points.is_empty() {
+        return String::new();
+    }
     let scaled: Vec<(f64, f64)> = points
         .iter()
         .map(|point| (point.x * scale, point.y * scale))
