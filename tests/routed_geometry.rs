@@ -75,6 +75,23 @@ fn terminal_support_is_normal_to_attached_rect_face(
     (on_top || on_bottom) && vertical_segment || (on_left || on_right) && horizontal_segment
 }
 
+fn source_support_is_normal_to_attached_rect_face(
+    rect: FRect,
+    start: FPoint,
+    next: FPoint,
+) -> bool {
+    let eps = 0.01;
+    let on_top = (start.y - rect.y).abs() <= eps;
+    let on_bottom = (start.y - (rect.y + rect.height)).abs() <= eps;
+    let on_left = (start.x - rect.x).abs() <= eps;
+    let on_right = (start.x - (rect.x + rect.width)).abs() <= eps;
+
+    let vertical_segment = (start.x - next.x).abs() <= eps && (start.y - next.y).abs() > eps;
+    let horizontal_segment = (start.y - next.y).abs() <= eps && (start.x - next.x).abs() > eps;
+
+    (on_top || on_bottom) && vertical_segment || (on_left || on_right) && horizontal_segment
+}
+
 fn effective_edge_direction_for_test(
     node_directions: &std::collections::HashMap<String, mmdflux::Direction>,
     from: &str,
@@ -534,6 +551,48 @@ fn unified_preview_http_request_backward_edge_preserves_client_side_face_attachm
     );
 }
 
+#[test]
+fn unified_route_contracts_prefer_lateral_exit_for_off_center_td_source_ports() {
+    let (diagram, geom) = layout_fixture("compat_kitchen_sink.mmd");
+    assert_eq!(geom.direction, mmdflux::Direction::TopDown);
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    for (from, to) in [("check-1", "process-A"), ("check-1", "error-1")] {
+        let edge = routed
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture should contain {from} -> {to}"));
+        assert!(
+            edge.path.len() >= 3,
+            "{from} -> {to} should have at least three routed points: {:?}",
+            edge.path
+        );
+
+        let source_rect = geom
+            .nodes
+            .get(from)
+            .unwrap_or_else(|| panic!("fixture should contain source {from}"))
+            .rect;
+        let start = edge.path[0];
+        let next = edge.path[1];
+        let center_x = source_rect.x + source_rect.width / 2.0;
+        let source_offset = (start.x - center_x).abs();
+        let min_off_center = 1.0;
+
+        assert!(
+            source_offset >= min_off_center,
+            "fixture expectation invalid: {from} -> {to} source should be off-center, got offset={source_offset}, min={min_off_center}, path={:?}",
+            edge.path
+        );
+        assert!(
+            (next.y - start.y).abs() <= ROUTE_EPS && (next.x - start.x).abs() > ROUTE_EPS,
+            "off-center TD source should prefer lateral first segment to avoid down-then-sweep artifact for {from} -> {to}: start={start:?}, next={next:?}, path={:?}",
+            edge.path
+        );
+    }
+}
+
 // -----------------------------------------------------------------------
 // Task 1.2: Shared float-route heuristics
 // -----------------------------------------------------------------------
@@ -630,4 +689,64 @@ fn shared_builder_keeps_alignment_tolerance_stable_for_near_aligned_points() {
         "near-aligned jitter produced non-orthogonal segment: {:?}",
         edge.path
     );
+}
+
+#[test]
+fn unified_route_contracts_keep_td_source_ports_normal_and_compact() {
+    let cases: &[(&str, &[(&str, &str)])] = &[(
+        "compat_kitchen_sink.mmd",
+        &[
+            ("start-node", "check-1"),
+            ("process-A", "end-node"),
+            ("error-1", "end-node"),
+        ],
+    )];
+
+    for (fixture, edges) in cases {
+        let (diagram, geom) = layout_fixture(fixture);
+        assert_eq!(
+            geom.direction,
+            mmdflux::Direction::TopDown,
+            "fixture {fixture} should be TD for source-support contract"
+        );
+        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+        for (from, to) in *edges {
+            let edge = routed
+                .edges
+                .iter()
+                .find(|edge| edge.from == *from && edge.to == *to)
+                .unwrap_or_else(|| panic!("fixture {fixture} missing edge {from} -> {to}"));
+            assert!(
+                edge.path.len() >= 2,
+                "fixture {fixture} edge {from} -> {to} should have at least two points: {:?}",
+                edge.path
+            );
+            let source_rect = geom
+                .nodes
+                .get(*from)
+                .unwrap_or_else(|| panic!("fixture {fixture} missing source node {from}"))
+                .rect;
+            let start = edge.path[0];
+            let next = edge.path[1];
+            let center_x = source_rect.x + source_rect.width / 2.0;
+            let source_offset = (start.x - center_x).abs();
+            assert!(
+                source_offset <= 1.0,
+                "fixture expectation invalid: source should be centered for this contract on {from} -> {to}, offset={source_offset}, path={:?}",
+                edge.path
+            );
+            assert!(
+                source_support_is_normal_to_attached_rect_face(source_rect, start, next),
+                "fixture {fixture} edge {from} -> {to} should leave source face on its normal axis in TD (avoid bottom-border sliding): start={start:?}, next={next:?}, source_rect={source_rect:?}, path={:?}",
+                edge.path
+            );
+            let bends = bend_count(&edge.path);
+            assert!(
+                bends <= 2,
+                "fixture {fixture} edge {from} -> {to} should stay compact after source-support preservation: bends={bends}, path={:?}",
+                edge.path
+            );
+        }
+    }
 }

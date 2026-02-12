@@ -78,11 +78,72 @@ fn build_unified_path(
     let control_points = build_path_from_hints(edge, geometry);
     let mut path = build_contracted_path(&control_points, direction);
     anchor_path_endpoints_to_endpoint_faces(&mut path, edge, geometry, direction, is_backward);
+    prefer_lateral_exit_for_off_center_primary_axis_sources(&mut path, edge, geometry, direction);
     ensure_endpoint_segments_axis_aligned(&mut path);
     if !is_backward {
         enforce_primary_axis_terminal_direction(&mut path, direction, 8.0);
     }
     normalize_orthogonal_route_contracts(&path, direction)
+}
+
+fn prefer_lateral_exit_for_off_center_primary_axis_sources(
+    path: &mut [FPoint],
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+) {
+    const EPS: f64 = 0.5;
+    const MIN_OFF_CENTER_ABS: f64 = 1.0;
+    const SEG_EPS: f64 = 0.000_001;
+
+    if path.len() < 4 || !matches!(direction, Direction::TopDown | Direction::BottomTop) {
+        return;
+    }
+
+    let Some((source_rect, _source_shape)) =
+        endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+    else {
+        return;
+    };
+
+    let start = path[0];
+    let first = path[1];
+    let second = path[2];
+    let on_top = (start.y - source_rect.y).abs() <= EPS;
+    let on_bottom = (start.y - (source_rect.y + source_rect.height)).abs() <= EPS;
+    if !on_top && !on_bottom {
+        return;
+    }
+
+    let center_x = source_rect.x + source_rect.width / 2.0;
+    let source_offset = (start.x - center_x).abs();
+    if source_offset < MIN_OFF_CENTER_ABS {
+        return;
+    }
+
+    let first_is_vertical =
+        (start.x - first.x).abs() <= SEG_EPS && (start.y - first.y).abs() > SEG_EPS;
+    let second_is_horizontal =
+        (first.y - second.y).abs() <= SEG_EPS && (first.x - second.x).abs() > SEG_EPS;
+    if !first_is_vertical || !second_is_horizontal {
+        return;
+    }
+
+    let progresses_away = if on_bottom {
+        second.y > start.y + SEG_EPS
+    } else {
+        second.y < start.y - SEG_EPS
+    };
+    if !progresses_away {
+        return;
+    }
+
+    let replacement = FPoint::new(second.x, start.y);
+    if (replacement.x - start.x).abs() <= SEG_EPS || (replacement.y - second.y).abs() <= SEG_EPS {
+        return;
+    }
+
+    path[1] = replacement;
 }
 
 pub(crate) fn build_path_from_hints(

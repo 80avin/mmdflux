@@ -428,7 +428,7 @@ pub(crate) fn point_on_face_float(rect: FRect, face: Face, fraction: f64) -> FPo
 /// diagram's primary axis to keep paths axis-aligned and symmetric.
 pub(crate) const ROUTE_ALIGN_EPS: f64 = 0.5;
 pub(crate) const ROUTE_POINT_EPS: f64 = 0.000_001;
-pub(crate) const LARGE_HORIZONTAL_OFFSET_THRESHOLD: usize = 15;
+pub(crate) const LARGE_HORIZONTAL_OFFSET_THRESHOLD: usize = 30;
 const MIN_TERMINAL_SUPPORT: f64 = 8.0;
 
 pub(crate) fn build_orthogonal_path_float(
@@ -445,9 +445,12 @@ pub(crate) fn build_orthogonal_path_float(
 
     let mut output: Vec<FPoint> = Vec::with_capacity(control_points.len() * 3);
     output.push(start);
+    let span_count = control_points.len().saturating_sub(1);
 
-    for target in control_points.into_iter().skip(1) {
+    for (span_idx, target) in control_points.into_iter().skip(1).enumerate() {
         let current = output.last().copied().unwrap_or(start);
+        let is_first_span = span_idx == 0;
+        let is_last_span = span_idx + 1 == span_count;
 
         if (current.x - target.x).abs() < ROUTE_POINT_EPS
             && (current.y - target.y).abs() < ROUTE_POINT_EPS
@@ -471,14 +474,28 @@ pub(crate) fn build_orthogonal_path_float(
             continue;
         }
 
-        if primary_vertical {
+        // For diagonal spans, choose elbow orientation by span role:
+        // - first span: preserve source-face normal support
+        // - last span: preserve target-face normal support
+        // - single diagonal span: keep balanced V-H-V / H-V-H fallback
+        if primary_vertical && is_first_span && is_last_span {
             let mid_y = (current.y + target.y) / 2.0;
             output.push(FPoint::new(current.x, mid_y));
             output.push(FPoint::new(target.x, mid_y));
-        } else {
+        } else if !primary_vertical && is_first_span && is_last_span {
             let mid_x = (current.x + target.x) / 2.0;
             output.push(FPoint::new(mid_x, current.y));
             output.push(FPoint::new(mid_x, target.y));
+        } else if primary_vertical {
+            if is_first_span {
+                output.push(FPoint::new(current.x, target.y));
+            } else {
+                output.push(FPoint::new(target.x, current.y));
+            }
+        } else if is_first_span {
+            output.push(FPoint::new(target.x, current.y));
+        } else {
+            output.push(FPoint::new(current.x, target.y));
         }
         output.push(target);
     }
@@ -511,6 +528,7 @@ pub(crate) fn normalize_orthogonal_route_contracts(
 
     normalized = remove_collinear_points(&normalized);
     normalized = reduce_midfield_jogs_for_large_horizontal_offset(&normalized, direction);
+    normalized = compact_terminal_staircase(&normalized, direction);
     ensure_terminal_support_segment(&mut normalized, direction);
     normalized = dedupe_adjacent_points(&normalized);
     remove_collinear_points(&normalized)
@@ -629,6 +647,73 @@ fn reduce_midfield_jogs_for_large_horizontal_offset(
         FPoint::new(end.x, mid_y),
         end,
     ]
+}
+
+fn compact_terminal_staircase(points: &[FPoint], direction: Direction) -> Vec<FPoint> {
+    // Keep short 4-point routes intact so source-face support is not converted
+    // into a border-slide start segment.
+    if points.len() <= 4 {
+        return points.to_vec();
+    }
+
+    let mut compacted = points.to_vec();
+    let len = compacted.len();
+    let a = compacted[len - 4];
+    let b = compacted[len - 3];
+    let c = compacted[len - 2];
+    let d = compacted[len - 1];
+
+    if matches!(direction, Direction::TopDown | Direction::BottomTop) {
+        if segment_is_vertical(a, b)
+            && segment_is_horizontal(b, c)
+            && segment_is_vertical(c, d)
+            && segment_sign(b.y - a.y) == segment_sign(d.y - c.y)
+            && segment_sign(b.y - a.y) != 0
+        {
+            let elbow = FPoint::new(c.x, a.y);
+            if !points_equal(a, elbow) && !points_equal(elbow, d) {
+                compacted.truncate(len - 3);
+                compacted.push(elbow);
+                compacted.push(d);
+            }
+        }
+    } else if segment_is_horizontal(a, b)
+        && segment_is_vertical(b, c)
+        && segment_is_horizontal(c, d)
+        && segment_sign(b.x - a.x) == segment_sign(d.x - c.x)
+        && segment_sign(b.x - a.x) != 0
+    {
+        let elbow = FPoint::new(a.x, c.y);
+        if !points_equal(a, elbow) && !points_equal(elbow, d) {
+            compacted.truncate(len - 3);
+            compacted.push(elbow);
+            compacted.push(d);
+        }
+    }
+
+    compacted
+}
+
+fn segment_is_vertical(start: FPoint, end: FPoint) -> bool {
+    (start.x - end.x).abs() <= ROUTE_POINT_EPS && (start.y - end.y).abs() > ROUTE_POINT_EPS
+}
+
+fn segment_is_horizontal(start: FPoint, end: FPoint) -> bool {
+    (start.y - end.y).abs() <= ROUTE_POINT_EPS && (start.x - end.x).abs() > ROUTE_POINT_EPS
+}
+
+fn points_equal(a: FPoint, b: FPoint) -> bool {
+    (a.x - b.x).abs() <= ROUTE_POINT_EPS && (a.y - b.y).abs() <= ROUTE_POINT_EPS
+}
+
+fn segment_sign(delta: f64) -> i8 {
+    if delta.abs() <= ROUTE_POINT_EPS {
+        0
+    } else if delta.is_sign_positive() {
+        1
+    } else {
+        -1
+    }
 }
 
 fn preferred_mid_y_for_vertical_layout(start: FPoint, end: FPoint, direction: Direction) -> f64 {
