@@ -23,6 +23,17 @@ Current schema:
 - `unified_viewbox_height`
 - `viewbox_width_delta`
 - `viewbox_height_delta`
+- `full_route_envelope_width`
+- `full_route_envelope_height`
+- `unified_route_envelope_width`
+- `unified_route_envelope_height`
+- `route_envelope_width_delta`
+- `route_envelope_height_delta`
+- `full_edge_label_count`
+- `unified_edge_label_count`
+- `edge_label_count_delta`
+- `label_position_max_drift`
+- `label_position_mean_drift`
 
 Required fixture coverage in this baseline:
 - `fan_in.mmd`
@@ -33,6 +44,30 @@ Required fixture coverage in this baseline:
 - `inline_label_flowchart.mmd`
 - `double_skip.mmd`
 - `skip_edge_collision.mmd`
+
+## Task 0.4 Q6 Metric Gate Spec (2026-02-12)
+
+Q6 gate now tracks non-viewBox path-level signals in the sweep baseline:
+
+- Route-envelope deltas:
+  - `route_envelope_width_delta`
+  - `route_envelope_height_delta`
+- Label drift stats:
+  - `label_position_max_drift`
+  - `label_position_mean_drift`
+  - plus `edge_label_count_delta` for label cardinality shifts
+
+Reproducible monitor thresholds (script-configurable):
+
+- `ROUTE_ENVELOPE_ABS_DELTA_WARN_PX` (default `24`)
+- `LABEL_POSITION_MAX_DRIFT_WARN_PX` (default `40`)
+- `LABEL_POSITION_MEAN_DRIFT_WARN_PX` (default `20`)
+
+Sweep script reports these in a `Q6 metric summary` section:
+
+```bash
+./scripts/tests/08-unified-vs-full-svg-diff-sweep.sh
+```
 
 ## Task 0.2 Q1 Policy Spec (2026-02-12)
 

@@ -1,289 +1,293 @@
-fixture	style	status	diff_lines	full_viewbox_width	full_viewbox_height	unified_viewbox_width	unified_viewbox_height	viewbox_width_delta	viewbox_height_delta
-ampersand.mmd	basis	diff	17	318.15	278.00	318.15	278.00	0.00	0.00
-backward_in_subgraph.mmd	basis	diff	13	219.06	254.00	219.06	254.00	0.00	0.00
-bidirectional_arrows.mmd	basis	diff	15	84.91	382.00	84.91	382.00	0.00	0.00
-bidirectional.mmd	basis	diff	15	84.91	382.00	84.91	382.00	0.00	0.00
-bottom_top.mmd	basis	diff	13	155.25	278.00	155.25	278.00	0.00	0.00
-br_line_breaks.mmd	basis	diff	13	123.70	422.00	123.70	422.00	0.00	0.00
-chain.mmd	basis	diff	15	125.00	382.00	125.00	382.00	0.00	0.00
-ci_pipeline.mmd	basis	diff	21	1093.09	174.00	1093.09	174.00	0.00	0.00
-compat_class_annotation.mmd	basis	diff	15	203.82	362.88	203.82	362.88	0.00	0.00
-compat_directive.mmd	basis	diff	15	269.52	362.88	269.52	362.88	0.00	0.00
-compat_frontmatter.mmd	basis	diff	13	84.91	278.00	84.91	278.00	0.00	0.00
-compat_hyphenated_ids.mmd	basis	diff	15	150.98	449.06	150.98	449.06	0.00	0.00
-compat_invisible_edge.mmd	basis	diff	13	119.91	278.00	119.91	278.00	0.00	0.00
-compat_kitchen_sink.mmd	basis	diff	19	295.88	498.06	295.88	498.06	0.00	0.00
-compat_no_direction.mmd	basis	diff	11	111.26	174.00	111.26	174.00	0.00	0.00
-compat_numeric_ids.mmd	basis	diff	13	418.12	70.00	418.12	70.00	0.00	0.00
-complex.mmd	basis	diff	31	579.64	757.28	579.64	757.28	0.00	0.00
-cross_circle_arrows.mmd	basis	diff	17	84.91	486.00	84.91	486.00	0.00	0.00
-decision.mmd	basis	diff	17	285.44	413.36	285.44	413.36	0.00	0.00
-diamond_fan.mmd	basis	diff	17	251.89	278.00	251.89	278.00	0.00	0.00
-direction_override.mmd	basis	same	0	473.00	328.00	473.00	328.00	0.00	0.00
-double_skip.mmd	basis	diff	19	214.75	382.00	214.75	382.00	0.00	0.00
-edge_styles.mmd	basis	diff	17	573.60	174.00	573.60	174.00	0.00	0.00
-external_node_subgraph.mmd	basis	diff	17	536.01	393.00	536.01	393.00	0.00	0.00
-fan_in_lr.mmd	basis	diff	15	273.23	278.00	273.23	278.00	0.00	0.00
-fan_in.mmd	basis	diff	15	495.33	174.00	495.33	174.00	0.00	0.00
-fan_out.mmd	basis	diff	15	487.54	174.00	487.54	174.00	0.00	0.00
-five_fan_in.mmd	basis	diff	19	560.54	174.00	560.54	174.00	0.00	0.00
-git_workflow.mmd	basis	diff	17	960.94	117.00	960.94	117.00	0.00	0.00
-http_request.mmd	basis	diff	23	550.70	642.20	550.70	642.20	0.00	0.00
-inline_edge_labels.mmd	basis	diff	17	115.16	582.00	115.16	582.00	0.00	0.00
-inline_label_flowchart.mmd	basis	diff	61	1028.03	1655.78	1028.03	1655.78	0.00	0.00
-label_spacing.mmd	basis	diff	13	203.82	198.00	203.82	198.00	0.00	0.00
-labeled_edges.mmd	basis	diff	19	335.04	497.80	335.04	497.80	0.00	0.00
-left_right.mmd	basis	diff	13	580.90	70.00	580.90	70.00	0.00	0.00
-multi_edge_labeled.mmd	basis	diff	15	133.25	302.00	133.25	302.00	0.00	0.00
-multi_edge.mmd	basis	diff	13	84.91	174.00	84.91	174.00	0.00	0.00
-multi_subgraph_direction_override.mmd	basis	diff	20	351.61	462.60	351.61	462.60	0.00	0.00
-multi_subgraph.mmd	basis	diff	15	644.76	170.00	644.76	170.00	0.00	0.00
-multiple_cycles.mmd	basis	diff	17	159.84	278.00	159.84	278.00	0.00	0.00
-narrow_fan_in.mmd	basis	diff	15	322.73	174.00	322.73	174.00	0.00	0.00
-nested_subgraph_edge.mmd	basis	same	0	435.88	414.00	435.88	414.00	0.00	0.00
-nested_subgraph_only.mmd	basis	diff	11	224.91	310.00	224.91	310.00	0.00	0.00
-nested_subgraph.mmd	basis	diff	13	273.54	408.00	273.54	408.00	0.00	0.00
-nested_with_siblings.mmd	basis	diff	15	621.64	221.00	621.64	221.00	0.00	0.00
-right_left.mmd	basis	diff	13	436.50	70.00	436.50	70.00	0.00	0.00
-self_loop_labeled.mmd	basis	diff	14	169.35	348.40	169.35	348.40	0.00	0.00
-self_loop_with_others.mmd	basis	diff	14	169.04	278.00	169.04	278.00	0.00	0.00
-self_loop.mmd	basis	same	0	169.04	70.00	169.04	70.00	0.00	0.00
-shapes_basic.mmd	basis	diff	21	146.71	765.22	146.71	765.22	0.00	0.00
-shapes_degenerate.mmd	basis	diff	23	116.46	798.00	116.46	798.00	0.00	0.00
-shapes_document.mmd	basis	diff	17	106.16	548.50	106.16	548.50	0.00	0.00
-shapes_junction.mmd	basis	diff	13	218.00	76.00	218.00	76.00	0.00	0.00
-shapes_special.mmd	basis	diff	11	181.92	70.00	181.92	70.00	0.00	0.00
-shapes.mmd	basis	diff	13	189.77	381.75	189.77	381.75	0.00	0.00
-simple_cycle.mmd	basis	diff	15	169.28	278.00	169.28	278.00	0.00	0.00
-simple_subgraph.mmd	basis	diff	13	223.88	343.00	223.88	343.00	0.00	0.00
-simple.mmd	basis	diff	11	111.26	174.00	111.26	174.00	0.00	0.00
-skip_edge_collision.mmd	basis	diff	17	162.88	382.00	162.88	382.00	0.00	0.00
-stacked_fan_in.mmd	basis	diff	15	141.12	278.00	141.12	278.00	0.00	0.00
-subgraph_as_node_edge.mmd	basis	diff	11	257.66	462.00	257.66	462.00	0.00	0.00
-subgraph_direction_cross_boundary.mmd	basis	diff	21	238.82	823.00	238.82	823.00	0.00	0.00
-subgraph_direction_lr.mmd	basis	same	0	473.00	328.00	473.00	328.00	0.00	0.00
-subgraph_direction_mixed.mmd	basis	same	0	233.82	335.40	233.82	335.40	0.00	0.00
-subgraph_direction_nested_both.mmd	basis	diff	11	352.73	326.80	352.73	326.80	0.00	0.00
-subgraph_direction_nested.mmd	basis	same	0	382.73	304.00	382.73	304.00	0.00	0.00
-subgraph_edges_bottom_top.mmd	basis	diff	13	369.61	304.00	369.61	304.00	0.00	0.00
-subgraph_edges.mmd	basis	diff	13	369.61	304.00	369.61	304.00	0.00	0.00
-subgraph_multi_word_title.mmd	basis	diff	17	249.87	536.00	249.87	536.00	0.00	0.00
-subgraph_numeric_id.mmd	basis	diff	15	184.91	512.00	184.91	512.00	0.00	0.00
-subgraph_to_subgraph_edge.mmd	basis	diff	13	285.88	542.00	285.88	542.00	0.00	0.00
-very_narrow_fan_in.mmd	basis	diff	17	441.64	174.00	441.64	174.00	0.00	0.00
-ampersand.mmd	linear	diff	17	318.15	278.00	318.15	278.00	0.00	0.00
-backward_in_subgraph.mmd	linear	diff	13	219.06	254.00	219.06	254.00	0.00	0.00
-bidirectional_arrows.mmd	linear	diff	15	84.91	382.00	84.91	382.00	0.00	0.00
-bidirectional.mmd	linear	diff	15	84.91	382.00	84.91	382.00	0.00	0.00
-bottom_top.mmd	linear	diff	13	155.25	278.00	155.25	278.00	0.00	0.00
-br_line_breaks.mmd	linear	diff	13	123.70	422.00	123.70	422.00	0.00	0.00
-chain.mmd	linear	diff	15	125.00	382.00	125.00	382.00	0.00	0.00
-ci_pipeline.mmd	linear	diff	21	1093.09	174.00	1093.09	174.00	0.00	0.00
-compat_class_annotation.mmd	linear	diff	15	203.82	362.88	203.82	362.88	0.00	0.00
-compat_directive.mmd	linear	diff	15	269.52	362.88	269.52	362.88	0.00	0.00
-compat_frontmatter.mmd	linear	diff	13	84.91	278.00	84.91	278.00	0.00	0.00
-compat_hyphenated_ids.mmd	linear	diff	15	150.98	449.06	150.98	449.06	0.00	0.00
-compat_invisible_edge.mmd	linear	diff	13	119.91	278.00	119.91	278.00	0.00	0.00
-compat_kitchen_sink.mmd	linear	diff	19	295.88	498.06	295.88	498.06	0.00	0.00
-compat_no_direction.mmd	linear	diff	11	111.26	174.00	111.26	174.00	0.00	0.00
-compat_numeric_ids.mmd	linear	diff	13	418.12	70.00	418.12	70.00	0.00	0.00
-complex.mmd	linear	diff	31	579.64	757.28	579.64	757.28	0.00	0.00
-cross_circle_arrows.mmd	linear	diff	17	84.91	486.00	84.91	486.00	0.00	0.00
-decision.mmd	linear	diff	17	285.44	413.36	285.44	413.36	0.00	0.00
-diamond_fan.mmd	linear	diff	17	251.89	278.00	251.89	278.00	0.00	0.00
-direction_override.mmd	linear	same	0	473.00	328.00	473.00	328.00	0.00	0.00
-double_skip.mmd	linear	diff	19	214.75	382.00	214.75	382.00	0.00	0.00
-edge_styles.mmd	linear	diff	17	573.60	174.00	573.60	174.00	0.00	0.00
-external_node_subgraph.mmd	linear	diff	17	536.01	393.00	536.01	393.00	0.00	0.00
-fan_in_lr.mmd	linear	diff	15	273.23	278.00	273.23	278.00	0.00	0.00
-fan_in.mmd	linear	diff	15	495.33	174.00	495.33	174.00	0.00	0.00
-fan_out.mmd	linear	diff	15	487.54	174.00	487.54	174.00	0.00	0.00
-five_fan_in.mmd	linear	diff	19	560.54	174.00	560.54	174.00	0.00	0.00
-git_workflow.mmd	linear	diff	17	960.94	117.00	960.94	117.00	0.00	0.00
-http_request.mmd	linear	diff	23	550.70	642.20	550.70	642.20	0.00	0.00
-inline_edge_labels.mmd	linear	diff	17	115.16	582.00	115.16	582.00	0.00	0.00
-inline_label_flowchart.mmd	linear	diff	61	1028.03	1655.78	1028.03	1655.78	0.00	0.00
-label_spacing.mmd	linear	diff	13	203.82	198.00	203.82	198.00	0.00	0.00
-labeled_edges.mmd	linear	diff	19	335.04	497.80	335.04	497.80	0.00	0.00
-left_right.mmd	linear	diff	13	580.90	70.00	580.90	70.00	0.00	0.00
-multi_edge_labeled.mmd	linear	diff	15	133.25	302.00	133.25	302.00	0.00	0.00
-multi_edge.mmd	linear	diff	13	84.91	174.00	84.91	174.00	0.00	0.00
-multi_subgraph_direction_override.mmd	linear	diff	20	351.61	462.60	351.61	462.60	0.00	0.00
-multi_subgraph.mmd	linear	diff	15	644.76	170.00	644.76	170.00	0.00	0.00
-multiple_cycles.mmd	linear	diff	17	159.84	278.00	159.84	278.00	0.00	0.00
-narrow_fan_in.mmd	linear	diff	15	322.73	174.00	322.73	174.00	0.00	0.00
-nested_subgraph_edge.mmd	linear	same	0	435.88	414.00	435.88	414.00	0.00	0.00
-nested_subgraph_only.mmd	linear	diff	11	224.91	310.00	224.91	310.00	0.00	0.00
-nested_subgraph.mmd	linear	diff	13	273.54	408.00	273.54	408.00	0.00	0.00
-nested_with_siblings.mmd	linear	diff	15	621.64	221.00	621.64	221.00	0.00	0.00
-right_left.mmd	linear	diff	13	436.50	70.00	436.50	70.00	0.00	0.00
-self_loop_labeled.mmd	linear	diff	14	169.35	348.40	169.35	348.40	0.00	0.00
-self_loop_with_others.mmd	linear	diff	14	169.04	278.00	169.04	278.00	0.00	0.00
-self_loop.mmd	linear	same	0	169.04	70.00	169.04	70.00	0.00	0.00
-shapes_basic.mmd	linear	diff	21	146.71	765.22	146.71	765.22	0.00	0.00
-shapes_degenerate.mmd	linear	diff	23	116.46	798.00	116.46	798.00	0.00	0.00
-shapes_document.mmd	linear	diff	17	106.16	548.50	106.16	548.50	0.00	0.00
-shapes_junction.mmd	linear	diff	13	218.00	76.00	218.00	76.00	0.00	0.00
-shapes_special.mmd	linear	diff	11	181.92	70.00	181.92	70.00	0.00	0.00
-shapes.mmd	linear	diff	13	189.77	381.75	189.77	381.75	0.00	0.00
-simple_cycle.mmd	linear	diff	15	169.28	278.00	169.28	278.00	0.00	0.00
-simple_subgraph.mmd	linear	diff	13	223.88	343.00	223.88	343.00	0.00	0.00
-simple.mmd	linear	diff	11	111.26	174.00	111.26	174.00	0.00	0.00
-skip_edge_collision.mmd	linear	diff	17	162.88	382.00	162.88	382.00	0.00	0.00
-stacked_fan_in.mmd	linear	diff	15	141.12	278.00	141.12	278.00	0.00	0.00
-subgraph_as_node_edge.mmd	linear	diff	11	257.66	462.00	257.66	462.00	0.00	0.00
-subgraph_direction_cross_boundary.mmd	linear	diff	21	238.82	823.00	238.82	823.00	0.00	0.00
-subgraph_direction_lr.mmd	linear	same	0	473.00	328.00	473.00	328.00	0.00	0.00
-subgraph_direction_mixed.mmd	linear	same	0	233.82	335.40	233.82	335.40	0.00	0.00
-subgraph_direction_nested_both.mmd	linear	diff	11	352.73	326.80	352.73	326.80	0.00	0.00
-subgraph_direction_nested.mmd	linear	same	0	382.73	304.00	382.73	304.00	0.00	0.00
-subgraph_edges_bottom_top.mmd	linear	diff	13	369.61	304.00	369.61	304.00	0.00	0.00
-subgraph_edges.mmd	linear	diff	13	369.61	304.00	369.61	304.00	0.00	0.00
-subgraph_multi_word_title.mmd	linear	diff	17	249.87	536.00	249.87	536.00	0.00	0.00
-subgraph_numeric_id.mmd	linear	diff	15	184.91	512.00	184.91	512.00	0.00	0.00
-subgraph_to_subgraph_edge.mmd	linear	diff	13	285.88	542.00	285.88	542.00	0.00	0.00
-very_narrow_fan_in.mmd	linear	diff	17	441.64	174.00	441.64	174.00	0.00	0.00
-ampersand.mmd	rounded	diff	17	318.15	278.00	318.15	278.00	0.00	0.00
-backward_in_subgraph.mmd	rounded	diff	13	219.06	254.00	219.06	254.00	0.00	0.00
-bidirectional_arrows.mmd	rounded	diff	15	84.91	382.00	84.91	382.00	0.00	0.00
-bidirectional.mmd	rounded	diff	15	84.91	382.00	84.91	382.00	0.00	0.00
-bottom_top.mmd	rounded	diff	13	155.25	278.00	155.25	278.00	0.00	0.00
-br_line_breaks.mmd	rounded	diff	13	123.70	422.00	123.70	422.00	0.00	0.00
-chain.mmd	rounded	diff	15	125.00	382.00	125.00	382.00	0.00	0.00
-ci_pipeline.mmd	rounded	diff	21	1093.09	174.00	1093.09	174.00	0.00	0.00
-compat_class_annotation.mmd	rounded	diff	15	203.82	362.88	203.82	362.88	0.00	0.00
-compat_directive.mmd	rounded	diff	15	269.52	362.88	269.52	362.88	0.00	0.00
-compat_frontmatter.mmd	rounded	diff	13	84.91	278.00	84.91	278.00	0.00	0.00
-compat_hyphenated_ids.mmd	rounded	diff	15	150.98	449.06	150.98	449.06	0.00	0.00
-compat_invisible_edge.mmd	rounded	diff	13	119.91	278.00	119.91	278.00	0.00	0.00
-compat_kitchen_sink.mmd	rounded	diff	19	295.88	498.06	295.88	498.06	0.00	0.00
-compat_no_direction.mmd	rounded	diff	11	111.26	174.00	111.26	174.00	0.00	0.00
-compat_numeric_ids.mmd	rounded	diff	13	418.12	70.00	418.12	70.00	0.00	0.00
-complex.mmd	rounded	diff	31	579.64	757.28	579.64	757.28	0.00	0.00
-cross_circle_arrows.mmd	rounded	diff	17	84.91	486.00	84.91	486.00	0.00	0.00
-decision.mmd	rounded	diff	17	285.44	413.36	285.44	413.36	0.00	0.00
-diamond_fan.mmd	rounded	diff	17	251.89	278.00	251.89	278.00	0.00	0.00
-direction_override.mmd	rounded	same	0	473.00	328.00	473.00	328.00	0.00	0.00
-double_skip.mmd	rounded	diff	19	214.75	382.00	214.75	382.00	0.00	0.00
-edge_styles.mmd	rounded	diff	17	573.60	174.00	573.60	174.00	0.00	0.00
-external_node_subgraph.mmd	rounded	diff	17	536.01	393.00	536.01	393.00	0.00	0.00
-fan_in_lr.mmd	rounded	diff	15	273.23	278.00	273.23	278.00	0.00	0.00
-fan_in.mmd	rounded	diff	15	495.33	174.00	495.33	174.00	0.00	0.00
-fan_out.mmd	rounded	diff	15	487.54	174.00	487.54	174.00	0.00	0.00
-five_fan_in.mmd	rounded	diff	19	560.54	174.00	560.54	174.00	0.00	0.00
-git_workflow.mmd	rounded	diff	17	960.94	117.00	960.94	117.00	0.00	0.00
-http_request.mmd	rounded	diff	23	550.70	642.20	550.70	642.20	0.00	0.00
-inline_edge_labels.mmd	rounded	diff	17	115.16	582.00	115.16	582.00	0.00	0.00
-inline_label_flowchart.mmd	rounded	diff	61	1028.03	1655.78	1028.03	1655.78	0.00	0.00
-label_spacing.mmd	rounded	diff	13	203.82	198.00	203.82	198.00	0.00	0.00
-labeled_edges.mmd	rounded	diff	19	335.04	497.80	335.04	497.80	0.00	0.00
-left_right.mmd	rounded	diff	13	580.90	70.00	580.90	70.00	0.00	0.00
-multi_edge_labeled.mmd	rounded	diff	15	133.25	302.00	133.25	302.00	0.00	0.00
-multi_edge.mmd	rounded	diff	13	84.91	174.00	84.91	174.00	0.00	0.00
-multi_subgraph_direction_override.mmd	rounded	diff	20	351.61	462.60	351.61	462.60	0.00	0.00
-multi_subgraph.mmd	rounded	diff	15	644.76	170.00	644.76	170.00	0.00	0.00
-multiple_cycles.mmd	rounded	diff	17	159.84	278.00	159.84	278.00	0.00	0.00
-narrow_fan_in.mmd	rounded	diff	15	322.73	174.00	322.73	174.00	0.00	0.00
-nested_subgraph_edge.mmd	rounded	same	0	435.88	414.00	435.88	414.00	0.00	0.00
-nested_subgraph_only.mmd	rounded	diff	11	224.91	310.00	224.91	310.00	0.00	0.00
-nested_subgraph.mmd	rounded	diff	13	273.54	408.00	273.54	408.00	0.00	0.00
-nested_with_siblings.mmd	rounded	diff	15	621.64	221.00	621.64	221.00	0.00	0.00
-right_left.mmd	rounded	diff	13	436.50	70.00	436.50	70.00	0.00	0.00
-self_loop_labeled.mmd	rounded	diff	14	169.35	348.40	169.35	348.40	0.00	0.00
-self_loop_with_others.mmd	rounded	diff	14	169.04	278.00	169.04	278.00	0.00	0.00
-self_loop.mmd	rounded	same	0	169.04	70.00	169.04	70.00	0.00	0.00
-shapes_basic.mmd	rounded	diff	21	146.71	765.22	146.71	765.22	0.00	0.00
-shapes_degenerate.mmd	rounded	diff	23	116.46	798.00	116.46	798.00	0.00	0.00
-shapes_document.mmd	rounded	diff	17	106.16	548.50	106.16	548.50	0.00	0.00
-shapes_junction.mmd	rounded	diff	13	218.00	76.00	218.00	76.00	0.00	0.00
-shapes_special.mmd	rounded	diff	11	181.92	70.00	181.92	70.00	0.00	0.00
-shapes.mmd	rounded	diff	13	189.77	381.75	189.77	381.75	0.00	0.00
-simple_cycle.mmd	rounded	diff	15	169.28	278.00	169.28	278.00	0.00	0.00
-simple_subgraph.mmd	rounded	diff	13	223.88	343.00	223.88	343.00	0.00	0.00
-simple.mmd	rounded	diff	11	111.26	174.00	111.26	174.00	0.00	0.00
-skip_edge_collision.mmd	rounded	diff	17	162.88	382.00	162.88	382.00	0.00	0.00
-stacked_fan_in.mmd	rounded	diff	15	141.12	278.00	141.12	278.00	0.00	0.00
-subgraph_as_node_edge.mmd	rounded	diff	11	257.66	462.00	257.66	462.00	0.00	0.00
-subgraph_direction_cross_boundary.mmd	rounded	diff	21	238.82	823.00	238.82	823.00	0.00	0.00
-subgraph_direction_lr.mmd	rounded	same	0	473.00	328.00	473.00	328.00	0.00	0.00
-subgraph_direction_mixed.mmd	rounded	same	0	233.82	335.40	233.82	335.40	0.00	0.00
-subgraph_direction_nested_both.mmd	rounded	diff	11	352.73	326.80	352.73	326.80	0.00	0.00
-subgraph_direction_nested.mmd	rounded	same	0	382.73	304.00	382.73	304.00	0.00	0.00
-subgraph_edges_bottom_top.mmd	rounded	diff	13	369.61	304.00	369.61	304.00	0.00	0.00
-subgraph_edges.mmd	rounded	diff	13	369.61	304.00	369.61	304.00	0.00	0.00
-subgraph_multi_word_title.mmd	rounded	diff	17	249.87	536.00	249.87	536.00	0.00	0.00
-subgraph_numeric_id.mmd	rounded	diff	15	184.91	512.00	184.91	512.00	0.00	0.00
-subgraph_to_subgraph_edge.mmd	rounded	diff	13	285.88	542.00	285.88	542.00	0.00	0.00
-very_narrow_fan_in.mmd	rounded	diff	17	441.64	174.00	441.64	174.00	0.00	0.00
-ampersand.mmd	orthogonal	diff	17	318.15	278.00	318.15	278.00	0.00	0.00
-backward_in_subgraph.mmd	orthogonal	diff	13	219.06	254.00	219.06	254.00	0.00	0.00
-bidirectional_arrows.mmd	orthogonal	diff	15	84.91	382.00	84.91	382.00	0.00	0.00
-bidirectional.mmd	orthogonal	diff	15	84.91	382.00	84.91	382.00	0.00	0.00
-bottom_top.mmd	orthogonal	diff	13	155.25	278.00	155.25	278.00	0.00	0.00
-br_line_breaks.mmd	orthogonal	diff	13	123.70	422.00	123.70	422.00	0.00	0.00
-chain.mmd	orthogonal	diff	15	125.00	382.00	125.00	382.00	0.00	0.00
-ci_pipeline.mmd	orthogonal	diff	21	1093.09	174.00	1093.09	174.00	0.00	0.00
-compat_class_annotation.mmd	orthogonal	diff	15	203.82	362.88	203.82	362.88	0.00	0.00
-compat_directive.mmd	orthogonal	diff	15	269.52	362.88	269.52	362.88	0.00	0.00
-compat_frontmatter.mmd	orthogonal	diff	13	84.91	278.00	84.91	278.00	0.00	0.00
-compat_hyphenated_ids.mmd	orthogonal	diff	15	150.98	449.06	150.98	449.06	0.00	0.00
-compat_invisible_edge.mmd	orthogonal	diff	13	119.91	278.00	119.91	278.00	0.00	0.00
-compat_kitchen_sink.mmd	orthogonal	diff	19	295.88	498.06	295.88	498.06	0.00	0.00
-compat_no_direction.mmd	orthogonal	diff	11	111.26	174.00	111.26	174.00	0.00	0.00
-compat_numeric_ids.mmd	orthogonal	diff	13	418.12	70.00	418.12	70.00	0.00	0.00
-complex.mmd	orthogonal	diff	31	579.64	757.28	579.64	757.28	0.00	0.00
-cross_circle_arrows.mmd	orthogonal	diff	17	84.91	486.00	84.91	486.00	0.00	0.00
-decision.mmd	orthogonal	diff	17	285.44	413.36	285.44	413.36	0.00	0.00
-diamond_fan.mmd	orthogonal	diff	17	251.89	278.00	251.89	278.00	0.00	0.00
-direction_override.mmd	orthogonal	same	0	473.00	328.00	473.00	328.00	0.00	0.00
-double_skip.mmd	orthogonal	diff	19	214.75	382.00	214.75	382.00	0.00	0.00
-edge_styles.mmd	orthogonal	diff	17	573.60	174.00	573.60	174.00	0.00	0.00
-external_node_subgraph.mmd	orthogonal	diff	17	536.01	393.00	536.01	393.00	0.00	0.00
-fan_in_lr.mmd	orthogonal	diff	15	273.23	278.00	273.23	278.00	0.00	0.00
-fan_in.mmd	orthogonal	diff	15	495.33	174.00	495.33	174.00	0.00	0.00
-fan_out.mmd	orthogonal	diff	15	487.54	174.00	487.54	174.00	0.00	0.00
-five_fan_in.mmd	orthogonal	diff	19	560.54	174.00	560.54	174.00	0.00	0.00
-git_workflow.mmd	orthogonal	diff	15	960.94	117.00	960.94	117.00	0.00	0.00
-http_request.mmd	orthogonal	diff	23	550.70	642.20	550.70	642.20	0.00	0.00
-inline_edge_labels.mmd	orthogonal	diff	17	115.16	582.00	115.16	582.00	0.00	0.00
-inline_label_flowchart.mmd	orthogonal	diff	61	1028.03	1655.78	1028.03	1655.78	0.00	0.00
-label_spacing.mmd	orthogonal	diff	13	203.82	198.00	203.82	198.00	0.00	0.00
-labeled_edges.mmd	orthogonal	diff	19	335.04	497.80	335.04	497.80	0.00	0.00
-left_right.mmd	orthogonal	diff	13	580.90	70.00	580.90	70.00	0.00	0.00
-multi_edge_labeled.mmd	orthogonal	diff	15	133.25	302.00	133.25	302.00	0.00	0.00
-multi_edge.mmd	orthogonal	diff	13	84.91	174.00	84.91	174.00	0.00	0.00
-multi_subgraph_direction_override.mmd	orthogonal	diff	20	351.61	462.60	351.61	462.60	0.00	0.00
-multi_subgraph.mmd	orthogonal	diff	15	644.76	170.00	644.76	170.00	0.00	0.00
-multiple_cycles.mmd	orthogonal	diff	17	159.84	278.00	159.84	278.00	0.00	0.00
-narrow_fan_in.mmd	orthogonal	diff	15	322.73	174.00	322.73	174.00	0.00	0.00
-nested_subgraph_edge.mmd	orthogonal	same	0	435.88	414.00	435.88	414.00	0.00	0.00
-nested_subgraph_only.mmd	orthogonal	diff	11	224.91	310.00	224.91	310.00	0.00	0.00
-nested_subgraph.mmd	orthogonal	diff	13	273.54	408.00	273.54	408.00	0.00	0.00
-nested_with_siblings.mmd	orthogonal	diff	15	621.64	221.00	621.64	221.00	0.00	0.00
-right_left.mmd	orthogonal	diff	13	436.50	70.00	436.50	70.00	0.00	0.00
-self_loop_labeled.mmd	orthogonal	diff	14	169.35	348.40	169.35	348.40	0.00	0.00
-self_loop_with_others.mmd	orthogonal	diff	14	169.04	278.00	169.04	278.00	0.00	0.00
-self_loop.mmd	orthogonal	same	0	169.04	70.00	169.04	70.00	0.00	0.00
-shapes_basic.mmd	orthogonal	diff	21	146.71	765.22	146.71	765.22	0.00	0.00
-shapes_degenerate.mmd	orthogonal	diff	23	116.46	798.00	116.46	798.00	0.00	0.00
-shapes_document.mmd	orthogonal	diff	17	106.16	548.50	106.16	548.50	0.00	0.00
-shapes_junction.mmd	orthogonal	diff	13	218.00	76.00	218.00	76.00	0.00	0.00
-shapes_special.mmd	orthogonal	diff	11	181.92	70.00	181.92	70.00	0.00	0.00
-shapes.mmd	orthogonal	diff	13	189.77	381.75	189.77	381.75	0.00	0.00
-simple_cycle.mmd	orthogonal	diff	15	169.28	278.00	169.28	278.00	0.00	0.00
-simple_subgraph.mmd	orthogonal	diff	13	223.88	343.00	223.88	343.00	0.00	0.00
-simple.mmd	orthogonal	diff	11	111.26	174.00	111.26	174.00	0.00	0.00
-skip_edge_collision.mmd	orthogonal	diff	17	162.88	382.00	162.88	382.00	0.00	0.00
-stacked_fan_in.mmd	orthogonal	diff	15	141.12	278.00	141.12	278.00	0.00	0.00
-subgraph_as_node_edge.mmd	orthogonal	diff	11	257.66	462.00	257.66	462.00	0.00	0.00
-subgraph_direction_cross_boundary.mmd	orthogonal	diff	21	238.82	823.00	238.82	823.00	0.00	0.00
-subgraph_direction_lr.mmd	orthogonal	same	0	473.00	328.00	473.00	328.00	0.00	0.00
-subgraph_direction_mixed.mmd	orthogonal	same	0	233.82	335.40	233.82	335.40	0.00	0.00
-subgraph_direction_nested_both.mmd	orthogonal	diff	11	352.73	326.80	352.73	326.80	0.00	0.00
-subgraph_direction_nested.mmd	orthogonal	same	0	382.73	304.00	382.73	304.00	0.00	0.00
-subgraph_edges_bottom_top.mmd	orthogonal	diff	13	369.61	304.00	369.61	304.00	0.00	0.00
-subgraph_edges.mmd	orthogonal	diff	13	369.61	304.00	369.61	304.00	0.00	0.00
-subgraph_multi_word_title.mmd	orthogonal	diff	17	249.87	536.00	249.87	536.00	0.00	0.00
-subgraph_numeric_id.mmd	orthogonal	diff	15	184.91	512.00	184.91	512.00	0.00	0.00
-subgraph_to_subgraph_edge.mmd	orthogonal	diff	13	285.88	542.00	285.88	542.00	0.00	0.00
-very_narrow_fan_in.mmd	orthogonal	diff	17	441.64	174.00	441.64	174.00	0.00	0.00
+fixture	style	status	diff_lines	full_viewbox_width	full_viewbox_height	unified_viewbox_width	unified_viewbox_height	viewbox_width_delta	viewbox_height_delta	full_route_envelope_width	full_route_envelope_height	unified_route_envelope_width	unified_route_envelope_height	route_envelope_width_delta	route_envelope_height_delta	full_edge_label_count	unified_edge_label_count	edge_label_count_delta	label_position_max_drift	label_position_mean_drift
+ampersand.mmd	basis	diff	17	318.15	278.00	318.15	278.00	0.00	0.00	176.07	150.00	176.07	150.00	0.00	0.00	0	0	0	0.00	0.00
+backward_in_subgraph.mmd	basis	diff	13	219.06	254.00	219.06	254.00	0.00	0.00	57.30	50.00	34.54	50.00	-22.76	0.00	0	0	0	0.00	0.00
+bidirectional.mmd	basis	diff	15	84.91	382.00	84.91	382.00	0.00	0.00	0.00	250.00	0.00	250.00	0.00	0.00	0	0	0	0.00	0.00
+bidirectional_arrows.mmd	basis	diff	15	84.91	382.00	84.91	382.00	0.00	0.00	0.00	250.00	0.00	250.00	0.00	0.00	0	0	0	0.00	0.00
+bottom_top.mmd	basis	diff	13	155.25	278.00	155.25	278.00	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+br_line_breaks.mmd	basis	diff	13	123.70	422.00	123.70	422.00	0.00	0.00	0.00	222.00	0.00	222.00	0.00	0.00	2	2	0	0.00	0.00
+chain.mmd	basis	diff	15	125.00	382.00	125.00	382.00	0.00	0.00	0.00	254.00	0.00	254.00	0.00	0.00	0	0	0	0.00	0.00
+ci_pipeline.mmd	basis	diff	21	1093.09	174.00	1093.09	174.00	0.00	0.00	802.38	104.00	802.38	104.00	0.00	0.00	2	2	0	0.00	0.00
+compat_class_annotation.mmd	basis	diff	15	203.82	362.88	203.82	362.88	0.00	0.00	118.91	234.88	118.91	234.88	0.00	0.00	2	2	0	0.00	0.00
+compat_directive.mmd	basis	diff	15	269.52	362.88	269.52	362.88	0.00	0.00	151.76	234.88	151.76	234.88	0.00	0.00	2	2	0	0.00	0.00
+compat_frontmatter.mmd	basis	diff	13	84.91	278.00	84.91	278.00	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+compat_hyphenated_ids.mmd	basis	diff	15	150.98	449.06	150.98	449.06	0.00	0.00	0.00	321.06	0.00	321.06	0.00	0.00	1	1	0	0.00	0.00
+compat_invisible_edge.mmd	basis	diff	13	119.91	278.00	119.91	278.00	0.00	0.00	69.46	150.67	69.46	150.00	0.00	-0.67	0	0	0	0.00	0.00
+compat_kitchen_sink.mmd	basis	diff	19	295.88	498.06	295.88	498.06	0.00	0.00	164.93	371.92	164.93	370.06	0.00	-1.86	2	2	0	0.00	0.00
+compat_no_direction.mmd	basis	diff	11	111.26	174.00	111.26	174.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+compat_numeric_ids.mmd	basis	diff	13	418.12	70.00	418.12	70.00	0.00	0.00	207.60	0.00	207.60	0.00	0.00	0.00	0	0	0	0.00	0.00
+complex.mmd	basis	diff	31	579.64	757.28	579.64	757.28	0.00	0.00	427.54	644.53	427.54	630.49	0.00	-14.04	4	4	0	0.00	0.00
+cross_circle_arrows.mmd	basis	diff	17	84.91	486.00	84.91	486.00	0.00	0.00	0.00	362.00	0.00	362.00	0.00	0.00	0	0	0	0.00	0.00
+decision.mmd	basis	diff	17	285.44	413.36	285.44	413.36	0.00	0.00	170.45	289.36	159.74	294.50	-10.71	5.14	2	2	0	0.00	0.00
+diamond_fan.mmd	basis	diff	17	251.89	278.00	251.89	278.00	0.00	0.00	142.95	151.65	142.95	150.00	0.00	-1.65	0	0	0	0.00	0.00
+direction_override.mmd	basis	same	0	473.00	328.00	473.00	328.00	0.00	0.00	318.00	200.00	318.00	200.00	0.00	0.00	0	0	0	0.00	0.00
+double_skip.mmd	basis	diff	19	214.75	382.00	214.75	382.00	0.00	0.00	144.25	255.25	144.25	254.00	0.00	-1.25	0	0	0	0.00	0.00
+edge_styles.mmd	basis	diff	17	573.60	174.00	573.60	174.00	0.00	0.00	455.56	50.00	455.56	50.00	0.00	0.00	0	0	0	0.00	0.00
+external_node_subgraph.mmd	basis	diff	17	536.01	393.00	536.01	393.00	0.00	0.00	235.01	200.00	235.01	200.00	0.00	0.00	0	0	0	0.00	0.00
+fan_in.mmd	basis	diff	15	495.33	174.00	495.33	174.00	0.00	0.00	352.89	60.19	352.89	46.00	0.00	-14.19	0	0	0	0.00	0.00
+fan_in_lr.mmd	basis	diff	15	273.23	278.00	273.23	278.00	0.00	0.00	80.50	208.00	46.00	208.00	-34.50	0.00	0	0	0	0.00	0.00
+fan_out.mmd	basis	diff	15	487.54	174.00	487.54	174.00	0.00	0.00	347.70	56.70	347.70	46.00	0.00	-10.70	0	0	0	0.00	0.00
+five_fan_in.mmd	basis	diff	19	560.54	174.00	560.54	174.00	0.00	0.00	475.64	64.51	475.64	49.74	0.00	-14.77	0	0	0	0.00	0.00
+git_workflow.mmd	basis	diff	17	960.94	117.00	960.94	117.00	0.00	0.00	642.68	62.00	642.68	62.00	0.00	0.00	4	4	0	0.00	0.00
+http_request.mmd	basis	diff	23	550.70	642.20	550.70	642.20	0.00	0.00	386.48	536.87	294.26	518.20	-92.22	-18.67	4	4	0	0.00	0.00
+inline_edge_labels.mmd	basis	diff	17	115.16	582.00	115.16	582.00	0.00	0.00	0.00	454.00	0.00	454.00	0.00	0.00	4	4	0	0.00	0.00
+inline_label_flowchart.mmd	basis	diff	61	1028.03	1655.78	1028.03	1655.78	0.00	0.00	875.01	1506.00	875.01	1506.00	0.00	0.00	9	9	0	0.00	0.00
+label_spacing.mmd	basis	diff	13	203.82	198.00	203.82	198.00	0.00	0.00	118.91	70.00	118.91	70.00	0.00	0.00	2	2	0	0.00	0.00
+labeled_edges.mmd	basis	diff	19	335.04	497.80	335.04	497.80	0.00	0.00	198.79	373.80	189.59	373.80	-9.20	0.00	5	5	0	0.00	0.00
+left_right.mmd	basis	diff	13	580.90	70.00	580.90	70.00	0.00	0.00	254.00	0.00	254.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+multi_edge.mmd	basis	diff	13	84.91	174.00	84.91	174.00	0.00	0.00	17.29	46.07	10.39	46.00	-6.90	-0.07	0	0	0	0.00	0.00
+multi_edge_labeled.mmd	basis	diff	15	133.25	302.00	133.25	302.00	0.00	0.00	56.67	174.00	28.95	174.00	-27.72	0.00	2	2	0	0.00	0.00
+multi_subgraph.mmd	basis	diff	15	644.76	170.00	644.76	170.00	0.00	0.00	389.12	0.00	389.12	0.00	0.00	0.00	0	0	0	0.00	0.00
+multi_subgraph_direction_override.mmd	basis	diff	20	351.61	462.60	351.61	462.60	0.00	0.00	268.56	279.00	268.56	279.00	0.00	0.00	0	0	0	0.00	0.00
+multiple_cycles.mmd	basis	diff	17	159.84	278.00	159.84	278.00	0.00	0.00	97.34	154.00	94.13	154.00	-3.21	0.00	0	0	0	0.00	0.00
+narrow_fan_in.mmd	basis	diff	15	322.73	174.00	322.73	174.00	0.00	0.00	237.82	60.33	237.82	46.00	0.00	-14.33	0	0	0	0.00	0.00
+nested_subgraph.mmd	basis	diff	13	273.54	408.00	273.54	408.00	0.00	0.00	0.00	175.00	0.00	175.00	0.00	0.00	0	0	0	0.00	0.00
+nested_subgraph_edge.mmd	basis	same	0	435.88	414.00	435.88	414.00	0.00	0.00	0.00	286.00	0.00	286.00	0.00	0.00	0	0	0	0.00	0.00
+nested_subgraph_only.mmd	basis	diff	11	224.91	310.00	224.91	310.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+nested_with_siblings.mmd	basis	diff	15	621.64	221.00	621.64	221.00	0.00	0.00	333.82	0.00	333.82	0.00	0.00	0.00	0	0	0	0.00	0.00
+q1_q2_conflict.mmd	basis	diff	23	803.68	278.00	803.68	278.00	0.00	0.00	670.14	154.00	670.14	154.00	0.00	0.00	0	0	0	0.00	0.00
+right_left.mmd	basis	diff	13	436.50	70.00	436.50	70.00	0.00	0.00	213.54	0.00	213.54	0.00	0.00	0.00	0	0	0	0.00	0.00
+self_loop.mmd	basis	same	0	169.04	70.00	169.04	70.00	0.00	0.00	35.50	47.59	35.50	47.59	0.00	0.00	0	0	0	0.00	0.00
+self_loop_labeled.mmd	basis	diff	14	169.35	348.40	169.35	348.40	0.00	0.00	85.70	220.40	85.70	220.40	0.00	0.00	2	2	0	0.00	0.00
+self_loop_with_others.mmd	basis	diff	14	169.04	278.00	169.04	278.00	0.00	0.00	94.27	150.00	94.27	150.00	0.00	0.00	0	0	0	0.00	0.00
+shapes.mmd	basis	diff	13	189.77	381.75	189.77	381.75	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_basic.mmd	basis	diff	21	146.71	765.22	146.71	765.22	0.00	0.00	0.00	637.22	0.00	637.22	0.00	0.00	0	0	0	0.00	0.00
+shapes_degenerate.mmd	basis	diff	23	116.46	798.00	116.46	798.00	0.00	0.00	0.00	670.00	0.00	670.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_document.mmd	basis	diff	17	106.16	548.50	106.16	548.50	0.00	0.00	0.00	413.75	0.00	413.75	0.00	0.00	0	0	0	0.00	0.00
+shapes_junction.mmd	basis	diff	13	218.00	76.00	218.00	76.00	0.00	0.00	124.00	0.00	124.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_special.mmd	basis	diff	11	181.92	70.00	181.92	70.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+simple.mmd	basis	diff	11	111.26	174.00	111.26	174.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+simple_cycle.mmd	basis	diff	15	169.28	278.00	169.28	278.00	0.00	0.00	93.77	154.00	93.77	154.00	0.00	0.00	0	0	0	0.00	0.00
+simple_subgraph.mmd	basis	diff	13	223.88	343.00	223.88	343.00	0.00	0.00	0.00	175.00	0.00	175.00	0.00	0.00	0	0	0	0.00	0.00
+skip_edge_collision.mmd	basis	diff	17	162.88	382.00	162.88	382.00	0.00	0.00	89.50	254.97	89.50	254.00	0.00	-0.97	0	0	0	0.00	0.00
+stacked_fan_in.mmd	basis	diff	15	141.12	278.00	141.12	278.00	0.00	0.00	78.09	150.80	78.09	150.00	0.00	-0.80	0	0	0	0.00	0.00
+subgraph_as_node_edge.mmd	basis	diff	11	257.66	462.00	257.66	462.00	0.00	0.00	0.00	334.00	0.00	334.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_cross_boundary.mmd	basis	diff	21	238.82	823.00	238.82	823.00	0.00	0.00	148.91	695.07	148.91	695.00	0.00	-0.07	0	0	0	0.00	0.00
+subgraph_direction_lr.mmd	basis	same	0	473.00	328.00	473.00	328.00	0.00	0.00	318.00	200.00	318.00	200.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_mixed.mmd	basis	same	0	233.82	335.40	233.82	335.40	0.00	0.00	86.68	187.60	86.68	187.60	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_nested.mmd	basis	same	0	382.73	304.00	382.73	304.00	0.00	0.00	199.37	110.00	199.37	110.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_nested_both.mmd	basis	diff	11	352.73	326.80	352.73	326.80	0.00	0.00	178.36	195.00	178.36	168.00	0.00	-27.00	0	0	0	0.00	0.00
+subgraph_edges.mmd	basis	diff	13	369.61	304.00	369.61	304.00	0.00	0.00	148.51	96.00	148.51	96.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_edges_bottom_top.mmd	basis	diff	13	369.61	304.00	369.61	304.00	0.00	0.00	148.51	96.00	148.51	96.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_multi_word_title.mmd	basis	diff	17	249.87	536.00	249.87	536.00	0.00	0.00	0.00	408.00	0.00	408.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_numeric_id.mmd	basis	diff	15	184.91	512.00	184.91	512.00	0.00	0.00	0.00	304.00	0.00	304.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_to_subgraph_edge.mmd	basis	diff	13	285.88	542.00	285.88	542.00	0.00	0.00	0.00	334.00	0.00	334.00	0.00	0.00	0	0	0	0.00	0.00
+very_narrow_fan_in.mmd	basis	diff	17	441.64	174.00	441.64	174.00	0.00	0.00	356.73	65.84	356.73	46.00	0.00	-19.84	0	0	0	0.00	0.00
+ampersand.mmd	linear	diff	17	318.15	278.00	318.15	278.00	0.00	0.00	176.07	150.00	176.07	150.00	0.00	0.00	0	0	0	0.00	0.00
+backward_in_subgraph.mmd	linear	diff	13	219.06	254.00	219.06	254.00	0.00	0.00	66.53	50.00	34.54	50.00	-31.99	0.00	0	0	0	0.00	0.00
+bidirectional.mmd	linear	diff	15	84.91	382.00	84.91	382.00	0.00	0.00	0.00	250.00	0.00	250.00	0.00	0.00	0	0	0	0.00	0.00
+bidirectional_arrows.mmd	linear	diff	15	84.91	382.00	84.91	382.00	0.00	0.00	0.00	250.00	0.00	250.00	0.00	0.00	0	0	0	0.00	0.00
+bottom_top.mmd	linear	diff	13	155.25	278.00	155.25	278.00	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+br_line_breaks.mmd	linear	diff	13	123.70	422.00	123.70	422.00	0.00	0.00	0.00	222.00	0.00	222.00	0.00	0.00	2	2	0	0.00	0.00
+chain.mmd	linear	diff	15	125.00	382.00	125.00	382.00	0.00	0.00	0.00	254.00	0.00	254.00	0.00	0.00	0	0	0	0.00	0.00
+ci_pipeline.mmd	linear	diff	21	1093.09	174.00	1093.09	174.00	0.00	0.00	802.38	104.00	802.38	104.00	0.00	0.00	2	2	0	0.00	0.00
+compat_class_annotation.mmd	linear	diff	15	203.82	362.88	203.82	362.88	0.00	0.00	118.91	234.88	118.91	234.88	0.00	0.00	2	2	0	0.00	0.00
+compat_directive.mmd	linear	diff	15	269.52	362.88	269.52	362.88	0.00	0.00	151.76	234.88	151.76	234.88	0.00	0.00	2	2	0	0.00	0.00
+compat_frontmatter.mmd	linear	diff	13	84.91	278.00	84.91	278.00	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+compat_hyphenated_ids.mmd	linear	diff	15	150.98	449.06	150.98	449.06	0.00	0.00	0.00	321.06	0.00	321.06	0.00	0.00	1	1	0	0.00	0.00
+compat_invisible_edge.mmd	linear	diff	13	119.91	278.00	119.91	278.00	0.00	0.00	69.46	150.67	69.46	150.00	0.00	-0.67	0	0	0	0.00	0.00
+compat_kitchen_sink.mmd	linear	diff	19	295.88	498.06	295.88	498.06	0.00	0.00	164.93	371.92	164.93	370.06	0.00	-1.86	2	2	0	0.00	0.00
+compat_no_direction.mmd	linear	diff	11	111.26	174.00	111.26	174.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+compat_numeric_ids.mmd	linear	diff	13	418.12	70.00	418.12	70.00	0.00	0.00	207.60	0.00	207.60	0.00	0.00	0.00	0	0	0	0.00	0.00
+complex.mmd	linear	diff	31	579.64	757.28	579.64	757.28	0.00	0.00	427.54	644.53	427.54	630.49	0.00	-14.04	4	4	0	0.00	0.00
+cross_circle_arrows.mmd	linear	diff	17	84.91	486.00	84.91	486.00	0.00	0.00	0.00	362.00	0.00	362.00	0.00	0.00	0	0	0	0.00	0.00
+decision.mmd	linear	diff	17	285.44	413.36	285.44	413.36	0.00	0.00	170.45	289.36	161.19	294.50	-9.26	5.14	2	2	0	0.00	0.00
+diamond_fan.mmd	linear	diff	17	251.89	278.00	251.89	278.00	0.00	0.00	142.95	151.65	142.95	150.00	0.00	-1.65	0	0	0	0.00	0.00
+direction_override.mmd	linear	same	0	473.00	328.00	473.00	328.00	0.00	0.00	318.00	200.00	318.00	200.00	0.00	0.00	0	0	0	0.00	0.00
+double_skip.mmd	linear	diff	19	214.75	382.00	214.75	382.00	0.00	0.00	144.25	255.25	144.25	254.00	0.00	-1.25	0	0	0	0.00	0.00
+edge_styles.mmd	linear	diff	17	573.60	174.00	573.60	174.00	0.00	0.00	455.56	50.00	455.56	50.00	0.00	0.00	0	0	0	0.00	0.00
+external_node_subgraph.mmd	linear	diff	17	536.01	393.00	536.01	393.00	0.00	0.00	235.01	200.00	235.01	200.00	0.00	0.00	0	0	0	0.00	0.00
+fan_in.mmd	linear	diff	15	495.33	174.00	495.33	174.00	0.00	0.00	352.89	60.19	352.89	46.00	0.00	-14.19	0	0	0	0.00	0.00
+fan_in_lr.mmd	linear	diff	15	273.23	278.00	273.23	278.00	0.00	0.00	80.50	208.00	46.00	208.00	-34.50	0.00	0	0	0	0.00	0.00
+fan_out.mmd	linear	diff	15	487.54	174.00	487.54	174.00	0.00	0.00	347.70	56.70	347.70	46.00	0.00	-10.70	0	0	0	0.00	0.00
+five_fan_in.mmd	linear	diff	19	560.54	174.00	560.54	174.00	0.00	0.00	475.64	64.51	475.64	49.74	0.00	-14.77	0	0	0	0.00	0.00
+git_workflow.mmd	linear	diff	17	960.94	117.00	960.94	117.00	0.00	0.00	642.68	62.00	642.68	62.00	0.00	0.00	4	4	0	0.00	0.00
+http_request.mmd	linear	diff	23	550.70	642.20	550.70	642.20	0.00	0.00	386.48	536.87	314.01	518.20	-72.47	-18.67	4	4	0	0.00	0.00
+inline_edge_labels.mmd	linear	diff	17	115.16	582.00	115.16	582.00	0.00	0.00	0.00	454.00	0.00	454.00	0.00	0.00	4	4	0	0.00	0.00
+inline_label_flowchart.mmd	linear	diff	61	1028.03	1655.78	1028.03	1655.78	0.00	0.00	875.01	1506.00	875.01	1506.00	0.00	0.00	9	9	0	0.00	0.00
+label_spacing.mmd	linear	diff	13	203.82	198.00	203.82	198.00	0.00	0.00	118.91	70.00	118.91	70.00	0.00	0.00	2	2	0	0.00	0.00
+labeled_edges.mmd	linear	diff	19	335.04	497.80	335.04	497.80	0.00	0.00	198.79	373.80	189.59	373.80	-9.20	0.00	5	5	0	0.00	0.00
+left_right.mmd	linear	diff	13	580.90	70.00	580.90	70.00	0.00	0.00	254.00	0.00	254.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+multi_edge.mmd	linear	diff	13	84.91	174.00	84.91	174.00	0.00	0.00	20.00	46.07	10.39	46.00	-9.61	-0.07	0	0	0	0.00	0.00
+multi_edge_labeled.mmd	linear	diff	15	133.25	302.00	133.25	302.00	0.00	0.00	68.63	174.00	28.95	174.00	-39.68	0.00	2	2	0	0.00	0.00
+multi_subgraph.mmd	linear	diff	15	644.76	170.00	644.76	170.00	0.00	0.00	389.12	0.00	389.12	0.00	0.00	0.00	0	0	0	0.00	0.00
+multi_subgraph_direction_override.mmd	linear	diff	20	351.61	462.60	351.61	462.60	0.00	0.00	268.56	279.00	268.56	279.00	0.00	0.00	0	0	0	0.00	0.00
+multiple_cycles.mmd	linear	diff	17	159.84	278.00	159.84	278.00	0.00	0.00	98.94	154.00	94.13	154.00	-4.81	0.00	0	0	0	0.00	0.00
+narrow_fan_in.mmd	linear	diff	15	322.73	174.00	322.73	174.00	0.00	0.00	237.82	60.33	237.82	46.00	0.00	-14.33	0	0	0	0.00	0.00
+nested_subgraph.mmd	linear	diff	13	273.54	408.00	273.54	408.00	0.00	0.00	0.00	175.00	0.00	175.00	0.00	0.00	0	0	0	0.00	0.00
+nested_subgraph_edge.mmd	linear	same	0	435.88	414.00	435.88	414.00	0.00	0.00	0.00	286.00	0.00	286.00	0.00	0.00	0	0	0	0.00	0.00
+nested_subgraph_only.mmd	linear	diff	11	224.91	310.00	224.91	310.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+nested_with_siblings.mmd	linear	diff	15	621.64	221.00	621.64	221.00	0.00	0.00	333.82	0.00	333.82	0.00	0.00	0.00	0	0	0	0.00	0.00
+q1_q2_conflict.mmd	linear	diff	23	803.68	278.00	803.68	278.00	0.00	0.00	670.14	154.00	670.14	154.00	0.00	0.00	0	0	0	0.00	0.00
+right_left.mmd	linear	diff	13	436.50	70.00	436.50	70.00	0.00	0.00	213.54	0.00	213.54	0.00	0.00	0.00	0	0	0	0.00	0.00
+self_loop.mmd	linear	same	0	169.04	70.00	169.04	70.00	0.00	0.00	35.50	52.62	35.50	52.62	0.00	0.00	0	0	0	0.00	0.00
+self_loop_labeled.mmd	linear	diff	14	169.35	348.40	169.35	348.40	0.00	0.00	85.70	220.40	85.70	220.40	0.00	0.00	2	2	0	0.00	0.00
+self_loop_with_others.mmd	linear	diff	14	169.04	278.00	169.04	278.00	0.00	0.00	94.27	150.00	94.27	150.00	0.00	0.00	0	0	0	0.00	0.00
+shapes.mmd	linear	diff	13	189.77	381.75	189.77	381.75	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_basic.mmd	linear	diff	21	146.71	765.22	146.71	765.22	0.00	0.00	0.00	637.22	0.00	637.22	0.00	0.00	0	0	0	0.00	0.00
+shapes_degenerate.mmd	linear	diff	23	116.46	798.00	116.46	798.00	0.00	0.00	0.00	670.00	0.00	670.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_document.mmd	linear	diff	17	106.16	548.50	106.16	548.50	0.00	0.00	0.00	413.75	0.00	413.75	0.00	0.00	0	0	0	0.00	0.00
+shapes_junction.mmd	linear	diff	13	218.00	76.00	218.00	76.00	0.00	0.00	124.00	0.00	124.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_special.mmd	linear	diff	11	181.92	70.00	181.92	70.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+simple.mmd	linear	diff	11	111.26	174.00	111.26	174.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+simple_cycle.mmd	linear	diff	15	169.28	278.00	169.28	278.00	0.00	0.00	93.77	154.00	93.77	154.00	0.00	0.00	0	0	0	0.00	0.00
+simple_subgraph.mmd	linear	diff	13	223.88	343.00	223.88	343.00	0.00	0.00	0.00	175.00	0.00	175.00	0.00	0.00	0	0	0	0.00	0.00
+skip_edge_collision.mmd	linear	diff	17	162.88	382.00	162.88	382.00	0.00	0.00	89.50	254.97	89.50	254.00	0.00	-0.97	0	0	0	0.00	0.00
+stacked_fan_in.mmd	linear	diff	15	141.12	278.00	141.12	278.00	0.00	0.00	78.09	150.80	78.09	150.00	0.00	-0.80	0	0	0	0.00	0.00
+subgraph_as_node_edge.mmd	linear	diff	11	257.66	462.00	257.66	462.00	0.00	0.00	0.00	334.00	0.00	334.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_cross_boundary.mmd	linear	diff	21	238.82	823.00	238.82	823.00	0.00	0.00	148.91	695.07	148.91	695.00	0.00	-0.07	0	0	0	0.00	0.00
+subgraph_direction_lr.mmd	linear	same	0	473.00	328.00	473.00	328.00	0.00	0.00	318.00	200.00	318.00	200.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_mixed.mmd	linear	same	0	233.82	335.40	233.82	335.40	0.00	0.00	86.68	187.60	86.68	187.60	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_nested.mmd	linear	same	0	382.73	304.00	382.73	304.00	0.00	0.00	199.37	110.00	199.37	110.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_nested_both.mmd	linear	diff	11	352.73	326.80	352.73	326.80	0.00	0.00	178.36	195.00	178.36	168.00	0.00	-27.00	0	0	0	0.00	0.00
+subgraph_edges.mmd	linear	diff	13	369.61	304.00	369.61	304.00	0.00	0.00	148.51	96.00	148.51	96.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_edges_bottom_top.mmd	linear	diff	13	369.61	304.00	369.61	304.00	0.00	0.00	148.51	96.00	148.51	96.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_multi_word_title.mmd	linear	diff	17	249.87	536.00	249.87	536.00	0.00	0.00	0.00	408.00	0.00	408.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_numeric_id.mmd	linear	diff	15	184.91	512.00	184.91	512.00	0.00	0.00	0.00	304.00	0.00	304.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_to_subgraph_edge.mmd	linear	diff	13	285.88	542.00	285.88	542.00	0.00	0.00	0.00	334.00	0.00	334.00	0.00	0.00	0	0	0	0.00	0.00
+very_narrow_fan_in.mmd	linear	diff	17	441.64	174.00	441.64	174.00	0.00	0.00	356.73	65.84	356.73	46.00	0.00	-19.84	0	0	0	0.00	0.00
+ampersand.mmd	rounded	diff	17	318.15	278.00	318.15	278.00	0.00	0.00	176.07	150.00	176.07	150.00	0.00	0.00	0	0	0	0.00	0.00
+backward_in_subgraph.mmd	rounded	diff	13	219.06	254.00	219.06	254.00	0.00	0.00	66.53	50.00	34.54	50.00	-31.99	0.00	0	0	0	0.00	0.00
+bidirectional.mmd	rounded	diff	15	84.91	382.00	84.91	382.00	0.00	0.00	0.00	250.00	0.00	250.00	0.00	0.00	0	0	0	0.00	0.00
+bidirectional_arrows.mmd	rounded	diff	15	84.91	382.00	84.91	382.00	0.00	0.00	0.00	250.00	0.00	250.00	0.00	0.00	0	0	0	0.00	0.00
+bottom_top.mmd	rounded	diff	13	155.25	278.00	155.25	278.00	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+br_line_breaks.mmd	rounded	diff	13	123.70	422.00	123.70	422.00	0.00	0.00	0.00	222.00	0.00	222.00	0.00	0.00	2	2	0	0.00	0.00
+chain.mmd	rounded	diff	15	125.00	382.00	125.00	382.00	0.00	0.00	0.00	254.00	0.00	254.00	0.00	0.00	0	0	0	0.00	0.00
+ci_pipeline.mmd	rounded	diff	21	1093.09	174.00	1093.09	174.00	0.00	0.00	802.38	104.00	802.38	104.00	0.00	0.00	2	2	0	0.00	0.00
+compat_class_annotation.mmd	rounded	diff	15	203.82	362.88	203.82	362.88	0.00	0.00	118.91	234.88	118.91	234.88	0.00	0.00	2	2	0	0.00	0.00
+compat_directive.mmd	rounded	diff	15	269.52	362.88	269.52	362.88	0.00	0.00	151.76	234.88	151.76	234.88	0.00	0.00	2	2	0	0.00	0.00
+compat_frontmatter.mmd	rounded	diff	13	84.91	278.00	84.91	278.00	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+compat_hyphenated_ids.mmd	rounded	diff	15	150.98	449.06	150.98	449.06	0.00	0.00	0.00	321.06	0.00	321.06	0.00	0.00	1	1	0	0.00	0.00
+compat_invisible_edge.mmd	rounded	diff	13	119.91	278.00	119.91	278.00	0.00	0.00	69.46	150.67	69.46	150.00	0.00	-0.67	0	0	0	0.00	0.00
+compat_kitchen_sink.mmd	rounded	diff	19	295.88	498.06	295.88	498.06	0.00	0.00	164.93	371.92	164.93	370.06	0.00	-1.86	2	2	0	0.00	0.00
+compat_no_direction.mmd	rounded	diff	11	111.26	174.00	111.26	174.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+compat_numeric_ids.mmd	rounded	diff	13	418.12	70.00	418.12	70.00	0.00	0.00	207.60	0.00	207.60	0.00	0.00	0.00	0	0	0	0.00	0.00
+complex.mmd	rounded	diff	31	579.64	757.28	579.64	757.28	0.00	0.00	427.54	644.53	427.54	630.49	0.00	-14.04	4	4	0	0.00	0.00
+cross_circle_arrows.mmd	rounded	diff	17	84.91	486.00	84.91	486.00	0.00	0.00	0.00	362.00	0.00	362.00	0.00	0.00	0	0	0	0.00	0.00
+decision.mmd	rounded	diff	17	285.44	413.36	285.44	413.36	0.00	0.00	170.45	289.36	161.19	294.50	-9.26	5.14	2	2	0	0.00	0.00
+diamond_fan.mmd	rounded	diff	17	251.89	278.00	251.89	278.00	0.00	0.00	142.95	151.65	142.95	150.00	0.00	-1.65	0	0	0	0.00	0.00
+direction_override.mmd	rounded	same	0	473.00	328.00	473.00	328.00	0.00	0.00	318.00	200.00	318.00	200.00	0.00	0.00	0	0	0	0.00	0.00
+double_skip.mmd	rounded	diff	19	214.75	382.00	214.75	382.00	0.00	0.00	144.25	255.25	144.25	254.00	0.00	-1.25	0	0	0	0.00	0.00
+edge_styles.mmd	rounded	diff	17	573.60	174.00	573.60	174.00	0.00	0.00	455.56	50.00	455.56	50.00	0.00	0.00	0	0	0	0.00	0.00
+external_node_subgraph.mmd	rounded	diff	17	536.01	393.00	536.01	393.00	0.00	0.00	235.01	200.00	235.01	200.00	0.00	0.00	0	0	0	0.00	0.00
+fan_in.mmd	rounded	diff	15	495.33	174.00	495.33	174.00	0.00	0.00	352.89	60.19	352.89	46.00	0.00	-14.19	0	0	0	0.00	0.00
+fan_in_lr.mmd	rounded	diff	15	273.23	278.00	273.23	278.00	0.00	0.00	80.50	208.00	46.00	208.00	-34.50	0.00	0	0	0	0.00	0.00
+fan_out.mmd	rounded	diff	15	487.54	174.00	487.54	174.00	0.00	0.00	347.70	56.70	347.70	46.00	0.00	-10.70	0	0	0	0.00	0.00
+five_fan_in.mmd	rounded	diff	19	560.54	174.00	560.54	174.00	0.00	0.00	475.64	64.51	475.64	49.74	0.00	-14.77	0	0	0	0.00	0.00
+git_workflow.mmd	rounded	diff	17	960.94	117.00	960.94	117.00	0.00	0.00	642.68	62.00	642.68	62.00	0.00	0.00	4	4	0	0.00	0.00
+http_request.mmd	rounded	diff	23	550.70	642.20	550.70	642.20	0.00	0.00	386.48	536.87	314.01	518.20	-72.47	-18.67	4	4	0	0.00	0.00
+inline_edge_labels.mmd	rounded	diff	17	115.16	582.00	115.16	582.00	0.00	0.00	0.00	454.00	0.00	454.00	0.00	0.00	4	4	0	0.00	0.00
+inline_label_flowchart.mmd	rounded	diff	61	1028.03	1655.78	1028.03	1655.78	0.00	0.00	875.01	1506.00	875.01	1506.00	0.00	0.00	9	9	0	0.00	0.00
+label_spacing.mmd	rounded	diff	13	203.82	198.00	203.82	198.00	0.00	0.00	118.91	70.00	118.91	70.00	0.00	0.00	2	2	0	0.00	0.00
+labeled_edges.mmd	rounded	diff	19	335.04	497.80	335.04	497.80	0.00	0.00	198.79	373.80	189.59	373.80	-9.20	0.00	5	5	0	0.00	0.00
+left_right.mmd	rounded	diff	13	580.90	70.00	580.90	70.00	0.00	0.00	254.00	0.00	254.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+multi_edge.mmd	rounded	diff	13	84.91	174.00	84.91	174.00	0.00	0.00	20.00	46.07	10.39	46.00	-9.61	-0.07	0	0	0	0.00	0.00
+multi_edge_labeled.mmd	rounded	diff	15	133.25	302.00	133.25	302.00	0.00	0.00	68.63	174.00	28.95	174.00	-39.68	0.00	2	2	0	0.00	0.00
+multi_subgraph.mmd	rounded	diff	15	644.76	170.00	644.76	170.00	0.00	0.00	389.12	0.00	389.12	0.00	0.00	0.00	0	0	0	0.00	0.00
+multi_subgraph_direction_override.mmd	rounded	diff	20	351.61	462.60	351.61	462.60	0.00	0.00	268.56	279.00	268.56	279.00	0.00	0.00	0	0	0	0.00	0.00
+multiple_cycles.mmd	rounded	diff	17	159.84	278.00	159.84	278.00	0.00	0.00	98.94	154.00	94.13	154.00	-4.81	0.00	0	0	0	0.00	0.00
+narrow_fan_in.mmd	rounded	diff	15	322.73	174.00	322.73	174.00	0.00	0.00	237.82	60.33	237.82	46.00	0.00	-14.33	0	0	0	0.00	0.00
+nested_subgraph.mmd	rounded	diff	13	273.54	408.00	273.54	408.00	0.00	0.00	0.00	175.00	0.00	175.00	0.00	0.00	0	0	0	0.00	0.00
+nested_subgraph_edge.mmd	rounded	same	0	435.88	414.00	435.88	414.00	0.00	0.00	0.00	286.00	0.00	286.00	0.00	0.00	0	0	0	0.00	0.00
+nested_subgraph_only.mmd	rounded	diff	11	224.91	310.00	224.91	310.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+nested_with_siblings.mmd	rounded	diff	15	621.64	221.00	621.64	221.00	0.00	0.00	333.82	0.00	333.82	0.00	0.00	0.00	0	0	0	0.00	0.00
+q1_q2_conflict.mmd	rounded	diff	23	803.68	278.00	803.68	278.00	0.00	0.00	670.14	154.00	670.14	154.00	0.00	0.00	0	0	0	0.00	0.00
+right_left.mmd	rounded	diff	13	436.50	70.00	436.50	70.00	0.00	0.00	213.54	0.00	213.54	0.00	0.00	0.00	0	0	0	0.00	0.00
+self_loop.mmd	rounded	same	0	169.04	70.00	169.04	70.00	0.00	0.00	35.50	54.00	35.50	54.00	0.00	0.00	0	0	0	0.00	0.00
+self_loop_labeled.mmd	rounded	diff	14	169.35	348.40	169.35	348.40	0.00	0.00	85.70	220.40	85.70	220.40	0.00	0.00	2	2	0	0.00	0.00
+self_loop_with_others.mmd	rounded	diff	14	169.04	278.00	169.04	278.00	0.00	0.00	94.27	150.00	94.27	150.00	0.00	0.00	0	0	0	0.00	0.00
+shapes.mmd	rounded	diff	13	189.77	381.75	189.77	381.75	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_basic.mmd	rounded	diff	21	146.71	765.22	146.71	765.22	0.00	0.00	0.00	637.22	0.00	637.22	0.00	0.00	0	0	0	0.00	0.00
+shapes_degenerate.mmd	rounded	diff	23	116.46	798.00	116.46	798.00	0.00	0.00	0.00	670.00	0.00	670.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_document.mmd	rounded	diff	17	106.16	548.50	106.16	548.50	0.00	0.00	0.00	413.75	0.00	413.75	0.00	0.00	0	0	0	0.00	0.00
+shapes_junction.mmd	rounded	diff	13	218.00	76.00	218.00	76.00	0.00	0.00	124.00	0.00	124.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_special.mmd	rounded	diff	11	181.92	70.00	181.92	70.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+simple.mmd	rounded	diff	11	111.26	174.00	111.26	174.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+simple_cycle.mmd	rounded	diff	15	169.28	278.00	169.28	278.00	0.00	0.00	93.77	154.00	93.77	154.00	0.00	0.00	0	0	0	0.00	0.00
+simple_subgraph.mmd	rounded	diff	13	223.88	343.00	223.88	343.00	0.00	0.00	0.00	175.00	0.00	175.00	0.00	0.00	0	0	0	0.00	0.00
+skip_edge_collision.mmd	rounded	diff	17	162.88	382.00	162.88	382.00	0.00	0.00	89.50	254.97	89.50	254.00	0.00	-0.97	0	0	0	0.00	0.00
+stacked_fan_in.mmd	rounded	diff	15	141.12	278.00	141.12	278.00	0.00	0.00	78.09	150.80	78.09	150.00	0.00	-0.80	0	0	0	0.00	0.00
+subgraph_as_node_edge.mmd	rounded	diff	11	257.66	462.00	257.66	462.00	0.00	0.00	0.00	334.00	0.00	334.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_cross_boundary.mmd	rounded	diff	21	238.82	823.00	238.82	823.00	0.00	0.00	148.91	695.07	148.91	695.00	0.00	-0.07	0	0	0	0.00	0.00
+subgraph_direction_lr.mmd	rounded	same	0	473.00	328.00	473.00	328.00	0.00	0.00	318.00	200.00	318.00	200.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_mixed.mmd	rounded	same	0	233.82	335.40	233.82	335.40	0.00	0.00	86.68	187.60	86.68	187.60	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_nested.mmd	rounded	same	0	382.73	304.00	382.73	304.00	0.00	0.00	199.37	110.00	199.37	110.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_nested_both.mmd	rounded	diff	11	352.73	326.80	352.73	326.80	0.00	0.00	178.36	195.00	178.36	168.00	0.00	-27.00	0	0	0	0.00	0.00
+subgraph_edges.mmd	rounded	diff	13	369.61	304.00	369.61	304.00	0.00	0.00	148.51	96.00	148.51	96.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_edges_bottom_top.mmd	rounded	diff	13	369.61	304.00	369.61	304.00	0.00	0.00	148.51	96.00	148.51	96.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_multi_word_title.mmd	rounded	diff	17	249.87	536.00	249.87	536.00	0.00	0.00	0.00	408.00	0.00	408.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_numeric_id.mmd	rounded	diff	15	184.91	512.00	184.91	512.00	0.00	0.00	0.00	304.00	0.00	304.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_to_subgraph_edge.mmd	rounded	diff	13	285.88	542.00	285.88	542.00	0.00	0.00	0.00	334.00	0.00	334.00	0.00	0.00	0	0	0	0.00	0.00
+very_narrow_fan_in.mmd	rounded	diff	17	441.64	174.00	441.64	174.00	0.00	0.00	356.73	65.84	356.73	46.00	0.00	-19.84	0	0	0	0.00	0.00
+ampersand.mmd	orthogonal	diff	17	318.15	278.00	318.15	278.00	0.00	0.00	176.07	150.00	176.07	150.00	0.00	0.00	0	0	0	0.00	0.00
+backward_in_subgraph.mmd	orthogonal	diff	13	219.06	254.00	219.06	254.00	0.00	0.00	66.53	50.00	34.54	50.00	-31.99	0.00	0	0	0	0.00	0.00
+bidirectional.mmd	orthogonal	diff	15	84.91	382.00	84.91	382.00	0.00	0.00	0.00	250.00	0.00	250.00	0.00	0.00	0	0	0	0.00	0.00
+bidirectional_arrows.mmd	orthogonal	diff	15	84.91	382.00	84.91	382.00	0.00	0.00	0.00	250.00	0.00	250.00	0.00	0.00	0	0	0	0.00	0.00
+bottom_top.mmd	orthogonal	diff	13	155.25	278.00	155.25	278.00	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+br_line_breaks.mmd	orthogonal	diff	13	123.70	422.00	123.70	422.00	0.00	0.00	0.00	222.00	0.00	222.00	0.00	0.00	2	2	0	0.00	0.00
+chain.mmd	orthogonal	diff	15	125.00	382.00	125.00	382.00	0.00	0.00	0.00	254.00	0.00	254.00	0.00	0.00	0	0	0	0.00	0.00
+ci_pipeline.mmd	orthogonal	diff	21	1093.09	174.00	1093.09	174.00	0.00	0.00	802.38	104.00	802.38	104.00	0.00	0.00	2	2	0	0.00	0.00
+compat_class_annotation.mmd	orthogonal	diff	15	203.82	362.88	203.82	362.88	0.00	0.00	118.91	234.88	118.91	234.88	0.00	0.00	2	2	0	0.00	0.00
+compat_directive.mmd	orthogonal	diff	15	269.52	362.88	269.52	362.88	0.00	0.00	151.76	234.88	151.76	234.88	0.00	0.00	2	2	0	0.00	0.00
+compat_frontmatter.mmd	orthogonal	diff	13	84.91	278.00	84.91	278.00	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+compat_hyphenated_ids.mmd	orthogonal	diff	15	150.98	449.06	150.98	449.06	0.00	0.00	0.00	321.06	0.00	321.06	0.00	0.00	1	1	0	0.00	0.00
+compat_invisible_edge.mmd	orthogonal	diff	13	119.91	278.00	119.91	278.00	0.00	0.00	69.46	150.67	69.46	150.00	0.00	-0.67	0	0	0	0.00	0.00
+compat_kitchen_sink.mmd	orthogonal	diff	19	295.88	498.06	295.88	498.06	0.00	0.00	164.93	371.92	164.93	370.06	0.00	-1.86	2	2	0	0.00	0.00
+compat_no_direction.mmd	orthogonal	diff	11	111.26	174.00	111.26	174.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+compat_numeric_ids.mmd	orthogonal	diff	13	418.12	70.00	418.12	70.00	0.00	0.00	207.60	0.00	207.60	0.00	0.00	0.00	0	0	0	0.00	0.00
+complex.mmd	orthogonal	diff	31	579.64	757.28	579.64	757.28	0.00	0.00	427.54	644.53	427.54	630.49	0.00	-14.04	4	4	0	0.00	0.00
+cross_circle_arrows.mmd	orthogonal	diff	17	84.91	486.00	84.91	486.00	0.00	0.00	0.00	362.00	0.00	362.00	0.00	0.00	0	0	0	0.00	0.00
+decision.mmd	orthogonal	diff	17	285.44	413.36	285.44	413.36	0.00	0.00	170.45	289.36	161.19	294.50	-9.26	5.14	2	2	0	0.00	0.00
+diamond_fan.mmd	orthogonal	diff	17	251.89	278.00	251.89	278.00	0.00	0.00	142.95	151.65	142.95	150.00	0.00	-1.65	0	0	0	0.00	0.00
+direction_override.mmd	orthogonal	same	0	473.00	328.00	473.00	328.00	0.00	0.00	318.00	200.00	318.00	200.00	0.00	0.00	0	0	0	0.00	0.00
+double_skip.mmd	orthogonal	diff	19	214.75	382.00	214.75	382.00	0.00	0.00	144.25	255.25	144.25	254.00	0.00	-1.25	0	0	0	0.00	0.00
+edge_styles.mmd	orthogonal	diff	17	573.60	174.00	573.60	174.00	0.00	0.00	455.56	50.00	455.56	50.00	0.00	0.00	0	0	0	0.00	0.00
+external_node_subgraph.mmd	orthogonal	diff	17	536.01	393.00	536.01	393.00	0.00	0.00	235.01	200.00	235.01	200.00	0.00	0.00	0	0	0	0.00	0.00
+fan_in.mmd	orthogonal	diff	15	495.33	174.00	495.33	174.00	0.00	0.00	352.89	60.19	352.89	46.00	0.00	-14.19	0	0	0	0.00	0.00
+fan_in_lr.mmd	orthogonal	diff	15	273.23	278.00	273.23	278.00	0.00	0.00	80.50	208.00	46.00	208.00	-34.50	0.00	0	0	0	0.00	0.00
+fan_out.mmd	orthogonal	diff	15	487.54	174.00	487.54	174.00	0.00	0.00	347.70	56.70	347.70	46.00	0.00	-10.70	0	0	0	0.00	0.00
+five_fan_in.mmd	orthogonal	diff	19	560.54	174.00	560.54	174.00	0.00	0.00	475.64	64.51	475.64	49.74	0.00	-14.77	0	0	0	0.00	0.00
+git_workflow.mmd	orthogonal	diff	15	960.94	117.00	960.94	117.00	0.00	0.00	642.68	62.00	642.68	62.00	0.00	0.00	4	4	0	0.00	0.00
+http_request.mmd	orthogonal	diff	23	550.70	642.20	550.70	642.20	0.00	0.00	386.48	536.87	314.01	518.20	-72.47	-18.67	4	4	0	0.00	0.00
+inline_edge_labels.mmd	orthogonal	diff	17	115.16	582.00	115.16	582.00	0.00	0.00	0.00	454.00	0.00	454.00	0.00	0.00	4	4	0	0.00	0.00
+inline_label_flowchart.mmd	orthogonal	diff	61	1028.03	1655.78	1028.03	1655.78	0.00	0.00	875.01	1506.00	875.01	1506.00	0.00	0.00	9	9	0	0.00	0.00
+label_spacing.mmd	orthogonal	diff	13	203.82	198.00	203.82	198.00	0.00	0.00	118.91	70.00	118.91	70.00	0.00	0.00	2	2	0	0.00	0.00
+labeled_edges.mmd	orthogonal	diff	19	335.04	497.80	335.04	497.80	0.00	0.00	198.79	373.80	189.59	373.80	-9.20	0.00	5	5	0	0.00	0.00
+left_right.mmd	orthogonal	diff	13	580.90	70.00	580.90	70.00	0.00	0.00	254.00	0.00	254.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+multi_edge.mmd	orthogonal	diff	13	84.91	174.00	84.91	174.00	0.00	0.00	20.00	46.07	10.39	46.00	-9.61	-0.07	0	0	0	0.00	0.00
+multi_edge_labeled.mmd	orthogonal	diff	15	133.25	302.00	133.25	302.00	0.00	0.00	68.63	174.00	28.95	174.00	-39.68	0.00	2	2	0	0.00	0.00
+multi_subgraph.mmd	orthogonal	diff	15	644.76	170.00	644.76	170.00	0.00	0.00	389.12	0.00	389.12	0.00	0.00	0.00	0	0	0	0.00	0.00
+multi_subgraph_direction_override.mmd	orthogonal	diff	20	351.61	462.60	351.61	462.60	0.00	0.00	268.56	279.00	275.75	279.00	7.19	0.00	0	0	0	0.00	0.00
+multiple_cycles.mmd	orthogonal	diff	17	159.84	278.00	159.84	278.00	0.00	0.00	98.94	154.00	94.13	154.00	-4.81	0.00	0	0	0	0.00	0.00
+narrow_fan_in.mmd	orthogonal	diff	15	322.73	174.00	322.73	174.00	0.00	0.00	237.82	60.33	237.82	46.00	0.00	-14.33	0	0	0	0.00	0.00
+nested_subgraph.mmd	orthogonal	diff	13	273.54	408.00	273.54	408.00	0.00	0.00	0.00	175.00	0.00	175.00	0.00	0.00	0	0	0	0.00	0.00
+nested_subgraph_edge.mmd	orthogonal	same	0	435.88	414.00	435.88	414.00	0.00	0.00	0.00	286.00	0.00	286.00	0.00	0.00	0	0	0	0.00	0.00
+nested_subgraph_only.mmd	orthogonal	diff	11	224.91	310.00	224.91	310.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+nested_with_siblings.mmd	orthogonal	diff	15	621.64	221.00	621.64	221.00	0.00	0.00	333.82	0.00	333.82	0.00	0.00	0.00	0	0	0	0.00	0.00
+q1_q2_conflict.mmd	orthogonal	diff	23	803.68	278.00	803.68	278.00	0.00	0.00	670.14	154.00	670.14	154.00	0.00	0.00	0	0	0	0.00	0.00
+right_left.mmd	orthogonal	diff	13	436.50	70.00	436.50	70.00	0.00	0.00	213.54	0.00	213.54	0.00	0.00	0.00	0	0	0	0.00	0.00
+self_loop.mmd	orthogonal	same	0	169.04	70.00	169.04	70.00	0.00	0.00	35.50	54.00	35.50	54.00	0.00	0.00	0	0	0	0.00	0.00
+self_loop_labeled.mmd	orthogonal	diff	14	169.35	348.40	169.35	348.40	0.00	0.00	85.70	220.40	85.70	220.40	0.00	0.00	2	2	0	0.00	0.00
+self_loop_with_others.mmd	orthogonal	diff	14	169.04	278.00	169.04	278.00	0.00	0.00	94.27	150.00	94.27	150.00	0.00	0.00	0	0	0	0.00	0.00
+shapes.mmd	orthogonal	diff	13	189.77	381.75	189.77	381.75	0.00	0.00	0.00	150.00	0.00	150.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_basic.mmd	orthogonal	diff	21	146.71	765.22	146.71	765.22	0.00	0.00	0.00	637.22	0.00	637.22	0.00	0.00	0	0	0	0.00	0.00
+shapes_degenerate.mmd	orthogonal	diff	23	116.46	798.00	116.46	798.00	0.00	0.00	0.00	670.00	0.00	670.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_document.mmd	orthogonal	diff	17	106.16	548.50	106.16	548.50	0.00	0.00	0.00	413.75	0.00	413.75	0.00	0.00	0	0	0	0.00	0.00
+shapes_junction.mmd	orthogonal	diff	13	218.00	76.00	218.00	76.00	0.00	0.00	124.00	0.00	124.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+shapes_special.mmd	orthogonal	diff	11	181.92	70.00	181.92	70.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0.00	0	0	0	0.00	0.00
+simple.mmd	orthogonal	diff	11	111.26	174.00	111.26	174.00	0.00	0.00	0.00	46.00	0.00	46.00	0.00	0.00	0	0	0	0.00	0.00
+simple_cycle.mmd	orthogonal	diff	15	169.28	278.00	169.28	278.00	0.00	0.00	93.77	154.00	93.77	154.00	0.00	0.00	0	0	0	0.00	0.00
+simple_subgraph.mmd	orthogonal	diff	13	223.88	343.00	223.88	343.00	0.00	0.00	0.00	175.00	0.00	175.00	0.00	0.00	0	0	0	0.00	0.00
+skip_edge_collision.mmd	orthogonal	diff	17	162.88	382.00	162.88	382.00	0.00	0.00	89.50	254.97	89.50	254.00	0.00	-0.97	0	0	0	0.00	0.00
+stacked_fan_in.mmd	orthogonal	diff	15	141.12	278.00	141.12	278.00	0.00	0.00	78.09	150.80	78.09	150.00	0.00	-0.80	0	0	0	0.00	0.00
+subgraph_as_node_edge.mmd	orthogonal	diff	11	257.66	462.00	257.66	462.00	0.00	0.00	0.00	334.00	0.00	334.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_cross_boundary.mmd	orthogonal	diff	21	238.82	823.00	238.82	823.00	0.00	0.00	148.91	695.07	148.91	695.00	0.00	-0.07	0	0	0	0.00	0.00
+subgraph_direction_lr.mmd	orthogonal	same	0	473.00	328.00	473.00	328.00	0.00	0.00	318.00	200.00	318.00	200.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_mixed.mmd	orthogonal	same	0	233.82	335.40	233.82	335.40	0.00	0.00	86.68	187.60	86.68	187.60	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_nested.mmd	orthogonal	same	0	382.73	304.00	382.73	304.00	0.00	0.00	199.37	110.00	199.37	110.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_direction_nested_both.mmd	orthogonal	diff	11	352.73	326.80	352.73	326.80	0.00	0.00	178.36	195.00	178.36	186.62	0.00	-8.38	0	0	0	0.00	0.00
+subgraph_edges.mmd	orthogonal	diff	13	369.61	304.00	369.61	304.00	0.00	0.00	148.51	96.00	148.51	96.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_edges_bottom_top.mmd	orthogonal	diff	13	369.61	304.00	369.61	304.00	0.00	0.00	148.51	96.00	148.51	96.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_multi_word_title.mmd	orthogonal	diff	17	249.87	536.00	249.87	536.00	0.00	0.00	0.00	408.00	0.00	408.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_numeric_id.mmd	orthogonal	diff	15	184.91	512.00	184.91	512.00	0.00	0.00	0.00	304.00	0.00	304.00	0.00	0.00	0	0	0	0.00	0.00
+subgraph_to_subgraph_edge.mmd	orthogonal	diff	13	285.88	542.00	285.88	542.00	0.00	0.00	0.00	334.00	0.00	334.00	0.00	0.00	0	0	0	0.00	0.00
+very_narrow_fan_in.mmd	orthogonal	diff	17	441.64	174.00	441.64	174.00	0.00	0.00	356.73	65.84	356.73	46.00	0.00	-19.84	0	0	0	0.00	0.00

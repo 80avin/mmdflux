@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 803.68 278.00" style="max-width: 803.68px; background-color: transparent;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+  <defs>
+    <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
+    </marker>
+    <marker id="crosshead" viewBox="0 0 11.00 11.00" refX="12.00" refY="5.20" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <path d="M 1,1 l 9,9 M 10,1 l -9,9" stroke="#333" stroke-width="2" />
+    </marker>
+    <marker id="circlehead" viewBox="0 0 10.00 10.00" refX="11.00" refY="5.00" markerWidth="11.00" markerHeight="11.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <circle cx="5" cy="5" r="5" stroke="#333" stroke-width="1" fill="#333" />
+    </marker>
+    <marker id="open-arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0,0 10.00,5.00 0,10.00" fill="white" stroke="#333" stroke-width="1" />
+    </marker>
+    <marker id="diamondhead" viewBox="0 0 12.00 12.00" refX="6.00" refY="6.00" markerWidth="12.00" markerHeight="12.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0,6.00 6.00,0 12.00,6.00 6.00,12.00" fill="#333" />
+    </marker>
+    <marker id="open-diamondhead" viewBox="0 0 12.00 12.00" refX="6.00" refY="6.00" markerWidth="12.00" markerHeight="12.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+      <polygon points="0,6.00 6.00,0 12.00,6.00 6.00,12.00" fill="white" stroke="#333" stroke-width="1" />
+    </marker>
+  </defs>
+  <g transform="translate(0.00,0.00)">
+    <g class="edgePaths">
+      <path d="M66.77,62.00 L66.77,66.17 C66.77,70.33 66.77,78.67 113.09,90.02 C159.41,101.38 252.05,115.75 298.37,122.94 L344.69,130.13" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M234.30,62.00 L234.30,66.17 C234.30,70.33 234.30,78.67 252.72,88.55 C271.14,98.43 307.98,109.87 326.40,115.59 L344.82,121.30" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M401.84,62.00 L401.84,66.17 C401.84,70.33 401.84,78.67 401.84,86.33 C401.84,94.00 401.84,101.00 401.84,104.50 L401.84,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M569.38,62.00 L569.38,66.17 C569.38,70.33 569.38,78.67 550.96,88.55 C532.54,98.43 495.70,109.87 477.28,115.59 L458.86,121.30" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M736.91,62.00 L736.91,66.17 C736.91,70.33 736.91,78.67 690.59,90.02 C644.27,101.38 551.63,115.75 505.31,122.94 L458.99,130.13" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M396.65,166.00 L395.85,170.17 C395.05,174.33 393.44,182.67 393.32,190.35 C393.19,198.02 394.54,205.05 395.22,208.56 L395.89,212.07" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M407.03,216.00 L407.83,211.83 C408.63,207.67 410.24,199.33 410.36,191.65 C410.49,183.98 409.14,176.95 408.46,173.44 L407.79,169.93" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+    </g>
+    <g class="edgeLabels">
+    </g>
+    <g class="nodes">
+      <rect x="348.64" y="112.00" width="106.40" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="401.84" y="139.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Target</text>
+      <rect x="8.00" y="8.00" width="117.54" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="66.77" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Source1</text>
+      <rect x="175.54" y="8.00" width="117.54" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="234.30" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Source2</text>
+      <rect x="343.07" y="8.00" width="117.54" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="401.84" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Source3</text>
+      <rect x="510.61" y="8.00" width="117.54" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="569.38" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Source4</text>
+      <rect x="678.14" y="8.00" width="117.54" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="736.91" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Source5</text>
+      <rect x="356.53" y="216.00" width="90.62" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="401.84" y="243.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Sink</text>
+    </g>
+  </g>
+</svg>

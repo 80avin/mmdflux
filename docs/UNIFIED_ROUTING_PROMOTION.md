@@ -64,6 +64,23 @@ These specs are documented and test-scaffolded before runtime behavior changes.
   - `q1_q2_conflict.mmd` keeps `Q2 -> B` on the TD canonical right lane.
   - The same fixture enforces that exactly one inbound edge to `B` uses the right face.
 
+### Q6 Non-ViewBox Metric Gate Spec (Task 0.4)
+
+- Sweep baseline must include non-viewBox route/label signals:
+  - `route_envelope_width_delta`
+  - `route_envelope_height_delta`
+  - `label_position_max_drift`
+  - `label_position_mean_drift`
+  - `edge_label_count_delta`
+- Gate reproducibility is anchored in:
+  - `scripts/tests/08-unified-vs-full-svg-diff-sweep.sh`
+  - `docs/unified_feedback_baseline.tsv`
+  - `tests/svg_snapshots.rs` baseline-schema tests
+- Monitor thresholds (default, env-overridable):
+  - `ROUTE_ENVELOPE_ABS_DELTA_WARN_PX=24`
+  - `LABEL_POSITION_MAX_DRIFT_WARN_PX=40`
+  - `LABEL_POSITION_MEAN_DRIFT_WARN_PX=20`
+
 ## Accepted Deltas (Release N, Flowchart Scope)
 
 This is the decision record for known output differences when unified routing is promoted.

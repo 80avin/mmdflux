@@ -12,7 +12,11 @@ mkdir -p "$OUT_DIR"
 
 FLOW_STYLES_DEFAULT=("basis" "linear" "rounded" "orthogonal")
 CLASS_STYLES_DEFAULT=("basis")
-UNIFIED_FEEDBACK_BASELINE_HEADER=$'fixture\tstyle\tstatus\tdiff_lines\tfull_viewbox_width\tfull_viewbox_height\tunified_viewbox_width\tunified_viewbox_height\tviewbox_width_delta\tviewbox_height_delta'
+UNIFIED_FEEDBACK_BASELINE_HEADER=$'fixture\tstyle\tstatus\tdiff_lines\tfull_viewbox_width\tfull_viewbox_height\tunified_viewbox_width\tunified_viewbox_height\tviewbox_width_delta\tviewbox_height_delta\tfull_route_envelope_width\tfull_route_envelope_height\tunified_route_envelope_width\tunified_route_envelope_height\troute_envelope_width_delta\troute_envelope_height_delta\tfull_edge_label_count\tunified_edge_label_count\tedge_label_count_delta\tlabel_position_max_drift\tlabel_position_mean_drift'
+
+ROUTE_ENVELOPE_ABS_DELTA_WARN_PX="${ROUTE_ENVELOPE_ABS_DELTA_WARN_PX:-24}"
+LABEL_POSITION_MAX_DRIFT_WARN_PX="${LABEL_POSITION_MAX_DRIFT_WARN_PX:-40}"
+LABEL_POSITION_MEAN_DRIFT_WARN_PX="${LABEL_POSITION_MEAN_DRIFT_WARN_PX:-20}"
 
 split_list() {
   local raw="${1:-}"
@@ -105,6 +109,133 @@ format_delta() {
   awk -v baseline="$baseline" -v candidate="$candidate" 'BEGIN { printf "%.2f", (candidate - baseline) }'
 }
 
+extract_route_envelope_dimensions() {
+  local svg_file="$1"
+  awk '
+    BEGIN {
+      in_paths = 0
+      seen = 0
+    }
+    /<g class="edgePaths">/ { in_paths = 1; next }
+    in_paths && /<\/g>/ { in_paths = 0 }
+    in_paths && /<path / {
+      line = $0
+      if (!match(line, /d="[^"]*"/)) {
+        next
+      }
+      d = substr(line, RSTART + 3, RLENGTH - 4)
+      while (match(d, /-?[0-9]+([.][0-9]+)?,-?[0-9]+([.][0-9]+)?/)) {
+        pair = substr(d, RSTART, RLENGTH)
+        split(pair, coords, ",")
+        x = coords[1] + 0
+        y = coords[2] + 0
+        if (!seen) {
+          min_x = max_x = x
+          min_y = max_y = y
+          seen = 1
+        } else {
+          if (x < min_x) min_x = x
+          if (x > max_x) max_x = x
+          if (y < min_y) min_y = y
+          if (y > max_y) max_y = y
+        }
+        d = substr(d, RSTART + RLENGTH)
+      }
+    }
+    END {
+      if (!seen) {
+        printf "0 0\n"
+        exit
+      }
+      printf "%.2f %.2f\n", (max_x - min_x), (max_y - min_y)
+    }
+  ' "$svg_file"
+}
+
+extract_edge_label_positions() {
+  local svg_file="$1"
+  awk '
+    BEGIN { in_labels = 0 }
+    /<g class="edgeLabels">/ { in_labels = 1; next }
+    in_labels && /<\/g>/ { in_labels = 0 }
+    in_labels && /<text / {
+      x = ""
+      y = ""
+      if (match($0, /x="[^"]+"/)) {
+        x = substr($0, RSTART + 3, RLENGTH - 4)
+      }
+      if (match($0, /y="[^"]+"/)) {
+        y = substr($0, RSTART + 3, RLENGTH - 4)
+      }
+      if (x != "" && y != "") {
+        printf "%s %s\n", x, y
+      }
+    }
+  ' "$svg_file"
+}
+
+extract_label_drift_stats() {
+  local full_svg="$1"
+  local unified_svg="$2"
+
+  local full_labels
+  full_labels="$(mktemp)"
+  local unified_labels
+  unified_labels="$(mktemp)"
+
+  extract_edge_label_positions "$full_svg" >"$full_labels"
+  extract_edge_label_positions "$unified_svg" >"$unified_labels"
+
+  local full_count
+  full_count="$(wc -l <"$full_labels" | tr -d ' ')"
+  local unified_count
+  unified_count="$(wc -l <"$unified_labels" | tr -d ' ')"
+  local pair_count
+  if (( full_count < unified_count )); then
+    pair_count="$full_count"
+  else
+    pair_count="$unified_count"
+  fi
+
+  local edge_label_count_delta
+  edge_label_count_delta="$(awk -v baseline="$full_count" -v candidate="$unified_count" 'BEGIN { printf "%d", (candidate - baseline) }')"
+
+  local label_position_max_drift="0.00"
+  local label_position_mean_drift="0.00"
+  if (( pair_count > 0 )); then
+    read -r label_position_max_drift label_position_mean_drift <<<"$(paste "$full_labels" "$unified_labels" \
+      | head -n "$pair_count" \
+      | awk '
+        {
+          dx = $1 - $3
+          dy = $2 - $4
+          drift = sqrt(dx * dx + dy * dy)
+          if (drift > max_drift) {
+            max_drift = drift
+          }
+          sum_drift += drift
+          count++
+        }
+        END {
+          if (count == 0) {
+            printf "0.00 0.00\n"
+          } else {
+            printf "%.2f %.2f\n", max_drift, (sum_drift / count)
+          }
+        }
+      ')"
+  fi
+
+  printf '%s %s %s %s %s\n' \
+    "$full_count" \
+    "$unified_count" \
+    "$edge_label_count_delta" \
+    "$label_position_max_drift" \
+    "$label_position_mean_drift"
+
+  rm -f "$full_labels" "$unified_labels"
+}
+
 render_family_style() {
   local family="$1"
   local style="$2"
@@ -129,6 +260,17 @@ render_family_style() {
     local unified_viewbox_height="0"
     local viewbox_width_delta="0.00"
     local viewbox_height_delta="0.00"
+    local full_route_envelope_width="0.00"
+    local full_route_envelope_height="0.00"
+    local unified_route_envelope_width="0.00"
+    local unified_route_envelope_height="0.00"
+    local route_envelope_width_delta="0.00"
+    local route_envelope_height_delta="0.00"
+    local full_edge_label_count="0"
+    local unified_edge_label_count="0"
+    local edge_label_count_delta="0"
+    local label_position_max_drift="0.00"
+    local label_position_mean_drift="0.00"
 
     render_svg "full-compute" "$style" "$fixture_path" "$full_svg"
     render_svg "unified-preview" "$style" "$fixture_path" "$unified_svg"
@@ -136,6 +278,11 @@ render_family_style() {
     read -r unified_viewbox_width unified_viewbox_height <<<"$(extract_viewbox_dimensions "$unified_svg")"
     viewbox_width_delta="$(format_delta "$full_viewbox_width" "$unified_viewbox_width")"
     viewbox_height_delta="$(format_delta "$full_viewbox_height" "$unified_viewbox_height")"
+    read -r full_route_envelope_width full_route_envelope_height <<<"$(extract_route_envelope_dimensions "$full_svg")"
+    read -r unified_route_envelope_width unified_route_envelope_height <<<"$(extract_route_envelope_dimensions "$unified_svg")"
+    route_envelope_width_delta="$(format_delta "$full_route_envelope_width" "$unified_route_envelope_width")"
+    route_envelope_height_delta="$(format_delta "$full_route_envelope_height" "$unified_route_envelope_height")"
+    read -r full_edge_label_count unified_edge_label_count edge_label_count_delta label_position_max_drift label_position_mean_drift <<<"$(extract_label_drift_stats "$full_svg" "$unified_svg")"
 
     if diff -u "$full_svg" "$unified_svg" >"$diff_file"; then
       status="same"
@@ -145,7 +292,7 @@ render_family_style() {
       diff_lines="$(wc -l <"$diff_file" | tr -d ' ')"
     fi
 
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "$fixture_name" \
       "$status" \
       "$diff_lines" \
@@ -154,7 +301,18 @@ render_family_style() {
       "$unified_viewbox_width" \
       "$unified_viewbox_height" \
       "$viewbox_width_delta" \
-      "$viewbox_height_delta" >>"$report"
+      "$viewbox_height_delta" \
+      "$full_route_envelope_width" \
+      "$full_route_envelope_height" \
+      "$unified_route_envelope_width" \
+      "$unified_route_envelope_height" \
+      "$route_envelope_width_delta" \
+      "$route_envelope_height_delta" \
+      "$full_edge_label_count" \
+      "$unified_edge_label_count" \
+      "$edge_label_count_delta" \
+      "$label_position_max_drift" \
+      "$label_position_mean_drift" >>"$report"
   done
 }
 
@@ -167,11 +325,68 @@ generate_unified_feedback_baseline() {
     [[ -f "$report" ]] || continue
     awk -F $'\t' -v style="$style" '
       BEGIN { OFS = "\t" }
-      NF >= 9 { print $1, style, $2, $3, $4, $5, $6, $7, $8, $9 }
+      NF >= 20 { print $1, style, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20 }
     ' "$report" >>"$baseline"
   done
 
   printf '%s\n' "$baseline"
+}
+
+summarize_q6_metrics() {
+  local baseline="$1"
+  awk -F $'\t' \
+    -v route_warn="$ROUTE_ENVELOPE_ABS_DELTA_WARN_PX" \
+    -v label_max_warn="$LABEL_POSITION_MAX_DRIFT_WARN_PX" \
+    -v label_mean_warn="$LABEL_POSITION_MEAN_DRIFT_WARN_PX" '
+    function abs(v) { return v < 0 ? -v : v }
+    NR == 1 {
+      for (i = 1; i <= NF; i++) {
+        idx[$i] = i
+      }
+      required["route_envelope_width_delta"] = 1
+      required["route_envelope_height_delta"] = 1
+      required["label_position_max_drift"] = 1
+      required["label_position_mean_drift"] = 1
+      for (name in required) {
+        if (!(name in idx)) {
+          printf "Missing required Q6 metric column in baseline: %s\n", name > "/dev/stderr"
+          exit 2
+        }
+      }
+      next
+    }
+    NR > 1 && NF > 1 {
+      route_w = abs($(idx["route_envelope_width_delta"]) + 0)
+      route_h = abs($(idx["route_envelope_height_delta"]) + 0)
+      route_abs = route_w > route_h ? route_w : route_h
+      if (route_abs > max_route_abs_delta) {
+        max_route_abs_delta = route_abs
+      }
+
+      label_max = $(idx["label_position_max_drift"]) + 0
+      label_mean = $(idx["label_position_mean_drift"]) + 0
+      if (label_max > max_label_max_drift) {
+        max_label_max_drift = label_max
+      }
+      if (label_mean > max_label_mean_drift) {
+        max_label_mean_drift = label_mean
+      }
+      row_count++
+    }
+    END {
+      if (row_count == 0) {
+        printf "Q6 metric summary: no baseline rows found\n"
+        exit
+      }
+
+      printf "Q6 metric summary: rows=%d max_route_envelope_abs_delta=%.2fpx (warn>%.2f) max_label_position_max_drift=%.2fpx (warn>%.2f) max_label_position_mean_drift=%.2fpx (warn>%.2f)\n", \
+        row_count, max_route_abs_delta, route_warn, max_label_max_drift, label_max_warn, max_label_mean_drift, label_mean_warn
+
+      if (max_route_abs_delta > route_warn || max_label_max_drift > label_max_warn || max_label_mean_drift > label_mean_warn) {
+        printf "Q6 metric warning: one or more thresholds exceeded; review sweep gallery and baseline deltas before promotion.\n"
+      }
+    }
+  ' "$baseline"
 }
 
 style_badge_class() {
@@ -433,6 +648,9 @@ GALLERY_PATH="$(generate_gallery)"
 
 print_section "Generating unified feedback baseline"
 BASELINE_PATH="$(generate_unified_feedback_baseline)"
+
+print_section "Q6 metric summary"
+summarize_q6_metrics "$BASELINE_PATH"
 
 echo
 echo "Unified-vs-full SVG sweep complete."

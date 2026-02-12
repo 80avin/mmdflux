@@ -43,6 +43,17 @@ const UNIFIED_FEEDBACK_BASELINE_COLUMNS: &[&str] = &[
     "unified_viewbox_height",
     "viewbox_width_delta",
     "viewbox_height_delta",
+    "full_route_envelope_width",
+    "full_route_envelope_height",
+    "unified_route_envelope_width",
+    "unified_route_envelope_height",
+    "route_envelope_width_delta",
+    "route_envelope_height_delta",
+    "full_edge_label_count",
+    "unified_edge_label_count",
+    "edge_label_count_delta",
+    "label_position_max_drift",
+    "label_position_mean_drift",
 ];
 const UNIFIED_FEEDBACK_BASELINE_FIXTURES: &[&str] = &[
     "fan_in.mmd",
@@ -483,4 +494,76 @@ fn unified_feedback_baseline_contains_required_fixtures_and_metrics() {
             "baseline is missing required fixture row: {fixture}"
         );
     }
+}
+
+#[test]
+fn q6_metrics_include_route_envelope_and_label_drift() {
+    let baseline_path = unified_feedback_baseline_path();
+    let raw = fs::read_to_string(&baseline_path).unwrap_or_else(|e| {
+        panic!(
+            "Failed to read unified feedback baseline {}: {e}",
+            baseline_path.display()
+        )
+    });
+
+    let mut lines = raw.lines();
+    let header_line = lines
+        .next()
+        .expect("baseline file must include a header row");
+    let header_columns = parse_tsv_record(header_line);
+
+    let route_width_delta_index = header_columns
+        .iter()
+        .position(|column| *column == "route_envelope_width_delta")
+        .expect("baseline header must include route_envelope_width_delta");
+    let route_height_delta_index = header_columns
+        .iter()
+        .position(|column| *column == "route_envelope_height_delta")
+        .expect("baseline header must include route_envelope_height_delta");
+    let label_max_drift_index = header_columns
+        .iter()
+        .position(|column| *column == "label_position_max_drift")
+        .expect("baseline header must include label_position_max_drift");
+    let label_mean_drift_index = header_columns
+        .iter()
+        .position(|column| *column == "label_position_mean_drift")
+        .expect("baseline header must include label_position_mean_drift");
+
+    let mut has_non_viewbox_signal = false;
+    for line in lines.filter(|line| !line.trim().is_empty()) {
+        let row = parse_tsv_record(line);
+        let route_width_delta = row
+            .get(route_width_delta_index)
+            .expect("row must include route_envelope_width_delta")
+            .parse::<f64>()
+            .expect("route_envelope_width_delta should parse as f64");
+        let route_height_delta = row
+            .get(route_height_delta_index)
+            .expect("row must include route_envelope_height_delta")
+            .parse::<f64>()
+            .expect("route_envelope_height_delta should parse as f64");
+        let label_max_drift = row
+            .get(label_max_drift_index)
+            .expect("row must include label_position_max_drift")
+            .parse::<f64>()
+            .expect("label_position_max_drift should parse as f64");
+        let label_mean_drift = row
+            .get(label_mean_drift_index)
+            .expect("row must include label_position_mean_drift")
+            .parse::<f64>()
+            .expect("label_position_mean_drift should parse as f64");
+
+        if route_width_delta.abs() > 0.01
+            || route_height_delta.abs() > 0.01
+            || label_max_drift > 0.01
+            || label_mean_drift > 0.01
+        {
+            has_non_viewbox_signal = true;
+        }
+    }
+
+    assert!(
+        has_non_viewbox_signal,
+        "Q6 baseline must include at least one non-viewBox route/label signal"
+    );
 }
