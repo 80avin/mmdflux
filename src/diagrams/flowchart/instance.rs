@@ -59,10 +59,11 @@ impl DiagramInstance for FlowchartInstance {
         if matches!(format, OutputFormat::Mmds) {
             let routing_mode = config.routing_mode.unwrap_or(engine_result.routing_mode);
             let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
-                Some(routing::route_graph_geometry(
+                Some(routing::route_graph_geometry_with_policies(
                     diagram,
                     &engine_result.geometry,
                     routing_mode,
+                    config.routing_policies,
                 ))
             } else {
                 None
@@ -78,8 +79,12 @@ impl DiagramInstance for FlowchartInstance {
 
         if matches!(format, OutputFormat::Svg) && engine_result.engine_id != LayoutEngineId::Dagre {
             let routing_mode = config.routing_mode.unwrap_or(engine_result.routing_mode);
-            let routed =
-                routing::route_graph_geometry(diagram, &engine_result.geometry, routing_mode);
+            let routed = routing::route_graph_geometry_with_policies(
+                diagram,
+                &engine_result.geometry,
+                routing_mode,
+                config.routing_policies,
+            );
             // Non-dagre SVG: inject routed paths into geometry for rendering.
             let geom = inject_routed_paths(&engine_result.geometry, &routed);
             return Ok(render_svg_from_geometry(

@@ -14,7 +14,7 @@ use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use super::unified_router::{UnifiedRoutingOptions, route_edges_unified};
 use crate::dagre::{LayoutResult, Point, Rect};
-use crate::diagram::{PathDetail, RoutingMode, SvgEdgePathStyle};
+use crate::diagram::{PathDetail, RoutingMode, RoutingPolicyToggles, SvgEdgePathStyle};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 use crate::render::{RenderOptions, layout_config_for_diagram};
 
@@ -135,7 +135,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     // From this point on, rendering reads from `geom` instead of `layout`.
     let geom = geometry::from_dagre_layout(&layout, diagram);
     let geom = if options.routing_mode == Some(RoutingMode::UnifiedPreview) {
-        inject_unified_preview_paths(diagram, &geom)
+        inject_unified_preview_paths(diagram, &geom, options.routing_policies)
     } else {
         geom
     };
@@ -197,8 +197,12 @@ fn rerouted_edge_indexes_for_mode(
     }
 }
 
-fn inject_unified_preview_paths(diagram: &Diagram, geom: &GraphGeometry) -> GraphGeometry {
-    let routed = route_edges_unified(diagram, geom, UnifiedRoutingOptions::preview());
+fn inject_unified_preview_paths(
+    diagram: &Diagram,
+    geom: &GraphGeometry,
+    policies: RoutingPolicyToggles,
+) -> GraphGeometry {
+    let routed = route_edges_unified(diagram, geom, UnifiedRoutingOptions::preview(policies));
     let mut updated = geom.clone();
     for edge in routed {
         if let Some(layout_edge) = updated.edges.iter_mut().find(|e| e.index == edge.index) {

@@ -11,6 +11,7 @@ use super::routing_core::{
     q1_overflow_face_for_slot, q1_primary_face_capacity, q2_backward_channel_face,
     resolve_q1_q2_face_conflict,
 };
+use crate::diagram::RoutingPolicyToggles;
 use crate::diagrams::flowchart::geometry::{FPoint, FRect, GraphGeometry, RoutedEdgeGeometry};
 use crate::graph::{Diagram, Direction, Shape};
 
@@ -21,14 +22,17 @@ pub(crate) struct UnifiedRoutingOptions {
     pub backward_fallback_to_hints: bool,
     /// Optional grid snap `(scale_x, scale_y)` applied after routing.
     pub grid_snap: Option<(f64, f64)>,
+    /// Policy toggles for staged rollout.
+    pub policy_toggles: RoutingPolicyToggles,
 }
 
 impl UnifiedRoutingOptions {
     /// Conservative preview: unified routing for forward edges only.
-    pub(crate) fn preview() -> Self {
+    pub(crate) fn preview(policy_toggles: RoutingPolicyToggles) -> Self {
         Self {
             backward_fallback_to_hints: true,
             grid_snap: None,
+            policy_toggles,
         }
     }
 }
@@ -39,7 +43,11 @@ pub(crate) fn route_edges_unified(
     geometry: &GraphGeometry,
     options: UnifiedRoutingOptions,
 ) -> Vec<RoutedEdgeGeometry> {
-    let q1_target_conflict = q1_target_overflow_context(geometry, geometry.direction);
+    let q1_target_conflict = if options.policy_toggles.q1_overflow {
+        q1_target_overflow_context(geometry, geometry.direction)
+    } else {
+        Q1TargetOverflowContext::default()
+    };
     geometry
         .edges
         .iter()
@@ -124,6 +132,7 @@ fn build_unified_path(
     normalize_orthogonal_route_contracts(&normalized, direction)
 }
 
+#[derive(Default)]
 struct Q1TargetOverflowContext {
     overflow_face_for_edge: HashMap<usize, Face>,
     overflow_targeted: HashSet<String>,

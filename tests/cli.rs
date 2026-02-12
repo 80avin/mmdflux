@@ -78,6 +78,29 @@ fn cli_accepts_svg_edge_path_style_orthogonal() {
 }
 
 #[test]
+fn cli_accepts_independent_policy_toggles_with_full_compute_rollback() {
+    mmdflux()
+        .args([
+            "--format",
+            "svg",
+            "--routing-mode",
+            "full-compute",
+            "--policy-q1",
+            "off",
+            "--policy-q3",
+            "on",
+            "--policy-q4",
+            "off",
+            "--policy-q5",
+            "on",
+        ])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success()
+        .stdout(predicate::str::starts_with("<svg"));
+}
+
+#[test]
 fn cli_rejects_legacy_svg_edge_curve_flag() {
     mmdflux()
         .args(["--format", "svg", "--svg-edge-curve", "orthogonal"])

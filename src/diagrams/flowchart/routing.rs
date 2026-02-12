@@ -9,7 +9,7 @@ use super::geometry::*;
 use super::render::unified_router::{
     UnifiedRoutingOptions, build_path_from_hints, route_edges_unified, snap_path_to_grid,
 };
-use crate::diagram::RoutingMode;
+use crate::diagram::{RoutingMode, RoutingPolicyToggles};
 use crate::graph::Diagram;
 
 /// Route graph geometry to produce fully-routed edge paths.
@@ -21,10 +21,27 @@ pub fn route_graph_geometry(
     geometry: &GraphGeometry,
     routing_mode: RoutingMode,
 ) -> RoutedGraphGeometry {
+    route_graph_geometry_with_policies(
+        diagram,
+        geometry,
+        routing_mode,
+        RoutingPolicyToggles::default(),
+    )
+}
+
+/// Route graph geometry with explicit policy toggles.
+pub fn route_graph_geometry_with_policies(
+    diagram: &Diagram,
+    geometry: &GraphGeometry,
+    routing_mode: RoutingMode,
+    routing_policies: RoutingPolicyToggles,
+) -> RoutedGraphGeometry {
     let edges: Vec<RoutedEdgeGeometry> = match routing_mode {
-        RoutingMode::UnifiedPreview => {
-            route_edges_unified(diagram, geometry, UnifiedRoutingOptions::preview())
-        }
+        RoutingMode::UnifiedPreview => route_edges_unified(
+            diagram,
+            geometry,
+            UnifiedRoutingOptions::preview(routing_policies),
+        ),
         RoutingMode::PassThroughClip | RoutingMode::FullCompute => geometry
             .edges
             .iter()
@@ -85,7 +102,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::diagram::RoutingMode;
+    use crate::diagram::{RoutingMode, RoutingPolicyToggles};
 
     fn simple_geometry() -> (Diagram, GraphGeometry) {
         let mut diagram = Diagram::new(crate::graph::Direction::TopDown);
@@ -247,7 +264,11 @@ mod tests {
     #[test]
     fn unified_router_preview_paths_are_axis_aligned() {
         let (diagram, geom) = simple_geometry();
-        let unified = route_edges_unified(&diagram, &geom, UnifiedRoutingOptions::preview());
+        let unified = route_edges_unified(
+            &diagram,
+            &geom,
+            UnifiedRoutingOptions::preview(RoutingPolicyToggles::default()),
+        );
 
         assert!(!unified.is_empty());
         for edge in unified.iter().filter(|edge| !edge.is_backward) {

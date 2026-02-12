@@ -12,7 +12,9 @@ pub use canvas::Canvas;
 use canvas::{Cell, Connections};
 pub use chars::CharSet;
 
-use crate::diagram::{OutputFormat, PathDetail, RenderConfig, RoutingMode, SvgEdgePathStyle};
+use crate::diagram::{
+    OutputFormat, PathDetail, RenderConfig, RoutingMode, RoutingPolicyToggles, SvgEdgePathStyle,
+};
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
 };
@@ -62,6 +64,7 @@ impl From<&RenderConfig> for RenderOptions {
             padding: config.padding,
             path_detail: config.path_detail,
             routing_mode: config.routing_mode,
+            routing_policies: config.routing_policies,
         }
     }
 }
@@ -120,6 +123,8 @@ pub struct RenderOptions {
     pub path_detail: PathDetail,
     /// Optional routing mode override for graph-family renderers.
     pub routing_mode: Option<RoutingMode>,
+    /// Policy toggles for staged unified-routing rollout.
+    pub routing_policies: RoutingPolicyToggles,
 }
 
 impl Default for RenderOptions {
@@ -136,6 +141,7 @@ impl Default for RenderOptions {
             padding: None,
             path_detail: PathDetail::default(),
             routing_mode: None,
+            routing_policies: RoutingPolicyToggles::default(),
         }
     }
 }

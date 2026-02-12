@@ -302,6 +302,41 @@ impl RoutingMode {
     }
 }
 
+/// Per-policy routing toggles for staged unified-routing rollout.
+///
+/// Defaults are conservative: keep established Q1 overflow behavior enabled,
+/// while future Q3/Q4/Q5 policy tranches start disabled until explicitly
+/// implemented and promoted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoutingPolicyToggles {
+    pub q1_overflow: bool,
+    pub q3_label_revalidation: bool,
+    pub q4_rank_span_periphery: bool,
+    pub q5_style_min_segment: bool,
+}
+
+impl RoutingPolicyToggles {
+    pub const fn all_enabled() -> Self {
+        Self {
+            q1_overflow: true,
+            q3_label_revalidation: true,
+            q4_rank_span_periphery: true,
+            q5_style_min_segment: true,
+        }
+    }
+}
+
+impl Default for RoutingPolicyToggles {
+    fn default() -> Self {
+        Self {
+            q1_overflow: true,
+            q3_label_revalidation: false,
+            q4_rank_span_periphery: false,
+            q5_style_min_segment: false,
+        }
+    }
+}
+
 /// Synchronous graph layout engine trait.
 ///
 /// Layout engines position nodes and edges in a graph. Each engine
@@ -545,6 +580,8 @@ pub struct RenderConfig {
     pub path_detail: PathDetail,
     /// Optional routing mode override for routed-geometry preview/testing.
     pub routing_mode: Option<RoutingMode>,
+    /// Policy toggles for staged unified-routing rollout.
+    pub routing_policies: RoutingPolicyToggles,
 }
 
 /// Error type for rendering failures.

@@ -6,7 +6,7 @@ use clap::{Parser, ValueEnum};
 use mmdflux::dagre::Ranker;
 use mmdflux::diagram::{
     GeometryLevel, LayoutConfig, LayoutEngineId, OutputFormat, PathDetail, RenderConfig,
-    RoutingMode, SvgEdgePathStyle,
+    RoutingMode, RoutingPolicyToggles, SvgEdgePathStyle,
 };
 use mmdflux::registry::default_registry;
 
@@ -106,6 +106,22 @@ struct Cli {
     /// Routing mode override for routed-geometry preview.
     #[arg(long, value_enum)]
     routing_mode: Option<RoutingModeArg>,
+
+    /// Q1 face-overflow policy toggle (on/off).
+    #[arg(long, value_enum)]
+    policy_q1: Option<PolicyToggleArg>,
+
+    /// Q3 label-revalidation policy toggle (on/off).
+    #[arg(long, value_enum)]
+    policy_q3: Option<PolicyToggleArg>,
+
+    /// Q4 rank-span periphery policy toggle (on/off).
+    #[arg(long, value_enum)]
+    policy_q4: Option<PolicyToggleArg>,
+
+    /// Q5 style-min-segment policy toggle (on/off).
+    #[arg(long, value_enum)]
+    policy_q5: Option<PolicyToggleArg>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -226,6 +242,18 @@ impl From<RoutingModeArg> for RoutingMode {
     }
 }
 
+#[derive(Clone, Copy, ValueEnum, Debug)]
+enum PolicyToggleArg {
+    On,
+    Off,
+}
+
+impl PolicyToggleArg {
+    fn is_enabled(self) -> bool {
+        matches!(self, PolicyToggleArg::On)
+    }
+}
+
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
@@ -275,6 +303,22 @@ fn main() -> io::Result<()> {
     };
 
     let config = RenderConfig {
+        routing_policies: {
+            let mut policies = RoutingPolicyToggles::default();
+            if let Some(toggle) = cli.policy_q1 {
+                policies.q1_overflow = toggle.is_enabled();
+            }
+            if let Some(toggle) = cli.policy_q3 {
+                policies.q3_label_revalidation = toggle.is_enabled();
+            }
+            if let Some(toggle) = cli.policy_q4 {
+                policies.q4_rank_span_periphery = toggle.is_enabled();
+            }
+            if let Some(toggle) = cli.policy_q5 {
+                policies.q5_style_min_segment = toggle.is_enabled();
+            }
+            policies
+        },
         layout: LayoutConfig {
             node_sep: cli.node_spacing.unwrap_or(50.0),
             edge_sep: cli.edge_spacing.unwrap_or(20.0),

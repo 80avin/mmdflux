@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use mmdflux::diagram::{OutputFormat, PathDetail, RenderConfig, RoutingMode, SvgEdgePathStyle};
+use mmdflux::diagram::{
+    OutputFormat, PathDetail, RenderConfig, RoutingMode, RoutingPolicyToggles, SvgEdgePathStyle,
+};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::registry::DiagramInstance;
@@ -115,6 +117,18 @@ fn render_svg_fixture_with_curve(name: &str, curve: SvgEdgePathStyle) -> String 
 }
 
 fn render_svg_fixture_with_routing_mode(name: &str, mode: RoutingMode) -> String {
+    render_svg_fixture_with_routing_mode_and_policies(
+        name,
+        mode,
+        RoutingPolicyToggles::all_enabled(),
+    )
+}
+
+fn render_svg_fixture_with_routing_mode_and_policies(
+    name: &str,
+    mode: RoutingMode,
+    policies: RoutingPolicyToggles,
+) -> String {
     let input = load_fixture(name);
     let mut instance = FlowchartInstance::new();
     instance.parse(&input).expect("Failed to parse fixture");
@@ -122,6 +136,7 @@ fn render_svg_fixture_with_routing_mode(name: &str, mode: RoutingMode) -> String
         svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
         path_detail: PathDetail::Full,
         routing_mode: Some(mode),
+        routing_policies: policies,
         ..RenderConfig::default()
     };
     instance
@@ -418,6 +433,49 @@ fn svg_full_compute_override_matches_legacy_linear_core_subset() {
             full_compute, legacy,
             "full-compute override should preserve legacy SVG for fixture {fixture}"
         );
+    }
+}
+
+#[test]
+fn svg_full_compute_rollback_is_stable_across_policy_toggle_matrix() {
+    let policy_matrix = [
+        RoutingPolicyToggles::all_enabled(),
+        RoutingPolicyToggles {
+            q1_overflow: false,
+            ..RoutingPolicyToggles::all_enabled()
+        },
+        RoutingPolicyToggles {
+            q3_label_revalidation: false,
+            ..RoutingPolicyToggles::all_enabled()
+        },
+        RoutingPolicyToggles {
+            q4_rank_span_periphery: false,
+            ..RoutingPolicyToggles::all_enabled()
+        },
+        RoutingPolicyToggles {
+            q5_style_min_segment: false,
+            ..RoutingPolicyToggles::all_enabled()
+        },
+    ];
+
+    for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
+        let baseline = render_svg_fixture_with_routing_mode_and_policies(
+            fixture,
+            RoutingMode::FullCompute,
+            RoutingPolicyToggles::all_enabled(),
+        );
+        for policies in policy_matrix {
+            let output = render_svg_fixture_with_routing_mode_and_policies(
+                fixture,
+                RoutingMode::FullCompute,
+                policies,
+            );
+            assert_eq!(
+                output, baseline,
+                "full-compute rollback should be stable for {fixture} under policy set {:?}",
+                policies
+            );
+        }
     }
 }
 

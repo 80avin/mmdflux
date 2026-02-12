@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::{OutputFormat, RenderConfig, SvgEdgePathStyle};
+use mmdflux::diagram::{OutputFormat, RenderConfig, RoutingPolicyToggles, SvgEdgePathStyle};
 use mmdflux::diagrams::flowchart::engine::DagreLayoutEngine;
 use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::diagrams::mmds::from_mmds_str;
@@ -2802,6 +2802,67 @@ fn mmds_integration_fixture_matrix() {
             "fixture {} expected pass={}",
             fixture_name,
             should_pass
+        );
+    }
+}
+
+#[test]
+fn full_compute_rollback_is_stable_across_policy_toggle_matrix_for_text_and_svg() {
+    let input = load_fixture("simple_cycle.mmd");
+    let policy_matrix = [
+        RoutingPolicyToggles::all_enabled(),
+        RoutingPolicyToggles {
+            q1_overflow: false,
+            ..RoutingPolicyToggles::all_enabled()
+        },
+        RoutingPolicyToggles {
+            q3_label_revalidation: false,
+            ..RoutingPolicyToggles::all_enabled()
+        },
+        RoutingPolicyToggles {
+            q4_rank_span_periphery: false,
+            ..RoutingPolicyToggles::all_enabled()
+        },
+        RoutingPolicyToggles {
+            q5_style_min_segment: false,
+            ..RoutingPolicyToggles::all_enabled()
+        },
+    ];
+
+    let render_with = |format: OutputFormat, policies: RoutingPolicyToggles| {
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(&input).expect("fixture should parse");
+        instance
+            .render(
+                format,
+                &RenderConfig {
+                    routing_mode: Some(RoutingMode::FullCompute),
+                    svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
+                    routing_policies: policies,
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("render should succeed")
+    };
+
+    let baseline_text = render_with(OutputFormat::Text, RoutingPolicyToggles::all_enabled());
+    let baseline_svg = render_with(OutputFormat::Svg, RoutingPolicyToggles::all_enabled());
+
+    for policies in policy_matrix {
+        let text = render_with(OutputFormat::Text, policies);
+        let svg = render_with(OutputFormat::Svg, policies);
+        assert_eq!(
+            text, baseline_text,
+            "text rollback should be stable under policy toggle matrix: {:?}",
+            policies
+        );
+        assert_eq!(
+            svg, baseline_svg,
+            "svg rollback should be stable under policy toggle matrix: {:?}",
+            policies
         );
     }
 }
