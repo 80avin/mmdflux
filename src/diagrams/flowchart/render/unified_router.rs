@@ -9,10 +9,13 @@ use super::route_policy::effective_edge_direction;
 use super::routing_core::{
     Face, Q1OverflowSide, build_orthogonal_path_float, normalize_orthogonal_route_contracts,
     q1_overflow_face_for_slot, q1_primary_face_capacity, q1_primary_target_face,
-    q2_backward_channel_face, resolve_q1_q2_face_conflict,
+    q2_backward_channel_face, q4_rank_span_should_use_periphery, q4_required_periphery_detour,
+    resolve_q1_q2_face_conflict,
 };
 use crate::diagram::RoutingPolicyToggles;
-use crate::diagrams::flowchart::geometry::{FPoint, FRect, GraphGeometry, RoutedEdgeGeometry};
+use crate::diagrams::flowchart::geometry::{
+    EngineHints, FPoint, FRect, GraphGeometry, RoutedEdgeGeometry,
+};
 use crate::graph::{Diagram, Direction, Shape};
 
 /// Preview options for unified float-first routing.
@@ -72,6 +75,10 @@ pub(crate) fn route_edges_unified(
             let target_has_backward_conflict = q1_target_conflict
                 .targets_with_backward_inbound
                 .contains(&edge.to);
+            let rank_span = edge_rank_span(geometry, edge).unwrap_or(0);
+            let q4_rank_span_active = options.policy_toggles.q4_rank_span_periphery
+                && !is_backward
+                && q4_rank_span_should_use_periphery(rank_span);
             let mut path = build_unified_path(
                 edge,
                 geometry,
@@ -80,6 +87,8 @@ pub(crate) fn route_edges_unified(
                 q1_policy_target_face,
                 target_overflowed,
                 target_has_backward_conflict,
+                q4_rank_span_active,
+                rank_span,
             );
 
             if let Some((sx, sy)) = options.grid_snap {
@@ -190,6 +199,8 @@ fn build_unified_path(
     q1_policy_target_face: Option<Face>,
     target_overflowed: bool,
     target_has_backward_conflict: bool,
+    q4_rank_span_active: bool,
+    q4_rank_span: usize,
 ) -> Vec<FPoint> {
     let control_points = build_path_from_hints(edge, geometry);
     let mut path = build_contracted_path(&control_points, direction);
@@ -218,6 +229,24 @@ fn build_unified_path(
     let mut normalized = normalize_orthogonal_route_contracts(&path, direction);
     if is_backward {
         ensure_backward_outer_lane_clearance(&mut normalized, direction, 12.0);
+    }
+    if q4_rank_span_active {
+        let required_detour = q4_required_periphery_detour(q4_rank_span);
+        apply_q4_rank_span_periphery_detour(&mut normalized, direction, required_detour);
+        if path_has_diagonal_segments(&normalized) {
+            normalized = build_contracted_path(&normalized, direction);
+            anchor_path_endpoints_to_endpoint_faces(
+                &mut normalized,
+                edge,
+                geometry,
+                direction,
+                is_backward,
+                q1_policy_target_face,
+                target_overflowed,
+                target_has_backward_conflict,
+            );
+            ensure_endpoint_segments_axis_aligned(&mut normalized);
+        }
     }
     collapse_source_turnback_spikes(&mut normalized);
     let mut finalized = normalize_orthogonal_route_contracts(&normalized, direction);
@@ -302,6 +331,158 @@ fn q1_target_overflow_context(
         overflow_targeted,
         targets_with_backward_inbound,
     }
+}
+
+fn edge_rank_span(
+    geometry: &GraphGeometry,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+) -> Option<usize> {
+    let EngineHints::Dagre(hints) = geometry.engine_hints.as_ref()?;
+    let src_rank = *hints.node_ranks.get(&edge.from)?;
+    let dst_rank = *hints.node_ranks.get(&edge.to)?;
+    Some(src_rank.abs_diff(dst_rank) as usize)
+}
+
+fn apply_q4_rank_span_periphery_detour(
+    path: &mut [FPoint],
+    direction: Direction,
+    required_detour: f64,
+) {
+    const EPS: f64 = 0.000_001;
+    if path.len() < 3 || required_detour <= 0.0 {
+        return;
+    }
+
+    let last = path.len() - 1;
+    match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            let baseline_min = path[0].x.min(path[last].x);
+            let baseline_max = path[0].x.max(path[last].x);
+            let route_min = path.iter().map(|point| point.x).fold(f64::INFINITY, f64::min);
+            let route_max = path
+                .iter()
+                .map(|point| point.x)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let detour_left = baseline_min - route_min;
+            let detour_right = route_max - baseline_max;
+
+            let interior_at_min: Vec<usize> = path
+                .iter()
+                .enumerate()
+                .filter(|(idx, point)| {
+                    *idx > 0 && *idx < last && (point.x - route_min).abs() <= EPS
+                })
+                .map(|(idx, _)| idx)
+                .collect();
+            let interior_at_max: Vec<usize> = path
+                .iter()
+                .enumerate()
+                .filter(|(idx, point)| {
+                    *idx > 0 && *idx < last && (point.x - route_max).abs() <= EPS
+                })
+                .map(|(idx, _)| idx)
+                .collect();
+
+            let can_expand_left = !interior_at_min.is_empty();
+            let can_expand_right = !interior_at_max.is_empty();
+            if !can_expand_left && !can_expand_right {
+                return;
+            }
+
+            let mut expand_right = detour_right >= detour_left;
+            if expand_right && !can_expand_right && can_expand_left {
+                expand_right = false;
+            } else if !expand_right && !can_expand_left && can_expand_right {
+                expand_right = true;
+            }
+
+            if expand_right {
+                if detour_right + EPS >= required_detour {
+                    return;
+                }
+                let target_x = baseline_max + required_detour;
+                for idx in interior_at_max {
+                    path[idx].x = target_x;
+                }
+            } else {
+                if detour_left + EPS >= required_detour {
+                    return;
+                }
+                let target_x = baseline_min - required_detour;
+                for idx in interior_at_min {
+                    path[idx].x = target_x;
+                }
+            }
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            let baseline_min = path[0].y.min(path[last].y);
+            let baseline_max = path[0].y.max(path[last].y);
+            let route_min = path.iter().map(|point| point.y).fold(f64::INFINITY, f64::min);
+            let route_max = path
+                .iter()
+                .map(|point| point.y)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let detour_top = baseline_min - route_min;
+            let detour_bottom = route_max - baseline_max;
+
+            let interior_at_min: Vec<usize> = path
+                .iter()
+                .enumerate()
+                .filter(|(idx, point)| {
+                    *idx > 0 && *idx < last && (point.y - route_min).abs() <= EPS
+                })
+                .map(|(idx, _)| idx)
+                .collect();
+            let interior_at_max: Vec<usize> = path
+                .iter()
+                .enumerate()
+                .filter(|(idx, point)| {
+                    *idx > 0 && *idx < last && (point.y - route_max).abs() <= EPS
+                })
+                .map(|(idx, _)| idx)
+                .collect();
+
+            let can_expand_top = !interior_at_min.is_empty();
+            let can_expand_bottom = !interior_at_max.is_empty();
+            if !can_expand_top && !can_expand_bottom {
+                return;
+            }
+
+            let mut expand_bottom = detour_bottom >= detour_top;
+            if expand_bottom && !can_expand_bottom && can_expand_top {
+                expand_bottom = false;
+            } else if !expand_bottom && !can_expand_top && can_expand_bottom {
+                expand_bottom = true;
+            }
+
+            if expand_bottom {
+                if detour_bottom + EPS >= required_detour {
+                    return;
+                }
+                let target_y = baseline_max + required_detour;
+                for idx in interior_at_max {
+                    path[idx].y = target_y;
+                }
+            } else {
+                if detour_top + EPS >= required_detour {
+                    return;
+                }
+                let target_y = baseline_min - required_detour;
+                for idx in interior_at_min {
+                    path[idx].y = target_y;
+                }
+            }
+        }
+    }
+}
+
+fn path_has_diagonal_segments(path: &[FPoint]) -> bool {
+    const EPS: f64 = 0.000_001;
+    path.windows(2).any(|segment| {
+        let a = segment[0];
+        let b = segment[1];
+        (a.x - b.x).abs() > EPS && (a.y - b.y).abs() > EPS
+    })
 }
 
 fn prefer_lateral_exit_for_off_center_primary_axis_sources(

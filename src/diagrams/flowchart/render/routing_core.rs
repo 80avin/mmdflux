@@ -18,6 +18,9 @@ pub(crate) enum Q1OverflowSide {
 /// Primary face capacity for deterministic overflow policy in `Task 0.2`.
 pub(crate) const Q1_PRIMARY_FACE_CAPACITY_TD_BT: usize = 4;
 pub(crate) const Q1_PRIMARY_FACE_CAPACITY_LR_RL: usize = 2;
+pub(crate) const Q4_LONG_SKIP_RANK_SPAN_TRIGGER: usize = 2;
+pub(crate) const Q4_MIN_PERIPHERY_DETOUR_BASE: f64 = 28.0;
+pub(crate) const Q4_MIN_PERIPHERY_DETOUR_MAX: f64 = 36.0;
 
 /// Return the deterministic base capacity for the primary incoming face.
 pub(crate) fn q1_primary_face_capacity(direction: Direction) -> usize {
@@ -25,6 +28,21 @@ pub(crate) fn q1_primary_face_capacity(direction: Direction) -> usize {
         Direction::TopDown | Direction::BottomTop => Q1_PRIMARY_FACE_CAPACITY_TD_BT,
         Direction::LeftRight | Direction::RightLeft => Q1_PRIMARY_FACE_CAPACITY_LR_RL,
     }
+}
+
+/// Determine whether Q4 long-skip policy is eligible by rank span.
+pub(crate) fn q4_rank_span_should_use_periphery(rank_span: usize) -> bool {
+    rank_span >= Q4_LONG_SKIP_RANK_SPAN_TRIGGER
+}
+
+/// Compute required minimum periphery detour for Q4 long-skip edges.
+pub(crate) fn q4_required_periphery_detour(rank_span: usize) -> f64 {
+    if !q4_rank_span_should_use_periphery(rank_span) {
+        return 0.0;
+    }
+
+    let rank_bonus = rank_span.saturating_sub(Q4_LONG_SKIP_RANK_SPAN_TRIGGER) as f64;
+    (Q4_MIN_PERIPHERY_DETOUR_BASE + rank_bonus).min(Q4_MIN_PERIPHERY_DETOUR_MAX)
 }
 
 /// Convert canonical Q1 spill slot into an overflow face for a direction.

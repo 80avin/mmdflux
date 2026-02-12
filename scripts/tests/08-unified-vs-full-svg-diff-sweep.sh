@@ -17,6 +17,10 @@ UNIFIED_FEEDBACK_BASELINE_HEADER=$'fixture\tstyle\tstatus\tdiff_lines\tfull_view
 ROUTE_ENVELOPE_ABS_DELTA_WARN_PX="${ROUTE_ENVELOPE_ABS_DELTA_WARN_PX:-24}"
 LABEL_POSITION_MAX_DRIFT_WARN_PX="${LABEL_POSITION_MAX_DRIFT_WARN_PX:-40}"
 LABEL_POSITION_MEAN_DRIFT_WARN_PX="${LABEL_POSITION_MEAN_DRIFT_WARN_PX:-20}"
+Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX="${Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX:-24}"
+Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX="${Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX:-40}"
+Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX="${Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX:-20}"
+Q4_FIXTURES_DEFAULT="double_skip.mmd,skip_edge_collision.mmd,inline_label_flowchart.mmd"
 
 split_list() {
   local raw="${1:-}"
@@ -81,6 +85,22 @@ render_svg() {
     --geometry-level routed \
     --routing-mode "$mode" \
     --svg-edge-path-style "$style" \
+    "$fixture_path" >"$out_file"
+}
+
+render_svg_with_q4_policy() {
+  local mode="$1"
+  local style="$2"
+  local q4_policy="$3"
+  local fixture_path="$4"
+  local out_file="$5"
+
+  "$MMDFLUX_BIN" \
+    --format svg \
+    --geometry-level routed \
+    --routing-mode "$mode" \
+    --svg-edge-path-style "$style" \
+    --policy-q4 "$q4_policy" \
     "$fixture_path" >"$out_file"
 }
 
@@ -389,6 +409,89 @@ summarize_q6_metrics() {
   ' "$baseline"
 }
 
+summarize_q4_rank_span_metrics() {
+  local fixtures_raw="${Q4_FIXTURES:-$Q4_FIXTURES_DEFAULT}"
+  local report="$OUT_DIR/q4-rank-span-metrics.tsv"
+
+  printf '%s\n' "fixture\tstyle\troute_envelope_width_delta\troute_envelope_height_delta\tlabel_position_max_drift\tlabel_position_mean_drift" >"$report"
+
+  local max_route_abs_delta="0.00"
+  local max_label_max_drift="0.00"
+  local max_label_mean_drift="0.00"
+  local row_count=0
+
+  while IFS= read -r fixture_name; do
+    [[ -z "$fixture_name" ]] && continue
+    if [[ "$fixture_name" != *.mmd ]]; then
+      fixture_name="${fixture_name}.mmd"
+    fi
+
+    local fixture_path="$REPO_ROOT/tests/fixtures/flowchart/$fixture_name"
+    if [[ ! -f "$fixture_path" ]]; then
+      echo "Missing Q4 fixture: $fixture_path" >&2
+      exit 1
+    fi
+
+    local stem="${fixture_name%.mmd}"
+    local off_svg="$OUT_DIR/q4_${stem}.off.svg"
+    local on_svg="$OUT_DIR/q4_${stem}.on.svg"
+
+    render_svg_with_q4_policy "unified-preview" "linear" "off" "$fixture_path" "$off_svg"
+    render_svg_with_q4_policy "unified-preview" "linear" "on" "$fixture_path" "$on_svg"
+
+    local off_route_w off_route_h on_route_w on_route_h
+    read -r off_route_w off_route_h <<<"$(extract_route_envelope_dimensions "$off_svg")"
+    read -r on_route_w on_route_h <<<"$(extract_route_envelope_dimensions "$on_svg")"
+
+    local route_w_delta route_h_delta
+    route_w_delta="$(format_delta "$off_route_w" "$on_route_w")"
+    route_h_delta="$(format_delta "$off_route_h" "$on_route_h")"
+
+    local _off_labels _on_labels _label_count_delta label_max_drift label_mean_drift
+    read -r _off_labels _on_labels _label_count_delta label_max_drift label_mean_drift <<<"$(extract_label_drift_stats "$off_svg" "$on_svg")"
+
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$fixture_name" \
+      "linear" \
+      "$route_w_delta" \
+      "$route_h_delta" \
+      "$label_max_drift" \
+      "$label_mean_drift" >>"$report"
+
+    max_route_abs_delta="$(awk -v current="$max_route_abs_delta" -v w="$route_w_delta" -v h="$route_h_delta" '
+      function abs(v) { return v < 0 ? -v : v }
+      BEGIN {
+        candidate = abs(w)
+        if (abs(h) > candidate) candidate = abs(h)
+        if (candidate > current) printf "%.2f", candidate; else printf "%.2f", current
+      }
+    ')"
+    max_label_max_drift="$(awk -v current="$max_label_max_drift" -v candidate="$label_max_drift" '
+      BEGIN {
+        if (candidate + 0 > current + 0) printf "%.2f", candidate + 0; else printf "%.2f", current + 0
+      }
+    ')"
+    max_label_mean_drift="$(awk -v current="$max_label_mean_drift" -v candidate="$label_mean_drift" '
+      BEGIN {
+        if (candidate + 0 > current + 0) printf "%.2f", candidate + 0; else printf "%.2f", current + 0
+      }
+    ')"
+
+    row_count=$((row_count + 1))
+  done < <(split_list "$fixtures_raw")
+
+  echo "Q4 rank-span metric summary: rows=${row_count} max_route_envelope_abs_delta=${max_route_abs_delta}px (gate<=${Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX}) max_label_position_max_drift=${max_label_max_drift}px (gate<=${Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX}) max_label_position_mean_drift=${max_label_mean_drift}px (gate<=${Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX})" >&2
+
+  if awk -v route="$max_route_abs_delta" -v route_gate="$Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX" \
+        -v max_drift="$max_label_max_drift" -v max_gate="$Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX" \
+        -v mean_drift="$max_label_mean_drift" -v mean_gate="$Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX" \
+        'BEGIN { exit !(route > route_gate || max_drift > max_gate || mean_drift > mean_gate) }'; then
+    echo "Q4 rank-span metric gate warning: one or more Q6-aligned thresholds exceeded; keep --policy-q4 off by default until remediated." >&2
+  fi
+
+  printf '%s\n' "$report"
+}
+
 style_badge_class() {
   case "$1" in
     basis) printf 'style-basis' ;;
@@ -652,8 +755,12 @@ BASELINE_PATH="$(generate_unified_feedback_baseline)"
 print_section "Q6 metric summary"
 summarize_q6_metrics "$BASELINE_PATH"
 
+print_section "Q4 rank-span metric gate summary"
+Q4_REPORT_PATH="$(summarize_q4_rank_span_metrics)"
+
 echo
 echo "Unified-vs-full SVG sweep complete."
 echo "Artifacts: $OUT_DIR"
 echo "Gallery: $GALLERY_PATH"
 echo "Unified feedback baseline: $BASELINE_PATH"
+echo "Q4 rank-span metric report: $Q4_REPORT_PATH"

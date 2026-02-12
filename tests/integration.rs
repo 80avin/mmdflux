@@ -2973,6 +2973,7 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
                     svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
                     routing_policies: RoutingPolicyToggles {
                         q1_overflow: q1_enabled,
+                        q4_rank_span_periphery: false,
                         ..RoutingPolicyToggles::all_enabled()
                     },
                     ..RenderConfig::default()
@@ -3102,6 +3103,7 @@ fn q1_q2_outputs_are_deterministic_under_toggle_matrix_for_text_and_svg() {
                     svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
                     routing_policies: RoutingPolicyToggles {
                         q1_overflow: q1_enabled,
+                        q4_rank_span_periphery: false,
                         ..RoutingPolicyToggles::all_enabled()
                     },
                     ..RenderConfig::default()

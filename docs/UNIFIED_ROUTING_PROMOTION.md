@@ -106,6 +106,26 @@ These specs are documented and test-scaffolded before runtime behavior changes.
   - `LABEL_POSITION_MAX_DRIFT_WARN_PX=40`
   - `LABEL_POSITION_MEAN_DRIFT_WARN_PX=20`
 
+### Q4 Rank-Span Policy + Metric Gate (Task 3.2)
+
+- Q4 activation rule is intentionally simple for initial rollout:
+  - apply periphery detour only when `rank_span >= 2`
+- Required detour is bounded and rank-aware in shared policy helpers:
+  - base `28px`, capped at `36px`
+- Q4-on vs Q4-off fixture subset classification (unified preview, linear SVG):
+  - `must-diff`: `double_skip.mmd`, `skip_edge_collision.mmd`, `inline_label_flowchart.mmd`
+  - `must-match`: none in this subset
+- Q4-specific Q6-aligned metric gate is now scripted in:
+  - `scripts/tests/08-unified-vs-full-svg-diff-sweep.sh`
+  - report output: `q4-rank-span-metrics.tsv`
+  - thresholds:
+    - `Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX=24`
+    - `Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX=40`
+    - `Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX=20`
+- Default posture:
+  - keep `q4_rank_span_periphery` **off by default** in `RoutingPolicyToggles::default()`
+  - use `--policy-q4 on` for controlled validation and staged rollout
+
 ## Accepted Deltas (Release N, Flowchart Scope)
 
 This is the decision record for known output differences when unified routing is promoted.

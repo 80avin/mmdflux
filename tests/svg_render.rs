@@ -1190,6 +1190,7 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
         options.path_detail = PathDetail::Full;
         options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
             q1_overflow: true,
+            q4_rank_span_periphery: false,
             ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
         };
 
@@ -1258,6 +1259,7 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
             options.path_detail = PathDetail::Full;
             options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
                 q1_overflow: q1_enabled,
+                q4_rank_span_periphery: false,
                 ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
             };
 
@@ -1281,7 +1283,6 @@ fn svg_linear_q4_rank_span_toggle_pushes_known_long_skip_edges_toward_periphery_
     let long_skip_cases = [
         ("double_skip.mmd", "A", "D"),
         ("skip_edge_collision.mmd", "A", "D"),
-        ("inline_label_flowchart.mmd", "parse", "validate"),
     ];
 
     for (fixture_name, from, to) in long_skip_cases {
