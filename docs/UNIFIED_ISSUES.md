@@ -5,6 +5,60 @@
 **Comparison:** `full-compute` (left/baseline) vs `unified-preview` (right/candidate)
 **Gallery:** `scripts/tests/out/20260211-132916-unified-vs-full-sweep/routing-svg-diff-gallery-v2.html`
 **Data:** `docs/unified_analysis_raw.json`, `docs/unified_deep_analysis.json`
+**Task 0.1 Baseline:** `docs/unified_feedback_baseline.tsv`
+
+## Task 0.1 Baseline Dataset (2026-02-12)
+
+Locked fixture/metric baseline for the first remediation phase is stored in
+`docs/unified_feedback_baseline.tsv`.
+
+Current schema:
+- `fixture`
+- `style`
+- `status`
+- `diff_lines`
+- `full_viewbox_width`
+- `full_viewbox_height`
+- `unified_viewbox_width`
+- `unified_viewbox_height`
+- `viewbox_width_delta`
+- `viewbox_height_delta`
+
+Required fixture coverage in this baseline:
+- `fan_in.mmd`
+- `five_fan_in.mmd`
+- `stacked_fan_in.mmd`
+- `fan_in_lr.mmd`
+- `labeled_edges.mmd`
+- `inline_label_flowchart.mmd`
+- `double_skip.mmd`
+- `skip_edge_collision.mmd`
+
+## Task 0.2 Q1 Policy Spec (2026-02-12)
+
+Q1 overflow policy is now explicitly fixture-backed and documented as a Phase-0
+spec (no runtime behavior change in this task):
+
+- Primary face capacity:
+  - `TD/BT`: `4`
+  - `LR/RL`: `2`
+- Overflow trigger:
+  - `incoming_degree > primary_face_capacity(direction)`
+- Overflow distribution order:
+  - Deterministic alternating side lanes:
+    - slot `0`: `LeftOrTop`
+    - slot `1`: `RightOrBottom`
+    - slot `2`: `LeftOrTop`
+    - ...
+
+Fixture-backed trigger expectations:
+
+| Fixture | Direction | Incoming degree | Expected overflow |
+| ------- | --------- | --------------- | ----------------- |
+| `stacked_fan_in.mmd` | TD | 2 | No |
+| `fan_in.mmd` | TD | 3 | No |
+| `five_fan_in.mmd` | TD | 5 | Yes |
+| `fan_in_lr.mmd` | LR | 3 | Yes |
 
 ## Executive Summary
 

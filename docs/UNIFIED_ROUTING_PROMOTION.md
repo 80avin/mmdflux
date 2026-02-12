@@ -29,6 +29,41 @@ This checklist assumes you are willing to ship breaking rendering deltas in a mi
 - [x] Rollback policy (current):
   - Keep `--routing-mode full-compute` documented and supported for at least one release after default flip.
 
+## Phase-0 Policy Specs (Pre-Implementation Contracts)
+
+These specs are documented and test-scaffolded before runtime behavior changes.
+
+### Q1 Face-Anchor Overflow Spec (Task 0.2)
+
+- Primary face capacity is direction-specific:
+  - `TD/BT`: `4`
+  - `LR/RL`: `2`
+- Overflow activates when:
+  - `incoming_degree > primary_face_capacity(direction)`
+- Overflow spill slots alternate deterministic side lanes:
+  - slot `0`: `LeftOrTop`
+  - slot `1`: `RightOrBottom`
+  - repeating thereafter
+- Fixture-backed trigger contracts:
+  - `stacked_fan_in.mmd` (`TD`, degree `2`) -> no overflow
+  - `fan_in.mmd` (`TD`, degree `3`) -> no overflow
+  - `five_fan_in.mmd` (`TD`, degree `5`) -> overflow
+  - `fan_in_lr.mmd` (`LR`, degree `3`) -> overflow
+
+### Q1+Q2 Precedence Spec (Task 0.3)
+
+- Canonical backward channel remains direction-fixed:
+  - `TD/BT`: `Right`
+  - `LR/RL`: `Bottom`
+- On overflowed targets, incoming edges are deterministically ordered by edge index.
+- Q1 overflow candidates use deterministic alternating spill slots from Task 0.2.
+- Precedence rule under contention:
+  - Backward edges retain canonical Q2 channel.
+  - Forward edges must not consume canonical backward channel on overflowed targets.
+- Fixture-backed precedence contract:
+  - `q1_q2_conflict.mmd` keeps `Q2 -> B` on the TD canonical right lane.
+  - The same fixture enforces that exactly one inbound edge to `B` uses the right face.
+
 ## Accepted Deltas (Release N, Flowchart Scope)
 
 This is the decision record for known output differences when unified routing is promoted.

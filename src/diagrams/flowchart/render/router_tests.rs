@@ -2,8 +2,9 @@ use super::super::layout::{LayoutConfig, compute_layout_direct};
 use super::*;
 use crate::diagrams::flowchart::geometry::{FPoint, FRect};
 use crate::diagrams::flowchart::render::routing_core::{
-    Face, build_orthogonal_path_float, classify_face_float, edge_faces, plan_attachments,
-    point_on_face_float,
+    Face, Q1OverflowSide, build_orthogonal_path_float, classify_face_float, edge_faces,
+    plan_attachments, point_on_face_float, q1_overflow_face_for_slot, q1_primary_face_capacity,
+    q2_backward_channel_face, resolve_q1_q2_face_conflict,
 };
 use crate::graph::{Diagram, Node};
 use crate::render::intersect::NodeFace;
@@ -1122,6 +1123,55 @@ fn routing_core_build_orthogonal_path_float_emits_axis_aligned_segments() {
     assert!(points.windows(2).all(|seg| {
         (seg[0].x - seg[1].x).abs() < f64::EPSILON || (seg[0].y - seg[1].y).abs() < f64::EPSILON
     }));
+}
+
+#[test]
+fn q1_q2_precedence_prefers_backward_channel_over_overflow_target_slot() {
+    assert_eq!(
+        q1_primary_face_capacity(Direction::TopDown),
+        4,
+        "TD/Bt primary capacity should remain in sync with contract"
+    );
+    assert_eq!(
+        q1_primary_face_capacity(Direction::LeftRight),
+        2,
+        "LR/RL primary capacity should remain in sync with contract"
+    );
+
+    assert_eq!(
+        q2_backward_channel_face(Direction::TopDown),
+        Face::Right,
+        "TD backward canonical channel should be right"
+    );
+    assert_eq!(
+        q2_backward_channel_face(Direction::LeftRight),
+        Face::Bottom,
+        "LR backward canonical channel should be bottom"
+    );
+
+    assert_eq!(
+        q1_overflow_face_for_slot(Direction::TopDown, Q1OverflowSide::LeftOrTop),
+        Face::Left,
+        "TD overflow slot 0 should map to left"
+    );
+    assert_eq!(
+        q1_overflow_face_for_slot(Direction::TopDown, Q1OverflowSide::RightOrBottom),
+        Face::Right,
+        "TD overflow slot 1 should map to right"
+    );
+
+    assert_eq!(
+        resolve_q1_q2_face_conflict(Direction::TopDown, true, Some(Face::Right), Face::Right),
+        Face::Right
+    );
+    assert_eq!(
+        resolve_q1_q2_face_conflict(Direction::TopDown, true, Some(Face::Top), Face::Top),
+        Face::Right
+    );
+    assert_eq!(
+        resolve_q1_q2_face_conflict(Direction::TopDown, false, Some(Face::Right), Face::Right),
+        Face::Right
+    );
 }
 
 #[test]

@@ -8,6 +8,71 @@ use crate::diagrams::flowchart::geometry::{FPoint, FRect};
 use crate::graph::{Direction, Edge, Shape, Stroke};
 use crate::render::intersect::{NodeFace, classify_face};
 
+/// Direction-specific overflow lane for Q1 fan-in spill candidates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Q1OverflowSide {
+    LeftOrTop,
+    RightOrBottom,
+}
+
+/// Primary face capacity for deterministic overflow policy in `Task 0.2`.
+pub(crate) const Q1_PRIMARY_FACE_CAPACITY_TD_BT: usize = 4;
+pub(crate) const Q1_PRIMARY_FACE_CAPACITY_LR_RL: usize = 2;
+
+/// Return the deterministic base capacity for the primary incoming face.
+pub(crate) fn q1_primary_face_capacity(direction: Direction) -> usize {
+    match direction {
+        Direction::TopDown | Direction::BottomTop => Q1_PRIMARY_FACE_CAPACITY_TD_BT,
+        Direction::LeftRight | Direction::RightLeft => Q1_PRIMARY_FACE_CAPACITY_LR_RL,
+    }
+}
+
+/// Convert canonical Q1 spill slot into an overflow face for a direction.
+pub(crate) fn q1_overflow_face_for_slot(direction: Direction, slot: Q1OverflowSide) -> Face {
+    match direction {
+        Direction::TopDown | Direction::BottomTop => match slot {
+            Q1OverflowSide::LeftOrTop => Face::Left,
+            Q1OverflowSide::RightOrBottom => Face::Right,
+        },
+        Direction::LeftRight | Direction::RightLeft => match slot {
+            Q1OverflowSide::LeftOrTop => Face::Top,
+            Q1OverflowSide::RightOrBottom => Face::Bottom,
+        },
+    }
+}
+
+/// Canonical backward channel for Q2 policy.
+pub(crate) fn q2_backward_channel_face(direction: Direction) -> Face {
+    match direction {
+        Direction::TopDown | Direction::BottomTop => Face::Right,
+        Direction::LeftRight | Direction::RightLeft => Face::Bottom,
+    }
+}
+
+/// Resolve a target/source face with explicit precedence when both Q1 overflow and
+/// Q2 backward channels are in contention.
+pub(crate) fn resolve_q1_q2_face_conflict(
+    direction: Direction,
+    is_backward: bool,
+    overflow_face: Option<Face>,
+    proposed_face: Face,
+) -> Face {
+    if !is_backward {
+        return proposed_face;
+    }
+
+    if overflow_face.is_none() {
+        return proposed_face;
+    }
+
+    let backward_face = q2_backward_channel_face(direction);
+    if proposed_face == backward_face {
+        backward_face
+    } else {
+        backward_face
+    }
+}
+
 /// Which face of a rectangular node an edge attaches to.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub(crate) enum Face {

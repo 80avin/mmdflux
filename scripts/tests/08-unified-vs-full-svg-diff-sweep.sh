@@ -12,6 +12,7 @@ mkdir -p "$OUT_DIR"
 
 FLOW_STYLES_DEFAULT=("basis" "linear" "rounded" "orthogonal")
 CLASS_STYLES_DEFAULT=("basis")
+UNIFIED_FEEDBACK_BASELINE_HEADER=$'fixture\tstyle\tstatus\tdiff_lines\tfull_viewbox_width\tfull_viewbox_height\tunified_viewbox_width\tunified_viewbox_height\tviewbox_width_delta\tviewbox_height_delta'
 
 split_list() {
   local raw="${1:-}"
@@ -79,6 +80,31 @@ render_svg() {
     "$fixture_path" >"$out_file"
 }
 
+extract_viewbox_dimensions() {
+  local svg_file="$1"
+  local viewbox
+  viewbox="$(grep -m1 -o 'viewBox="[^"]*"' "$svg_file" | sed -E 's/viewBox="([^"]*)"/\1/' || true)"
+  if [[ -z "$viewbox" ]]; then
+    printf '0 0\n'
+    return 0
+  fi
+
+  local _x _y width height
+  read -r _x _y width height <<<"$viewbox"
+  if [[ -z "${width:-}" || -z "${height:-}" ]]; then
+    printf '0 0\n'
+    return 0
+  fi
+
+  printf '%s %s\n' "$width" "$height"
+}
+
+format_delta() {
+  local baseline="$1"
+  local candidate="$2"
+  awk -v baseline="$baseline" -v candidate="$candidate" 'BEGIN { printf "%.2f", (candidate - baseline) }'
+}
+
 render_family_style() {
   local family="$1"
   local style="$2"
@@ -97,9 +123,19 @@ render_family_style() {
     local diff_file="$OUT_DIR/${slug}.diff"
     local status="same"
     local diff_lines="0"
+    local full_viewbox_width="0"
+    local full_viewbox_height="0"
+    local unified_viewbox_width="0"
+    local unified_viewbox_height="0"
+    local viewbox_width_delta="0.00"
+    local viewbox_height_delta="0.00"
 
     render_svg "full-compute" "$style" "$fixture_path" "$full_svg"
     render_svg "unified-preview" "$style" "$fixture_path" "$unified_svg"
+    read -r full_viewbox_width full_viewbox_height <<<"$(extract_viewbox_dimensions "$full_svg")"
+    read -r unified_viewbox_width unified_viewbox_height <<<"$(extract_viewbox_dimensions "$unified_svg")"
+    viewbox_width_delta="$(format_delta "$full_viewbox_width" "$unified_viewbox_width")"
+    viewbox_height_delta="$(format_delta "$full_viewbox_height" "$unified_viewbox_height")"
 
     if diff -u "$full_svg" "$unified_svg" >"$diff_file"; then
       status="same"
@@ -109,8 +145,33 @@ render_family_style() {
       diff_lines="$(wc -l <"$diff_file" | tr -d ' ')"
     fi
 
-    printf '%s\t%s\t%s\n' "$fixture_name" "$status" "$diff_lines" >>"$report"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "$fixture_name" \
+      "$status" \
+      "$diff_lines" \
+      "$full_viewbox_width" \
+      "$full_viewbox_height" \
+      "$unified_viewbox_width" \
+      "$unified_viewbox_height" \
+      "$viewbox_width_delta" \
+      "$viewbox_height_delta" >>"$report"
   done
+}
+
+generate_unified_feedback_baseline() {
+  local baseline="$OUT_DIR/unified-feedback-baseline.tsv"
+
+  printf '%s\n' "$UNIFIED_FEEDBACK_BASELINE_HEADER" >"$baseline"
+  for style in "${FLOW_STYLES[@]}"; do
+    local report="$OUT_DIR/flowchart.svg.${style}.report.tsv"
+    [[ -f "$report" ]] || continue
+    awk -F $'\t' -v style="$style" '
+      BEGIN { OFS = "\t" }
+      NF >= 9 { print $1, style, $2, $3, $4, $5, $6, $7, $8, $9 }
+    ' "$report" >>"$baseline"
+  done
+
+  printf '%s\n' "$baseline"
 }
 
 style_badge_class() {
@@ -233,7 +294,7 @@ HTML_HEADER
   <p class="meta">fixtures=${fixtures} | diff=${diff_count} | same=${same_count}</p>
 HTML_GROUP
 
-      while IFS=$'\t' read -r fixture_name status diff_lines; do
+      while IFS=$'\t' read -r fixture_name status diff_lines _full_w _full_h _unified_w _unified_h _delta_w _delta_h; do
         local fixture_base="${fixture_name%.mmd}"
         local fixture_slug="${family}_${fixture_base}_svg_${style}"
         local full_file="${fixture_slug}.full.svg"
@@ -370,7 +431,11 @@ done
 print_section "Generating gallery"
 GALLERY_PATH="$(generate_gallery)"
 
+print_section "Generating unified feedback baseline"
+BASELINE_PATH="$(generate_unified_feedback_baseline)"
+
 echo
 echo "Unified-vs-full SVG sweep complete."
 echo "Artifacts: $OUT_DIR"
 echo "Gallery: $GALLERY_PATH"
+echo "Unified feedback baseline: $BASELINE_PATH"

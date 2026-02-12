@@ -3,8 +3,14 @@
 //! This module routes edges in float space first, then optionally applies a
 //! deterministic grid snap adapter for text-oriented consumption.
 
+use std::collections::{HashMap, HashSet};
+
 use super::route_policy::effective_edge_direction;
-use super::routing_core::{build_orthogonal_path_float, normalize_orthogonal_route_contracts};
+use super::routing_core::{
+    Face, Q1OverflowSide, build_orthogonal_path_float, normalize_orthogonal_route_contracts,
+    q1_overflow_face_for_slot, q1_primary_face_capacity, q2_backward_channel_face,
+    resolve_q1_q2_face_conflict,
+};
 use crate::diagrams::flowchart::geometry::{FPoint, FRect, GraphGeometry, RoutedEdgeGeometry};
 use crate::graph::{Diagram, Direction, Shape};
 
@@ -33,6 +39,7 @@ pub(crate) fn route_edges_unified(
     geometry: &GraphGeometry,
     options: UnifiedRoutingOptions,
 ) -> Vec<RoutedEdgeGeometry> {
+    let q1_target_conflict = q1_target_overflow_context(geometry, geometry.direction);
     geometry
         .edges
         .iter()
@@ -49,7 +56,19 @@ pub(crate) fn route_edges_unified(
             } else {
                 edge_direction
             };
-            let mut path = build_unified_path(edge, geometry, route_direction, is_backward);
+            let overflow_target_face = q1_target_conflict
+                .overflow_face_for_edge
+                .get(&edge.index)
+                .copied();
+            let target_overflowed = q1_target_conflict.overflow_targeted.contains(&edge.to);
+            let mut path = build_unified_path(
+                edge,
+                geometry,
+                route_direction,
+                is_backward,
+                overflow_target_face,
+                target_overflowed,
+            );
 
             if let Some((sx, sy)) = options.grid_snap {
                 path = snap_path_to_grid(&path, sx, sy);
@@ -74,10 +93,20 @@ fn build_unified_path(
     geometry: &GraphGeometry,
     direction: Direction,
     is_backward: bool,
+    q1_overflow_target_face: Option<Face>,
+    target_overflowed: bool,
 ) -> Vec<FPoint> {
     let control_points = build_path_from_hints(edge, geometry);
     let mut path = build_contracted_path(&control_points, direction);
-    anchor_path_endpoints_to_endpoint_faces(&mut path, edge, geometry, direction, is_backward);
+    anchor_path_endpoints_to_endpoint_faces(
+        &mut path,
+        edge,
+        geometry,
+        direction,
+        is_backward,
+        q1_overflow_target_face,
+        target_overflowed,
+    );
     prefer_lateral_exit_for_off_center_primary_axis_sources(
         &mut path,
         edge,
@@ -93,6 +122,55 @@ fn build_unified_path(
     let mut normalized = normalize_orthogonal_route_contracts(&path, direction);
     collapse_source_turnback_spikes(&mut normalized);
     normalize_orthogonal_route_contracts(&normalized, direction)
+}
+
+struct Q1TargetOverflowContext {
+    overflow_face_for_edge: HashMap<usize, Face>,
+    overflow_targeted: HashSet<String>,
+}
+
+fn q1_target_overflow_context(
+    geometry: &GraphGeometry,
+    direction: Direction,
+) -> Q1TargetOverflowContext {
+    let mut incoming_by_target: HashMap<
+        String,
+        Vec<&crate::diagrams::flowchart::geometry::LayoutEdge>,
+    > = HashMap::new();
+    for edge in &geometry.edges {
+        incoming_by_target
+            .entry(edge.to.clone())
+            .or_default()
+            .push(edge);
+    }
+
+    let capacity = q1_primary_face_capacity(direction);
+    let mut overflow_face_for_edge: HashMap<usize, Face> = HashMap::new();
+    let mut overflow_targeted: HashSet<String> = HashSet::new();
+
+    for (target_id, mut incoming_edges) in incoming_by_target {
+        if incoming_edges.len() <= capacity {
+            continue;
+        }
+        overflow_targeted.insert(target_id);
+        incoming_edges.sort_unstable_by_key(|edge| edge.index);
+
+        let overflow_edges = &incoming_edges[capacity..];
+        for (idx, edge) in overflow_edges.iter().enumerate() {
+            let overflow_slot = if idx % 2 == 0 {
+                Q1OverflowSide::LeftOrTop
+            } else {
+                Q1OverflowSide::RightOrBottom
+            };
+            let face = q1_overflow_face_for_slot(direction, overflow_slot);
+            overflow_face_for_edge.insert(edge.index, face);
+        }
+    }
+
+    Q1TargetOverflowContext {
+        overflow_face_for_edge,
+        overflow_targeted,
+    }
 }
 
 fn prefer_lateral_exit_for_off_center_primary_axis_sources(
@@ -327,6 +405,8 @@ fn anchor_path_endpoints_to_endpoint_faces(
     geometry: &GraphGeometry,
     direction: Direction,
     is_backward: bool,
+    q1_overflow_target_face: Option<Face>,
+    target_overflowed: bool,
 ) {
     const EPS: f64 = 0.5;
     if path.len() < 2 {
@@ -340,7 +420,15 @@ fn anchor_path_endpoints_to_endpoint_faces(
         let start = path[0];
         let next = path[1];
         if point_on_or_inside_rect(start, &from_rect, EPS) {
-            path[0] = clip_point_to_axis_face(start, next, from_rect, direction, is_backward);
+            path[0] = clip_point_to_axis_face(
+                start,
+                next,
+                from_rect,
+                direction,
+                is_backward,
+                None,
+                false,
+            );
         }
     }
 
@@ -352,7 +440,15 @@ fn anchor_path_endpoints_to_endpoint_faces(
         let end = path[last];
         let prev = path[last - 1];
         if point_on_or_inside_rect(end, &to_rect, EPS) {
-            path[last] = clip_point_to_axis_face(end, prev, to_rect, direction, is_backward);
+            path[last] = clip_point_to_axis_face(
+                end,
+                prev,
+                to_rect,
+                direction,
+                is_backward,
+                q1_overflow_target_face,
+                target_overflowed,
+            );
         }
     }
 }
@@ -374,7 +470,7 @@ fn endpoint_rect_and_shape(
         .map(|node| (node.rect, node.shape))
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum RectFace {
     Top,
     Bottom,
@@ -415,6 +511,8 @@ fn clip_point_to_axis_face(
     rect: FRect,
     direction: Direction,
     preserve_existing_face: bool,
+    q1_overflow_face: Option<Face>,
+    target_overflowed: bool,
 ) -> FPoint {
     const EPS: f64 = 0.000_001;
     let left = rect.x;
@@ -429,6 +527,59 @@ fn clip_point_to_axis_face(
 
     let dx = endpoint.x - adjacent.x;
     let dy = endpoint.y - adjacent.y;
+
+    if let Some(overflow_face) = q1_overflow_face {
+        if preserve_existing_face {
+            let resolved_face = resolve_q1_q2_face_conflict(
+                direction,
+                true,
+                Some(overflow_face),
+                q2_backward_channel_face(direction),
+            );
+            let resolved_rect_face = map_face_to_rect_face(resolved_face);
+            return clip_point_to_rect_face(endpoint, rect, resolved_rect_face);
+        }
+
+        let terminal_is_horizontal = dy.abs() <= EPS && dx.abs() > EPS;
+        let terminal_is_vertical = dx.abs() <= EPS && dy.abs() > EPS;
+        let overflow_face_is_compatible = match overflow_face {
+            Face::Left | Face::Right => terminal_is_horizontal,
+            Face::Top | Face::Bottom => terminal_is_vertical,
+        };
+
+        if overflow_face_is_compatible {
+            let resolved_face =
+                resolve_q1_q2_face_conflict(direction, false, Some(overflow_face), overflow_face);
+            let resolved_rect_face = map_face_to_rect_face(resolved_face);
+            return clip_point_to_rect_face(endpoint, rect, resolved_rect_face);
+        }
+
+        if matches!(direction, Direction::TopDown | Direction::BottomTop) {
+            return clip_point_to_rect_face(endpoint, rect, map_face_to_rect_face(overflow_face));
+        }
+
+        let fallback_face = if terminal_is_horizontal || dx.abs() >= dy.abs() {
+            if adjacent.x < endpoint.x {
+                Face::Left
+            } else {
+                Face::Right
+            }
+        } else if adjacent.y < endpoint.y {
+            Face::Top
+        } else {
+            Face::Bottom
+        };
+        return clip_point_to_rect_face(endpoint, rect, map_face_to_rect_face(fallback_face));
+    }
+
+    if !preserve_existing_face && target_overflowed {
+        let canonical = map_face_to_rect_face(q2_backward_channel_face(direction));
+        if let Some(actual_face) = boundary_face_excluding_corners(endpoint, rect, 0.5)
+            && actual_face == canonical
+        {
+            return clip_point_to_rect_face(endpoint, rect, opposite_rect_face(canonical));
+        }
+    }
 
     // Backward hints often already carry intended side-face attachment.
     // Preserve that face when the endpoint is unambiguously on a non-corner
@@ -485,6 +636,38 @@ fn clip_point_to_axis_face(
         endpoint.x.clamp(x_min, x_max),
         endpoint.y.clamp(y_min, y_max),
     )
+}
+
+fn map_face_to_rect_face(face: Face) -> RectFace {
+    match face {
+        Face::Top => RectFace::Top,
+        Face::Bottom => RectFace::Bottom,
+        Face::Left => RectFace::Left,
+        Face::Right => RectFace::Right,
+    }
+}
+
+fn opposite_rect_face(face: RectFace) -> RectFace {
+    match face {
+        RectFace::Top => RectFace::Bottom,
+        RectFace::Bottom => RectFace::Top,
+        RectFace::Left => RectFace::Right,
+        RectFace::Right => RectFace::Left,
+    }
+}
+
+fn clip_point_to_rect_face(endpoint: FPoint, rect: FRect, face: RectFace) -> FPoint {
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    match face {
+        RectFace::Top => FPoint::new(endpoint.x.clamp(left, right), top),
+        RectFace::Bottom => FPoint::new(endpoint.x.clamp(left, right), bottom),
+        RectFace::Left => FPoint::new(left, endpoint.y.clamp(top, bottom)),
+        RectFace::Right => FPoint::new(right, endpoint.y.clamp(top, bottom)),
+    }
 }
 
 fn ensure_endpoint_segments_axis_aligned(path: &mut Vec<FPoint>) {

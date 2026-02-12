@@ -31,6 +31,29 @@ const UNIFIED_PARITY_ACCEPTED_DELTAS: &[&str] = &[
 ];
 
 const UNIFIED_PARITY_MUST_MATCH: &[&str] = &[];
+const UNIFIED_FEEDBACK_BASELINE_FILE: &str = "docs/unified_feedback_baseline.tsv";
+const UNIFIED_FEEDBACK_BASELINE_COLUMNS: &[&str] = &[
+    "fixture",
+    "style",
+    "status",
+    "diff_lines",
+    "full_viewbox_width",
+    "full_viewbox_height",
+    "unified_viewbox_width",
+    "unified_viewbox_height",
+    "viewbox_width_delta",
+    "viewbox_height_delta",
+];
+const UNIFIED_FEEDBACK_BASELINE_FIXTURES: &[&str] = &[
+    "fan_in.mmd",
+    "five_fan_in.mmd",
+    "stacked_fan_in.mmd",
+    "fan_in_lr.mmd",
+    "labeled_edges.mmd",
+    "inline_label_flowchart.mmd",
+    "double_skip.mmd",
+    "skip_edge_collision.mmd",
+];
 
 fn list_fixtures() -> Vec<String> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -200,6 +223,14 @@ fn mmds_snapshot_path(stem: &str) -> PathBuf {
         .join("svg-snapshots")
         .join("mmds")
         .join(format!("{stem}.svg"))
+}
+
+fn unified_feedback_baseline_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(UNIFIED_FEEDBACK_BASELINE_FILE)
+}
+
+fn parse_tsv_record(line: &str) -> Vec<&str> {
+    line.split('\t').collect()
 }
 
 fn assert_snapshot(fixture: &str) {
@@ -408,4 +439,48 @@ fn svg_unified_preview_preserves_subgraph_vertical_order_on_multi_override_fixtu
         "legacy output unexpectedly lacks top-to-bottom subgraph ordering: ys={:?}",
         legacy_ys
     );
+}
+
+#[test]
+fn unified_feedback_baseline_contains_required_fixtures_and_metrics() {
+    let baseline_path = unified_feedback_baseline_path();
+    let raw = fs::read_to_string(&baseline_path).unwrap_or_else(|e| {
+        panic!(
+            "Failed to read unified feedback baseline {}: {e}",
+            baseline_path.display()
+        )
+    });
+
+    let mut lines = raw.lines();
+    let header_line = lines
+        .next()
+        .expect("baseline file must include a header row");
+    let header_columns = parse_tsv_record(header_line);
+
+    for required in UNIFIED_FEEDBACK_BASELINE_COLUMNS {
+        assert!(
+            header_columns.contains(required),
+            "baseline is missing required column: {required}"
+        );
+    }
+
+    let fixture_column_index = header_columns
+        .iter()
+        .position(|column| *column == "fixture")
+        .expect("baseline header must include fixture column");
+
+    let mut baseline_fixtures: Vec<&str> = lines
+        .filter(|line| !line.trim().is_empty())
+        .map(parse_tsv_record)
+        .filter_map(|row| row.get(fixture_column_index).copied())
+        .collect();
+    baseline_fixtures.sort_unstable();
+    baseline_fixtures.dedup();
+
+    for fixture in UNIFIED_FEEDBACK_BASELINE_FIXTURES {
+        assert!(
+            baseline_fixtures.binary_search(fixture).is_ok(),
+            "baseline is missing required fixture row: {fixture}"
+        );
+    }
 }

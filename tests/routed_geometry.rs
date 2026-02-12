@@ -86,6 +86,35 @@ fn point_inside_rect(rect: FRect, point: FPoint) -> bool {
         && point.y < rect.y + rect.height - eps
 }
 
+fn point_on_target_face(rect: FRect, point: FPoint) -> &'static str {
+    let eps = 0.5;
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    let on_right = (point.x - right).abs() <= eps;
+    let on_left = (point.x - left).abs() <= eps;
+    let on_top = (point.y - top).abs() <= eps;
+    let on_bottom = (point.y - bottom).abs() <= eps;
+
+    if on_right && point.y > top + eps && point.y < bottom - eps {
+        "right"
+    } else if on_left && point.y > top + eps && point.y < bottom - eps {
+        "left"
+    } else if on_top && point.x > left + eps && point.x < right - eps {
+        "top"
+    } else if on_bottom && point.x > left + eps && point.x < right - eps {
+        "bottom"
+    } else if on_right {
+        "right"
+    } else if on_left {
+        "left"
+    } else {
+        "interior_or_corner"
+    }
+}
+
 fn terminal_support_is_normal_to_attached_rect_face(
     rect: FRect,
     prev: FPoint,
@@ -998,4 +1027,190 @@ fn unified_route_contracts_keep_td_source_ports_normal_and_compact() {
             );
         }
     }
+}
+
+// -----------------------------------------------------------------------
+// Task 0.2: Q1 policy spec contracts
+// -----------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug)]
+enum Q1SpecDirection {
+    TopDown,
+    BottomTop,
+    LeftRight,
+    RightLeft,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Q1OverflowSide {
+    LeftOrTop,
+    RightOrBottom,
+}
+
+const Q1_PRIMARY_FACE_CAPACITY_TD_BT: usize = 4;
+const Q1_PRIMARY_FACE_CAPACITY_LR_RL: usize = 2;
+
+fn q1_primary_face_capacity(direction: Q1SpecDirection) -> usize {
+    match direction {
+        Q1SpecDirection::TopDown | Q1SpecDirection::BottomTop => Q1_PRIMARY_FACE_CAPACITY_TD_BT,
+        Q1SpecDirection::LeftRight | Q1SpecDirection::RightLeft => Q1_PRIMARY_FACE_CAPACITY_LR_RL,
+    }
+}
+
+fn q1_overflow_activates(direction: Q1SpecDirection, incoming_degree: usize) -> bool {
+    incoming_degree > q1_primary_face_capacity(direction)
+}
+
+fn q1_overflow_distribution_order(
+    _direction: Q1SpecDirection,
+    overflow_count: usize,
+) -> Vec<Q1OverflowSide> {
+    let mut order = Vec::with_capacity(overflow_count);
+    for index in 0..overflow_count {
+        if index % 2 == 0 {
+            order.push(Q1OverflowSide::LeftOrTop);
+        } else {
+            order.push(Q1OverflowSide::RightOrBottom);
+        }
+    }
+    order
+}
+
+#[test]
+fn q1_policy_spec_defines_when_overflow_must_activate() {
+    let cases = [
+        ("stacked_fan_in.mmd", Q1SpecDirection::TopDown, 2, false),
+        ("fan_in.mmd", Q1SpecDirection::TopDown, 3, false),
+        ("five_fan_in.mmd", Q1SpecDirection::TopDown, 5, true),
+        ("fan_in_lr.mmd", Q1SpecDirection::LeftRight, 3, true),
+    ];
+
+    for (fixture, direction, incoming_degree, expected_overflow) in cases {
+        let actual = q1_overflow_activates(direction, incoming_degree);
+        assert_eq!(
+            actual, expected_overflow,
+            "Q1 overflow activation contract mismatch for fixture {fixture}: direction={direction:?}, incoming_degree={incoming_degree}"
+        );
+    }
+}
+
+#[test]
+fn q1_policy_spec_defines_spill_distribution_order() {
+    let td_order = q1_overflow_distribution_order(Q1SpecDirection::TopDown, 4);
+    assert_eq!(
+        td_order,
+        vec![
+            Q1OverflowSide::LeftOrTop,
+            Q1OverflowSide::RightOrBottom,
+            Q1OverflowSide::LeftOrTop,
+            Q1OverflowSide::RightOrBottom,
+        ],
+        "TD/BT overflow slots should alternate side lanes for deterministic spread"
+    );
+
+    let lr_order = q1_overflow_distribution_order(Q1SpecDirection::LeftRight, 3);
+    assert_eq!(
+        lr_order,
+        vec![
+            Q1OverflowSide::LeftOrTop,
+            Q1OverflowSide::RightOrBottom,
+            Q1OverflowSide::LeftOrTop,
+        ],
+        "LR/RL overflow slots should alternate side lanes for deterministic spread"
+    );
+
+    let bt_order = q1_overflow_distribution_order(Q1SpecDirection::BottomTop, 2);
+    assert_eq!(
+        bt_order,
+        vec![Q1OverflowSide::LeftOrTop, Q1OverflowSide::RightOrBottom],
+        "BT overflow slots should mirror TD side-lane alternation"
+    );
+
+    let rl_order = q1_overflow_distribution_order(Q1SpecDirection::RightLeft, 2);
+    assert_eq!(
+        rl_order,
+        vec![Q1OverflowSide::LeftOrTop, Q1OverflowSide::RightOrBottom],
+        "RL overflow slots should mirror LR side-lane alternation"
+    );
+}
+
+#[test]
+fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
+    let fixture = "q1_q2_conflict.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    let first = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let second = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    assert_eq!(
+        first.edges.len(),
+        second.edges.len(),
+        "routed edge count should be deterministic"
+    );
+
+    let target_rect = geom
+        .nodes
+        .get("B")
+        .expect("q1_q2_conflict fixture should contain node B")
+        .rect;
+    let conflict = first
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Q2" && edge.to == "B")
+        .expect("fixture should contain Q2 -> B");
+
+    assert!(
+        conflict.is_backward,
+        "Q2 -> B must be backward in unified preview layout for this fixture"
+    );
+
+    let conflict_end = *conflict
+        .path
+        .last()
+        .expect("backward edge should have path endpoint");
+    let conflict_face = point_on_target_face(target_rect, conflict_end);
+    assert_eq!(
+        conflict_face,
+        "right",
+        "Q2 -> B must keep TD backward canonical channel under fan-in pressure: end={conflict_end:?}, path={path:?}",
+        conflict_end = conflict_end,
+        path = conflict.path
+    );
+
+    let incoming_to_b: Vec<_> = first.edges.iter().filter(|edge| edge.to == "B").collect();
+    if std::env::var("MMDFLUX_DEBUG_Q1").is_ok_and(|v| v == "1") {
+        for edge in &incoming_to_b {
+            let end = edge
+                .path
+                .last()
+                .copied()
+                .expect("inbound edge should have endpoint");
+            let end_face = point_on_target_face(target_rect, end);
+            eprintln!(
+                "edge {}->{} index={} backward={} end={:?} face={}",
+                edge.from, edge.to, edge.index, edge.is_backward, end, end_face
+            );
+        }
+    }
+    assert_eq!(
+        incoming_to_b.len(),
+        6,
+        "q1_q2_conflict should create exactly six inbound edges to B"
+    );
+
+    let right_face_count = incoming_to_b
+        .iter()
+        .filter(|edge| {
+            let end = edge
+                .path
+                .last()
+                .copied()
+                .expect("inbound edge should have endpoint");
+            point_on_target_face(target_rect, end) == "right"
+        })
+        .count();
+
+    assert_eq!(
+        right_face_count, 1,
+        "only the backward conflict edge should occupy B's canonical right-backward lane: right_face_count={right_face_count}"
+    );
 }
