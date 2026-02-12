@@ -228,6 +228,7 @@ pub fn from_dagre_layout(result: &dagre::LayoutResult, diagram: &Diagram) -> Gra
         .edges
         .iter()
         .map(|el| {
+            let diagram_edge = diagram.edges.get(el.index);
             let waypoints: Vec<FPoint> = result
                 .edge_waypoints
                 .get(&el.index)
@@ -243,15 +244,20 @@ pub fn from_dagre_layout(result: &dagre::LayoutResult, diagram: &Diagram) -> Gra
                 .get(&el.index)
                 .map(|wp| FPoint::new(wp.point.x, wp.point.y));
 
-            let from_subgraph = if diagram.is_subgraph(&el.from.0) {
-                Some(el.from.0.clone())
+            let (from_subgraph, to_subgraph) = if let Some(edge) = diagram_edge {
+                (edge.from_subgraph.clone(), edge.to_subgraph.clone())
             } else {
-                None
-            };
-            let to_subgraph = if diagram.is_subgraph(&el.to.0) {
-                Some(el.to.0.clone())
-            } else {
-                None
+                let from_subgraph = if diagram.is_subgraph(&el.from.0) {
+                    Some(el.from.0.clone())
+                } else {
+                    None
+                };
+                let to_subgraph = if diagram.is_subgraph(&el.to.0) {
+                    Some(el.to.0.clone())
+                } else {
+                    None
+                };
+                (from_subgraph, to_subgraph)
             };
 
             LayoutEdge {

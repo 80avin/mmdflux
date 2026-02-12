@@ -50,6 +50,31 @@ fn bend_count(path: &[FPoint]) -> usize {
     path.len().saturating_sub(2)
 }
 
+fn point_inside_rect(rect: FRect, point: FPoint) -> bool {
+    let eps = 0.01;
+    point.x > rect.x + eps
+        && point.x < rect.x + rect.width - eps
+        && point.y > rect.y + eps
+        && point.y < rect.y + rect.height - eps
+}
+
+fn terminal_support_is_normal_to_attached_rect_face(
+    rect: FRect,
+    prev: FPoint,
+    end: FPoint,
+) -> bool {
+    let eps = 0.01;
+    let on_top = (end.y - rect.y).abs() <= eps;
+    let on_bottom = (end.y - (rect.y + rect.height)).abs() <= eps;
+    let on_left = (end.x - rect.x).abs() <= eps;
+    let on_right = (end.x - (rect.x + rect.width)).abs() <= eps;
+
+    let vertical_segment = (prev.x - end.x).abs() <= eps && (prev.y - end.y).abs() > eps;
+    let horizontal_segment = (prev.y - end.y).abs() <= eps && (prev.x - end.x).abs() > eps;
+
+    (on_top || on_bottom) && vertical_segment || (on_left || on_right) && horizontal_segment
+}
+
 fn effective_edge_direction_for_test(
     node_directions: &std::collections::HashMap<String, mmdflux::Direction>,
     from: &str,
@@ -424,6 +449,50 @@ fn unified_preview_multi_subgraph_bmid_to_f_keeps_terminal_support_clearance() {
         "Bmid -> F terminal support should preserve >=12px clearance before endpoint: dy={dy}, path={:?}",
         edge.path
     );
+}
+
+#[test]
+fn unified_preview_fan_in_lr_target_endpoints_stay_on_or_outside_target_border() {
+    let (diagram, geom) = layout_fixture("fan_in_lr.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let target_rect = geom
+        .nodes
+        .get("D")
+        .expect("fan_in_lr should contain target node D")
+        .rect;
+
+    for edge in routed
+        .edges
+        .iter()
+        .filter(|edge| (edge.from == "A" || edge.from == "C") && edge.to == "D")
+    {
+        assert!(
+            edge.path.len() >= 2,
+            "edge should contain at least two points: {:?}",
+            edge.path
+        );
+        let prev = edge.path[edge.path.len() - 2];
+        let end = *edge.path.last().expect("edge should have routed points");
+        assert!(
+            !point_inside_rect(target_rect, end),
+            "unified routed endpoint should not be inside target rect for {} -> {}: end={:?}, target_rect={:?}, path={:?}",
+            edge.from,
+            edge.to,
+            end,
+            target_rect,
+            edge.path
+        );
+        assert!(
+            terminal_support_is_normal_to_attached_rect_face(target_rect, prev, end),
+            "fan_in_lr terminal segment should approach D on the face-normal axis for {} -> {}: prev={:?}, end={:?}, target_rect={:?}, path={:?}",
+            edge.from,
+            edge.to,
+            prev,
+            end,
+            target_rect,
+            edge.path
+        );
+    }
 }
 
 // -----------------------------------------------------------------------

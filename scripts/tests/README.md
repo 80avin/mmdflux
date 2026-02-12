@@ -49,3 +49,6 @@ RUN_ID=local-check-1 ./scripts/tests/run-all.sh
 - `07-plan-0076-unified-routing-quality-qa.sh`
   - plan-level QA sweep for unified routing promotion hardening
   - expanded parity classification, determinism, routed path-detail defaults, and validation matrix
+- `08-unified-vs-full-svg-diff-sweep.sh`
+  - reusable full-compute vs unified-preview SVG sweep
+  - renders fixture/style matrices, writes per-style TSV reports, and generates `routing-svg-diff-gallery-v2.html`

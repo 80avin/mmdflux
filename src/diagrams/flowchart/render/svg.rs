@@ -878,8 +878,10 @@ fn render_edges(
         if matches!(edge_path_style, SvgEdgePathStyle::Linear) {
             points = fix_corner_points(&points);
         }
+        let is_backward = geom.reversed_edges.contains(&index);
         let enforce_primary_axis_no_backtrack = matches!(routing_mode, RoutingMode::UnifiedPreview)
-            && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal);
+            && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
+            && !is_backward;
         points = apply_marker_offsets(
             &points,
             edge,
@@ -2159,8 +2161,17 @@ fn should_adjust_rerouted_edge_endpoints(
         return true;
     }
 
-    endpoint_attachment_is_invalid(points[0], from_rect, direction, true, EPS)
-        || endpoint_attachment_is_invalid(points[points.len() - 1], to_rect, direction, false, EPS)
+    let is_backward = geom.reversed_edges.contains(&edge.index);
+
+    endpoint_attachment_is_invalid(points[0], from_rect, direction, true, is_backward, EPS)
+        || endpoint_attachment_is_invalid(
+            points[points.len() - 1],
+            to_rect,
+            direction,
+            false,
+            is_backward,
+            EPS,
+        )
 }
 
 fn endpoint_attachment_is_invalid(
@@ -2168,6 +2179,7 @@ fn endpoint_attachment_is_invalid(
     rect: Rect,
     direction: Direction,
     is_source: bool,
+    is_backward: bool,
     eps: f64,
 ) -> bool {
     const FACE_PROXIMITY: f64 = 6.0;
@@ -2183,30 +2195,32 @@ fn endpoint_attachment_is_invalid(
         return true;
     }
 
+    let is_forward_source = is_source != is_backward;
+
     match direction {
         Direction::TopDown => {
-            if is_source {
+            if is_forward_source {
                 (bottom - point.y) > FACE_PROXIMITY
             } else {
                 (point.y - top) > FACE_PROXIMITY
             }
         }
         Direction::BottomTop => {
-            if is_source {
+            if is_forward_source {
                 (point.y - top) > FACE_PROXIMITY
             } else {
                 (bottom - point.y) > FACE_PROXIMITY
             }
         }
         Direction::LeftRight => {
-            if is_source {
+            if is_forward_source {
                 (right - point.x) > FACE_PROXIMITY
             } else {
                 (point.x - left) > FACE_PROXIMITY
             }
         }
         Direction::RightLeft => {
-            if is_source {
+            if is_forward_source {
                 (point.x - left) > FACE_PROXIMITY
             } else {
                 (right - point.x) > FACE_PROXIMITY
@@ -2388,6 +2402,12 @@ fn apply_marker_offsets(
     };
 
     let mut points = points.to_vec();
+    if !preserve_orthogonal {
+        // Non-orth styles (linear/rounded/basis) can look visually cramped when
+        // an orthogonal route ends with a short final elbow immediately before
+        // the marker. Collapse that elbow into a direct terminal approach.
+        points = collapse_narrow_terminal_elbows_for_non_orth(&points, 14.0);
+    }
     if preserve_orthogonal {
         // Keep endpoint support visibly longer than marker pullback so the
         // terminal stem remains readable in orthogonal mode.
@@ -2510,6 +2530,50 @@ fn apply_marker_offsets(
     }
 
     out
+}
+
+fn collapse_narrow_terminal_elbows_for_non_orth(
+    points: &[Point],
+    min_terminal_leg: f64,
+) -> Vec<Point> {
+    if points.len() < 4 || min_terminal_leg <= 0.0 {
+        return points.to_vec();
+    }
+
+    let mut collapsed = points.to_vec();
+
+    if collapsed.len() >= 4 {
+        let n = collapsed.len();
+        let pre = collapsed[n - 3];
+        let elbow = collapsed[n - 2];
+        let end = collapsed[n - 1];
+        let pre_axis = segment_axis(pre, elbow);
+        let end_axis = segment_axis(elbow, end);
+        if let (Some(a), Some(b)) = (pre_axis, end_axis)
+            && a != b
+            && segment_manhattan_len(elbow, end) < min_terminal_leg
+            && segment_manhattan_len(pre, end) > 0.001
+        {
+            collapsed.remove(n - 2);
+        }
+    }
+
+    if collapsed.len() >= 4 {
+        let start = collapsed[0];
+        let elbow = collapsed[1];
+        let post = collapsed[2];
+        let start_axis = segment_axis(start, elbow);
+        let post_axis = segment_axis(elbow, post);
+        if let (Some(a), Some(b)) = (start_axis, post_axis)
+            && a != b
+            && segment_manhattan_len(start, elbow) < min_terminal_leg
+            && segment_manhattan_len(start, post) > 0.001
+        {
+            collapsed.remove(1);
+        }
+    }
+
+    collapsed
 }
 
 fn enforce_primary_axis_tail_contracts(

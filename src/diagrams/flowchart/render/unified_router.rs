@@ -5,8 +5,8 @@
 
 use super::route_policy::effective_edge_direction;
 use super::routing_core::{build_orthogonal_path_float, normalize_orthogonal_route_contracts};
-use crate::diagrams::flowchart::geometry::{FPoint, GraphGeometry, RoutedEdgeGeometry};
-use crate::graph::{Diagram, Direction};
+use crate::diagrams::flowchart::geometry::{FPoint, FRect, GraphGeometry, RoutedEdgeGeometry};
+use crate::graph::{Diagram, Direction, Shape};
 
 /// Preview options for unified float-first routing.
 #[derive(Debug, Clone, Copy)]
@@ -49,7 +49,7 @@ pub(crate) fn route_edges_unified(
             } else {
                 edge_direction
             };
-            let mut path = build_unified_path(edge, geometry, route_direction);
+            let mut path = build_unified_path(edge, geometry, route_direction, is_backward);
 
             if let Some((sx, sy)) = options.grid_snap {
                 path = snap_path_to_grid(&path, sx, sy);
@@ -73,9 +73,15 @@ fn build_unified_path(
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
     geometry: &GraphGeometry,
     direction: Direction,
+    is_backward: bool,
 ) -> Vec<FPoint> {
     let control_points = build_path_from_hints(edge, geometry);
-    build_contracted_path(&control_points, direction)
+    let mut path = build_contracted_path(&control_points, direction);
+    anchor_path_endpoints_to_endpoint_faces(&mut path, edge, geometry);
+    if !is_backward {
+        enforce_primary_axis_terminal_direction(&mut path, direction, 8.0);
+    }
+    normalize_orthogonal_route_contracts(&path, direction)
 }
 
 pub(crate) fn build_path_from_hints(
@@ -211,4 +217,154 @@ fn build_contracted_path(control_points: &[FPoint], direction: Direction) -> Vec
     let waypoints = &control_points[1..(control_points.len() - 1)];
     let orthogonal = build_orthogonal_path_float(start, end, direction, waypoints);
     normalize_orthogonal_route_contracts(&orthogonal, direction)
+}
+
+fn anchor_path_endpoints_to_endpoint_faces(
+    path: &mut [FPoint],
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+) {
+    const EPS: f64 = 0.5;
+    if path.len() < 2 {
+        return;
+    }
+
+    if let Some((from_rect, from_shape)) =
+        endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+        && !matches!(from_shape, Shape::Diamond | Shape::Hexagon)
+    {
+        let start = path[0];
+        let next = path[1];
+        if point_on_or_inside_rect(start, &from_rect, EPS) {
+            path[0] = clip_point_to_axis_face(start, next, from_rect);
+        }
+    }
+
+    if let Some((to_rect, to_shape)) =
+        endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+        && !matches!(to_shape, Shape::Diamond | Shape::Hexagon)
+    {
+        let last = path.len() - 1;
+        let end = path[last];
+        let prev = path[last - 1];
+        if point_on_or_inside_rect(end, &to_rect, EPS) {
+            path[last] = clip_point_to_axis_face(end, prev, to_rect);
+        }
+    }
+}
+
+fn endpoint_rect_and_shape(
+    geometry: &GraphGeometry,
+    node_id: &str,
+    subgraph_id: Option<&str>,
+) -> Option<(FRect, Shape)> {
+    if let Some(sg_id) = subgraph_id {
+        return geometry
+            .subgraphs
+            .get(sg_id)
+            .map(|sg| (sg.rect, Shape::Rectangle));
+    }
+    geometry
+        .nodes
+        .get(node_id)
+        .map(|node| (node.rect, node.shape))
+}
+
+fn clip_point_to_axis_face(endpoint: FPoint, adjacent: FPoint, rect: FRect) -> FPoint {
+    const EPS: f64 = 0.000_001;
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    let x_min = left.min(right);
+    let x_max = left.max(right);
+    let y_min = top.min(bottom);
+    let y_max = top.max(bottom);
+
+    let dx = endpoint.x - adjacent.x;
+    let dy = endpoint.y - adjacent.y;
+
+    // Terminal segment is horizontal: anchor endpoint on left/right face.
+    if dy.abs() <= EPS && dx.abs() > EPS {
+        let x = if adjacent.x < endpoint.x { left } else { right };
+        return FPoint::new(x, endpoint.y.clamp(y_min, y_max));
+    }
+
+    // Terminal segment is vertical: anchor endpoint on top/bottom face.
+    if dx.abs() <= EPS && dy.abs() > EPS {
+        let y = if adjacent.y < endpoint.y { top } else { bottom };
+        return FPoint::new(endpoint.x.clamp(x_min, x_max), y);
+    }
+
+    // Fallback: clamp interior drift to the rectangle boundary box.
+    FPoint::new(
+        endpoint.x.clamp(x_min, x_max),
+        endpoint.y.clamp(y_min, y_max),
+    )
+}
+
+fn enforce_primary_axis_terminal_direction(
+    points: &mut [FPoint],
+    direction: Direction,
+    min_terminal_support: f64,
+) {
+    if points.len() < 2 || min_terminal_support <= 0.0 {
+        return;
+    }
+
+    let n = points.len();
+    let end_idx = n - 1;
+    let penult_idx = n - 2;
+
+    match direction {
+        Direction::TopDown => {
+            let target_penult_y = points[end_idx].y - min_terminal_support;
+            if points[penult_idx].y > target_penult_y {
+                points[penult_idx].y = target_penult_y;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].y > points[penult_idx].y {
+                    points[pre_idx].y = points[penult_idx].y;
+                }
+            }
+        }
+        Direction::BottomTop => {
+            let target_penult_y = points[end_idx].y + min_terminal_support;
+            if points[penult_idx].y < target_penult_y {
+                points[penult_idx].y = target_penult_y;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].y < points[penult_idx].y {
+                    points[pre_idx].y = points[penult_idx].y;
+                }
+            }
+        }
+        Direction::LeftRight => {
+            let target_penult_x = points[end_idx].x - min_terminal_support;
+            if points[penult_idx].x > target_penult_x {
+                points[penult_idx].x = target_penult_x;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].x > points[penult_idx].x {
+                    points[pre_idx].x = points[penult_idx].x;
+                }
+            }
+        }
+        Direction::RightLeft => {
+            let target_penult_x = points[end_idx].x + min_terminal_support;
+            if points[penult_idx].x < target_penult_x {
+                points[penult_idx].x = target_penult_x;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].x < points[penult_idx].x {
+                    points[pre_idx].x = points[penult_idx].x;
+                }
+            }
+        }
+    }
 }

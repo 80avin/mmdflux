@@ -82,6 +82,15 @@ fn manhattan_segment_len(a: (f64, f64), b: (f64, f64)) -> f64 {
     (a.0 - b.0).abs() + (a.1 - b.1).abs()
 }
 
+fn horizontal_span(points: &[(f64, f64)]) -> f64 {
+    if points.is_empty() {
+        return 0.0;
+    }
+    let min_x = points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
+    let max_x = points.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
+    max_x - min_x
+}
+
 fn segment_axis(a: (f64, f64), b: (f64, f64)) -> Option<char> {
     if (a.0 - b.0).abs() < 0.001 && (a.1 - b.1).abs() >= 0.001 {
         Some('V')
@@ -218,6 +227,26 @@ fn edge_index(diagram: &mmdflux::Diagram, from: &str, to: &str) -> usize {
         .find(|edge| edge.from == from && edge.to == to)
         .unwrap_or_else(|| panic!("expected edge {from} -> {to}"))
         .index
+}
+
+fn node_center_for_id(diagram: &mmdflux::Diagram, node_id: &str) -> (f64, f64) {
+    let engine = DagreLayoutEngine::text();
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let geom = engine
+        .layout(diagram, &config)
+        .expect("layout should succeed for center lookup");
+    let node = geom
+        .nodes
+        .get(node_id)
+        .unwrap_or_else(|| panic!("expected node `{node_id}` in layout geometry"));
+    (
+        node.rect.x + node.rect.width / 2.0,
+        node.rect.y + node.rect.height / 2.0,
+    )
+}
+
+fn distance(a: (f64, f64), b: (f64, f64)) -> f64 {
+    ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
 }
 
 #[test]
@@ -493,6 +522,139 @@ fn svg_orthogonal_unified_preview_does_not_add_short_staircase_jogs_after_adjust
 }
 
 #[test]
+fn svg_orthogonal_unified_preview_multiple_cycles_avoids_tiny_terminal_staircase_jogs() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("multiple_cycles.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+    let edges = [
+        edge_index(&diagram, "C", "A"),
+        edge_index(&diagram, "C", "B"),
+    ];
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    for edge_idx in edges {
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        assert!(
+            points.len() >= 3,
+            "multiple_cycles edge should keep at least one terminal elbow in orthogonal mode: {points:?}"
+        );
+        let terminal_support =
+            manhattan_segment_len(points[points.len() - 2], points[points.len() - 1]);
+        let pre_terminal =
+            manhattan_segment_len(points[points.len() - 3], points[points.len() - 2]);
+        assert!(
+            terminal_support >= 10.0 && pre_terminal >= 10.0,
+            "multiple_cycles orthogonal tail should avoid tiny terminal staircase jogs; terminal_support={terminal_support}, pre_terminal={pre_terminal}, points={points:?}"
+        );
+    }
+}
+
+#[test]
+fn svg_orthogonal_unified_preview_nested_subgraph_edge_avoids_large_lateral_detour() {
+    let diagram = load_flowchart_fixture_diagram("nested_subgraph_edge.mmd");
+    let edges = [
+        edge_index(&diagram, "Client", "Server1"),
+        edge_index(&diagram, "Server1", "Monitoring"),
+    ];
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    for edge_idx in edges {
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        let span = horizontal_span(&points);
+        assert!(
+            span <= 20.0,
+            "nested_subgraph_edge orthogonal path should not make a large horizontal detour: span={span}, points={points:?}"
+        );
+    }
+}
+
+#[test]
+fn svg_basis_unified_preview_ampersand_avoids_tiny_terminal_hook_before_arrow() {
+    let diagram = load_flowchart_fixture_diagram("ampersand.mmd");
+    let merge_in_edges = [
+        edge_index(&diagram, "A", "C"),
+        edge_index(&diagram, "B", "C"),
+    ];
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Basis;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    for edge_idx in merge_in_edges {
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        assert!(
+            points.len() >= 2,
+            "ampersand edge should contain at least two path points: {points:?}"
+        );
+        let terminal = manhattan_segment_len(points[points.len() - 2], points[points.len() - 1]);
+        assert!(
+            terminal >= 4.0,
+            "basis unified terminal segment should avoid tiny hook before marker; terminal={terminal}, points={points:?}"
+        );
+    }
+}
+
+#[test]
+fn svg_non_orth_unified_preview_backward_edges_terminal_tangent_points_toward_target() {
+    let cases = [
+        ("decision.mmd", "D", "A"),
+        ("git_workflow.mmd", "Remote", "Working"),
+        ("http_request.mmd", "Response", "Client"),
+        ("labeled_edges.mmd", "Error", "Setup"),
+    ];
+    let styles = [
+        SvgEdgePathStyle::Linear,
+        SvgEdgePathStyle::Rounded,
+        SvgEdgePathStyle::Basis,
+    ];
+
+    for (fixture_name, from, to) in cases {
+        let diagram = load_flowchart_fixture_diagram(fixture_name);
+        let edge_idx = edge_index(&diagram, from, to);
+        let target_center = node_center_for_id(&diagram, to);
+
+        for style in styles {
+            let mut options = RenderOptions::default_svg();
+            options.svg.edge_path_style = style;
+            options.routing_mode = Some(RoutingMode::UnifiedPreview);
+            options.path_detail = PathDetail::Full;
+            let svg = render_svg(&diagram, &options);
+            let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+
+            assert!(
+                points.len() >= 2,
+                "{fixture_name} {from}->{to} should have at least two SVG path points for {style:?}: {points:?}"
+            );
+
+            let prev = points[points.len() - 2];
+            let end = points[points.len() - 1];
+            let toward_target = distance(end, target_center) < distance(prev, target_center);
+            assert!(
+                toward_target,
+                "{fixture_name} {from}->{to} terminal tangent should point toward target center for {style:?}: prev={prev:?}, end={end:?}, target_center={target_center:?}, points={points:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn svg_linear_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -626,6 +788,97 @@ fn svg_non_orth_unified_preview_keeps_endpoint_pulled_back_for_visible_arrow_tip
             end.1,
             expected_endpoint_y
         );
+    }
+}
+
+#[test]
+fn svg_non_orth_unified_preview_fan_in_lr_terminal_arrowheads_do_not_end_inside_target() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("flowchart")
+        .join("fan_in_lr.mmd");
+    let input = fs::read_to_string(fixture).expect("fixture should load");
+    let flowchart = parse_flowchart(&input).expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+
+    let top_edge = edge_index(&diagram, "A", "D");
+    let bottom_edge = edge_index(&diagram, "C", "D");
+    let styles = [
+        SvgEdgePathStyle::Linear,
+        SvgEdgePathStyle::Rounded,
+        SvgEdgePathStyle::Basis,
+    ];
+
+    for style in styles {
+        let mut options = RenderOptions::default_svg();
+        options.svg.edge_path_style = style;
+        options.routing_mode = Some(RoutingMode::UnifiedPreview);
+        options.path_detail = PathDetail::Full;
+        let svg = render_svg(&diagram, &options);
+        let (tx, ty, tw, th) =
+            node_rect_for_label(&svg, "Target").expect("target rect should exist");
+
+        for edge_idx in [top_edge, bottom_edge] {
+            let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+            let end = points
+                .last()
+                .copied()
+                .expect("edge should have path points");
+            let inside = end.0 > tx + 0.5
+                && end.0 < tx + tw - 0.5
+                && end.1 > ty + 0.5
+                && end.1 < ty + th - 0.5;
+
+            assert!(
+                !inside,
+                "fan_in_lr edge endpoint should not be inside target interior for {style:?}: end={end:?}, target_rect=({tx}, {ty}, {tw}, {th}), points={points:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn svg_non_orth_unified_preview_backward_edges_keep_terminal_arrowheads_visible() {
+    let cases = [
+        ("decision.mmd", "D", "A", "Start"),
+        ("labeled_edges.mmd", "Error", "Setup", "Setup"),
+        ("http_request.mmd", "Response", "Client", "Client"),
+        ("complex.mmd", "E", "A", "Input"),
+    ];
+    let styles = [
+        SvgEdgePathStyle::Linear,
+        SvgEdgePathStyle::Rounded,
+        SvgEdgePathStyle::Basis,
+    ];
+
+    for (fixture_name, from, to, target_label) in cases {
+        let diagram = load_flowchart_fixture_diagram(fixture_name);
+        let edge_idx = edge_index(&diagram, from, to);
+
+        for style in styles {
+            let mut options = RenderOptions::default_svg();
+            options.svg.edge_path_style = style;
+            options.routing_mode = Some(RoutingMode::UnifiedPreview);
+            options.path_detail = PathDetail::Full;
+            let svg = render_svg(&diagram, &options);
+            let (tx, ty, tw, th) = node_rect_for_label(&svg, target_label)
+                .unwrap_or_else(|| panic!("target rect should exist for {target_label}"));
+            let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+            let end = points
+                .last()
+                .copied()
+                .expect("edge should have path points");
+            let inside = end.0 > tx + 0.5
+                && end.0 < tx + tw - 0.5
+                && end.1 > ty + 0.5
+                && end.1 < ty + th - 0.5;
+
+            assert!(
+                !inside,
+                "{fixture_name} {from}->{to} endpoint should stay outside target interior for {style:?}: end={end:?}, target_rect=({tx}, {ty}, {tw}, {th}), points={points:?}"
+            );
+        }
     }
 }
 
