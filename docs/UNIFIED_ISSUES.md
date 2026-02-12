@@ -69,6 +69,24 @@ Sweep script reports these in a `Q6 metric summary` section:
 ./scripts/tests/08-unified-vs-full-svg-diff-sweep.sh
 ```
 
+## Task 1.3 Text Label Parity Guard (2026-02-12)
+
+Q3 anchor-revalidation delivery now includes an explicit text-render guard:
+
+- Precomputed text label anchors are accepted only when the anchor remains
+  within `2` cells of the active routed path.
+- If a precomputed anchor is stale, text rendering falls back to a
+  route-midpoint anchor (with existing collision-avoidance safety).
+- Routing-mode parity for text is now fixture-gated for Q3 defects:
+  - `labeled_edges.mmd`
+  - `inline_label_flowchart.mmd`
+
+Renderer semantics note:
+- SVG/routed-geometry revalidation occurs in float-path space.
+- Text revalidation occurs in canvas-cell space at label placement time.
+- The guard intent is the same in both renderers: stale anchors must not pull
+  labels away from the active routed segment.
+
 ## Task 0.2 Q1 Policy Spec (2026-02-12)
 
 Q1 overflow policy is now explicitly fixture-backed and documented as a Phase-0

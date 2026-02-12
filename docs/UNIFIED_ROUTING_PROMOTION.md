@@ -88,6 +88,7 @@ This is the decision record for known output differences when unified routing is
 | Area | Classification | Decision | Notes |
 | ---- | -------------- | -------- | ----- |
 | Flowchart SVG linear parity-classification subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`, `decision.mmd`, `fan_out.mmd`, `left_right.mmd`, `subgraph_direction_cross_boundary.mmd`, `multi_subgraph_direction_override.mmd`) | accepted-improvement | Accept for Release N | Unified-preview deltas are explicitly classified and test-enforced in `svg_unified_preview_parity_fixture_subset_matches_expected_classification`. |
+| Flowchart text Q3 fixture parity (`labeled_edges.mmd`, `inline_label_flowchart.mmd`) | must-match | Must match | `text_q3_fixtures_match_between_unified_preview_and_full_compute_modes` enforces routing-mode parity for text output across Q3 fixtures. |
 | Flowchart backward-edge routing behavior | accepted-design | Accept for Release N | Keep route-hint fallback as intentional behavior (stability-first) instead of forcing full backward-edge unification in this release. |
 | Rollback parity guard (`--routing-mode full-compute`) for linear core subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`) | must-match-legacy | Must match | `svg_full_compute_override_matches_legacy_linear_core_subset` requires byte-identical legacy parity when rollback mode is selected. |
 
@@ -102,6 +103,9 @@ This is the decision record for known output differences when unified routing is
 - `tests/mmds_json.rs`:
   - `unified_preview_mmds_routed_output_is_deterministic_for_fixture_subset`
   - `routed_mmds_defaults_to_full_path_detail`
+- `tests/integration.rs`:
+  - `text_q3_fixtures_match_between_unified_preview_and_full_compute_modes`
+  - `text_renderer_rejects_stale_precomputed_label_anchor_for_q3_fixture`
 
 ## Follow-Up Planning Items (Required Before Graph-Family Promotion)
 

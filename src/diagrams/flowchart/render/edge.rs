@@ -33,6 +33,41 @@ pub fn calc_label_position(segments: &[Segment]) -> Option<Point> {
     segments.last().map(Segment::end_point)
 }
 
+const PRECOMPUTED_LABEL_MAX_DRIFT: f64 = 2.0;
+const LABEL_POINT_EPS: f64 = 0.000_001;
+
+fn point_distance(a: (f64, f64), b: (f64, f64)) -> f64 {
+    ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
+}
+
+fn distance_point_to_segment(point: (f64, f64), segment: &Segment) -> f64 {
+    let start = segment.start_point();
+    let end = segment.end_point();
+    let a = (start.x as f64, start.y as f64);
+    let b = (end.x as f64, end.y as f64);
+    let dx = b.0 - a.0;
+    let dy = b.1 - a.1;
+    let seg_len_sq = dx * dx + dy * dy;
+    if seg_len_sq <= LABEL_POINT_EPS {
+        return point_distance(point, a);
+    }
+    let projection = ((point.0 - a.0) * dx + (point.1 - a.1) * dy) / seg_len_sq;
+    let t = projection.clamp(0.0, 1.0);
+    let closest = (a.0 + t * dx, a.1 + t * dy);
+    point_distance(point, closest)
+}
+
+fn distance_point_to_path(point: (usize, usize), segments: &[Segment]) -> f64 {
+    if segments.is_empty() {
+        return f64::INFINITY;
+    }
+    let p = (point.0 as f64, point.1 as f64);
+    segments
+        .iter()
+        .map(|segment| distance_point_to_segment(p, segment))
+        .fold(f64::INFINITY, f64::min)
+}
+
 /// A label split into lines with precomputed dimensions.
 #[derive(Debug)]
 struct LabelBlock<'a> {
@@ -882,13 +917,24 @@ pub fn render_all_edges_with_labels(
             // otherwise fall back to heuristic placement.
             let allow_precomputed =
                 routed.edge.from_subgraph.is_none() && routed.edge.to_subgraph.is_none();
+            let mut stale_precomputed_anchor = false;
             let precomputed = if allow_precomputed {
                 label_positions
                     .get(&routed.edge.index)
-                    .filter(|&&(px, py)| {
-                        px < canvas.width()
+                    .and_then(|&(px, py)| {
+                        let in_bounds = px < canvas.width()
                             && py < canvas.height()
-                            && px.saturating_add(label_width) <= canvas.width()
+                            && px.saturating_add(label_width) <= canvas.width();
+                        if !in_bounds {
+                            return None;
+                        }
+                        let drift = distance_point_to_path((px, py), &routed.segments);
+                        if drift <= PRECOMPUTED_LABEL_MAX_DRIFT {
+                            Some((px, py))
+                        } else {
+                            stale_precomputed_anchor = true;
+                            None
+                        }
                     })
             } else {
                 None
@@ -920,7 +966,7 @@ pub fn render_all_edges_with_labels(
                         charset,
                     )
                 }
-            } else if let Some(&(pre_x, pre_y)) = precomputed {
+            } else if let Some((pre_x, pre_y)) = precomputed {
                 // Defensive safety net: route precomputed position through
                 // collision avoidance. When the midpoint formula is correct,
                 // find_safe_label_position returns the base position unchanged.
@@ -936,6 +982,30 @@ pub fn render_all_edges_with_labels(
                     charset,
                 );
                 draw_label_direct(canvas, label, safe_x, safe_y, charset)
+            } else if stale_precomputed_anchor {
+                if let Some(midpoint) = calc_label_position(&routed.segments) {
+                    let base_x = midpoint.x.saturating_sub(label_width / 2);
+                    let base_y = label_top_for_center(midpoint.y, label_height);
+                    let (safe_x, safe_y) = find_safe_label_position(
+                        canvas,
+                        (base_x, base_y),
+                        (label_width, label_height),
+                        diagram_direction,
+                        &placed_labels,
+                        false,
+                        charset,
+                    );
+                    draw_label_direct(canvas, label, safe_x, safe_y, charset)
+                } else {
+                    draw_edge_label_with_tracking(
+                        canvas,
+                        routed,
+                        label,
+                        diagram_direction,
+                        &placed_labels,
+                        charset,
+                    )
+                }
             } else {
                 draw_edge_label_with_tracking(
                     canvas,
