@@ -495,6 +495,45 @@ fn unified_preview_fan_in_lr_target_endpoints_stay_on_or_outside_target_border()
     }
 }
 
+#[test]
+fn unified_preview_http_request_backward_edge_preserves_client_side_face_attachment() {
+    let (diagram, geom) = layout_fixture("http_request.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let edge = routed
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Response" && edge.to == "Client")
+        .expect("fixture should contain Response -> Client");
+    assert!(
+        edge.path.len() >= 2,
+        "Response -> Client should have at least two routed points: {:?}",
+        edge.path
+    );
+
+    let end = *edge.path.last().expect("edge should have endpoint");
+    let client_rect = geom
+        .nodes
+        .get("Client")
+        .expect("fixture should contain Client")
+        .rect;
+    let right = client_rect.x + client_rect.width;
+    let bottom = client_rect.y + client_rect.height;
+
+    let dist_to_right = (right - end.x).abs();
+    let dist_to_bottom = (bottom - end.y).abs();
+    assert!(
+        dist_to_right + 0.5 < dist_to_bottom,
+        "Response -> Client endpoint should favor Client right face over bottom face in unified preview: end={end:?}, client_rect={client_rect:?}, dist_to_right={dist_to_right}, dist_to_bottom={dist_to_bottom}, path={:?}",
+        edge.path
+    );
+    assert!(
+        end.y < bottom - 0.5,
+        "Response -> Client endpoint should not collapse to bottom corner in unified preview: end={end:?}, client_rect={client_rect:?}, path={:?}",
+        edge.path
+    );
+}
+
 // -----------------------------------------------------------------------
 // Task 1.2: Shared float-route heuristics
 // -----------------------------------------------------------------------

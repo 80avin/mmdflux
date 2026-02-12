@@ -77,7 +77,8 @@ fn build_unified_path(
 ) -> Vec<FPoint> {
     let control_points = build_path_from_hints(edge, geometry);
     let mut path = build_contracted_path(&control_points, direction);
-    anchor_path_endpoints_to_endpoint_faces(&mut path, edge, geometry);
+    anchor_path_endpoints_to_endpoint_faces(&mut path, edge, geometry, direction, is_backward);
+    ensure_endpoint_segments_axis_aligned(&mut path);
     if !is_backward {
         enforce_primary_axis_terminal_direction(&mut path, direction, 8.0);
     }
@@ -223,6 +224,8 @@ fn anchor_path_endpoints_to_endpoint_faces(
     path: &mut [FPoint],
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
     geometry: &GraphGeometry,
+    direction: Direction,
+    is_backward: bool,
 ) {
     const EPS: f64 = 0.5;
     if path.len() < 2 {
@@ -236,7 +239,7 @@ fn anchor_path_endpoints_to_endpoint_faces(
         let start = path[0];
         let next = path[1];
         if point_on_or_inside_rect(start, &from_rect, EPS) {
-            path[0] = clip_point_to_axis_face(start, next, from_rect);
+            path[0] = clip_point_to_axis_face(start, next, from_rect, direction, is_backward);
         }
     }
 
@@ -248,7 +251,7 @@ fn anchor_path_endpoints_to_endpoint_faces(
         let end = path[last];
         let prev = path[last - 1];
         if point_on_or_inside_rect(end, &to_rect, EPS) {
-            path[last] = clip_point_to_axis_face(end, prev, to_rect);
+            path[last] = clip_point_to_axis_face(end, prev, to_rect, direction, is_backward);
         }
     }
 }
@@ -270,7 +273,48 @@ fn endpoint_rect_and_shape(
         .map(|node| (node.rect, node.shape))
 }
 
-fn clip_point_to_axis_face(endpoint: FPoint, adjacent: FPoint, rect: FRect) -> FPoint {
+#[derive(Clone, Copy)]
+enum RectFace {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+fn boundary_face_excluding_corners(point: FPoint, rect: FRect, eps: f64) -> Option<RectFace> {
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    let on_left = (point.x - left).abs() <= eps;
+    let on_right = (point.x - right).abs() <= eps;
+    let on_top = (point.y - top).abs() <= eps;
+    let on_bottom = (point.y - bottom).abs() <= eps;
+
+    let within_x = point.x > left + eps && point.x < right - eps;
+    let within_y = point.y > top + eps && point.y < bottom - eps;
+
+    if on_left && within_y {
+        Some(RectFace::Left)
+    } else if on_right && within_y {
+        Some(RectFace::Right)
+    } else if on_top && within_x {
+        Some(RectFace::Top)
+    } else if on_bottom && within_x {
+        Some(RectFace::Bottom)
+    } else {
+        None
+    }
+}
+
+fn clip_point_to_axis_face(
+    endpoint: FPoint,
+    adjacent: FPoint,
+    rect: FRect,
+    direction: Direction,
+    preserve_existing_face: bool,
+) -> FPoint {
     const EPS: f64 = 0.000_001;
     let left = rect.x;
     let right = rect.x + rect.width;
@@ -284,6 +328,44 @@ fn clip_point_to_axis_face(endpoint: FPoint, adjacent: FPoint, rect: FRect) -> F
 
     let dx = endpoint.x - adjacent.x;
     let dy = endpoint.y - adjacent.y;
+
+    // Backward hints often already carry intended side-face attachment.
+    // Preserve that face when the endpoint is unambiguously on a non-corner
+    // boundary position instead of forcing axis-derived top/bottom clipping.
+    // For backward TD/BT edges, preserve side-entry/exit intent carried by
+    // hint endpoints. This prevents collapsing to bottom corners while keeping
+    // LR/RL backward behavior unchanged.
+    if preserve_existing_face && matches!(direction, Direction::TopDown | Direction::BottomTop) {
+        if let Some(face) = boundary_face_excluding_corners(endpoint, rect, 0.5)
+            && matches!(face, RectFace::Left | RectFace::Right)
+        {
+            return match face {
+                RectFace::Left => FPoint::new(left, endpoint.y.clamp(y_min, y_max)),
+                RectFace::Right => FPoint::new(right, endpoint.y.clamp(y_min, y_max)),
+                RectFace::Top | RectFace::Bottom => unreachable!("matched above"),
+            };
+        }
+
+        let dist_left = (endpoint.x - left).abs();
+        let dist_right = (endpoint.x - right).abs();
+        let side_bias_threshold = (rect.width * 0.2).clamp(1.0, 6.0);
+        if dist_left.min(dist_right) <= side_bias_threshold {
+            let x = if adjacent.x < endpoint.x {
+                left
+            } else if adjacent.x > endpoint.x {
+                right
+            } else if dist_left <= dist_right {
+                left
+            } else {
+                right
+            };
+            let mut y = endpoint.y.clamp(y_min, y_max);
+            if (y - top).abs() <= EPS || (y - bottom).abs() <= EPS {
+                y = (top + bottom) / 2.0;
+            }
+            return FPoint::new(x, y);
+        }
+    }
 
     // Terminal segment is horizontal: anchor endpoint on left/right face.
     if dy.abs() <= EPS && dx.abs() > EPS {
@@ -302,6 +384,57 @@ fn clip_point_to_axis_face(endpoint: FPoint, adjacent: FPoint, rect: FRect) -> F
         endpoint.x.clamp(x_min, x_max),
         endpoint.y.clamp(y_min, y_max),
     )
+}
+
+fn ensure_endpoint_segments_axis_aligned(path: &mut Vec<FPoint>) {
+    if path.len() < 2 {
+        return;
+    }
+
+    ensure_endpoint_axis_aligned(path, true);
+    ensure_endpoint_axis_aligned(path, false);
+}
+
+fn ensure_endpoint_axis_aligned(path: &mut Vec<FPoint>, at_start: bool) {
+    const EPS: f64 = 0.000_001;
+    if path.len() < 2 {
+        return;
+    }
+
+    let (anchor_idx, adjacent_idx) = if at_start {
+        (0usize, 1usize)
+    } else {
+        let n = path.len();
+        (n - 1, n - 2)
+    };
+
+    let anchor = path[anchor_idx];
+    let adjacent = path[adjacent_idx];
+    if (anchor.x - adjacent.x).abs() <= EPS || (anchor.y - adjacent.y).abs() <= EPS {
+        return;
+    }
+
+    let mut elbow = FPoint::new(anchor.x, adjacent.y);
+    let mut use_fallback = points_match(elbow, anchor) || points_match(elbow, adjacent);
+    if use_fallback {
+        elbow = FPoint::new(adjacent.x, anchor.y);
+        use_fallback = points_match(elbow, anchor) || points_match(elbow, adjacent);
+    }
+    if use_fallback {
+        return;
+    }
+
+    if at_start {
+        path.insert(1, elbow);
+    } else {
+        let insert_at = path.len() - 1;
+        path.insert(insert_at, elbow);
+    }
+}
+
+fn points_match(a: FPoint, b: FPoint) -> bool {
+    const EPS: f64 = 0.000_001;
+    (a.x - b.x).abs() <= EPS && (a.y - b.y).abs() <= EPS
 }
 
 fn enforce_primary_axis_terminal_direction(

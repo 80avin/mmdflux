@@ -883,6 +883,36 @@ fn svg_non_orth_unified_preview_backward_edges_keep_terminal_arrowheads_visible(
 }
 
 #[test]
+fn svg_linear_unified_preview_self_loop_tail_does_not_collapse_upward_before_arrow() {
+    let diagram = load_flowchart_fixture_diagram("self_loop_labeled.mmd");
+    let edge_idx = edge_index(&diagram, "B", "B");
+
+    let full_svg = render_fixture_svg(&diagram, RoutingMode::FullCompute, SvgEdgePathStyle::Linear);
+    let unified_svg = render_fixture_svg(
+        &diagram,
+        RoutingMode::UnifiedPreview,
+        SvgEdgePathStyle::Linear,
+    );
+
+    let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_idx);
+    let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_idx);
+
+    assert!(
+        full_points.len() >= 5 && unified_points.len() >= 5,
+        "expected self-loop to contain at least 5 points; full={full_points:?}, unified={unified_points:?}"
+    );
+
+    let full_tail_elbow = full_points[full_points.len() - 3];
+    let unified_tail_elbow = unified_points[unified_points.len() - 3];
+    let delta_y = (full_tail_elbow.1 - unified_tail_elbow.1).abs();
+
+    assert!(
+        delta_y <= 12.0,
+        "self-loop tail elbow should remain near full-compute in unified linear mode (avoid upward collapse); full_tail_elbow={full_tail_elbow:?}, unified_tail_elbow={unified_tail_elbow:?}, delta_y={delta_y}, full_points={full_points:?}, unified_points={unified_points:?}"
+    );
+}
+
+#[test]
 fn unified_preview_diamond_boundary_clipping_matches_shape_boundary() {
     let diagram = load_flowchart_fixture_diagram("decision.mmd");
     let edge_index = edge_index(&diagram, "B", "D");

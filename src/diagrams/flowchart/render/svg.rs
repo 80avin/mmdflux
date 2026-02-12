@@ -881,7 +881,8 @@ fn render_edges(
         let is_backward = geom.reversed_edges.contains(&index);
         let enforce_primary_axis_no_backtrack = matches!(routing_mode, RoutingMode::UnifiedPreview)
             && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
-            && !is_backward;
+            && !is_backward
+            && edge.from != edge.to;
         points = apply_marker_offsets(
             &points,
             edge,
