@@ -1449,6 +1449,16 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
         conflict_end = conflict_end,
         path = conflict.path
     );
+    let conflict_prev = conflict
+        .path
+        .get(conflict.path.len().saturating_sub(2))
+        .copied()
+        .expect("backward edge should have terminal support point");
+    assert!(
+        terminal_support_is_normal_to_attached_rect_face(target_rect, conflict_prev, conflict_end),
+        "Q2 -> B should approach the canonical right face with a face-normal terminal segment: prev={conflict_prev:?}, end={conflict_end:?}, path={:?}",
+        conflict.path
+    );
 
     let incoming_to_b: Vec<_> = first.edges.iter().filter(|edge| edge.to == "B").collect();
     if std::env::var("MMDFLUX_DEBUG_Q1").is_ok_and(|v| v == "1") {

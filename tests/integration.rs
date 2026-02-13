@@ -2920,6 +2920,52 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
         let prev = points[points.len() - 2];
         let dx = end.0 - prev.0;
         let dy = end.1 - prev.1;
+        let (x, y, w, h) = rect;
+        let left = x;
+        let right = x + w;
+        let top = y;
+        let bottom = y + h;
+        const MARKER_PULLBACK_TOLERANCE: f64 = 6.0;
+
+        // SVG marker pullback can place the endpoint slightly outside the
+        // node border while still visually attaching to that face.
+        if end.0 > right
+            && end.0 - right <= MARKER_PULLBACK_TOLERANCE
+            && end.1 >= top - MARKER_PULLBACK_TOLERANCE
+            && end.1 <= bottom + MARKER_PULLBACK_TOLERANCE
+            && dy.abs() <= 0.5
+            && dx < 0.0
+        {
+            return "right";
+        }
+        if end.0 < left
+            && left - end.0 <= MARKER_PULLBACK_TOLERANCE
+            && end.1 >= top - MARKER_PULLBACK_TOLERANCE
+            && end.1 <= bottom + MARKER_PULLBACK_TOLERANCE
+            && dy.abs() <= 0.5
+            && dx > 0.0
+        {
+            return "left";
+        }
+        if end.1 > bottom
+            && end.1 - bottom <= MARKER_PULLBACK_TOLERANCE
+            && end.0 >= left - MARKER_PULLBACK_TOLERANCE
+            && end.0 <= right + MARKER_PULLBACK_TOLERANCE
+            && dx.abs() <= 0.5
+            && dy < 0.0
+        {
+            return "bottom";
+        }
+        if end.1 < top
+            && top - end.1 <= MARKER_PULLBACK_TOLERANCE
+            && end.0 >= left - MARKER_PULLBACK_TOLERANCE
+            && end.0 <= right + MARKER_PULLBACK_TOLERANCE
+            && dx.abs() <= 0.5
+            && dy > 0.0
+        {
+            return "top";
+        }
+
         if dx.abs() >= dy.abs() {
             if dx > 0.0 {
                 "right"
