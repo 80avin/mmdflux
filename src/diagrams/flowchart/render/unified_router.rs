@@ -252,6 +252,8 @@ fn build_unified_path(
     collapse_source_turnback_spikes(&mut normalized);
     let mut finalized = normalize_orthogonal_route_contracts(&normalized, direction);
     if is_backward {
+        enforce_backward_source_tangent_direction(&mut finalized, edge, geometry, direction);
+        ensure_backward_outer_lane_clearance(&mut finalized, direction, 12.0);
         enforce_backward_terminal_tangent_direction(&mut finalized, edge, geometry, direction);
     }
     finalized
@@ -822,6 +824,177 @@ fn enforce_backward_terminal_tangent_direction(
     let fallback_elbow = FPoint::new(support.x, prev.y);
     if !points_match(fallback_elbow, prev) && !points_match(fallback_elbow, support) {
         path.insert(support_idx, fallback_elbow);
+    }
+}
+
+fn enforce_backward_source_tangent_direction(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+) {
+    const EPS: f64 = 0.000_001;
+    const TANGENT_STEP: f64 = 8.0;
+    const FACE_CORNER_MARGIN: f64 = 1.0;
+    if path.len() < 2 {
+        return;
+    }
+
+    let Some((source_rect, _)) =
+        endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+    else {
+        return;
+    };
+
+    let clamp_interior = |value: f64, min: f64, max: f64| {
+        let lo = min.min(max);
+        let hi = min.max(max);
+        if (hi - lo) <= FACE_CORNER_MARGIN * 2.0 {
+            (lo + hi) / 2.0
+        } else {
+            value.clamp(lo + FACE_CORNER_MARGIN, hi - FACE_CORNER_MARGIN)
+        }
+    };
+
+    let canonical_face = q2_backward_channel_face(direction);
+    let left = source_rect.x;
+    let right = source_rect.x + source_rect.width;
+    let top = source_rect.y;
+    let bottom = source_rect.y + source_rect.height;
+
+    let existing_support = if path.len() > 2 { Some(path[1]) } else { None };
+
+    let mut start = path[0];
+    let mut support = match canonical_face {
+        Face::Left => {
+            start.x = left;
+            start.y = clamp_interior(start.y, top, bottom);
+            FPoint::new(start.x - TANGENT_STEP, start.y)
+        }
+        Face::Right => {
+            start.x = right;
+            start.y = clamp_interior(start.y, top, bottom);
+            FPoint::new(start.x + TANGENT_STEP, start.y)
+        }
+        Face::Top => {
+            start.x = clamp_interior(start.x, left, right);
+            start.y = top;
+            FPoint::new(start.x, start.y - TANGENT_STEP)
+        }
+        Face::Bottom => {
+            start.x = clamp_interior(start.x, left, right);
+            start.y = bottom;
+            FPoint::new(start.x, start.y + TANGENT_STEP)
+        }
+    };
+
+    if let Some(existing) = existing_support {
+        match canonical_face {
+            Face::Left => {
+                if (existing.y - start.y).abs() <= EPS && existing.x < start.x - EPS {
+                    support.x = support.x.min(existing.x);
+                }
+            }
+            Face::Right => {
+                if (existing.y - start.y).abs() <= EPS && existing.x > start.x + EPS {
+                    support.x = support.x.max(existing.x);
+                }
+            }
+            Face::Top => {
+                if (existing.x - start.x).abs() <= EPS && existing.y < start.y - EPS {
+                    support.y = support.y.min(existing.y);
+                }
+            }
+            Face::Bottom => {
+                if (existing.x - start.x).abs() <= EPS && existing.y > start.y + EPS {
+                    support.y = support.y.max(existing.y);
+                }
+            }
+        }
+    }
+
+    if path.len() >= 3 {
+        let next = path[2];
+        match canonical_face {
+            Face::Left => {
+                if next.x < support.x - EPS {
+                    support.x = next.x;
+                }
+            }
+            Face::Right => {
+                if next.x > support.x + EPS {
+                    support.x = next.x;
+                }
+            }
+            Face::Top => {
+                if next.y < support.y - EPS {
+                    support.y = next.y;
+                }
+            }
+            Face::Bottom => {
+                if next.y > support.y + EPS {
+                    support.y = next.y;
+                }
+            }
+        }
+    }
+
+    if path.len() >= 4 {
+        let next_next = path[3];
+        match canonical_face {
+            Face::Left => {
+                if (next_next.y - start.y).abs() <= EPS && next_next.x < support.x - EPS {
+                    support.x = next_next.x;
+                }
+            }
+            Face::Right => {
+                if (next_next.y - start.y).abs() <= EPS && next_next.x > support.x + EPS {
+                    support.x = next_next.x;
+                }
+            }
+            Face::Top => {
+                if (next_next.x - start.x).abs() <= EPS && next_next.y < support.y - EPS {
+                    support.y = next_next.y;
+                }
+            }
+            Face::Bottom => {
+                if (next_next.x - start.x).abs() <= EPS && next_next.y > support.y + EPS {
+                    support.y = next_next.y;
+                }
+            }
+        }
+    }
+
+    path[0] = start;
+    if path.len() == 2 {
+        path.insert(1, support);
+    } else {
+        path[1] = support;
+    }
+
+    if path.len() < 3 {
+        return;
+    }
+
+    let support_idx = 1;
+    let next_idx = 2;
+    let support = path[support_idx];
+    let next = path[next_idx];
+    let support_is_axis_aligned =
+        (support.x - next.x).abs() <= EPS || (support.y - next.y).abs() <= EPS;
+    if support_is_axis_aligned {
+        return;
+    }
+
+    let primary_elbow = FPoint::new(support.x, next.y);
+    if !points_match(primary_elbow, support) && !points_match(primary_elbow, next) {
+        path.insert(next_idx, primary_elbow);
+        return;
+    }
+
+    let fallback_elbow = FPoint::new(next.x, support.y);
+    if !points_match(fallback_elbow, support) && !points_match(fallback_elbow, next) {
+        path.insert(next_idx, fallback_elbow);
     }
 }
 

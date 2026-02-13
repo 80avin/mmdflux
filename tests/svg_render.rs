@@ -302,6 +302,40 @@ fn svg_terminal_approach_face(rect: (f64, f64, f64, f64), points: &[(f64, f64)])
     }
 }
 
+fn svg_source_departure_face(rect: (f64, f64, f64, f64), points: &[(f64, f64)]) -> &'static str {
+    if points.is_empty() {
+        return "interior_or_corner";
+    }
+
+    let start = points[0];
+    let direct_face = svg_point_face(rect, start);
+    if direct_face != "interior_or_corner" {
+        return direct_face;
+    }
+    if points.len() < 2 {
+        return direct_face;
+    }
+
+    let next = points[1];
+    let dx = next.0 - start.0;
+    let dy = next.1 - start.1;
+    if dx.abs() >= dy.abs() {
+        if dx > 0.0 {
+            "right"
+        } else if dx < 0.0 {
+            "left"
+        } else {
+            "interior_or_corner"
+        }
+    } else if dy > 0.0 {
+        "bottom"
+    } else if dy < 0.0 {
+        "top"
+    } else {
+        "interior_or_corner"
+    }
+}
+
 fn manhattan_segment_len(a: (f64, f64), b: (f64, f64)) -> f64 {
     (a.0 - b.0).abs() + (a.1 - b.1).abs()
 }
@@ -1368,18 +1402,45 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
     }
 
     let q2_cases = [
-        ("multiple_cycles.mmd", "C", "A", "Top", "right"),
-        ("http_request.mmd", "Response", "Client", "Client", "right"),
+        (
+            "multiple_cycles.mmd",
+            "C",
+            "A",
+            "Bottom",
+            "Top",
+            "right",
+            "right",
+        ),
+        (
+            "http_request.mmd",
+            "Response",
+            "Client",
+            "Send Response",
+            "Client",
+            "right",
+            "right",
+        ),
         (
             "git_workflow.mmd",
             "Remote",
             "Working",
+            "Remote Repo",
             "Working Dir",
+            "bottom",
             "bottom",
         ),
     ];
 
-    for (fixture_name, from, to, target_label, expected_face) in q2_cases {
+    for (
+        fixture_name,
+        from,
+        to,
+        source_label,
+        target_label,
+        expected_source_face,
+        expected_target_face,
+    ) in q2_cases
+    {
         let diagram = load_flowchart_fixture_diagram(fixture_name);
         for (mode_label, q1_enabled) in [("q1-on", true), ("q1-off", false)] {
             let mut options = RenderOptions::default_svg();
@@ -1393,15 +1454,23 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
             };
 
             let svg = render_svg(&diagram, &options);
-            let rect = node_rect_for_label(&svg, target_label).unwrap_or_else(|| {
+            let source_rect = node_rect_for_label(&svg, source_label).unwrap_or_else(|| {
+                panic!("missing source rect for {source_label} in {fixture_name}")
+            });
+            let target_rect = node_rect_for_label(&svg, target_label).unwrap_or_else(|| {
                 panic!("missing target rect for {target_label} in {fixture_name}")
             });
             let edge_idx = edge_index(&diagram, from, to);
             let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
-            let face = svg_terminal_approach_face(rect, &points);
+            let source_face = svg_source_departure_face(source_rect, &points);
             assert_eq!(
-                face, expected_face,
-                "fixture {fixture_name} edge {from}->{to} should keep canonical backward face {expected_face} ({mode_label}); points={points:?}"
+                source_face, expected_source_face,
+                "fixture {fixture_name} edge {from}->{to} should keep canonical backward source face {expected_source_face} ({mode_label}); points={points:?}"
+            );
+            let target_face = svg_terminal_approach_face(target_rect, &points);
+            assert_eq!(
+                target_face, expected_target_face,
+                "fixture {fixture_name} edge {from}->{to} should keep canonical backward target face {expected_target_face} ({mode_label}); points={points:?}"
             );
         }
     }

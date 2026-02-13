@@ -1437,6 +1437,33 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
         "Q2 -> B must be backward in unified preview layout for this fixture"
     );
 
+    let source_rect = geom
+        .nodes
+        .get("Q2")
+        .expect("q1_q2_conflict fixture should contain node Q2")
+        .rect;
+    let conflict_start = conflict
+        .path
+        .first()
+        .copied()
+        .expect("backward edge should have source endpoint");
+    let conflict_start_face = point_on_target_face(source_rect, conflict_start);
+    assert_eq!(
+        conflict_start_face, "right",
+        "Q2 -> B should depart from the canonical TD backward source lane (right face): start={conflict_start:?}, path={:?}",
+        conflict.path
+    );
+    let conflict_next = conflict
+        .path
+        .get(1)
+        .copied()
+        .expect("backward edge should have source support point");
+    assert!(
+        source_support_is_normal_to_attached_rect_face(source_rect, conflict_start, conflict_next),
+        "Q2 -> B should leave the canonical source face on its outward normal axis: start={conflict_start:?}, next={conflict_next:?}, path={:?}",
+        conflict.path
+    );
+
     let conflict_end = *conflict
         .path
         .last()
@@ -1582,13 +1609,18 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_face_policies() {
     }
 
     let q2_cases = [
-        ("multiple_cycles.mmd", "C", "A", "right"),
-        ("http_request.mmd", "Response", "Client", "right"),
-        ("git_workflow.mmd", "Remote", "Working", "bottom"),
+        ("multiple_cycles.mmd", "C", "A", "right", "right"),
+        ("http_request.mmd", "Response", "Client", "right", "right"),
+        ("git_workflow.mmd", "Remote", "Working", "bottom", "bottom"),
     ];
 
-    for (fixture, from, to, expected_face) in q2_cases {
+    for (fixture, from, to, expected_target_face, expected_source_face) in q2_cases {
         let (diagram, geom) = layout_fixture_svg(fixture);
+        let source_rect = geom
+            .nodes
+            .get(from)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain source node {from}"))
+            .rect;
         let target_rect = geom
             .nodes
             .get(to)
@@ -1622,6 +1654,17 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_face_policies() {
                 .iter()
                 .find(|edge| edge.from == from && edge.to == to)
                 .unwrap_or_else(|| panic!("fixture {fixture} missing edge {from} -> {to}"));
+            let start = edge
+                .path
+                .first()
+                .copied()
+                .expect("backward edge should have source endpoint");
+            let start_face = point_on_target_face(source_rect, start);
+            assert_eq!(
+                start_face, expected_source_face,
+                "fixture {fixture} edge {from}->{to} should keep canonical backward source face {expected_source_face} ({mode_label}); start={start:?}, path={:?}",
+                edge.path
+            );
             let end = edge
                 .path
                 .last()
@@ -1629,8 +1672,8 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_face_policies() {
                 .expect("backward edge should have endpoint");
             let end_face = point_on_target_face(target_rect, end);
             assert_eq!(
-                end_face, expected_face,
-                "fixture {fixture} edge {from}->{to} should keep canonical backward face {expected_face} ({mode_label}); end={end:?}, path={:?}",
+                end_face, expected_target_face,
+                "fixture {fixture} edge {from}->{to} should keep canonical backward target face {expected_target_face} ({mode_label}); end={end:?}, path={:?}",
                 edge.path
             );
         }
