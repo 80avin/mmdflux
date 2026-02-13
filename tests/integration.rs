@@ -2983,6 +2983,68 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
         }
     }
 
+    fn svg_terminal_approach_face_relaxed(
+        rect: (f64, f64, f64, f64),
+        points: &[(f64, f64)],
+    ) -> &'static str {
+        if points.is_empty() {
+            return "interior_or_corner";
+        }
+        let end = *points.last().expect("path should include endpoint");
+        let direct_face = svg_point_face(rect, end);
+        if direct_face != "interior_or_corner" {
+            return direct_face;
+        }
+        if points.len() < 2 {
+            return direct_face;
+        }
+
+        let prev = points[points.len() - 2];
+        let dx = end.0 - prev.0;
+        let dy = end.1 - prev.1;
+        let (x, y, w, h) = rect;
+        let left = x;
+        let right = x + w;
+        let top = y;
+        let bottom = y + h;
+        const MARKER_PULLBACK_TOLERANCE: f64 = 6.0;
+
+        if end.0 > right
+            && end.0 - right <= MARKER_PULLBACK_TOLERANCE
+            && end.1 >= top - MARKER_PULLBACK_TOLERANCE
+            && end.1 <= bottom + MARKER_PULLBACK_TOLERANCE
+            && dx < 0.0
+        {
+            return "right";
+        }
+        if end.0 < left
+            && left - end.0 <= MARKER_PULLBACK_TOLERANCE
+            && end.1 >= top - MARKER_PULLBACK_TOLERANCE
+            && end.1 <= bottom + MARKER_PULLBACK_TOLERANCE
+            && dx > 0.0
+        {
+            return "left";
+        }
+        if end.1 > bottom
+            && end.1 - bottom <= MARKER_PULLBACK_TOLERANCE
+            && end.0 >= left - MARKER_PULLBACK_TOLERANCE
+            && end.0 <= right + MARKER_PULLBACK_TOLERANCE
+            && dy < 0.0
+        {
+            return "bottom";
+        }
+        if end.1 < top
+            && top - end.1 <= MARKER_PULLBACK_TOLERANCE
+            && end.0 >= left - MARKER_PULLBACK_TOLERANCE
+            && end.0 <= right + MARKER_PULLBACK_TOLERANCE
+            && dy > 0.0
+        {
+            return "top";
+        }
+
+        svg_terminal_approach_face(rect, points)
+    }
+
     fn svg_source_departure_face(
         rect: (f64, f64, f64, f64),
         points: &[(f64, f64)],
@@ -3185,7 +3247,7 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
                 source_face, expected_source_face,
                 "fixture {fixture_name} edge {from}->{to} should keep canonical backward source face {expected_source_face} ({mode_label}); points={points:?}"
             );
-            let target_face = svg_terminal_approach_face(target_rect, &points);
+            let target_face = svg_terminal_approach_face_relaxed(target_rect, &points);
             assert_eq!(
                 target_face, expected_target_face,
                 "fixture {fixture_name} edge {from}->{to} should keep canonical backward target face {expected_target_face} ({mode_label}); points={points:?}"

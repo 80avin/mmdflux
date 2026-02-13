@@ -865,27 +865,32 @@ fn enforce_backward_source_tangent_direction(
     let existing_support = if path.len() > 2 { Some(path[1]) } else { None };
 
     let mut start = path[0];
-    let mut support = match canonical_face {
+    match canonical_face {
         Face::Left => {
             start.x = left;
             start.y = clamp_interior(start.y, top, bottom);
-            FPoint::new(start.x - TANGENT_STEP, start.y)
         }
         Face::Right => {
             start.x = right;
             start.y = clamp_interior(start.y, top, bottom);
-            FPoint::new(start.x + TANGENT_STEP, start.y)
         }
         Face::Top => {
             start.x = clamp_interior(start.x, left, right);
             start.y = top;
-            FPoint::new(start.x, start.y - TANGENT_STEP)
         }
         Face::Bottom => {
             start.x = clamp_interior(start.x, left, right);
             start.y = bottom;
-            FPoint::new(start.x, start.y + TANGENT_STEP)
         }
+    }
+    if matches!(canonical_face, Face::Left | Face::Right) {
+        start = bias_face_coordinate_toward_center(start, source_rect, 0.84);
+    }
+    let mut support = match canonical_face {
+        Face::Left => FPoint::new(start.x - TANGENT_STEP, start.y),
+        Face::Right => FPoint::new(start.x + TANGENT_STEP, start.y),
+        Face::Top => FPoint::new(start.x, start.y - TANGENT_STEP),
+        Face::Bottom => FPoint::new(start.x, start.y + TANGENT_STEP),
     };
 
     if let Some(existing) = existing_support {
@@ -1156,7 +1161,7 @@ fn anchor_path_endpoints_to_endpoint_faces(
         let start = path[0];
         let next = path[1];
         if point_on_or_inside_rect(start, &from_rect, EPS) {
-            path[0] = clip_point_to_axis_face(
+            let clipped = clip_point_to_axis_face(
                 start,
                 next,
                 from_rect,
@@ -1167,6 +1172,7 @@ fn anchor_path_endpoints_to_endpoint_faces(
                 false,
                 false,
             );
+            path[0] = clipped;
         }
     }
 
@@ -1447,6 +1453,55 @@ fn clip_point_to_rect_face(endpoint: FPoint, rect: FRect, face: RectFace) -> FPo
         RectFace::Bottom => FPoint::new(clamp_interior(endpoint.x, left, right), bottom),
         RectFace::Left => FPoint::new(left, clamp_interior(endpoint.y, top, bottom)),
         RectFace::Right => FPoint::new(right, clamp_interior(endpoint.y, top, bottom)),
+    }
+}
+
+fn boundary_face_including_corners(point: FPoint, rect: FRect, eps: f64) -> Option<RectFace> {
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    let dist_left = (point.x - left).abs();
+    let dist_right = (point.x - right).abs();
+    let dist_top = (point.y - top).abs();
+    let dist_bottom = (point.y - bottom).abs();
+    let min_dist = dist_left.min(dist_right).min(dist_top).min(dist_bottom);
+    if min_dist > eps {
+        return None;
+    }
+    if (min_dist - dist_left).abs() <= eps {
+        return Some(RectFace::Left);
+    }
+    if (min_dist - dist_right).abs() <= eps {
+        return Some(RectFace::Right);
+    }
+    if (min_dist - dist_top).abs() <= eps {
+        return Some(RectFace::Top);
+    }
+    Some(RectFace::Bottom)
+}
+
+fn bias_face_coordinate_toward_center(point: FPoint, rect: FRect, preserve_factor: f64) -> FPoint {
+    let factor = preserve_factor.clamp(0.0, 1.0);
+    let center_x = rect.x + rect.width / 2.0;
+    let center_y = rect.y + rect.height / 2.0;
+    let face = boundary_face_excluding_corners(point, rect, 0.5)
+        .or_else(|| boundary_face_including_corners(point, rect, 0.5));
+
+    let biased = match face {
+        Some(RectFace::Top) | Some(RectFace::Bottom) => {
+            FPoint::new(center_x + (point.x - center_x) * factor, point.y)
+        }
+        Some(RectFace::Left) | Some(RectFace::Right) => {
+            FPoint::new(point.x, center_y + (point.y - center_y) * factor)
+        }
+        None => point,
+    };
+
+    match face {
+        Some(face) => clip_point_to_rect_face(biased, rect, face),
+        None => biased,
     }
 }
 

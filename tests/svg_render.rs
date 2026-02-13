@@ -302,6 +302,69 @@ fn svg_terminal_approach_face(rect: (f64, f64, f64, f64), points: &[(f64, f64)])
     }
 }
 
+fn svg_terminal_approach_face_relaxed(
+    rect: (f64, f64, f64, f64),
+    points: &[(f64, f64)],
+) -> &'static str {
+    if points.is_empty() {
+        return "interior_or_corner";
+    }
+
+    let end = *points.last().expect("path should have at least one point");
+    let direct_face = svg_point_face(rect, end);
+    if direct_face != "interior_or_corner" {
+        return direct_face;
+    }
+    if points.len() < 2 {
+        return direct_face;
+    }
+
+    let prev = points[points.len() - 2];
+    let dx = end.0 - prev.0;
+    let dy = end.1 - prev.1;
+    let (x, y, w, h) = rect;
+    let left = x;
+    let right = x + w;
+    let top = y;
+    let bottom = y + h;
+    const MARKER_PULLBACK_TOLERANCE: f64 = 6.0;
+
+    if end.0 > right
+        && end.0 - right <= MARKER_PULLBACK_TOLERANCE
+        && end.1 >= top - MARKER_PULLBACK_TOLERANCE
+        && end.1 <= bottom + MARKER_PULLBACK_TOLERANCE
+        && dx < 0.0
+    {
+        return "right";
+    }
+    if end.0 < left
+        && left - end.0 <= MARKER_PULLBACK_TOLERANCE
+        && end.1 >= top - MARKER_PULLBACK_TOLERANCE
+        && end.1 <= bottom + MARKER_PULLBACK_TOLERANCE
+        && dx > 0.0
+    {
+        return "left";
+    }
+    if end.1 > bottom
+        && end.1 - bottom <= MARKER_PULLBACK_TOLERANCE
+        && end.0 >= left - MARKER_PULLBACK_TOLERANCE
+        && end.0 <= right + MARKER_PULLBACK_TOLERANCE
+        && dy < 0.0
+    {
+        return "bottom";
+    }
+    if end.1 < top
+        && top - end.1 <= MARKER_PULLBACK_TOLERANCE
+        && end.0 >= left - MARKER_PULLBACK_TOLERANCE
+        && end.0 <= right + MARKER_PULLBACK_TOLERANCE
+        && dy > 0.0
+    {
+        return "top";
+    }
+
+    svg_terminal_approach_face(rect, points)
+}
+
 fn svg_source_departure_face(rect: (f64, f64, f64, f64), points: &[(f64, f64)]) -> &'static str {
     if points.is_empty() {
         return "interior_or_corner";
@@ -372,6 +435,18 @@ fn segment_axis(a: (f64, f64), b: (f64, f64)) -> Option<char> {
     } else {
         None
     }
+}
+
+fn trailing_segment_run_len(points: &[(f64, f64)], segment_count: usize) -> f64 {
+    if points.len() < 2 || segment_count == 0 {
+        return 0.0;
+    }
+    points
+        .windows(2)
+        .rev()
+        .take(segment_count)
+        .map(|segment| manhattan_segment_len(segment[0], segment[1]))
+        .sum()
 }
 
 fn has_immediate_axis_backtrack(points: &[(f64, f64)]) -> bool {
@@ -1328,13 +1403,38 @@ fn svg_non_orth_unified_preview_q1_q2_conflict_keeps_backward_canonical_face() {
             .last()
             .copied()
             .expect("backward edge should have path points");
-        let end_face = svg_terminal_approach_face(rect, &points);
+        let end_face = svg_terminal_approach_face_relaxed(rect, &points);
 
         assert_eq!(
             end_face, "right",
             "Q2-conflict edge should keep canonical backward lane on right for {style:?}: end={end:?}, rect={rect:?}, points={points:?}"
         );
     }
+}
+
+#[test]
+fn svg_basis_unified_preview_q1_q2_conflict_avoids_tiny_terminal_hook_before_arrow() {
+    let diagram = load_flowchart_fixture_diagram("q1_q2_conflict.mmd");
+    let edge_idx = edge_index(&diagram, "Q2", "B");
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Basis;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+
+    assert!(
+        points.len() >= 3,
+        "q1_q2_conflict backward edge should keep at least one terminal support segment in basis mode: points={points:?}"
+    );
+
+    let terminal = manhattan_segment_len(points[points.len() - 2], points[points.len() - 1]);
+    let trailing_run = trailing_segment_run_len(&points, 4);
+    assert!(
+        terminal >= 1.0 && trailing_run >= 6.0,
+        "basis unified backward terminal hook should avoid tiny elbow before marker; terminal={terminal}, trailing_run={trailing_run}, points={points:?}"
+    );
 }
 
 #[test]
@@ -1467,7 +1567,7 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
                 source_face, expected_source_face,
                 "fixture {fixture_name} edge {from}->{to} should keep canonical backward source face {expected_source_face} ({mode_label}); points={points:?}"
             );
-            let target_face = svg_terminal_approach_face(target_rect, &points);
+            let target_face = svg_terminal_approach_face_relaxed(target_rect, &points);
             assert_eq!(
                 target_face, expected_target_face,
                 "fixture {fixture_name} edge {from}->{to} should keep canonical backward target face {expected_target_face} ({mode_label}); points={points:?}"

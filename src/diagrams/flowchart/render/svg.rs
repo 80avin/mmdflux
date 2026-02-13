@@ -2522,11 +2522,27 @@ fn apply_marker_offsets(
     };
 
     let mut points = points.to_vec();
-    if !preserve_orthogonal && !is_backward {
+    if !preserve_orthogonal {
         // Non-orth styles (linear/rounded/basis) can look visually cramped when
         // an orthogonal route ends with a short final elbow immediately before
         // the marker. Collapse that elbow into a direct terminal approach.
         points = collapse_narrow_terminal_elbows_for_non_orth(&points, 14.0);
+    }
+    if !preserve_orthogonal && is_backward {
+        // Backward edges in non-orth styles can still end up visually cramped
+        // after marker pullback. Keep a minimum visible support at both ends.
+        const MIN_NON_ORTH_BACKWARD_ENDPOINT_SUPPORT: f64 = 10.0;
+        points = enforce_min_orthogonal_endpoint_support(
+            &points,
+            start_offset + MIN_NON_ORTH_BACKWARD_ENDPOINT_SUPPORT,
+            end_offset + MIN_NON_ORTH_BACKWARD_ENDPOINT_SUPPORT,
+        );
+        let start_support = segment_manhattan_len(points[0], points[1]);
+        let end_support = segment_manhattan_len(points[points.len() - 2], points[points.len() - 1]);
+        start_offset =
+            start_offset.min((start_support - MIN_NON_ORTH_BACKWARD_ENDPOINT_SUPPORT).max(0.0));
+        end_offset =
+            end_offset.min((end_support - MIN_NON_ORTH_BACKWARD_ENDPOINT_SUPPORT).max(0.0));
     }
     if preserve_orthogonal {
         // Keep endpoint support visibly longer than marker pullback so the
@@ -2674,6 +2690,16 @@ fn collapse_narrow_terminal_elbows_for_non_orth(
             && segment_manhattan_len(elbow, end) < min_terminal_leg
             && segment_manhattan_len(pre, end) > 0.001
         {
+            let mut replacement_pre = pre;
+            match b {
+                SegmentAxis::Horizontal => replacement_pre.y = end.y,
+                SegmentAxis::Vertical => replacement_pre.x = end.x,
+            }
+            if segment_axis(replacement_pre, end).is_some()
+                && segment_manhattan_len(replacement_pre, end) > 0.001
+            {
+                collapsed[n - 3] = replacement_pre;
+            }
             collapsed.remove(n - 2);
         }
     }
