@@ -254,7 +254,13 @@ fn build_unified_path(
     if is_backward {
         enforce_backward_source_tangent_direction(&mut finalized, edge, geometry, direction);
         ensure_backward_outer_lane_clearance(&mut finalized, direction, 12.0);
-        enforce_backward_terminal_tangent_direction(&mut finalized, edge, geometry, direction);
+        enforce_backward_terminal_tangent_direction(
+            &mut finalized,
+            edge,
+            geometry,
+            direction,
+            target_overflowed,
+        );
     }
     finalized
 }
@@ -655,6 +661,7 @@ fn enforce_backward_terminal_tangent_direction(
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
     geometry: &GraphGeometry,
     direction: Direction,
+    preserve_terminal_lane_on_overflow_target: bool,
 ) {
     const EPS: f64 = 0.000_001;
     const TANGENT_STEP: f64 = 8.0;
@@ -812,7 +819,9 @@ fn enforce_backward_terminal_tangent_direction(
     let support_is_axis_aligned =
         (prev.x - support.x).abs() <= EPS || (prev.y - support.y).abs() <= EPS;
     if support_is_axis_aligned {
-        collapse_terminal_turnback_spikes(path, canonical_face);
+        if !preserve_terminal_lane_on_overflow_target {
+            collapse_terminal_turnback_spikes(path, canonical_face);
+        }
         return;
     }
 
@@ -837,7 +846,9 @@ fn enforce_backward_terminal_tangent_direction(
         path.insert(support_idx, fallback_elbow);
     }
 
-    collapse_terminal_turnback_spikes(path, canonical_face);
+    if !preserve_terminal_lane_on_overflow_target {
+        collapse_terminal_turnback_spikes(path, canonical_face);
+    }
 }
 
 fn collapse_terminal_turnback_spikes(path: &mut Vec<FPoint>, canonical_face: Face) {

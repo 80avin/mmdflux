@@ -1438,6 +1438,45 @@ fn svg_basis_unified_preview_q1_q2_conflict_avoids_tiny_terminal_hook_before_arr
 }
 
 #[test]
+fn svg_non_orth_unified_preview_q1_q2_conflict_preserves_lower_terminal_lane() {
+    let diagram = load_flowchart_fixture_diagram("q1_q2_conflict.mmd");
+    let edge_idx = edge_index(&diagram, "Q2", "B");
+    let styles = [
+        SvgEdgePathStyle::Linear,
+        SvgEdgePathStyle::Rounded,
+        SvgEdgePathStyle::Basis,
+    ];
+
+    let mut rect = None;
+    for style in styles {
+        let mut options = RenderOptions::default_svg();
+        options.svg.edge_path_style = style;
+        options.routing_mode = Some(RoutingMode::UnifiedPreview);
+        options.path_detail = PathDetail::Full;
+        let svg = render_svg(&diagram, &options);
+        let (_tx, ty, _tw, th) = match rect {
+            Some(rect) => rect,
+            None => {
+                let parsed = node_rect_for_label(&svg, "Target")
+                    .expect("expected target rect for q1_q2_conflict fixture");
+                rect = Some(parsed);
+                parsed
+            }
+        };
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        let end = points
+            .last()
+            .copied()
+            .expect("q1_q2_conflict backward edge should have path points");
+
+        assert!(
+            end.1 >= ty + th - 2.0,
+            "Q2-conflict non-orth terminal lane should stay near lower right-face channel for {style:?}: end={end:?}, target_rect_y={ty}, target_rect_h={th}, points={points:?}"
+        );
+    }
+}
+
+#[test]
 fn svg_orthogonal_unified_preview_q1_q2_conflict_avoids_terminal_axis_backtrack() {
     let diagram = load_flowchart_fixture_diagram("q1_q2_conflict.mmd");
     let edge_idx = edge_index(&diagram, "Q2", "B");
