@@ -1092,6 +1092,8 @@ fn unified_route_contracts_avoid_immediate_axial_turnbacks() {
     let cases = [
         ("multiple_cycles.mmd", "C", "A"),
         ("git_workflow.mmd", "Remote", "Working"),
+        ("simple_cycle.mmd", "C", "A"),
+        ("backward_in_subgraph.mmd", "B", "A"),
     ];
 
     for (fixture, from, to) in cases {

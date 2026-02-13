@@ -812,18 +812,140 @@ fn enforce_backward_terminal_tangent_direction(
     let support_is_axis_aligned =
         (prev.x - support.x).abs() <= EPS || (prev.y - support.y).abs() <= EPS;
     if support_is_axis_aligned {
+        collapse_terminal_turnback_spikes(path, canonical_face);
         return;
     }
 
     let primary_elbow = FPoint::new(prev.x, support.y);
-    if !points_match(primary_elbow, prev) && !points_match(primary_elbow, support) {
+    let fallback_elbow = FPoint::new(support.x, prev.y);
+
+    let can_use_primary =
+        !points_match(primary_elbow, prev) && !points_match(primary_elbow, support);
+    let can_use_fallback =
+        !points_match(fallback_elbow, prev) && !points_match(fallback_elbow, support);
+
+    let prefer_outer_corner_first = matches!(canonical_face, Face::Left | Face::Right);
+    if prefer_outer_corner_first {
+        if can_use_fallback {
+            path.insert(support_idx, fallback_elbow);
+        } else if can_use_primary {
+            path.insert(support_idx, primary_elbow);
+        }
+    } else if can_use_primary {
         path.insert(support_idx, primary_elbow);
+    } else if can_use_fallback {
+        path.insert(support_idx, fallback_elbow);
+    }
+
+    collapse_terminal_turnback_spikes(path, canonical_face);
+}
+
+fn collapse_terminal_turnback_spikes(path: &mut Vec<FPoint>, canonical_face: Face) {
+    const EPS: f64 = 0.000_001;
+    if path.len() < 4 {
         return;
     }
 
-    let fallback_elbow = FPoint::new(support.x, prev.y);
-    if !points_match(fallback_elbow, prev) && !points_match(fallback_elbow, support) {
-        path.insert(support_idx, fallback_elbow);
+    #[derive(Copy, Clone, Eq, PartialEq)]
+    enum Axis {
+        Horizontal,
+        Vertical,
+    }
+
+    let segment_axis = |a: FPoint, b: FPoint| -> Option<Axis> {
+        if (a.x - b.x).abs() <= EPS && (a.y - b.y).abs() > EPS {
+            Some(Axis::Vertical)
+        } else if (a.y - b.y).abs() <= EPS && (a.x - b.x).abs() > EPS {
+            Some(Axis::Horizontal)
+        } else {
+            None
+        }
+    };
+    let deltas_for_axis = |a: FPoint, b: FPoint, axis: Axis| -> f64 {
+        match axis {
+            Axis::Horizontal => b.x - a.x,
+            Axis::Vertical => b.y - a.y,
+        }
+    };
+
+    // Pattern: pre -> turn -> support reverses along one axis before the
+    // terminal support segment. Preserve the already-defined lane at `turn`.
+    if path.len() >= 4 {
+        let n = path.len();
+        let pre = path[n - 4];
+        let turn = path[n - 3];
+        let mut support = path[n - 2];
+        let mut end = path[n - 1];
+        if let (Some(axis1), Some(axis2), Some(axis3)) = (
+            segment_axis(pre, turn),
+            segment_axis(turn, support),
+            segment_axis(support, end),
+        ) {
+            let d1 = deltas_for_axis(pre, turn, axis1);
+            let d2 = deltas_for_axis(turn, support, axis2);
+            let has_reversal = axis1 == axis2
+                && axis2 != axis3
+                && d1.abs() > EPS
+                && d2.abs() > EPS
+                && d1.signum() != d2.signum();
+            if has_reversal {
+                match canonical_face {
+                    Face::Left | Face::Right => {
+                        support.y = turn.y;
+                        end.y = turn.y;
+                        path[n - 2] = support;
+                        path[n - 1] = end;
+                    }
+                    Face::Top | Face::Bottom => {
+                        support.x = turn.x;
+                        end.x = turn.x;
+                        path[n - 2] = support;
+                        path[n - 1] = end;
+                    }
+                }
+            }
+        }
+    }
+
+    // Pattern: turn -> support -> end immediately reverses on the same axis.
+    // Replace `turn` with an outer-corner elbow so the terminal approach
+    // remains monotonic toward the endpoint.
+    if path.len() >= 4 {
+        let n = path.len();
+        let pre = path[n - 4];
+        let turn = path[n - 3];
+        let support = path[n - 2];
+        let end = path[n - 1];
+        if let (Some(axis1), Some(axis2)) =
+            (segment_axis(turn, support), segment_axis(support, end))
+        {
+            let d1 = deltas_for_axis(turn, support, axis1);
+            let d2 = deltas_for_axis(support, end, axis2);
+            let has_reversal =
+                axis1 == axis2 && d1.abs() > EPS && d2.abs() > EPS && d1.signum() != d2.signum();
+            if has_reversal {
+                let candidate = match canonical_face {
+                    Face::Left | Face::Right => FPoint::new(support.x, pre.y),
+                    Face::Top | Face::Bottom => FPoint::new(pre.x, support.y),
+                };
+                let candidate_is_valid = !points_match(candidate, pre)
+                    && !points_match(candidate, support)
+                    && segment_axis(pre, candidate).is_some()
+                    && segment_axis(candidate, support).is_some();
+                if candidate_is_valid {
+                    path[n - 3] = candidate;
+                }
+            }
+        }
+    }
+
+    let mut idx = 1usize;
+    while idx < path.len() {
+        if points_match(path[idx - 1], path[idx]) {
+            path.remove(idx);
+        } else {
+            idx += 1;
+        }
     }
 }
 
