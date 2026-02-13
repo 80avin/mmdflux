@@ -2799,12 +2799,18 @@ fn enforce_min_orthogonal_endpoint_support(
 }
 
 fn extend_endpoint_support(points: &mut Vec<Point>, at_start: bool, min_support: f64) {
+    const EPS: f64 = 1e-6;
     if points.len() < 2 || min_support <= 0.0 {
         return;
     }
 
     let (anchor_idx, adjacent_idx, before_adjacent_idx, before_before_adjacent_idx) = if at_start {
-        (0usize, 1usize, Some(2usize), Some(3usize))
+        (
+            0usize,
+            1usize,
+            (points.len() > 2).then_some(2usize),
+            (points.len() > 3).then_some(3usize),
+        )
     } else {
         let n = points.len();
         (n - 1, n - 2, n.checked_sub(3), n.checked_sub(4))
@@ -2844,6 +2850,7 @@ fn extend_endpoint_support(points: &mut Vec<Point>, at_start: bool, min_support:
 
     let before_adjacent = points[before_adjacent_idx];
     if segment_axis(before_adjacent, new_adjacent).is_some() {
+        collapse_endpoint_axis_backtrack(points, at_start);
         return;
     }
 
@@ -2858,9 +2865,82 @@ fn extend_endpoint_support(points: &mut Vec<Point>, at_start: bool, min_support:
     let keeps_prev_axis = before_before_adjacent_idx
         .and_then(|idx| points.get(idx).copied())
         .is_none_or(|prev| segment_axis(prev, shifted_before).is_some());
-    if keeps_adjacent_axis && keeps_prev_axis {
-        points[before_adjacent_idx] = shifted_before;
-        return;
+    if keeps_adjacent_axis {
+        // Prefer coordinate shifting over elbow insertion. If the direct shift
+        // breaks the previous segment, try shifting that previous point onto the
+        // same axis first.
+        if !keeps_prev_axis {
+            if let Some(prev_idx) = before_before_adjacent_idx
+                && let Some(prev) = points.get(prev_idx).copied()
+            {
+                let shifted_prev = match axis {
+                    SegmentAxis::Vertical => Point {
+                        x: prev.x,
+                        y: shifted_before.y,
+                    },
+                    SegmentAxis::Horizontal => Point {
+                        x: shifted_before.x,
+                        y: prev.y,
+                    },
+                };
+                let keeps_next_axis = segment_axis(shifted_prev, shifted_before).is_some();
+                let keeps_prev_axis = prev_idx
+                    .checked_sub(1)
+                    .and_then(|idx| points.get(idx).copied())
+                    .is_none_or(|pprev| segment_axis(pprev, shifted_prev).is_some());
+                if keeps_next_axis && keeps_prev_axis {
+                    points[before_adjacent_idx] = shifted_before;
+                    points[prev_idx] = shifted_prev;
+                    collapse_endpoint_axis_backtrack(points, at_start);
+                    return;
+                }
+            }
+        } else {
+            points[before_adjacent_idx] = shifted_before;
+            // If this shift introduced a tiny stair-step just before the endpoint,
+            // propagate the same coordinate shift backward through the contiguous
+            // collinear run so orthogonal tails stay visually clean.
+            let mut propagate_idx = before_before_adjacent_idx;
+            while let Some(idx) = propagate_idx {
+                let Some(current) = points.get(idx).copied() else {
+                    break;
+                };
+                let should_shift = match axis {
+                    SegmentAxis::Vertical => (current.y - before_adjacent.y).abs() <= EPS,
+                    SegmentAxis::Horizontal => (current.x - before_adjacent.x).abs() <= EPS,
+                };
+                if !should_shift {
+                    break;
+                }
+
+                let candidate = match axis {
+                    SegmentAxis::Vertical => Point {
+                        x: current.x,
+                        y: shifted_before.y,
+                    },
+                    SegmentAxis::Horizontal => Point {
+                        x: shifted_before.x,
+                        y: current.y,
+                    },
+                };
+                let keeps_next_axis = points
+                    .get(idx + 1)
+                    .copied()
+                    .is_some_and(|next| segment_axis(candidate, next).is_some());
+                let keeps_prev_axis = idx
+                    .checked_sub(1)
+                    .and_then(|prev_idx| points.get(prev_idx).copied())
+                    .is_none_or(|prev| segment_axis(prev, candidate).is_some());
+                if !keeps_next_axis || !keeps_prev_axis {
+                    break;
+                }
+
+                points[idx] = candidate;
+                propagate_idx = idx.checked_sub(1);
+            }
+            collapse_endpoint_axis_backtrack(points, at_start);
+            return;
+        }
     }
 
     let elbow = match axis {
@@ -2879,6 +2959,45 @@ fn extend_endpoint_support(points: &mut Vec<Point>, at_start: bool, min_support:
     } else {
         let insert_at = points.len() - 2;
         points.insert(insert_at, elbow);
+    }
+    collapse_endpoint_axis_backtrack(points, at_start);
+}
+
+fn collapse_endpoint_axis_backtrack(points: &mut Vec<Point>, at_start: bool) {
+    const EPS: f64 = 1e-6;
+    if points.len() < 4 {
+        return;
+    }
+
+    let (outer_idx, middle_idx, inner_idx) = if at_start {
+        (3usize, 2usize, 1usize)
+    } else {
+        let n = points.len();
+        (n - 4, n - 3, n - 2)
+    };
+
+    let outer = points[outer_idx];
+    let middle = points[middle_idx];
+    let inner = points[inner_idx];
+    let Some(first_axis) = segment_axis(outer, middle) else {
+        return;
+    };
+    let Some(second_axis) = segment_axis(middle, inner) else {
+        return;
+    };
+    if first_axis != second_axis {
+        return;
+    }
+
+    let (delta1, delta2) = match first_axis {
+        SegmentAxis::Vertical => (middle.y - outer.y, inner.y - middle.y),
+        SegmentAxis::Horizontal => (middle.x - outer.x, inner.x - middle.x),
+    };
+    if delta1.abs() <= EPS || delta2.abs() <= EPS {
+        return;
+    }
+    if delta1.signum() != delta2.signum() {
+        points.remove(middle_idx);
     }
 }
 
