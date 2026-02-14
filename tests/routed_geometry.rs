@@ -1455,9 +1455,19 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
         "Q2 -> B should depart from the canonical TD backward source lane (right face): start={conflict_start:?}, path={:?}",
         conflict.path
     );
-    let source_top = source_rect.y;
-    let source_bottom = source_rect.y + source_rect.height;
-    let source_face_margin = (conflict_start.y - source_top).min(source_bottom - conflict_start.y);
+    let source_face_margin = match conflict_start_face {
+        "top" | "bottom" => {
+            let source_left = source_rect.x;
+            let source_right = source_rect.x + source_rect.width;
+            (conflict_start.x - source_left).min(source_right - conflict_start.x)
+        }
+        "left" | "right" => {
+            let source_top = source_rect.y;
+            let source_bottom = source_rect.y + source_rect.height;
+            (conflict_start.y - source_top).min(source_bottom - conflict_start.y)
+        }
+        _ => 0.0,
+    };
     assert!(
         source_face_margin >= 5.0,
         "Q2 -> B source departure should stay away from source face borders (closer to center) to avoid cramped hooks: margin={source_face_margin}, source_rect={source_rect:?}, start={conflict_start:?}, path={:?}",
