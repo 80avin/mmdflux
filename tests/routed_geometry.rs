@@ -965,6 +965,58 @@ fn unified_route_contracts_prefer_lateral_exit_for_off_center_td_source_ports() 
 }
 
 #[test]
+fn unified_route_contracts_keep_primary_stem_before_outward_td_fan_out_sweeps() {
+    let (diagram, geom) = layout_fixture("fan_out.mmd");
+    assert_eq!(geom.direction, mmdflux::Direction::TopDown);
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    for (from, to) in [("A", "B"), ("A", "D")] {
+        let edge = routed
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture should contain {from} -> {to}"));
+        assert!(
+            edge.path.len() >= 3,
+            "{from} -> {to} should have at least three routed points: {:?}",
+            edge.path
+        );
+
+        let source_rect = geom
+            .nodes
+            .get(from)
+            .unwrap_or_else(|| panic!("fixture should contain source {from}"))
+            .rect;
+        let start = edge.path[0];
+        let next = edge.path[1];
+        let third = edge.path[2];
+        let center_x = source_rect.x + source_rect.width / 2.0;
+        let source_offset = start.x - center_x;
+        assert!(
+            source_offset.abs() >= 1.0,
+            "fixture expectation invalid: {from} -> {to} source should be off-center, offset={source_offset}, path={:?}",
+            edge.path
+        );
+        assert!(
+            (next.x - start.x).abs() <= ROUTE_EPS && (next.y - start.y).abs() > ROUTE_EPS,
+            "fan-out edge {from} -> {to} should keep a short primary-axis source stem before sweeping: start={start:?}, next={next:?}, path={:?}",
+            edge.path
+        );
+        assert!(
+            (third.y - next.y).abs() <= ROUTE_EPS && (third.x - next.x).abs() > ROUTE_EPS,
+            "fan-out edge {from} -> {to} should sweep laterally after the source stem: next={next:?}, third={third:?}, path={:?}",
+            edge.path
+        );
+        assert!(
+            (third.x - next.x).signum() == source_offset.signum(),
+            "fan-out edge {from} -> {to} should sweep outward from source center: source_offset={source_offset}, second_dx={}, path={:?}",
+            third.x - next.x,
+            edge.path
+        );
+    }
+}
+
+#[test]
 fn unified_route_contracts_prefer_outward_first_source_exits_for_selected_fixtures() {
     type EdgeExpectation = (&'static str, &'static str, f64);
     type FixtureExpectations = (&'static str, &'static [EdgeExpectation]);

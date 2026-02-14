@@ -222,6 +222,13 @@ fn build_unified_path(
         direction,
         is_backward,
     );
+    ensure_primary_stem_for_flat_off_center_fanout_sources(
+        &mut path,
+        edge,
+        geometry,
+        direction,
+        is_backward,
+    );
     ensure_endpoint_segments_axis_aligned(&mut path);
     collapse_source_turnback_spikes(&mut path);
     if !is_backward {
@@ -564,6 +571,119 @@ fn prefer_lateral_exit_for_off_center_primary_axis_sources(
     }
 
     path[1] = replacement;
+}
+
+fn ensure_primary_stem_for_flat_off_center_fanout_sources(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+    is_backward: bool,
+) {
+    const MIN_OFF_CENTER_ABS: f64 = 1.0;
+    const MIN_PRIMARY_STEM: f64 = 8.0;
+    const FANOUT_LANE_EPS: f64 = 1.0;
+    const SEG_EPS: f64 = 0.000_001;
+
+    if is_backward
+        || path.len() < 3
+        || !matches!(direction, Direction::TopDown | Direction::BottomTop)
+    {
+        return;
+    }
+
+    let fanout_outbound: Vec<&crate::diagrams::flowchart::geometry::LayoutEdge> = geometry
+        .edges
+        .iter()
+        .filter(|candidate| candidate.from == edge.from)
+        .collect();
+    if fanout_outbound.len() != 3 {
+        return;
+    }
+    if fanout_outbound
+        .iter()
+        .any(|candidate| geometry.reversed_edges.contains(&candidate.index))
+    {
+        return;
+    }
+
+    let Some((source_rect, _)) =
+        endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+    else {
+        return;
+    };
+    let center_x = source_rect.x + source_rect.width / 2.0;
+    let start = path[0];
+    let first = path[1];
+    let second = path[2];
+    let source_offset = start.x - center_x;
+    if source_offset.abs() < MIN_OFF_CENTER_ABS {
+        return;
+    }
+
+    let first_is_horizontal =
+        (start.y - first.y).abs() <= SEG_EPS && (start.x - first.x).abs() > SEG_EPS;
+    let second_is_vertical =
+        (first.x - second.x).abs() <= SEG_EPS && (first.y - second.y).abs() > SEG_EPS;
+    if !first_is_horizontal || !second_is_vertical {
+        return;
+    }
+
+    let progresses_along_primary = match direction {
+        Direction::TopDown => second.y > start.y + SEG_EPS,
+        Direction::BottomTop => second.y < start.y - SEG_EPS,
+        _ => false,
+    };
+    if !progresses_along_primary {
+        return;
+    }
+
+    let lateral_delta = first.x - start.x;
+    if lateral_delta.abs() <= SEG_EPS || lateral_delta.signum() != source_offset.signum() {
+        return;
+    }
+
+    let mut outbound_target_primary_axis: Vec<f64> = Vec::with_capacity(fanout_outbound.len());
+    for candidate in fanout_outbound {
+        let Some((target_rect, _)) =
+            endpoint_rect_and_shape(geometry, &candidate.to, candidate.to_subgraph.as_deref())
+        else {
+            return;
+        };
+        outbound_target_primary_axis.push(target_rect.y);
+    }
+    let baseline_primary = outbound_target_primary_axis[0];
+    if outbound_target_primary_axis
+        .iter()
+        .any(|primary| (primary - baseline_primary).abs() > FANOUT_LANE_EPS)
+    {
+        return;
+    }
+
+    let stem_y = match direction {
+        Direction::TopDown => start.y + MIN_PRIMARY_STEM,
+        Direction::BottomTop => start.y - MIN_PRIMARY_STEM,
+        _ => start.y,
+    };
+    let stem = FPoint::new(start.x, stem_y);
+    let sweep = FPoint::new(first.x, stem_y);
+    if (stem.y - start.y).abs() <= SEG_EPS
+        || (sweep.x - stem.x).abs() <= SEG_EPS
+        || (second.y - sweep.y).abs() <= SEG_EPS
+    {
+        return;
+    }
+    let stem_stays_before_terminal_drop = match direction {
+        Direction::TopDown => stem.y < second.y - SEG_EPS,
+        Direction::BottomTop => stem.y > second.y + SEG_EPS,
+        _ => false,
+    };
+    if !stem_stays_before_terminal_drop {
+        return;
+    }
+
+    path[1] = stem;
+    path.insert(2, sweep);
 }
 
 fn collapse_source_turnback_spikes(path: &mut Vec<FPoint>) {
