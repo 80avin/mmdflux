@@ -1471,6 +1471,43 @@ fn svg_unified_preview_complex_top_diamond_loop_avoids_single_edge_micro_jogs() 
 }
 
 #[test]
+fn svg_non_orth_unified_preview_complex_backward_edge_avoids_center_biased_input_attachment() {
+    const MIN_CENTER_OFFSET: f64 = 12.0;
+
+    let diagram = load_flowchart_fixture_diagram("complex.mmd");
+    let edge_idx = edge_index(&diagram, "E", "A");
+    let styles = [
+        SvgEdgePathStyle::Linear,
+        SvgEdgePathStyle::Rounded,
+        SvgEdgePathStyle::Basis,
+    ];
+
+    for style in styles {
+        let mut options = RenderOptions::default_svg();
+        options.svg.edge_path_style = style;
+        options.routing_mode = Some(RoutingMode::UnifiedPreview);
+        options.path_detail = PathDetail::Full;
+        let svg = render_svg(&diagram, &options);
+
+        let rect = node_rect_for_label(&svg, "Input").expect("target rect should exist for Input");
+        let center_x = rect.0 + rect.2 / 2.0;
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        let end = *points
+            .last()
+            .expect("complex E->A should have path points for non-orth style");
+        let end_face = svg_terminal_approach_face_relaxed(rect, &points);
+
+        if end_face == "bottom" || end_face == "top" {
+            let center_offset = (end.0 - center_x).abs();
+            assert!(
+                center_offset >= MIN_CENTER_OFFSET,
+                "complex E->A {style:?} should avoid center-biased vertical attachment on Input when approaching from a backward top-loop lane; end={end:?}, center_x={center_x}, center_offset={center_offset}, min_offset={MIN_CENTER_OFFSET}, points={points:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn svg_unified_preview_multi_edge_labeled_preserves_parallel_lane_shape() {
     const MAX_LANE_DETOUR_LOSS_FROM_FULL: f64 = 2.0;
 

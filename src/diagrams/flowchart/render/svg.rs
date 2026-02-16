@@ -846,6 +846,7 @@ fn render_edges(
         } else {
             diagram.direction
         };
+        let is_backward = geom.reversed_edges.contains(&index);
         // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
         // edges whose endpoints already land on the subgraph border).
         if !rerouted_edges.contains(&index) {
@@ -876,7 +877,7 @@ fn render_edges(
                         edge_direction,
                     )));
         let mut points = if should_adjust {
-            adjust_edge_points_for_shapes(diagram, geom, edge, &points)
+            adjust_edge_points_for_shapes(diagram, geom, edge, &points, edge_direction, is_backward)
         } else {
             points
         };
@@ -884,14 +885,10 @@ fn render_edges(
         // handle smoothing natively from sparse waypoints.
         if matches!(edge_path_style, SvgEdgePathStyle::Linear) {
             points = fix_corner_points(&points);
-            if matches!(routing_mode, RoutingMode::UnifiedPreview)
-                && edge.from != edge.to
-                && edge_touches_diamond_endpoint(diagram, geom, edge)
-            {
-                points = collapse_tiny_linear_smoothing_jogs(&points, 6.0);
-            }
         }
-        let is_backward = geom.reversed_edges.contains(&index);
+        let allow_interior_nudges = !matches!(edge_path_style, SvgEdgePathStyle::Linear)
+            && !(matches!(routing_mode, RoutingMode::UnifiedPreview)
+                && edge_touches_diamond_endpoint(diagram, geom, edge));
         let enforce_primary_axis_no_backtrack = matches!(routing_mode, RoutingMode::UnifiedPreview)
             && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
             && !is_backward
@@ -901,10 +898,17 @@ fn render_edges(
             edge,
             edge_direction,
             is_backward,
-            !matches!(edge_path_style, SvgEdgePathStyle::Linear),
+            allow_interior_nudges,
             enforce_primary_axis_no_backtrack,
             matches!(edge_path_style, SvgEdgePathStyle::Orthogonal),
         );
+        if matches!(routing_mode, RoutingMode::UnifiedPreview)
+            && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
+            && edge.from != edge.to
+            && edge_touches_diamond_endpoint(diagram, geom, edge)
+        {
+            points = collapse_tiny_linear_smoothing_jogs(&points, 16.0);
+        }
         let rendered_points =
             points_for_svg_path(&points, diagram.direction, edge_path_style, path_detail);
         let d =
@@ -2373,7 +2377,10 @@ fn adjust_edge_points_for_shapes(
     geom: &GraphGeometry,
     edge: &Edge,
     points: &[Point],
+    direction: Direction,
+    is_backward: bool,
 ) -> Vec<Point> {
+    const EPS: f64 = 0.5;
     if points.len() < 2 {
         return points.to_vec();
     }
@@ -2385,20 +2392,36 @@ fn adjust_edge_points_for_shapes(
     };
 
     let mut adjusted = points.to_vec();
-    let from_target = if points.len() > 1 {
-        points[1]
-    } else {
-        from_rect.center()
-    };
-    let to_target = if points.len() > 1 {
-        points[points.len() - 2]
-    } else {
-        to_rect.center()
-    };
+    let source_needs_adjustment = matches!(from_shape, Shape::Diamond | Shape::Hexagon)
+        || endpoint_attachment_is_invalid(points[0], from_rect, direction, true, is_backward, EPS);
+    let target_needs_adjustment = matches!(to_shape, Shape::Diamond | Shape::Hexagon)
+        || endpoint_attachment_is_invalid(
+            points[points.len() - 1],
+            to_rect,
+            direction,
+            false,
+            is_backward,
+            EPS,
+        );
 
-    adjusted[0] = intersect_svg_node(&from_rect, from_target, from_shape);
-    let last = adjusted.len() - 1;
-    adjusted[last] = intersect_svg_node(&to_rect, to_target, to_shape);
+    if source_needs_adjustment {
+        let from_target = if points.len() > 1 {
+            points[1]
+        } else {
+            from_rect.center()
+        };
+        adjusted[0] = intersect_svg_node(&from_rect, from_target, from_shape);
+    }
+
+    if target_needs_adjustment {
+        let to_target = if points.len() > 1 {
+            points[points.len() - 2]
+        } else {
+            to_rect.center()
+        };
+        let last = adjusted.len() - 1;
+        adjusted[last] = intersect_svg_node(&to_rect, to_target, to_shape);
+    }
 
     adjusted
 }
@@ -2509,6 +2532,8 @@ fn collapse_tiny_linear_smoothing_jogs(points: &[Point], short_tol: f64) -> Vec<
         let prev_len = ((curr.x - prev.x).powi(2) + (curr.y - prev.y).powi(2)).sqrt();
         let next_len = ((next.x - curr.x).powi(2) + (next.y - curr.y).powi(2)).sqrt();
         let both_diagonal = prev_axis.is_none() && next_axis.is_none();
+        let axis_then_diagonal = prev_axis.is_some() && next_axis.is_none();
+        let diagonal_then_axis = prev_axis.is_none() && next_axis.is_some();
 
         let v1x = curr.x - prev.x;
         let v1y = curr.y - prev.y;
@@ -2516,7 +2541,10 @@ fn collapse_tiny_linear_smoothing_jogs(points: &[Point], short_tol: f64) -> Vec<
         let v2y = next.y - curr.y;
         let dot = v1x * v2x + v1y * v2y;
 
-        if both_diagonal && (prev_len < short_tol || next_len < short_tol) && dot > 0.0 {
+        let should_collapse = (both_diagonal && (prev_len < short_tol || next_len < short_tol))
+            || (axis_then_diagonal && prev_len < short_tol)
+            || (diagonal_then_axis && next_len < short_tol);
+        if should_collapse && dot > 0.0 {
             collapsed.remove(idx);
             idx = idx.saturating_sub(1).max(1);
             continue;
