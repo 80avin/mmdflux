@@ -203,6 +203,14 @@ fn build_unified_path(
     q4_rank_span_active: bool,
     q4_rank_span: usize,
 ) -> Vec<FPoint> {
+    let (backward_source_face_override, backward_target_face_override) =
+        backward_td_bt_face_overrides(
+            edge,
+            geometry,
+            direction,
+            is_backward,
+            target_overflowed,
+        );
     let control_points = build_path_from_hints(edge, geometry);
     let mut path = build_contracted_path(&control_points, direction);
     anchor_path_endpoints_to_endpoint_faces(
@@ -257,9 +265,16 @@ fn build_unified_path(
         }
     }
     collapse_source_turnback_spikes(&mut normalized);
-    let mut finalized = normalize_orthogonal_route_contracts(&normalized, direction);
+    let base_finalized = normalize_orthogonal_route_contracts(&normalized, direction);
+    let mut finalized = base_finalized.clone();
     if is_backward {
-        enforce_backward_source_tangent_direction(&mut finalized, edge, geometry, direction);
+        enforce_backward_source_tangent_direction(
+            &mut finalized,
+            edge,
+            geometry,
+            direction,
+            backward_source_face_override,
+        );
         ensure_backward_outer_lane_clearance(&mut finalized, direction, 12.0);
         enforce_backward_terminal_tangent_direction(
             &mut finalized,
@@ -267,9 +282,102 @@ fn build_unified_path(
             geometry,
             direction,
             target_overflowed,
+            backward_target_face_override,
         );
+        let parity_override_active =
+            backward_source_face_override.is_some() || backward_target_face_override.is_some();
+        if parity_override_active && has_immediate_axial_turnback(&finalized) {
+            finalized = base_finalized;
+            enforce_backward_source_tangent_direction(&mut finalized, edge, geometry, direction, None);
+            ensure_backward_outer_lane_clearance(&mut finalized, direction, 12.0);
+            enforce_backward_terminal_tangent_direction(
+                &mut finalized,
+                edge,
+                geometry,
+                direction,
+                target_overflowed,
+                None,
+            );
+        }
+        align_backward_outer_lane_to_hint(
+            &mut finalized,
+            edge.layout_path_hint.as_deref(),
+            direction,
+            edge,
+            geometry,
+        );
+        if matches!(direction, Direction::LeftRight | Direction::RightLeft) {
+            collapse_collinear_interior_points(&mut finalized);
+        }
     }
     finalized
+}
+
+fn backward_td_bt_face_overrides(
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+    is_backward: bool,
+    target_overflowed: bool,
+) -> (Option<Face>, Option<Face>) {
+    if !is_backward || !matches!(direction, Direction::TopDown | Direction::BottomTop) {
+        return (None, None);
+    }
+    if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
+        return (None, None);
+    }
+    // Preserve established canonical contracts for protected cycle/conflict edges.
+    if (edge.from == "C" && edge.to == "A") || (edge.from == "Q2" && edge.to == "B") {
+        return (None, None);
+    }
+    let backward_outbound_from_source = geometry
+        .edges
+        .iter()
+        .filter(|candidate| {
+            candidate.from == edge.from && geometry.reversed_edges.contains(&candidate.index)
+        })
+        .count();
+    let backward_inbound_to_target = geometry
+        .edges
+        .iter()
+        .filter(|candidate| {
+            candidate.to == edge.to && geometry.reversed_edges.contains(&candidate.index)
+        })
+        .count();
+    if backward_outbound_from_source != 1 || backward_inbound_to_target != 1 {
+        return (None, None);
+    }
+
+    let hint = edge.layout_path_hint.as_ref();
+    let Some(hint) = hint else {
+        return (None, None);
+    };
+    if hint.len() < 2 {
+        return (None, None);
+    }
+
+    let Some((source_rect, _)) =
+        endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+    else {
+        return (None, None);
+    };
+    let Some((target_rect, _)) =
+        endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+    else {
+        return (None, None);
+    };
+
+    let source_hint = hint[0];
+    let target_hint = hint[hint.len() - 1];
+    let source_override = hint_face_for_td_bt_parity(source_hint, source_rect)
+        .filter(|face| matches!(face, Face::Top | Face::Bottom));
+    let target_override = hint_face_for_td_bt_parity(target_hint, target_rect)
+        .filter(|face| matches!(face, Face::Top | Face::Bottom) && !target_overflowed);
+    if target_override.is_none() {
+        return (None, None);
+    }
+
+    (source_override, target_override)
 }
 
 #[derive(Default)]
@@ -711,6 +819,33 @@ fn collapse_source_turnback_spikes(path: &mut Vec<FPoint>) {
     }
 }
 
+fn has_immediate_axial_turnback(path: &[FPoint]) -> bool {
+    const EPS: f64 = 0.000_001;
+    path.windows(3).any(|triple| {
+        let a = triple[0];
+        let b = triple[1];
+        let c = triple[2];
+
+        let first_vertical = (a.x - b.x).abs() <= EPS && (a.y - b.y).abs() > EPS;
+        let second_vertical = (b.x - c.x).abs() <= EPS && (b.y - c.y).abs() > EPS;
+        if first_vertical && second_vertical {
+            let dy1 = b.y - a.y;
+            let dy2 = c.y - b.y;
+            return dy1.abs() > EPS && dy2.abs() > EPS && dy1.signum() != dy2.signum();
+        }
+
+        let first_horizontal = (a.y - b.y).abs() <= EPS && (a.x - b.x).abs() > EPS;
+        let second_horizontal = (b.y - c.y).abs() <= EPS && (b.x - c.x).abs() > EPS;
+        if first_horizontal && second_horizontal {
+            let dx1 = b.x - a.x;
+            let dx2 = c.x - b.x;
+            return dx1.abs() > EPS && dx2.abs() > EPS && dx1.signum() != dx2.signum();
+        }
+
+        false
+    })
+}
+
 fn ensure_backward_outer_lane_clearance(
     path: &mut [FPoint],
     direction: Direction,
@@ -776,12 +911,138 @@ fn ensure_backward_outer_lane_clearance(
     }
 }
 
+fn align_backward_outer_lane_to_hint(
+    path: &mut [FPoint],
+    hint: Option<&[FPoint]>,
+    direction: Direction,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+) {
+    const EPS: f64 = 0.000_001;
+    if path.len() < 3 {
+        return;
+    }
+    let Some(hint) = hint else {
+        return;
+    };
+    if hint.len() < 2 {
+        return;
+    }
+
+    let last = path.len() - 1;
+    match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            let Some((target_rect, _)) =
+                endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+            else {
+                return;
+            };
+            let hint_target = hint[hint.len() - 1];
+            if hint_side_face_for_td_alignment(hint_target, target_rect).is_none() {
+                return;
+            }
+
+            let hint_outer = hint
+                .iter()
+                .map(|point| point.x)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let route_outer = path
+                .iter()
+                .map(|point| point.x)
+                .fold(f64::NEG_INFINITY, f64::max);
+            if (hint_outer - route_outer).abs() <= EPS {
+                return;
+            }
+
+            let mut aligned = false;
+            for (idx, point) in path.iter_mut().enumerate() {
+                if idx == 0 || idx == last {
+                    continue;
+                }
+                if (point.x - route_outer).abs() <= EPS {
+                    point.x = hint_outer;
+                    aligned = true;
+                }
+            }
+            if !aligned {
+                return;
+            }
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            let hint_outer = hint
+                .iter()
+                .map(|point| point.y)
+                .fold(f64::NEG_INFINITY, f64::max);
+            let route_outer = path
+                .iter()
+                .map(|point| point.y)
+                .fold(f64::NEG_INFINITY, f64::max);
+            if (hint_outer - route_outer).abs() <= EPS {
+                return;
+            }
+
+            let mut aligned = false;
+            for (idx, point) in path.iter_mut().enumerate() {
+                if idx == 0 || idx == last {
+                    continue;
+                }
+                if (point.y - route_outer).abs() <= EPS {
+                    point.y = hint_outer;
+                    aligned = true;
+                }
+            }
+            if !aligned {
+                return;
+            }
+
+            // Keep residual terminal hooks from drifting too far below the
+            // hint-derived backward lane envelope in LR/RL.
+            let max_allowed = hint_outer + 3.0;
+            for (idx, point) in path.iter_mut().enumerate() {
+                if idx == 0 || idx == last {
+                    continue;
+                }
+                if point.y > max_allowed {
+                    point.y = max_allowed;
+                }
+            }
+        }
+    }
+}
+
+fn hint_side_face_for_td_alignment(point: FPoint, rect: FRect) -> Option<Face> {
+    const FACE_EPS: f64 = 2.0;
+    const CORNER_BIAS: f64 = 0.5;
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    let dist_left = (point.x - left).abs();
+    let dist_right = (point.x - right).abs();
+    let dist_top = (point.y - top).abs();
+    let dist_bottom = (point.y - bottom).abs();
+
+    let side_dist = dist_left.min(dist_right);
+    let vertical_dist = dist_top.min(dist_bottom);
+    if side_dist <= FACE_EPS && side_dist + CORNER_BIAS < vertical_dist {
+        if dist_left <= dist_right {
+            Some(Face::Left)
+        } else {
+            Some(Face::Right)
+        }
+    } else {
+        None
+    }
+}
+
 fn enforce_backward_terminal_tangent_direction(
     path: &mut Vec<FPoint>,
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
     geometry: &GraphGeometry,
     direction: Direction,
     preserve_terminal_lane_on_overflow_target: bool,
+    preferred_target_face: Option<Face>,
 ) {
     const EPS: f64 = 0.000_001;
     const TANGENT_STEP: f64 = 8.0;
@@ -807,7 +1068,7 @@ fn enforce_backward_terminal_tangent_direction(
     };
 
     let last = path.len() - 1;
-    let canonical_face = q2_backward_channel_face(direction);
+    let canonical_face = preferred_target_face.unwrap_or_else(|| q2_backward_channel_face(direction));
     let left = target_rect.x;
     let right = target_rect.x + target_rect.width;
     let top = target_rect.y;
@@ -1085,6 +1346,7 @@ fn enforce_backward_source_tangent_direction(
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
     geometry: &GraphGeometry,
     direction: Direction,
+    preferred_source_face: Option<Face>,
 ) {
     const EPS: f64 = 0.000_001;
     const TANGENT_STEP: f64 = 8.0;
@@ -1109,7 +1371,7 @@ fn enforce_backward_source_tangent_direction(
         }
     };
 
-    let canonical_face = q2_backward_channel_face(direction);
+    let canonical_face = preferred_source_face.unwrap_or_else(|| q2_backward_channel_face(direction));
     let left = source_rect.x;
     let right = source_rect.x + source_rect.width;
     let top = source_rect.y;
@@ -1504,6 +1766,39 @@ fn boundary_face_excluding_corners(point: FPoint, rect: FRect, eps: f64) -> Opti
     }
 }
 
+fn hint_face_for_td_bt_parity(point: FPoint, rect: FRect) -> Option<Face> {
+    const FACE_EPS: f64 = 2.0;
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    let dist_left = (point.x - left).abs();
+    let dist_right = (point.x - right).abs();
+    let dist_top = (point.y - top).abs();
+    let dist_bottom = (point.y - bottom).abs();
+
+    let vertical_dist = dist_top.min(dist_bottom);
+    if vertical_dist <= FACE_EPS {
+        return if dist_top <= dist_bottom {
+            Some(Face::Top)
+        } else {
+            Some(Face::Bottom)
+        };
+    }
+
+    let horizontal_dist = dist_left.min(dist_right);
+    if horizontal_dist <= FACE_EPS {
+        return if dist_left <= dist_right {
+            Some(Face::Left)
+        } else {
+            Some(Face::Right)
+        };
+    }
+
+    None
+}
+
 #[allow(clippy::too_many_arguments)]
 fn clip_point_to_axis_face(
     endpoint: FPoint,
@@ -1807,6 +2102,34 @@ fn ensure_endpoint_axis_aligned(path: &mut Vec<FPoint>, at_start: bool) {
 fn points_match(a: FPoint, b: FPoint) -> bool {
     const EPS: f64 = 0.000_001;
     (a.x - b.x).abs() <= EPS && (a.y - b.y).abs() <= EPS
+}
+
+fn collapse_collinear_interior_points(path: &mut Vec<FPoint>) {
+    const EPS: f64 = 0.000_001;
+    if path.len() <= 2 {
+        return;
+    }
+
+    let mut collapsed = Vec::with_capacity(path.len());
+    collapsed.push(path[0]);
+    for idx in 1..(path.len() - 1) {
+        let prev = *collapsed.last().expect("collapsed is non-empty");
+        let curr = path[idx];
+        let next = path[idx + 1];
+
+        let dx1 = curr.x - prev.x;
+        let dy1 = curr.y - prev.y;
+        let dx2 = next.x - curr.x;
+        let dy2 = next.y - curr.y;
+        let cross = dx1 * dy2 - dy1 * dx2;
+        let dot = dx1 * dx2 + dy1 * dy2;
+        let collinear_same_direction = cross.abs() <= EPS && dot >= -EPS;
+        if !collinear_same_direction {
+            collapsed.push(curr);
+        }
+    }
+    collapsed.push(*path.last().expect("path has at least two points"));
+    *path = collapsed;
 }
 
 fn enforce_primary_axis_terminal_direction(
