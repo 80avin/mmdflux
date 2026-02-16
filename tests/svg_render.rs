@@ -1614,6 +1614,24 @@ fn svg_orthogonal_unified_preview_q1_q2_conflict_avoids_terminal_axis_backtrack(
 }
 
 #[test]
+fn svg_orthogonal_unified_preview_decision_backward_edge_avoids_source_elbow_axis_backtrack() {
+    let diagram = load_flowchart_fixture_diagram("decision.mmd");
+    let edge_idx = edge_index(&diagram, "D", "A");
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+
+    assert!(
+        !has_immediate_axis_backtrack(&points),
+        "decision D->A orthogonal backward edge should avoid source-elbow axis backtrack spikes; points={points:?}"
+    );
+}
+
+#[test]
 fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
     let q1_cases = [
         ("stacked_fan_in.mmd", "C", "Bot", 0usize),

@@ -276,6 +276,7 @@ fn build_unified_path(
             backward_source_face_override,
         );
         ensure_backward_outer_lane_clearance(&mut finalized, direction, 12.0);
+        align_backward_source_stem_to_outer_lane(&mut finalized, edge, geometry, direction);
         enforce_backward_terminal_tangent_direction(
             &mut finalized,
             edge,
@@ -290,6 +291,7 @@ fn build_unified_path(
             finalized = base_finalized;
             enforce_backward_source_tangent_direction(&mut finalized, edge, geometry, direction, None);
             ensure_backward_outer_lane_clearance(&mut finalized, direction, 12.0);
+            align_backward_source_stem_to_outer_lane(&mut finalized, edge, geometry, direction);
             enforce_backward_terminal_tangent_direction(
                 &mut finalized,
                 edge,
@@ -909,6 +911,60 @@ fn ensure_backward_outer_lane_clearance(
             }
         }
     }
+}
+
+fn align_backward_source_stem_to_outer_lane(
+    path: &mut [FPoint],
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+) {
+    const EPS: f64 = 0.000_001;
+    const FACE_MARGIN: f64 = 1.0;
+    if !matches!(direction, Direction::TopDown | Direction::BottomTop) || path.len() < 3 {
+        return;
+    }
+
+    let Some((source_rect, _)) =
+        endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+    else {
+        return;
+    };
+
+    let top = source_rect.y;
+    let bottom = source_rect.y + source_rect.height;
+    let mut start = path[0];
+    let support = path[1];
+    let next = path[2];
+
+    let start_on_top_or_bottom =
+        (start.y - top).abs() <= EPS || (start.y - bottom).abs() <= EPS;
+    if !start_on_top_or_bottom {
+        return;
+    }
+
+    let stem_is_diagonal = (start.x - support.x).abs() > EPS && (start.y - support.y).abs() > EPS;
+    if !stem_is_diagonal {
+        return;
+    }
+
+    let support_to_next_is_horizontal =
+        (support.y - next.y).abs() <= EPS && (support.x - next.x).abs() > EPS;
+    if !support_to_next_is_horizontal {
+        return;
+    }
+
+    let left = source_rect.x;
+    let right = source_rect.x + source_rect.width;
+    let min_x = left + FACE_MARGIN;
+    let max_x = right - FACE_MARGIN;
+    let lane_x = support.x;
+    if lane_x < min_x - EPS || lane_x > max_x + EPS {
+        return;
+    }
+
+    start.x = lane_x.clamp(min_x, max_x);
+    path[0] = start;
 }
 
 fn align_backward_outer_lane_to_hint(

@@ -1452,6 +1452,46 @@ fn unified_preview_decision_backward_debug_to_start_supports_td_top_bottom_parit
 }
 
 #[test]
+fn unified_preview_decision_backward_debug_to_start_keeps_vertical_source_stem_before_elbow() {
+    let fixture = "decision.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    assert_eq!(
+        geom.direction,
+        mmdflux::Direction::TopDown,
+        "fixture {fixture} should be TD for source-stem normalization checks"
+    );
+
+    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let edge = unified
+        .edges
+        .iter()
+        .find(|edge| edge.from == "D" && edge.to == "A")
+        .expect("fixture should contain backward edge D -> A in unified-preview mode");
+    assert!(
+        edge.is_backward,
+        "fixture contract invalid: D -> A should be backward in unified-preview mode"
+    );
+    assert!(
+        edge.path.len() >= 3,
+        "D -> A should expose source stem and elbow points for this contract: path={:?}",
+        edge.path
+    );
+
+    let start = edge.path[0];
+    let source_stem = edge.path[1];
+    assert!(
+        approx_eq(start.x, source_stem.x),
+        "unified-preview D -> A should keep a vertical source stem before the backward elbow (avoid diagonal stem drift): start={start:?}, source_stem={source_stem:?}, path={:?}",
+        edge.path
+    );
+    assert!(
+        source_stem.y < start.y,
+        "TD backward source stem should move upward from Debug before elbow: start={start:?}, source_stem={source_stem:?}, path={:?}",
+        edge.path
+    );
+}
+
+#[test]
 fn unified_preview_complex_backward_more_data_to_input_supports_td_entry_parity() {
     let fixture = "complex.mmd";
     let (diagram, geom) = layout_fixture_svg(fixture);
