@@ -1508,6 +1508,38 @@ fn svg_non_orth_unified_preview_complex_backward_edge_avoids_center_biased_input
 }
 
 #[test]
+fn svg_linear_unified_preview_ci_pipeline_diamond_exits_avoid_extra_elbow_jogs() {
+    let diagram = load_flowchart_fixture_diagram("ci_pipeline.mmd");
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Linear;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    for (from, to) in [("Deploy", "Staging"), ("Deploy", "Prod")] {
+        let edge_idx = edge_index(&diagram, from, to);
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        assert!(
+            points.len() >= 3,
+            "ci_pipeline {from}->{to} should have at least three points for elbow checks: {points:?}"
+        );
+        let first = points[0];
+        let second = points[1];
+        let third = points[2];
+        let first_axis = segment_axis(first, second);
+        let second_axis = segment_axis(second, third);
+        if points.len() >= 4 {
+            let fourth = points[3];
+            let third_axis = segment_axis(third, fourth);
+            assert!(
+                !(first_axis.is_none() && second_axis.is_some() && third_axis.is_some()),
+                "ci_pipeline {from}->{to} should avoid extra elbow jogs right after Deploy? in unified linear mode (prefer direct diagonal-to-lane): points={points:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn svg_unified_preview_multi_edge_labeled_preserves_parallel_lane_shape() {
     const MAX_LANE_DETOUR_LOSS_FROM_FULL: f64 = 2.0;
 

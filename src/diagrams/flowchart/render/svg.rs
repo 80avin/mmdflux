@@ -907,7 +907,7 @@ fn render_edges(
             && edge.from != edge.to
             && edge_touches_diamond_endpoint(diagram, geom, edge)
         {
-            points = collapse_tiny_linear_smoothing_jogs(&points, 16.0);
+            points = collapse_tiny_linear_smoothing_jogs(&points, 30.0);
         }
         let rendered_points =
             points_for_svg_path(&points, diagram.direction, edge_path_style, path_detail);
