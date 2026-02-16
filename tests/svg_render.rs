@@ -1433,6 +1433,44 @@ fn svg_orthogonal_unified_preview_complex_backward_edge_terminal_tangent_points_
 }
 
 #[test]
+fn svg_unified_preview_complex_top_diamond_loop_avoids_single_edge_micro_jogs() {
+    const MIN_SEGMENT_LEN: f64 = 6.0;
+
+    let diagram = load_flowchart_fixture_diagram("complex.mmd");
+    let mut linear_options = RenderOptions::default_svg();
+    linear_options.svg.edge_path_style = SvgEdgePathStyle::Linear;
+    linear_options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    linear_options.path_detail = PathDetail::Full;
+    let linear_svg = render_svg(&diagram, &linear_options);
+
+    for (from, to) in [("C", "E"), ("E", "A")] {
+        let edge_idx = edge_index(&diagram, from, to);
+        let points = edge_path_for_svg_order(&diagram, &linear_svg, edge_idx);
+        assert!(
+            points.len() >= 2,
+            "complex {from}->{to} should emit at least one segment in linear mode: {points:?}"
+        );
+        let min_segment = min_svg_segment_len(&points);
+        assert!(
+            min_segment >= MIN_SEGMENT_LEN,
+            "complex {from}->{to} should avoid tiny elbow jog segments in unified linear mode (min {MIN_SEGMENT_LEN}): min_segment={min_segment}, points={points:?}"
+        );
+    }
+
+    let mut orth_options = RenderOptions::default_svg();
+    orth_options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    orth_options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    orth_options.path_detail = PathDetail::Full;
+    let orth_svg = render_svg(&diagram, &orth_options);
+    let backward_idx = edge_index(&diagram, "E", "A");
+    let backward_points = edge_path_for_svg_order(&diagram, &orth_svg, backward_idx);
+    assert!(
+        !has_immediate_axis_backtrack(&backward_points),
+        "complex E->A should not include an immediate axis backtrack in orthogonal unified mode: {backward_points:?}"
+    );
+}
+
+#[test]
 fn svg_unified_preview_multi_edge_labeled_preserves_parallel_lane_shape() {
     const MAX_LANE_DETOUR_LOSS_FROM_FULL: f64 = 2.0;
 

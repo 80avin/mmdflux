@@ -884,6 +884,12 @@ fn render_edges(
         // handle smoothing natively from sparse waypoints.
         if matches!(edge_path_style, SvgEdgePathStyle::Linear) {
             points = fix_corner_points(&points);
+            if matches!(routing_mode, RoutingMode::UnifiedPreview)
+                && edge.from != edge.to
+                && edge_touches_diamond_endpoint(diagram, geom, edge)
+            {
+                points = collapse_tiny_linear_smoothing_jogs(&points, 6.0);
+            }
         }
         let is_backward = geom.reversed_edges.contains(&index);
         let enforce_primary_axis_no_backtrack = matches!(routing_mode, RoutingMode::UnifiedPreview)
@@ -2163,6 +2169,11 @@ fn points_for_svg_path(
         } else {
             points.to_vec()
         };
+    let points = if matches!(curve, SvgEdgePathStyle::Orthogonal) {
+        collapse_immediate_axis_turnbacks(&points)
+    } else {
+        points
+    };
     match path_detail {
         PathDetail::Full => points,
         PathDetail::Compact => {
@@ -2247,6 +2258,15 @@ fn edge_endpoint_shape_rects(
     };
 
     Some((from, to))
+}
+
+fn edge_touches_diamond_endpoint(diagram: &Diagram, geom: &GraphGeometry, edge: &Edge) -> bool {
+    edge_endpoint_shape_rects(diagram, geom, edge).is_some_and(
+        |((_from_rect, from_shape), (_to_rect, to_shape))| {
+            matches!(from_shape, Shape::Diamond | Shape::Hexagon)
+                || matches!(to_shape, Shape::Diamond | Shape::Hexagon)
+        },
+    )
 }
 
 fn should_adjust_rerouted_edge_endpoints(
@@ -2470,6 +2490,93 @@ fn fix_corner_points(points: &[Point]) -> Vec<Point> {
     }
 
     out
+}
+
+fn collapse_tiny_linear_smoothing_jogs(points: &[Point], short_tol: f64) -> Vec<Point> {
+    if points.len() < 4 || short_tol <= 0.0 {
+        return points.to_vec();
+    }
+
+    let mut collapsed = points.to_vec();
+    let mut idx = 1usize;
+    while idx + 1 < collapsed.len() {
+        let prev = collapsed[idx - 1];
+        let curr = collapsed[idx];
+        let next = collapsed[idx + 1];
+
+        let prev_axis = segment_axis(prev, curr);
+        let next_axis = segment_axis(curr, next);
+        let prev_len = ((curr.x - prev.x).powi(2) + (curr.y - prev.y).powi(2)).sqrt();
+        let next_len = ((next.x - curr.x).powi(2) + (next.y - curr.y).powi(2)).sqrt();
+        let both_diagonal = prev_axis.is_none() && next_axis.is_none();
+
+        let v1x = curr.x - prev.x;
+        let v1y = curr.y - prev.y;
+        let v2x = next.x - curr.x;
+        let v2y = next.y - curr.y;
+        let dot = v1x * v2x + v1y * v2y;
+
+        if both_diagonal && (prev_len < short_tol || next_len < short_tol) && dot > 0.0 {
+            collapsed.remove(idx);
+            idx = idx.saturating_sub(1).max(1);
+            continue;
+        }
+
+        idx += 1;
+    }
+
+    collapsed
+}
+
+fn collapse_immediate_axis_turnbacks(points: &[Point]) -> Vec<Point> {
+    const EPS: f64 = 1e-6;
+    if points.len() <= 2 {
+        return points.to_vec();
+    }
+
+    let mut current = points.to_vec();
+    loop {
+        let mut changed = false;
+        let mut reduced = Vec::with_capacity(current.len());
+        reduced.push(current[0]);
+
+        for idx in 1..(current.len() - 1) {
+            let prev = *reduced.last().expect("reduced is non-empty");
+            let curr = current[idx];
+            let next = current[idx + 1];
+
+            let should_drop = match (segment_axis(prev, curr), segment_axis(curr, next)) {
+                (Some(SegmentAxis::Vertical), Some(SegmentAxis::Vertical)) => {
+                    let d1 = curr.y - prev.y;
+                    let d2 = next.y - curr.y;
+                    d1.abs() > EPS && d2.abs() > EPS && d1.signum() != d2.signum()
+                }
+                (Some(SegmentAxis::Horizontal), Some(SegmentAxis::Horizontal)) => {
+                    let d1 = curr.x - prev.x;
+                    let d2 = next.x - curr.x;
+                    d1.abs() > EPS && d2.abs() > EPS && d1.signum() != d2.signum()
+                }
+                _ => false,
+            };
+
+            if should_drop {
+                changed = true;
+                continue;
+            }
+            reduced.push(curr);
+        }
+
+        reduced.push(*current.last().expect("points has at least two elements"));
+        reduced.dedup_by(|a, b| (a.x - b.x).abs() <= EPS && (a.y - b.y).abs() <= EPS);
+
+        if !changed {
+            return reduced;
+        }
+        current = reduced;
+        if current.len() <= 2 {
+            return current;
+        }
+    }
 }
 
 fn points_are_axis_aligned(points: &[Point]) -> bool {
