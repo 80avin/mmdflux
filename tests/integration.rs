@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::diagram::{OutputFormat, RenderConfig, RoutingPolicyToggles, SvgEdgePathStyle};
-use mmdflux::diagrams::flowchart::engine::DagreLayoutEngine;
+use mmdflux::diagrams::flowchart::engine::{DagreLayoutEngine, MeasurementMode};
 use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::render::{
@@ -3254,6 +3254,460 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
             );
         }
     }
+}
+
+#[test]
+fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex() {
+    fn point_face(
+        rect: mmdflux::diagrams::flowchart::geometry::FRect,
+        point: mmdflux::diagrams::flowchart::geometry::FPoint,
+    ) -> &'static str {
+        let eps = 0.5;
+        let left = rect.x;
+        let right = rect.x + rect.width;
+        let top = rect.y;
+        let bottom = rect.y + rect.height;
+
+        let on_right = (point.x - right).abs() <= eps;
+        let on_left = (point.x - left).abs() <= eps;
+        let on_top = (point.y - top).abs() <= eps;
+        let on_bottom = (point.y - bottom).abs() <= eps;
+
+        if on_right && point.y > top + eps && point.y < bottom - eps {
+            "right"
+        } else if on_left && point.y > top + eps && point.y < bottom - eps {
+            "left"
+        } else if on_top && point.x > left + eps && point.x < right - eps {
+            "top"
+        } else if on_bottom && point.x > left + eps && point.x < right - eps {
+            "bottom"
+        } else if on_right {
+            "right"
+        } else if on_left {
+            "left"
+        } else {
+            "interior_or_corner"
+        }
+    }
+
+    let render_text_with_mode = |input: &str, mode: RoutingMode| {
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(input).expect("fixture should parse");
+        instance
+            .render(
+                OutputFormat::Text,
+                &RenderConfig {
+                    routing_mode: Some(mode),
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("text render should succeed")
+    };
+
+    let cases = [
+        ("decision.mmd", "D", "A", Some("top"), "bottom"),
+        ("complex.mmd", "E", "A", None, "bottom"),
+    ];
+
+    for (fixture, from, to, expected_source_face, expected_target_face) in cases {
+        let input = load_fixture(fixture);
+        let flowchart = parse_flowchart(&input).expect("fixture should parse");
+        let diagram = build_diagram(&flowchart);
+        let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
+        let engine = DagreLayoutEngine::with_mode(mode);
+        let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+        let geom = engine
+            .layout(&diagram, &config)
+            .expect("layout should succeed");
+
+        let source_rect = geom
+            .nodes
+            .get(from)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain source node {from}"))
+            .rect;
+        let target_rect = geom
+            .nodes
+            .get(to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {to}"))
+            .rect;
+
+        let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let full_edge = full
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain edge {from}->{to}"));
+        let unified_edge = unified
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain edge {from}->{to}"));
+
+        let full_start = full_edge
+            .path
+            .first()
+            .copied()
+            .expect("full-compute edge should have source endpoint");
+        let full_end = full_edge
+            .path
+            .last()
+            .copied()
+            .expect("full-compute edge should have target endpoint");
+        let unified_start = unified_edge
+            .path
+            .first()
+            .copied()
+            .expect("unified-preview edge should have source endpoint");
+        let unified_end = unified_edge
+            .path
+            .last()
+            .copied()
+            .expect("unified-preview edge should have target endpoint");
+
+        let full_source_face = point_face(source_rect, full_start);
+        let full_target_face = point_face(target_rect, full_end);
+        let unified_source_face = point_face(source_rect, unified_start);
+        let unified_target_face = point_face(target_rect, unified_end);
+
+        if let Some(expected_source_face) = expected_source_face {
+            assert_eq!(
+                full_source_face, expected_source_face,
+                "fixture contract changed unexpectedly: full-compute {from}->{to} should use source face {expected_source_face}; path={:?}",
+                full_edge.path
+            );
+        }
+        assert_eq!(
+            full_target_face, expected_target_face,
+            "fixture contract changed unexpectedly: full-compute {from}->{to} should use target face {expected_target_face}; path={:?}",
+            full_edge.path
+        );
+
+        if let Some(expected_source_face) = expected_source_face {
+            assert_eq!(
+                unified_source_face, expected_source_face,
+                "unified-preview {from}->{to} should match TD source-face parity with text/full ({expected_source_face}) for fixture {fixture}; full_path={:?}, unified_path={:?}",
+                full_edge.path, unified_edge.path
+            );
+        }
+        assert_eq!(
+            unified_target_face, expected_target_face,
+            "unified-preview {from}->{to} should match TD target-entry parity with text/full ({expected_target_face}) for fixture {fixture}; full_path={:?}, unified_path={:?}",
+            full_edge.path, unified_edge.path
+        );
+
+        let full_text = render_text_with_mode(&input, RoutingMode::FullCompute);
+        let unified_text = render_text_with_mode(&input, RoutingMode::UnifiedPreview);
+        assert_eq!(
+            unified_text, full_text,
+            "fixture {fixture} unified-preview text should match full-compute text when TD backward entry-face parity is satisfied"
+        );
+    }
+}
+
+#[test]
+fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
+    const MAX_GIT_CHANNEL_LANE_Y_DRIFT: f64 = 3.0;
+    const MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL: f64 = 8.0;
+
+    fn point_face(
+        rect: mmdflux::diagrams::flowchart::geometry::FRect,
+        point: mmdflux::diagrams::flowchart::geometry::FPoint,
+    ) -> &'static str {
+        let eps = 0.5;
+        let left = rect.x;
+        let right = rect.x + rect.width;
+        let top = rect.y;
+        let bottom = rect.y + rect.height;
+
+        let on_right = (point.x - right).abs() <= eps;
+        let on_left = (point.x - left).abs() <= eps;
+        let on_top = (point.y - top).abs() <= eps;
+        let on_bottom = (point.y - bottom).abs() <= eps;
+
+        if on_right && point.y > top + eps && point.y < bottom - eps {
+            "right"
+        } else if on_left && point.y > top + eps && point.y < bottom - eps {
+            "left"
+        } else if on_top && point.x > left + eps && point.x < right - eps {
+            "top"
+        } else if on_bottom && point.x > left + eps && point.x < right - eps {
+            "bottom"
+        } else if on_right {
+            "right"
+        } else if on_left {
+            "left"
+        } else {
+            "interior_or_corner"
+        }
+    }
+
+    let render_text_with_mode = |input: &str, mode: RoutingMode| {
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(input).expect("fixture should parse");
+        instance
+            .render(
+                OutputFormat::Text,
+                &RenderConfig {
+                    routing_mode: Some(mode),
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("text render should succeed")
+    };
+
+    {
+        let fixture = "git_workflow.mmd";
+        let input = load_fixture(fixture);
+        let flowchart = parse_flowchart(&input).expect("fixture should parse");
+        let diagram = build_diagram(&flowchart);
+        let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
+        let engine = DagreLayoutEngine::with_mode(mode);
+        let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+        let geom = engine
+            .layout(&diagram, &config)
+            .expect("layout should succeed");
+        assert_eq!(
+            geom.direction,
+            Direction::LeftRight,
+            "fixture {fixture} should remain LR for backward channel spacing parity checks"
+        );
+
+        let source_rect = geom
+            .nodes
+            .get("Remote")
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain source node Remote"))
+            .rect;
+        let target_rect = geom
+            .nodes
+            .get("Working")
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Working"))
+            .rect;
+
+        let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+        let full_edge = full
+            .edges
+            .iter()
+            .find(|edge| edge.from == "Remote" && edge.to == "Working")
+            .expect("fixture should contain edge Remote -> Working");
+        let unified_edge = unified
+            .edges
+            .iter()
+            .find(|edge| edge.from == "Remote" && edge.to == "Working")
+            .expect("fixture should contain edge Remote -> Working");
+
+        let full_start = full_edge.path[0];
+        let _full_end = *full_edge.path.last().expect("full edge should have endpoint");
+        let unified_start = unified_edge.path[0];
+        let unified_end = *unified_edge.path.last().expect("unified edge should have endpoint");
+        let _full_source_face = point_face(source_rect, full_start);
+        assert_eq!(
+            point_face(source_rect, unified_start),
+            "bottom",
+            "unified-preview Remote -> Working should preserve canonical bottom source face while matching spacing parity; full_path={:?}, unified_path={:?}",
+            full_edge.path,
+            unified_edge.path
+        );
+        assert_eq!(
+            point_face(target_rect, unified_end),
+            "bottom",
+            "unified-preview Remote -> Working should preserve canonical bottom target face while matching spacing parity; full_path={:?}, unified_path={:?}",
+            full_edge.path,
+            unified_edge.path
+        );
+
+        let full_lane_y = full_edge
+            .path
+            .iter()
+            .map(|point| point.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let unified_lane_y = unified_edge
+            .path
+            .iter()
+            .map(|point| point.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(
+            (unified_lane_y - full_lane_y).abs() <= MAX_GIT_CHANNEL_LANE_Y_DRIFT,
+            "unified-preview Remote -> Working should keep LR backward lane y close to full-compute text baseline (drift <= {MAX_GIT_CHANNEL_LANE_Y_DRIFT}): full_lane_y={full_lane_y}, unified_lane_y={unified_lane_y}, full_path={:?}, unified_path={:?}",
+            full_edge.path,
+            unified_edge.path
+        );
+
+        let full_text = render_text_with_mode(&input, RoutingMode::FullCompute);
+        let unified_text = render_text_with_mode(&input, RoutingMode::UnifiedPreview);
+        assert_eq!(
+            unified_text, full_text,
+            "fixture {fixture} unified-preview text should match full-compute text once LR backward channel spacing parity is satisfied"
+        );
+    }
+
+    {
+        let fixture = "http_request.mmd";
+        let input = load_fixture(fixture);
+        let flowchart = parse_flowchart(&input).expect("fixture should parse");
+        let diagram = build_diagram(&flowchart);
+        let engine = DagreLayoutEngine::text();
+        let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+        let geom = engine
+            .layout(&diagram, &config)
+            .expect("layout should succeed");
+
+        let source_rect = geom
+            .nodes
+            .get("Response")
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain source node Response"))
+            .rect;
+        let target_rect = geom
+            .nodes
+            .get("Client")
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Client"))
+            .rect;
+
+        let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+        let full_edge = full
+            .edges
+            .iter()
+            .find(|edge| edge.from == "Response" && edge.to == "Client")
+            .expect("fixture should contain edge Response -> Client");
+        let unified_edge = unified
+            .edges
+            .iter()
+            .find(|edge| edge.from == "Response" && edge.to == "Client")
+            .expect("fixture should contain edge Response -> Client");
+
+        let full_start = full_edge.path[0];
+        let _full_end = *full_edge.path.last().expect("full edge should have endpoint");
+        let unified_start = unified_edge.path[0];
+        let unified_end = *unified_edge.path.last().expect("unified edge should have endpoint");
+        let _full_source_face = point_face(source_rect, full_start);
+        assert_eq!(
+            point_face(source_rect, unified_start),
+            "right",
+            "unified-preview Response -> Client should preserve canonical right source face while matching right-clearance parity; full_path={:?}, unified_path={:?}",
+            full_edge.path,
+            unified_edge.path
+        );
+        assert_eq!(
+            point_face(target_rect, unified_end),
+            "right",
+            "unified-preview Response -> Client should preserve canonical right target face while matching right-clearance parity; full_path={:?}, unified_path={:?}",
+            full_edge.path,
+            unified_edge.path
+        );
+
+        let full_right_lane_x = full_edge
+            .path
+            .iter()
+            .map(|point| point.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let unified_right_lane_x = unified_edge
+            .path
+            .iter()
+            .map(|point| point.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(
+            unified_right_lane_x + MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL >= full_right_lane_x,
+            "unified-preview Response -> Client should preserve right-side clearance close to full-compute text baseline (allowed shrink <= {MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL}): full_right_lane_x={full_right_lane_x}, unified_right_lane_x={unified_right_lane_x}, full_path={:?}, unified_path={:?}",
+            full_edge.path,
+            unified_edge.path
+        );
+
+        let full_text = render_text_with_mode(&input, RoutingMode::FullCompute);
+        let unified_text = render_text_with_mode(&input, RoutingMode::UnifiedPreview);
+        assert_eq!(
+            unified_text, full_text,
+            "fixture {fixture} unified-preview text should match full-compute text once right-side backward clearance parity is satisfied"
+        );
+    }
+}
+
+#[test]
+fn integration_multi_edge_labeled_followup_spacing_contract() {
+    const MAX_LABEL_SPACING_LOSS_FROM_FULL: f64 = 10.0;
+
+    fn parse_attr_f64(line: &str, attr: &str) -> Option<f64> {
+        let marker = format!("{attr}=\"");
+        let start = line.find(&marker)? + marker.len();
+        let rest = &line[start..];
+        let end = rest.find('"')?;
+        rest[..end].parse::<f64>().ok()
+    }
+
+    fn edge_label_position(svg: &str, label: &str) -> Option<(f64, f64)> {
+        svg.lines().find_map(|line| {
+            let line = line.trim();
+            if !line.starts_with("<text") || !line.contains(&format!(">{label}<")) {
+                return None;
+            }
+            Some((parse_attr_f64(line, "x")?, parse_attr_f64(line, "y")?))
+        })
+    }
+
+    fn point_distance(a: (f64, f64), b: (f64, f64)) -> f64 {
+        ((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2)).sqrt()
+    }
+
+    let input = load_fixture("multi_edge_labeled.mmd");
+    let render_with_mode = |format: OutputFormat, mode: RoutingMode| {
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(&input).expect("fixture should parse");
+        instance
+            .render(
+                format,
+                &RenderConfig {
+                    routing_mode: Some(mode),
+                    svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("render should succeed")
+    };
+
+    let full_svg = render_with_mode(OutputFormat::Svg, RoutingMode::FullCompute);
+    let unified_svg = render_with_mode(OutputFormat::Svg, RoutingMode::UnifiedPreview);
+    let full_path_1 = edge_label_position(&full_svg, "path 1")
+        .expect("full-compute SVG should render multi_edge_labeled label 'path 1'");
+    let full_path_2 = edge_label_position(&full_svg, "path 2")
+        .expect("full-compute SVG should render multi_edge_labeled label 'path 2'");
+    let unified_path_1 = edge_label_position(&unified_svg, "path 1")
+        .expect("unified-preview SVG should render multi_edge_labeled label 'path 1'");
+    let unified_path_2 = edge_label_position(&unified_svg, "path 2")
+        .expect("unified-preview SVG should render multi_edge_labeled label 'path 2'");
+
+    let full_spacing = point_distance(full_path_1, full_path_2);
+    let unified_spacing = point_distance(unified_path_1, unified_path_2);
+
+    assert!(
+        full_spacing >= 60.0,
+        "fixture contract changed unexpectedly: full-compute SVG should keep wide multi-edge label spacing (>= 60px), got {full_spacing}; path_1={full_path_1:?}, path_2={full_path_2:?}"
+    );
+    assert!(
+        unified_spacing + MAX_LABEL_SPACING_LOSS_FROM_FULL >= full_spacing,
+        "unified-preview SVG should preserve multi_edge_labeled label spacing close to full-compute (loss <= {MAX_LABEL_SPACING_LOSS_FROM_FULL}): full_spacing={full_spacing}, unified_spacing={unified_spacing}, full_positions=({full_path_1:?}, {full_path_2:?}), unified_positions=({unified_path_1:?}, {unified_path_2:?})"
+    );
+
+    let unified_text = render_with_mode(OutputFormat::Text, RoutingMode::UnifiedPreview);
+    assert!(
+        unified_text.contains("path 1"),
+        "existing multi-edge label visibility expectation should remain intact for 'path 1':\n{unified_text}"
+    );
+    assert!(
+        unified_text.contains("path 2"),
+        "existing multi-edge label visibility expectation should remain intact for 'path 2':\n{unified_text}"
+    );
 }
 
 #[test]

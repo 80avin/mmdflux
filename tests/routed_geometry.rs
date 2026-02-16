@@ -1358,6 +1358,493 @@ fn unified_route_contracts_keep_td_source_ports_normal_and_compact() {
 }
 
 // -----------------------------------------------------------------------
+// Task 0.1: TD/BT backward entry-face parity RED regressions
+// -----------------------------------------------------------------------
+
+#[test]
+fn unified_preview_decision_backward_debug_to_start_supports_td_top_bottom_parity() {
+    let fixture = "decision.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    assert_eq!(
+        geom.direction,
+        mmdflux::Direction::TopDown,
+        "fixture {fixture} should be TD for backward entry-face parity"
+    );
+
+    let source_rect = geom
+        .nodes
+        .get("D")
+        .unwrap_or_else(|| panic!("fixture {fixture} should contain source node D"))
+        .rect;
+    let target_rect = geom
+        .nodes
+        .get("A")
+        .unwrap_or_else(|| panic!("fixture {fixture} should contain target node A"))
+        .rect;
+
+    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let full_edge = full
+        .edges
+        .iter()
+        .find(|edge| edge.from == "D" && edge.to == "A")
+        .expect("fixture should contain backward edge D -> A in full-compute mode");
+    assert!(
+        full_edge.is_backward,
+        "fixture contract invalid: D -> A should be backward in full-compute mode"
+    );
+    let full_start = full_edge
+        .path
+        .first()
+        .copied()
+        .expect("full-compute backward edge should have source endpoint");
+    let full_end = full_edge
+        .path
+        .last()
+        .copied()
+        .expect("full-compute backward edge should have target endpoint");
+    let full_source_face = point_on_target_face(source_rect, full_start);
+    let full_target_face = point_on_target_face(target_rect, full_end);
+    assert_eq!(
+        full_source_face, "top",
+        "fixture contract changed unexpectedly: full-compute D -> A should depart from source top face for TD top->bottom parity; start={full_start:?}, path={:?}",
+        full_edge.path
+    );
+    assert_eq!(
+        full_target_face, "bottom",
+        "fixture contract changed unexpectedly: full-compute D -> A should enter target bottom face for TD top->bottom parity; end={full_end:?}, path={:?}",
+        full_edge.path
+    );
+
+    let unified_edge = unified
+        .edges
+        .iter()
+        .find(|edge| edge.from == "D" && edge.to == "A")
+        .expect("fixture should contain backward edge D -> A in unified-preview mode");
+    assert!(
+        unified_edge.is_backward,
+        "fixture contract invalid: D -> A should be backward in unified-preview mode"
+    );
+    let unified_start = unified_edge
+        .path
+        .first()
+        .copied()
+        .expect("unified-preview backward edge should have source endpoint");
+    let unified_end = unified_edge
+        .path
+        .last()
+        .copied()
+        .expect("unified-preview backward edge should have target endpoint");
+    let unified_source_face = point_on_target_face(source_rect, unified_start);
+    let unified_target_face = point_on_target_face(target_rect, unified_end);
+
+    assert_eq!(
+        unified_source_face, full_source_face,
+        "unified-preview D -> A should match full-compute source departure face for TD top->bottom parity: full={full_source_face}, unified={unified_source_face}, full_path={:?}, unified_path={:?}",
+        full_edge.path, unified_edge.path
+    );
+    assert_eq!(
+        unified_target_face, full_target_face,
+        "unified-preview D -> A should match full-compute target entry face for TD top->bottom parity: full={full_target_face}, unified={unified_target_face}, full_path={:?}, unified_path={:?}",
+        full_edge.path, unified_edge.path
+    );
+}
+
+#[test]
+fn unified_preview_complex_backward_more_data_to_input_supports_td_entry_parity() {
+    let fixture = "complex.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    assert_eq!(
+        geom.direction,
+        mmdflux::Direction::TopDown,
+        "fixture {fixture} should be TD for backward target-entry parity"
+    );
+
+    let target_rect = geom
+        .nodes
+        .get("A")
+        .unwrap_or_else(|| panic!("fixture {fixture} should contain target node A"))
+        .rect;
+
+    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let full_edge = full
+        .edges
+        .iter()
+        .find(|edge| edge.from == "E" && edge.to == "A")
+        .expect("fixture should contain backward edge E -> A in full-compute mode");
+    assert!(
+        full_edge.is_backward,
+        "fixture contract invalid: E -> A should be backward in full-compute mode"
+    );
+    let full_end = full_edge
+        .path
+        .last()
+        .copied()
+        .expect("full-compute backward edge should have target endpoint");
+    let full_target_face = point_on_target_face(target_rect, full_end);
+    assert_eq!(
+        full_target_face, "bottom",
+        "fixture contract changed unexpectedly: full-compute E -> A should enter target bottom face for TD entry parity; end={full_end:?}, path={:?}",
+        full_edge.path
+    );
+
+    let unified_edge = unified
+        .edges
+        .iter()
+        .find(|edge| edge.from == "E" && edge.to == "A")
+        .expect("fixture should contain backward edge E -> A in unified-preview mode");
+    assert!(
+        unified_edge.is_backward,
+        "fixture contract invalid: E -> A should be backward in unified-preview mode"
+    );
+    let unified_end = unified_edge
+        .path
+        .last()
+        .copied()
+        .expect("unified-preview backward edge should have target endpoint");
+    let unified_target_face = point_on_target_face(target_rect, unified_end);
+
+    assert_eq!(
+        unified_target_face, full_target_face,
+        "unified-preview E -> A should match full-compute target entry face for TD entry parity: full={full_target_face}, unified={unified_target_face}, full_path={:?}, unified_path={:?}",
+        full_edge.path, unified_edge.path
+    );
+}
+
+// -----------------------------------------------------------------------
+// Task 0.2: LR/RL backward clearance parity RED regressions
+// -----------------------------------------------------------------------
+
+#[test]
+fn unified_preview_git_workflow_backward_remote_to_working_preserves_min_lr_channel_spacing() {
+    const MAX_CHANNEL_LANE_Y_DRIFT: f64 = 3.0;
+    const MAX_BEND_INCREASE_FROM_FULL: usize = 1;
+
+    let fixture = "git_workflow.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    assert_eq!(
+        geom.direction,
+        mmdflux::Direction::LeftRight,
+        "fixture {fixture} should be LR for channel-spacing parity checks"
+    );
+
+    let source_rect = geom
+        .nodes
+        .get("Remote")
+        .unwrap_or_else(|| panic!("fixture {fixture} should contain source node Remote"))
+        .rect;
+    let target_rect = geom
+        .nodes
+        .get("Working")
+        .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Working"))
+        .rect;
+
+    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let full_edge = full
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Remote" && edge.to == "Working")
+        .expect("fixture should contain backward edge Remote -> Working in full-compute mode");
+    let unified_edge = unified
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Remote" && edge.to == "Working")
+        .expect("fixture should contain backward edge Remote -> Working in unified-preview mode");
+
+    assert!(
+        full_edge.is_backward && unified_edge.is_backward,
+        "fixture contract invalid: Remote -> Working should be backward in both routing modes"
+    );
+
+    let full_start = full_edge
+        .path
+        .first()
+        .copied()
+        .expect("full-compute backward edge should have source endpoint");
+    let full_end = full_edge
+        .path
+        .last()
+        .copied()
+        .expect("full-compute backward edge should have target endpoint");
+    let unified_start = unified_edge
+        .path
+        .first()
+        .copied()
+        .expect("unified-preview backward edge should have source endpoint");
+    let unified_end = unified_edge
+        .path
+        .last()
+        .copied()
+        .expect("unified-preview backward edge should have target endpoint");
+
+    let _full_source_face = point_on_target_face(source_rect, full_start);
+    let _full_target_face = point_on_target_face(target_rect, full_end);
+    let unified_source_face = point_on_target_face(source_rect, unified_start);
+    let unified_target_face = point_on_target_face(target_rect, unified_end);
+
+    assert_eq!(
+        unified_source_face, "bottom",
+        "unified-preview Remote -> Working should preserve canonical bottom source face while normalizing spacing parity: start={unified_start:?}, path={:?}",
+        unified_edge.path
+    );
+    assert_eq!(
+        unified_target_face, "bottom",
+        "unified-preview Remote -> Working should preserve canonical bottom target face while normalizing spacing parity: end={unified_end:?}, path={:?}",
+        unified_edge.path
+    );
+
+    let full_lane_y = full_edge
+        .path
+        .iter()
+        .map(|point| point.y)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let unified_lane_y = unified_edge
+        .path
+        .iter()
+        .map(|point| point.y)
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    assert!(
+        (unified_lane_y - full_lane_y).abs() <= MAX_CHANNEL_LANE_Y_DRIFT,
+        "unified-preview Remote -> Working should keep LR backward lane spacing close to full-compute baseline (max y drift <= {MAX_CHANNEL_LANE_Y_DRIFT}): full_lane_y={full_lane_y}, unified_lane_y={unified_lane_y}, full_path={:?}, unified_path={:?}",
+        full_edge.path,
+        unified_edge.path
+    );
+
+    let full_bends = bend_count(&full_edge.path);
+    let unified_bends = bend_count(&unified_edge.path);
+    assert!(
+        unified_bends <= full_bends + MAX_BEND_INCREASE_FROM_FULL,
+        "unified-preview Remote -> Working should avoid extra loop compaction bends relative to full-compute baseline: full_bends={full_bends}, unified_bends={unified_bends}, full_path={:?}, unified_path={:?}",
+        full_edge.path,
+        unified_edge.path
+    );
+}
+
+#[test]
+fn unified_preview_http_request_backward_response_to_client_preserves_min_right_clearance() {
+    const MAX_RIGHT_CLEARANCE_SHRINK_FROM_FULL: f64 = 8.0;
+
+    let fixture = "http_request.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    let source_rect = geom
+        .nodes
+        .get("Response")
+        .unwrap_or_else(|| panic!("fixture {fixture} should contain source node Response"))
+        .rect;
+    let target_rect = geom
+        .nodes
+        .get("Client")
+        .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Client"))
+        .rect;
+
+    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let full_edge = full
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Response" && edge.to == "Client")
+        .expect("fixture should contain backward edge Response -> Client in full-compute mode");
+    let unified_edge = unified
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Response" && edge.to == "Client")
+        .expect("fixture should contain backward edge Response -> Client in unified-preview mode");
+
+    assert!(
+        full_edge.is_backward && unified_edge.is_backward,
+        "fixture contract invalid: Response -> Client should be backward in both routing modes"
+    );
+
+    let full_start = full_edge
+        .path
+        .first()
+        .copied()
+        .expect("full-compute backward edge should have source endpoint");
+    let full_end = full_edge
+        .path
+        .last()
+        .copied()
+        .expect("full-compute backward edge should have target endpoint");
+    let unified_start = unified_edge
+        .path
+        .first()
+        .copied()
+        .expect("unified-preview backward edge should have source endpoint");
+    let unified_end = unified_edge
+        .path
+        .last()
+        .copied()
+        .expect("unified-preview backward edge should have target endpoint");
+
+    let _full_source_face = point_on_target_face(source_rect, full_start);
+    let _full_target_face = point_on_target_face(target_rect, full_end);
+    let unified_source_face = point_on_target_face(source_rect, unified_start);
+    let unified_target_face = point_on_target_face(target_rect, unified_end);
+
+    assert_eq!(
+        unified_source_face, "right",
+        "unified-preview Response -> Client should preserve canonical right source face while normalizing right-side clearance: start={unified_start:?}, path={:?}",
+        unified_edge.path
+    );
+    assert_eq!(
+        unified_target_face, "right",
+        "unified-preview Response -> Client should preserve canonical right target face while normalizing right-side clearance: end={unified_end:?}, path={:?}",
+        unified_edge.path
+    );
+
+    let full_right_lane_x = full_edge
+        .path
+        .iter()
+        .map(|point| point.x)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let unified_right_lane_x = unified_edge
+        .path
+        .iter()
+        .map(|point| point.x)
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    assert!(
+        unified_right_lane_x + MAX_RIGHT_CLEARANCE_SHRINK_FROM_FULL >= full_right_lane_x,
+        "unified-preview Response -> Client should preserve minimum right-side backward clearance close to full-compute baseline (allowed shrink <= {MAX_RIGHT_CLEARANCE_SHRINK_FROM_FULL}): full_right_lane_x={full_right_lane_x}, unified_right_lane_x={unified_right_lane_x}, full_path={:?}, unified_path={:?}",
+        full_edge.path,
+        unified_edge.path
+    );
+}
+
+#[test]
+fn unified_preview_multi_edge_labeled_preserves_parallel_lane_separation() {
+    const MAX_LANE_DETOUR_LOSS_FROM_FULL: f64 = 2.0;
+
+    let fixture = "multi_edge_labeled.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    assert_eq!(
+        geom.direction,
+        mmdflux::Direction::TopDown,
+        "fixture {fixture} should be TD for multi-edge lane separation checks"
+    );
+
+    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let mut full_parallel_edges: Vec<_> = full
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A" && edge.to == "B")
+        .collect();
+    let mut unified_parallel_edges: Vec<_> = unified
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A" && edge.to == "B")
+        .collect();
+    full_parallel_edges.sort_by_key(|edge| edge.index);
+    unified_parallel_edges.sort_by_key(|edge| edge.index);
+
+    assert_eq!(
+        full_parallel_edges.len(),
+        2,
+        "fixture contract invalid: full-compute should keep two A->B parallel edges"
+    );
+    assert_eq!(
+        unified_parallel_edges.len(),
+        2,
+        "fixture contract invalid: unified-preview should keep two A->B parallel edges"
+    );
+
+    for (full_edge, unified_edge) in full_parallel_edges.iter().zip(unified_parallel_edges.iter()) {
+        let full_detour = lateral_detour_from_endpoint_axis(&full_edge.path, geom.direction);
+        let unified_detour = lateral_detour_from_endpoint_axis(&unified_edge.path, geom.direction);
+        assert!(
+            full_detour >= 8.0,
+            "fixture contract changed unexpectedly: full-compute A->B edge index {} should keep a bowed parallel lane (detour >= 8): detour={full_detour}, path={:?}",
+            full_edge.index,
+            full_edge.path
+        );
+        assert!(
+            unified_detour + MAX_LANE_DETOUR_LOSS_FROM_FULL >= full_detour,
+            "unified-preview A->B edge index {} should preserve parallel lane detour close to full-compute (loss <= {MAX_LANE_DETOUR_LOSS_FROM_FULL}): full_detour={full_detour}, unified_detour={unified_detour}, full_path={:?}, unified_path={:?}",
+            full_edge.index,
+            full_edge.path,
+            unified_edge.path
+        );
+    }
+}
+
+#[test]
+fn unified_preview_multi_edge_labeled_preserves_label_spacing_floor() {
+    const MAX_LABEL_SPACING_LOSS_FROM_FULL: f64 = 10.0;
+
+    let fixture = "multi_edge_labeled.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let mut full_labels: Vec<_> = full
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A" && edge.to == "B")
+        .map(|edge| {
+            (
+                edge.index,
+                edge.label_position.unwrap_or_else(|| {
+                    panic!(
+                        "full-compute multi_edge_labeled edge index {} should include label_position",
+                        edge.index
+                    )
+                }),
+            )
+        })
+        .collect();
+    let mut unified_labels: Vec<_> = unified
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A" && edge.to == "B")
+        .map(|edge| {
+            (
+                edge.index,
+                edge.label_position.unwrap_or_else(|| {
+                    panic!(
+                        "unified-preview multi_edge_labeled edge index {} should include label_position",
+                        edge.index
+                    )
+                }),
+            )
+        })
+        .collect();
+    full_labels.sort_by_key(|(index, _)| *index);
+    unified_labels.sort_by_key(|(index, _)| *index);
+
+    assert_eq!(
+        full_labels.len(),
+        2,
+        "fixture contract invalid: full-compute should expose two A->B label positions"
+    );
+    assert_eq!(
+        unified_labels.len(),
+        2,
+        "fixture contract invalid: unified-preview should expose two A->B label positions"
+    );
+
+    let full_spacing = point_distance(full_labels[0].1, full_labels[1].1);
+    let unified_spacing = point_distance(unified_labels[0].1, unified_labels[1].1);
+
+    assert!(
+        full_spacing >= 60.0,
+        "fixture contract changed unexpectedly: full-compute A->B label spacing should remain wide (>= 60px), got {full_spacing}; labels={full_labels:?}"
+    );
+    assert!(
+        unified_spacing + MAX_LABEL_SPACING_LOSS_FROM_FULL >= full_spacing,
+        "unified-preview should preserve multi-edge label spacing close to full-compute baseline (loss <= {MAX_LABEL_SPACING_LOSS_FROM_FULL}): full_spacing={full_spacing}, unified_spacing={unified_spacing}, full_labels={full_labels:?}, unified_labels={unified_labels:?}"
+    );
+}
+
+// -----------------------------------------------------------------------
 // Task 0.2: Q1 policy spec contracts
 // -----------------------------------------------------------------------
 
