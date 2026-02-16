@@ -1598,6 +1598,91 @@ fn unified_preview_complex_backward_more_data_to_input_avoids_tiny_terminal_stai
     }
 }
 
+#[test]
+fn unified_preview_td_backward_followup_edges_match_full_compute_entry_face_parity() {
+    let cases = [
+        ("simple_cycle.mmd", "C", "A"),
+        ("multiple_cycles.mmd", "C", "A"),
+        ("q1_q2_conflict.mmd", "Q2", "B"),
+    ];
+
+    for (fixture, from, to) in cases {
+        let (diagram, geom) = layout_fixture_svg(fixture);
+        assert_eq!(
+            geom.direction,
+            mmdflux::Direction::TopDown,
+            "fixture {fixture} should be TD for backward-entry parity checks"
+        );
+
+        let source_rect = geom
+            .nodes
+            .get(from)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain source node {from}"))
+            .rect;
+        let target_rect = geom
+            .nodes
+            .get(to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {to}"))
+            .rect;
+
+        let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+        let full_edge = full
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain backward edge {from} -> {to} in full-compute mode"));
+        let unified_edge = unified
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain backward edge {from} -> {to} in unified-preview mode"));
+
+        assert!(
+            full_edge.is_backward && unified_edge.is_backward,
+            "fixture {fixture} contract invalid: {from} -> {to} should be backward in both routing modes"
+        );
+
+        let full_start = full_edge
+            .path
+            .first()
+            .copied()
+            .expect("full-compute backward edge should have source endpoint");
+        let full_end = full_edge
+            .path
+            .last()
+            .copied()
+            .expect("full-compute backward edge should have target endpoint");
+        let unified_start = unified_edge
+            .path
+            .first()
+            .copied()
+            .expect("unified-preview backward edge should have source endpoint");
+        let unified_end = unified_edge
+            .path
+            .last()
+            .copied()
+            .expect("unified-preview backward edge should have target endpoint");
+
+        let full_source_face = point_on_target_face(source_rect, full_start);
+        let full_target_face = point_on_target_face(target_rect, full_end);
+        let unified_source_face = point_on_target_face(source_rect, unified_start);
+        let unified_target_face = point_on_target_face(target_rect, unified_end);
+
+        assert_eq!(
+            unified_source_face, full_source_face,
+            "unified-preview {from}->{to} should match full-compute source departure face for fixture {fixture}: full={full_source_face}, unified={unified_source_face}, full_path={:?}, unified_path={:?}",
+            full_edge.path, unified_edge.path
+        );
+        assert_eq!(
+            unified_target_face, full_target_face,
+            "unified-preview {from}->{to} should match full-compute target entry face for fixture {fixture}: full={full_target_face}, unified={unified_target_face}, full_path={:?}, unified_path={:?}",
+            full_edge.path, unified_edge.path
+        );
+    }
+}
+
 // -----------------------------------------------------------------------
 // Task 0.2: LR/RL backward clearance parity RED regressions
 // -----------------------------------------------------------------------
@@ -2074,8 +2159,8 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
         .expect("backward edge should have source endpoint");
     let conflict_start_face = point_on_target_face(source_rect, conflict_start);
     assert_eq!(
-        conflict_start_face, "right",
-        "Q2 -> B should depart from the canonical TD backward source lane (right face): start={conflict_start:?}, path={:?}",
+        conflict_start_face, "top",
+        "Q2 -> B should depart from the TD parity source lane (top face): start={conflict_start:?}, path={:?}",
         conflict.path
     );
     let source_face_margin = match conflict_start_face {
@@ -2114,8 +2199,8 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
     let conflict_face = point_on_target_face(target_rect, conflict_end);
     assert_eq!(
         conflict_face,
-        "right",
-        "Q2 -> B must keep TD backward canonical channel under fan-in pressure: end={conflict_end:?}, path={path:?}",
+        "bottom",
+        "Q2 -> B should enter B on the TD parity target lane (bottom face) under fan-in pressure: end={conflict_end:?}, path={path:?}",
         conflict_end = conflict_end,
         path = conflict.path
     );
@@ -2164,8 +2249,8 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
         .count();
 
     assert_eq!(
-        right_face_count, 1,
-        "only the backward conflict edge should occupy B's canonical right-backward lane: right_face_count={right_face_count}"
+        right_face_count, 0,
+        "Q2 conflict parity policy should avoid reserving B's right lane as a special backward channel: right_face_count={right_face_count}"
     );
 }
 
@@ -2252,7 +2337,9 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_face_policies() {
     }
 
     let q2_cases = [
-        ("multiple_cycles.mmd", "C", "A", "right", "right"),
+        ("simple_cycle.mmd", "C", "A", "bottom", "top"),
+        ("multiple_cycles.mmd", "C", "A", "bottom", "top"),
+        ("q1_q2_conflict.mmd", "Q2", "B", "bottom", "top"),
         ("http_request.mmd", "Response", "Client", "right", "right"),
         ("git_workflow.mmd", "Remote", "Working", "bottom", "bottom"),
     ];

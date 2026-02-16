@@ -287,6 +287,9 @@ fn build_unified_path(
         );
         let parity_override_active =
             backward_source_face_override.is_some() || backward_target_face_override.is_some();
+        if parity_override_active {
+            finalized = normalize_orthogonal_route_contracts(&finalized, direction);
+        }
         if parity_override_active && has_immediate_axial_turnback(&finalized) {
             finalized = base_finalized;
             enforce_backward_source_tangent_direction(&mut finalized, edge, geometry, direction, None);
@@ -321,36 +324,15 @@ fn backward_td_bt_face_overrides(
     geometry: &GraphGeometry,
     direction: Direction,
     is_backward: bool,
-    target_overflowed: bool,
+    _target_overflowed: bool,
 ) -> (Option<Face>, Option<Face>) {
+    const MIN_OVERRIDE_RECT_SPAN: f64 = 20.0;
     if !is_backward || !matches!(direction, Direction::TopDown | Direction::BottomTop) {
         return (None, None);
     }
     if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
         return (None, None);
     }
-    // Preserve established canonical contracts for protected cycle/conflict edges.
-    if (edge.from == "C" && edge.to == "A") || (edge.from == "Q2" && edge.to == "B") {
-        return (None, None);
-    }
-    let backward_outbound_from_source = geometry
-        .edges
-        .iter()
-        .filter(|candidate| {
-            candidate.from == edge.from && geometry.reversed_edges.contains(&candidate.index)
-        })
-        .count();
-    let backward_inbound_to_target = geometry
-        .edges
-        .iter()
-        .filter(|candidate| {
-            candidate.to == edge.to && geometry.reversed_edges.contains(&candidate.index)
-        })
-        .count();
-    if backward_outbound_from_source != 1 || backward_inbound_to_target != 1 {
-        return (None, None);
-    }
-
     let hint = edge.layout_path_hint.as_ref();
     let Some(hint) = hint else {
         return (None, None);
@@ -369,13 +351,22 @@ fn backward_td_bt_face_overrides(
     else {
         return (None, None);
     };
+    // Restrict parity overrides to geometry with stable floating-point extents.
+    // Tiny text-grid rectangles are too coarse and can overfit corner hints.
+    if source_rect.width < MIN_OVERRIDE_RECT_SPAN
+        || source_rect.height < MIN_OVERRIDE_RECT_SPAN
+        || target_rect.width < MIN_OVERRIDE_RECT_SPAN
+        || target_rect.height < MIN_OVERRIDE_RECT_SPAN
+    {
+        return (None, None);
+    }
 
     let source_hint = hint[0];
     let target_hint = hint[hint.len() - 1];
     let source_override = hint_face_for_td_bt_parity(source_hint, source_rect)
         .filter(|face| matches!(face, Face::Top | Face::Bottom));
     let target_override = hint_face_for_td_bt_parity(target_hint, target_rect)
-        .filter(|face| matches!(face, Face::Top | Face::Bottom) && !target_overflowed);
+        .filter(|face| matches!(face, Face::Top | Face::Bottom));
     if target_override.is_none() {
         return (None, None);
     }
@@ -1868,6 +1859,7 @@ fn boundary_face_excluding_corners(point: FPoint, rect: FRect, eps: f64) -> Opti
 
 fn hint_face_for_td_bt_parity(point: FPoint, rect: FRect) -> Option<Face> {
     const FACE_EPS: f64 = 2.0;
+    const CORNER_BIAS: f64 = 0.5;
     let left = rect.x;
     let right = rect.x + rect.width;
     let top = rect.y;
@@ -1878,17 +1870,18 @@ fn hint_face_for_td_bt_parity(point: FPoint, rect: FRect) -> Option<Face> {
     let dist_top = (point.y - top).abs();
     let dist_bottom = (point.y - bottom).abs();
 
+    let horizontal_dist = dist_left.min(dist_right);
     let vertical_dist = dist_top.min(dist_bottom);
-    if vertical_dist <= FACE_EPS {
+
+    // Reject corner-ambiguous hints where side/top proximity is comparable.
+    if vertical_dist <= FACE_EPS && vertical_dist + CORNER_BIAS < horizontal_dist {
         return if dist_top <= dist_bottom {
             Some(Face::Top)
         } else {
             Some(Face::Bottom)
         };
     }
-
-    let horizontal_dist = dist_left.min(dist_right);
-    if horizontal_dist <= FACE_EPS {
+    if horizontal_dist <= FACE_EPS && horizontal_dist + CORNER_BIAS < vertical_dist {
         return if dist_left <= dist_right {
             Some(Face::Left)
         } else {

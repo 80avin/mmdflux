@@ -3184,13 +3184,31 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
 
     let q2_cases = [
         (
+            "simple_cycle.mmd",
+            "C",
+            "A",
+            "End",
+            "Start",
+            "top",
+            "bottom",
+        ),
+        (
             "multiple_cycles.mmd",
             "C",
             "A",
             "Bottom",
             "Top",
-            "right",
-            "right",
+            "top",
+            "bottom",
+        ),
+        (
+            "q1_q2_conflict.mmd",
+            "Q2",
+            "B",
+            "Sink",
+            "Target",
+            "top",
+            "bottom",
         ),
         (
             "http_request.mmd",
@@ -3245,12 +3263,12 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
             let source_face = svg_source_departure_face(source_rect, &points);
             assert_eq!(
                 source_face, expected_source_face,
-                "fixture {fixture_name} edge {from}->{to} should keep canonical backward source face {expected_source_face} ({mode_label}); points={points:?}"
+                "fixture {fixture_name} edge {from}->{to} should keep expected backward source face {expected_source_face} ({mode_label}); points={points:?}"
             );
             let target_face = svg_terminal_approach_face_relaxed(target_rect, &points);
             assert_eq!(
                 target_face, expected_target_face,
-                "fixture {fixture_name} edge {from}->{to} should keep canonical backward target face {expected_target_face} ({mode_label}); points={points:?}"
+                "fixture {fixture_name} edge {from}->{to} should keep expected backward target face {expected_target_face} ({mode_label}); points={points:?}"
             );
         }
     }

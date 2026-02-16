@@ -1525,8 +1525,8 @@ fn svg_non_orth_unified_preview_q1_q2_conflict_keeps_backward_canonical_face() {
         let end_face = svg_terminal_approach_face_relaxed(rect, &points);
 
         assert_eq!(
-            end_face, "right",
-            "Q2-conflict edge should keep canonical backward lane on right for {style:?}: end={end:?}, rect={rect:?}, points={points:?}"
+            end_face, "bottom",
+            "Q2-conflict edge should follow TD parity target entry (bottom face) for {style:?}: end={end:?}, rect={rect:?}, points={points:?}"
         );
     }
 }
@@ -1697,13 +1697,31 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
 
     let q2_cases = [
         (
+            "simple_cycle.mmd",
+            "C",
+            "A",
+            "End",
+            "Start",
+            "top",
+            "bottom",
+        ),
+        (
             "multiple_cycles.mmd",
             "C",
             "A",
             "Bottom",
             "Top",
-            "right",
-            "right",
+            "top",
+            "bottom",
+        ),
+        (
+            "q1_q2_conflict.mmd",
+            "Q2",
+            "B",
+            "Sink",
+            "Target",
+            "top",
+            "bottom",
         ),
         (
             "http_request.mmd",
@@ -1759,12 +1777,12 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
             let source_face = svg_source_departure_face(source_rect, &points);
             assert_eq!(
                 source_face, expected_source_face,
-                "fixture {fixture_name} edge {from}->{to} should keep canonical backward source face {expected_source_face} ({mode_label}); points={points:?}"
+                "fixture {fixture_name} edge {from}->{to} should keep expected backward source face {expected_source_face} ({mode_label}); points={points:?}"
             );
             let target_face = svg_terminal_approach_face_relaxed(target_rect, &points);
             assert_eq!(
                 target_face, expected_target_face,
-                "fixture {fixture_name} edge {from}->{to} should keep canonical backward target face {expected_target_face} ({mode_label}); points={points:?}"
+                "fixture {fixture_name} edge {from}->{to} should keep expected backward target face {expected_target_face} ({mode_label}); points={points:?}"
             );
         }
     }
