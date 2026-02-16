@@ -1554,6 +1554,50 @@ fn unified_preview_complex_backward_more_data_to_input_supports_td_entry_parity(
     );
 }
 
+#[test]
+fn unified_preview_complex_backward_more_data_to_input_avoids_tiny_terminal_staircase_elbow() {
+    const MIN_TERMINAL_LATERAL_RUN: f64 = 6.0;
+
+    let fixture = "complex.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    assert_eq!(
+        geom.direction,
+        mmdflux::Direction::TopDown,
+        "fixture {fixture} should be TD for terminal staircase checks"
+    );
+
+    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let edge = unified
+        .edges
+        .iter()
+        .find(|edge| edge.from == "E" && edge.to == "A")
+        .expect("fixture should contain backward edge E -> A in unified-preview mode");
+    assert!(
+        edge.is_backward,
+        "fixture contract invalid: E -> A should be backward in unified-preview mode"
+    );
+    assert!(
+        edge.path.len() >= 3,
+        "E -> A should have at least three points for terminal staircase checks: path={:?}",
+        edge.path
+    );
+
+    let n = edge.path.len();
+    let a = edge.path[n - 3];
+    let b = edge.path[n - 2];
+    let c = edge.path[n - 1];
+    let ab_is_horizontal = approx_eq(a.y, b.y) && !approx_eq(a.x, b.x);
+    let bc_is_vertical = approx_eq(b.x, c.x) && !approx_eq(b.y, c.y);
+    if ab_is_horizontal && bc_is_vertical {
+        let lateral_run = (b.x - a.x).abs();
+        assert!(
+            lateral_run >= MIN_TERMINAL_LATERAL_RUN,
+            "unified-preview E -> A should avoid tiny terminal staircase elbows that create acute kinks near the target (min lateral run {MIN_TERMINAL_LATERAL_RUN}): lateral_run={lateral_run}, path={:?}",
+            edge.path
+        );
+    }
+}
+
 // -----------------------------------------------------------------------
 // Task 0.2: LR/RL backward clearance parity RED regressions
 // -----------------------------------------------------------------------

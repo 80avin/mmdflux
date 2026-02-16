@@ -301,6 +301,7 @@ fn build_unified_path(
                 None,
             );
         }
+        collapse_tiny_backward_terminal_staircase(&mut finalized, direction, 6.0);
         align_backward_outer_lane_to_hint(
             &mut finalized,
             edge.layout_path_hint.as_deref(),
@@ -1386,6 +1387,49 @@ fn collapse_terminal_turnback_spikes(path: &mut Vec<FPoint>, canonical_face: Fac
             }
         }
     }
+
+    let mut idx = 1usize;
+    while idx < path.len() {
+        if points_match(path[idx - 1], path[idx]) {
+            path.remove(idx);
+        } else {
+            idx += 1;
+        }
+    }
+}
+
+fn collapse_tiny_backward_terminal_staircase(
+    path: &mut Vec<FPoint>,
+    direction: Direction,
+    min_lateral_run: f64,
+) {
+    const EPS: f64 = 0.000_001;
+    if !matches!(direction, Direction::TopDown | Direction::BottomTop)
+        || path.len() < 3
+        || min_lateral_run <= 0.0
+    {
+        return;
+    }
+
+    let n = path.len();
+    let a = path[n - 3];
+    let b = path[n - 2];
+    let mut c = path[n - 1];
+
+    let ab_is_horizontal = (a.y - b.y).abs() <= EPS && (a.x - b.x).abs() > EPS;
+    let bc_is_vertical = (b.x - c.x).abs() <= EPS && (b.y - c.y).abs() > EPS;
+    if !ab_is_horizontal || !bc_is_vertical {
+        return;
+    }
+
+    let lateral_run = (b.x - a.x).abs();
+    if lateral_run + EPS >= min_lateral_run {
+        return;
+    }
+
+    c.x = a.x;
+    path[n - 1] = c;
+    path[n - 2] = FPoint::new(a.x, b.y);
 
     let mut idx = 1usize;
     while idx < path.len() {
