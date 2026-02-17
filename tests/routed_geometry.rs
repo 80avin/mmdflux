@@ -2740,3 +2740,51 @@ fn unified_preview_diamond_source_endpoints_on_boundary() {
         );
     }
 }
+
+#[test]
+fn diamond_fan_out_source_endpoints_on_boundary() {
+    let (diagram, geom) = layout_fixture_svg("diamond_fan_out.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let a_rect = geom.nodes.get("A").unwrap().rect;
+    let cx = a_rect.x + a_rect.width / 2.0;
+    let cy = a_rect.y + a_rect.height / 2.0;
+    let w = a_rect.width / 2.0;
+    let h = a_rect.height / 2.0;
+
+    for to in ["B", "C", "D"] {
+        let edge = routed
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == to)
+            .unwrap_or_else(|| panic!("missing edge A->{to}"));
+        let start = edge.path.first().unwrap();
+        let boundary = (start.x - cx).abs() / w + (start.y - cy).abs() / h;
+        assert!(
+            (boundary - 1.0).abs() < 0.05,
+            "A->{to} source should be on diamond boundary, got {boundary}: {start:?}"
+        );
+    }
+}
+
+#[test]
+fn diamond_fan_out_source_endpoints_spread() {
+    let (diagram, geom) = layout_fixture_svg("diamond_fan_out.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let mut source_xs: Vec<(String, f64)> = Vec::new();
+    for to in ["B", "C", "D"] {
+        let edge = routed
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == to)
+            .unwrap_or_else(|| panic!("missing edge A->{to}"));
+        source_xs.push((to.to_string(), edge.path[0].x));
+    }
+
+    // Not all at the same x (would mean collapsed to vertex)
+    let all_same = source_xs.windows(2).all(|w| (w[0].1 - w[1].1).abs() < 0.5);
+    assert!(
+        !all_same,
+        "diamond fan-out source endpoints should spread, got: {source_xs:?}"
+    );
+}

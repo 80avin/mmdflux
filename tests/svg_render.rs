@@ -2649,3 +2649,12 @@ fn mmds_svg_diamond_endpoint_convergence_decision() {
     // Test edge into diamond node B (target convergence)
     assert_mmds_svg_endpoint_convergence(&diagram, "A", "B", tolerance);
 }
+
+#[test]
+fn mmds_svg_diamond_endpoint_convergence_diamond_fan_out() {
+    let diagram = load_flowchart_fixture_diagram("diamond_fan_out.mmd");
+    let tolerance = 5.0;
+    for to in ["B", "C", "D"] {
+        assert_mmds_svg_endpoint_convergence(&diagram, "A", to, tolerance);
+    }
+}
