@@ -1891,6 +1891,76 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_avoids_source_elbow_axi
 }
 
 #[test]
+fn svg_orthogonal_unified_preview_decision_backward_edge_keeps_bottom_target_face_parity() {
+    let diagram = load_flowchart_fixture_diagram("decision.mmd");
+    let edge_idx = edge_index(&diagram, "D", "A");
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+    let start_rect =
+        node_rect_for_label(&svg, "Start").expect("missing Start rect in decision fixture");
+    let target_face = svg_terminal_approach_face_relaxed(start_rect, &points);
+
+    assert_eq!(
+        target_face, "bottom",
+        "decision D->A orthogonal backward edge should keep TD backward target-entry parity on Start bottom face; face={target_face}, points={points:?}"
+    );
+}
+
+#[test]
+fn svg_orthogonal_unified_preview_decision_backward_edge_preserves_routed_terminal_lane_x() {
+    const MAX_TERMINAL_LANE_X_DRIFT: f64 = 8.0;
+
+    let diagram = load_flowchart_fixture_diagram("decision.mmd");
+    let edge_idx = edge_index(&diagram, "D", "A");
+
+    let measurement_mode = mmdflux::diagrams::flowchart::engine::MeasurementMode::for_format(
+        OutputFormat::Svg,
+        &RenderConfig::default(),
+    );
+    let engine = DagreLayoutEngine::with_mode(measurement_mode);
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let geom = engine
+        .layout(&diagram, &config)
+        .expect("layout should succeed for decision fixture");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed_edge = routed
+        .edges
+        .iter()
+        .find(|edge| edge.from == "D" && edge.to == "A")
+        .expect("decision fixture should contain backward edge D -> A");
+    assert!(
+        routed_edge.path.len() >= 3,
+        "routed decision D->A should keep at least one terminal support segment: path={:?}",
+        routed_edge.path
+    );
+    let routed_terminal_support = routed_edge.path[routed_edge.path.len() - 2];
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+    assert!(
+        points.len() >= 3,
+        "rendered decision D->A should keep at least one terminal support segment: points={points:?}"
+    );
+    let svg_terminal_support = points[points.len() - 2];
+    let drift = (svg_terminal_support.0 - routed_terminal_support.x).abs();
+
+    assert!(
+        drift <= MAX_TERMINAL_LANE_X_DRIFT,
+        "decision D->A orthogonal SVG endpoint adjustment should preserve routed terminal lane x (drift <= {MAX_TERMINAL_LANE_X_DRIFT}); routed_terminal_support={routed_terminal_support:?}, svg_terminal_support={svg_terminal_support:?}, drift={drift}, routed_path={:?}, svg_points={points:?}",
+        routed_edge.path
+    );
+}
+
+#[test]
 fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
     let q1_cases = [
         ("stacked_fan_in.mmd", "C", "Bot", 0usize),
