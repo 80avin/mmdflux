@@ -887,7 +887,15 @@ fn render_edges(
                         edge_direction,
                     )));
         let mut points = if should_adjust {
-            adjust_edge_points_for_shapes(diagram, geom, edge, &points, edge_direction, is_backward)
+            adjust_edge_points_for_shapes(
+                diagram,
+                geom,
+                edge,
+                &points,
+                edge_direction,
+                is_backward,
+                routing_mode,
+            )
         } else {
             points
         };
@@ -2382,6 +2390,7 @@ fn adjust_edge_points_for_shapes(
     points: &[Point],
     direction: Direction,
     is_backward: bool,
+    routing_mode: RoutingMode,
 ) -> Vec<Point> {
     const EPS: f64 = 0.5;
     if points.len() < 2 {
@@ -2395,26 +2404,23 @@ fn adjust_edge_points_for_shapes(
     };
 
     let mut adjusted = points.to_vec();
-    // For non-rect shapes on non-self-loop forward edges, the router places
-    // endpoints on the actual shape boundary. Skip the rect-face-proximity check
-    // — their endpoints are authoritative from the router.
-    // Backward edges use dagre hint points that land on the bounding rect, so
-    // diamond/hexagon endpoints always need projection to the shape boundary.
-    // Self-loops use a different path construction, so the safety net still applies.
     let is_self_loop = edge.from == edge.to;
-    let source_shape_authoritative =
-        !is_self_loop && !is_backward && matches!(from_shape, Shape::Diamond | Shape::Hexagon);
-    let target_shape_authoritative =
-        !is_self_loop && !is_backward && matches!(to_shape, Shape::Diamond | Shape::Hexagon);
-    // Backward edges with non-rect shapes: always project to shape boundary,
-    // since dagre hint points land on the bounding rect, not the shape.
-    let backward_source_needs_shape_projection =
-        !is_self_loop && is_backward && matches!(from_shape, Shape::Diamond | Shape::Hexagon);
-    let backward_target_needs_shape_projection =
-        !is_self_loop && is_backward && matches!(to_shape, Shape::Diamond | Shape::Hexagon);
-    let source_needs_adjustment = backward_source_needs_shape_projection
-        || (!source_shape_authoritative
-            && endpoint_attachment_is_invalid(
+    // In unified-preview mode the router already places forward non-rect shape
+    // endpoints on the actual shape boundary — these are authoritative and must
+    // not be re-projected (different approach angles would shift them).
+    // In full-compute mode dagre only clips to the bounding rect, so non-rect
+    // shapes always need re-projection to the actual shape boundary.
+    let router_placed_source = matches!(routing_mode, RoutingMode::UnifiedPreview)
+        && !is_self_loop
+        && !is_backward
+        && matches!(from_shape, Shape::Diamond | Shape::Hexagon);
+    let router_placed_target = matches!(routing_mode, RoutingMode::UnifiedPreview)
+        && !is_self_loop
+        && !is_backward
+        && matches!(to_shape, Shape::Diamond | Shape::Hexagon);
+    let source_needs_adjustment = !router_placed_source
+        && (matches!(from_shape, Shape::Diamond | Shape::Hexagon)
+            || endpoint_attachment_is_invalid(
                 points[0],
                 from_rect,
                 direction,
@@ -2422,9 +2428,9 @@ fn adjust_edge_points_for_shapes(
                 is_backward,
                 EPS,
             ));
-    let target_needs_adjustment = backward_target_needs_shape_projection
-        || (!target_shape_authoritative
-            && endpoint_attachment_is_invalid(
+    let target_needs_adjustment = !router_placed_target
+        && (matches!(to_shape, Shape::Diamond | Shape::Hexagon)
+            || endpoint_attachment_is_invalid(
                 points[points.len() - 1],
                 to_rect,
                 direction,
