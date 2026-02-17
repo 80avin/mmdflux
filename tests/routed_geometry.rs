@@ -2229,20 +2229,32 @@ enum OverflowSide {
 
 const FAN_IN_PRIMARY_FACE_CAPACITY_TD_BT: usize = 4;
 const FAN_IN_PRIMARY_FACE_CAPACITY_LR_RL: usize = 2;
+const FAN_IN_MIN_PRIMARY_SLOT_SPACING: f64 = 16.0;
+const FAN_IN_MIN_CORNER_INSET_FORWARD: f64 = 8.0;
 
-fn fan_in_primary_face_capacity(direction: FanInSpecDirection) -> usize {
-    match direction {
+fn fan_in_primary_face_capacity(direction: FanInSpecDirection, face_span: f64) -> usize {
+    let _baseline = match direction {
         FanInSpecDirection::TopDown | FanInSpecDirection::BottomTop => {
             FAN_IN_PRIMARY_FACE_CAPACITY_TD_BT
         }
         FanInSpecDirection::LeftRight | FanInSpecDirection::RightLeft => {
             FAN_IN_PRIMARY_FACE_CAPACITY_LR_RL
         }
+    };
+    let usable = (face_span - 2.0 * FAN_IN_MIN_CORNER_INSET_FORWARD).max(0.0);
+    if usable <= f64::EPSILON {
+        1
+    } else {
+        (usable / FAN_IN_MIN_PRIMARY_SLOT_SPACING).floor() as usize + 1
     }
 }
 
-fn fan_in_overflow_activates(direction: FanInSpecDirection, incoming_degree: usize) -> bool {
-    incoming_degree > fan_in_primary_face_capacity(direction)
+fn fan_in_overflow_activates(
+    direction: FanInSpecDirection,
+    incoming_degree: usize,
+    face_span: f64,
+) -> bool {
+    incoming_degree > fan_in_primary_face_capacity(direction, face_span)
 }
 
 fn fan_in_overflow_distribution_order(
@@ -2263,19 +2275,59 @@ fn fan_in_overflow_distribution_order(
 #[test]
 fn fan_in_overflow_policy_spec_defines_when_overflow_must_activate() {
     let cases = [
-        ("stacked_fan_in.mmd", FanInSpecDirection::TopDown, 2, false),
-        ("fan_in.mmd", FanInSpecDirection::TopDown, 3, false),
-        ("five_fan_in.mmd", FanInSpecDirection::TopDown, 5, true),
-        ("fan_in_lr.mmd", FanInSpecDirection::LeftRight, 3, true),
+        (
+            "stacked_fan_in.mmd",
+            FanInSpecDirection::TopDown,
+            "C",
+            2,
+            false,
+        ),
+        ("fan_in.mmd", FanInSpecDirection::TopDown, "D", 3, false),
+        (
+            "five_fan_in.mmd",
+            FanInSpecDirection::TopDown,
+            "F",
+            5,
+            false,
+        ),
+        (
+            "fan_in_lr.mmd",
+            FanInSpecDirection::LeftRight,
+            "D",
+            3,
+            false,
+        ),
+        (
+            "fan_in_backward_channel_conflict.mmd",
+            FanInSpecDirection::TopDown,
+            "B",
+            6,
+            false,
+        ),
     ];
 
-    for (fixture, direction, incoming_degree, expected_overflow) in cases {
-        let actual = fan_in_overflow_activates(direction, incoming_degree);
+    for (fixture, direction, target, incoming_degree, expected_overflow) in cases {
+        let (_, geom) = layout_fixture_svg(fixture);
+        let target_rect = geom
+            .nodes
+            .get(target)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {target}"))
+            .rect;
+        let face_span = match direction {
+            FanInSpecDirection::TopDown | FanInSpecDirection::BottomTop => target_rect.width,
+            FanInSpecDirection::LeftRight | FanInSpecDirection::RightLeft => target_rect.height,
+        };
+        let actual = fan_in_overflow_activates(direction, incoming_degree, face_span);
         assert_eq!(
             actual, expected_overflow,
-            "Fan-in overflow activation contract mismatch for fixture {fixture}: direction={direction:?}, incoming_degree={incoming_degree}"
+            "Fan-in overflow activation contract mismatch for fixture {fixture}: direction={direction:?}, incoming_degree={incoming_degree}, face_span={face_span}"
         );
     }
+
+    assert!(
+        fan_in_overflow_activates(FanInSpecDirection::TopDown, 8, 106.4),
+        "adaptive fan-in capacity should still overflow when inbound degree exceeds available primary-face slots"
+    );
 }
 
 #[test]
@@ -2459,7 +2511,7 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
     let fan_in_cases = [
         ("stacked_fan_in.mmd", "C", 0usize),
         ("fan_in.mmd", "D", 0usize),
-        ("five_fan_in.mmd", "F", 1usize),
+        ("five_fan_in.mmd", "F", 0usize),
     ];
 
     for (fixture, target, min_side_faces) in fan_in_cases {
@@ -2693,6 +2745,77 @@ graph TD
     assert!(
         observed_multi_slot_side,
         "expected at least one side face with multiple overflow arrivals to validate slot spreading"
+    );
+}
+
+#[test]
+fn very_narrow_fan_in_primary_face_ports_do_not_collapse_to_single_anchor() {
+    let (diagram, geom) = layout_fixture_svg("very_narrow_fan_in.mmd");
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        RoutingMode::UnifiedPreview,
+        RoutingPolicyToggles::all_enabled(),
+    );
+    let target_rect = geom
+        .nodes
+        .get("E")
+        .expect("very_narrow_fan_in should contain target E")
+        .rect;
+
+    let inbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.to == "E" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        inbound.len(),
+        4,
+        "very_narrow_fan_in should produce four inbound forward edges to E"
+    );
+
+    let mut top_xs = Vec::new();
+    let mut side_count = 0usize;
+    for edge in &inbound {
+        let end = edge
+            .path
+            .last()
+            .copied()
+            .expect("inbound edge should have endpoint");
+        match point_on_target_face(target_rect, end) {
+            "top" => top_xs.push(end.x),
+            "left" | "right" => side_count += 1,
+            _ => {}
+        }
+    }
+
+    assert_eq!(
+        side_count, 0,
+        "very_narrow_fan_in should stay on the primary TD target face when span can host all inbound slots"
+    );
+    assert_eq!(
+        top_xs.len(),
+        4,
+        "very_narrow_fan_in should attach all inbound edges on top face"
+    );
+
+    top_xs.sort_by(|a, b| a.total_cmp(b));
+    let mut unique_count = 0usize;
+    let mut last: Option<f64> = None;
+    for value in &top_xs {
+        let is_new = match last {
+            Some(prev) => (*value - prev).abs() > 0.5,
+            None => true,
+        };
+        if is_new {
+            unique_count += 1;
+            last = Some(*value);
+        }
+    }
+
+    assert_eq!(
+        unique_count, 4,
+        "very_narrow_fan_in top-face target ports should occupy distinct anchors instead of collapsing: top_xs={top_xs:?}"
     );
 }
 

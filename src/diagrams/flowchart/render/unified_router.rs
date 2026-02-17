@@ -195,6 +195,7 @@ const LABEL_ANCHOR_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
 const POINT_EPS: f64 = 0.000_001;
 const MIN_PORT_CORNER_INSET_FORWARD: f64 = 8.0;
 const MIN_PORT_CORNER_INSET_BACKWARD: f64 = 12.0;
+const MIN_FAN_IN_PRIMARY_SLOT_SPACING: f64 = 16.0;
 
 fn clamp_face_coordinate_with_corner_inset(value: f64, min: f64, max: f64, max_inset: f64) -> f64 {
     let lo = min.min(max);
@@ -513,7 +514,6 @@ fn fan_in_target_overflow_context(
             .push(edge);
     }
 
-    let capacity = fan_in_primary_face_capacity(direction);
     let primary_face = fan_in_primary_target_face(direction);
     let mut target_face_for_edge: HashMap<usize, Face> = HashMap::new();
     let mut target_fraction_for_edge: HashMap<usize, f64> = HashMap::new();
@@ -541,6 +541,13 @@ fn fan_in_target_overflow_context(
             continue;
         }
 
+        let target_rect = forward_edges
+            .first()
+            .and_then(|edge| endpoint_rect(geometry, &edge.to, edge.to_subgraph.as_deref()));
+        let capacity = target_rect
+            .map(|rect| adaptive_fan_in_primary_face_capacity(direction, rect))
+            .unwrap_or_else(|| fan_in_primary_face_capacity(direction));
+
         forward_edges.sort_by(|a, b| {
             let a_cross = fan_in_source_cross_axis(geometry, a, direction);
             let b_cross = fan_in_source_cross_axis(geometry, b, direction);
@@ -554,30 +561,28 @@ fn fan_in_target_overflow_context(
             target_face_for_edge.insert(edge.index, primary_face);
         }
 
-        if forward_edges.len() <= capacity {
-            continue;
-        }
-
-        overflow_targeted.insert(target_id);
-        let overflow_edges = &forward_edges[capacity..];
-        let target_cross = overflow_edges
-            .first()
-            .and_then(|edge| endpoint_rect(geometry, &edge.to, edge.to_subgraph.as_deref()))
-            .map(|rect| face_cross_axis(rect, direction))
-            .unwrap_or(0.0);
-        for (idx, edge) in overflow_edges.iter().enumerate() {
-            let source_cross = fan_in_source_cross_axis(geometry, edge, direction);
-            let overflow_slot = if source_cross < target_cross - CENTER_EPS {
-                OverflowSide::LeftOrTop
-            } else if source_cross > target_cross + CENTER_EPS {
-                OverflowSide::RightOrBottom
-            } else if idx % 2 == 0 {
-                OverflowSide::LeftOrTop
-            } else {
-                OverflowSide::RightOrBottom
-            };
-            let face = fan_in_overflow_face_for_slot(direction, overflow_slot);
-            target_face_for_edge.insert(edge.index, face);
+        if forward_edges.len() > capacity {
+            overflow_targeted.insert(target_id);
+            let overflow_edges = &forward_edges[capacity..];
+            let target_cross = overflow_edges
+                .first()
+                .and_then(|edge| endpoint_rect(geometry, &edge.to, edge.to_subgraph.as_deref()))
+                .map(|rect| face_cross_axis(rect, direction))
+                .unwrap_or(0.0);
+            for (idx, edge) in overflow_edges.iter().enumerate() {
+                let source_cross = fan_in_source_cross_axis(geometry, edge, direction);
+                let overflow_slot = if source_cross < target_cross - CENTER_EPS {
+                    OverflowSide::LeftOrTop
+                } else if source_cross > target_cross + CENTER_EPS {
+                    OverflowSide::RightOrBottom
+                } else if idx % 2 == 0 {
+                    OverflowSide::LeftOrTop
+                } else {
+                    OverflowSide::RightOrBottom
+                };
+                let face = fan_in_overflow_face_for_slot(direction, overflow_slot);
+                target_face_for_edge.insert(edge.index, face);
+            }
         }
 
         let mut edges_by_face: HashMap<Face, Vec<(usize, f64)>> = HashMap::new();
@@ -605,10 +610,7 @@ fn fan_in_target_overflow_context(
             }
         }
 
-        if let Some(target_rect) = forward_edges
-            .first()
-            .and_then(|edge| endpoint_rect(geometry, &edge.to, edge.to_subgraph.as_deref()))
-        {
+        if let Some(target_rect) = target_rect {
             apply_near_aligned_primary_face_fraction_override(
                 geometry,
                 direction,
@@ -627,6 +629,20 @@ fn fan_in_target_overflow_context(
         overflow_targeted,
         targets_with_backward_inbound,
     }
+}
+
+fn adaptive_fan_in_primary_face_capacity(direction: Direction, target_rect: &FRect) -> usize {
+    let face_span = match direction {
+        Direction::TopDown | Direction::BottomTop => target_rect.width.abs(),
+        Direction::LeftRight | Direction::RightLeft => target_rect.height.abs(),
+    };
+    let usable_span = (face_span - 2.0 * MIN_PORT_CORNER_INSET_FORWARD).max(0.0);
+    let dynamic_capacity = if usable_span <= f64::EPSILON {
+        1
+    } else {
+        (usable_span / MIN_FAN_IN_PRIMARY_SLOT_SPACING).floor() as usize + 1
+    };
+    dynamic_capacity.max(1)
 }
 
 fn fan_in_source_cross_axis(
