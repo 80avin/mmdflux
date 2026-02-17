@@ -342,6 +342,10 @@ fn build_unified_path(
         if matches!(direction, Direction::LeftRight | Direction::RightLeft) {
             collapse_collinear_interior_points(&mut finalized);
         }
+        // Backward edge processing (tangent direction, lane clearance, corner inset)
+        // overrides shape-aware endpoints with rect-aligned positions.
+        // Re-project endpoints to actual shape boundaries as a final step.
+        snap_backward_endpoints_to_shape(&mut finalized, edge, geometry);
     }
     finalized
 }
@@ -1876,6 +1880,43 @@ fn anchor_path_endpoints_to_endpoint_faces(
                 target_has_backward_conflict,
             );
             path[last] = project_endpoint_to_shape(clipped, prev, to_rect, to_shape);
+        }
+    }
+}
+
+/// Re-project backward edge endpoints to actual shape boundaries.
+///
+/// Backward edge processing (tangent direction, lane clearance, corner inset)
+/// snaps endpoints to rect faces. This function corrects non-rect shapes
+/// (diamond, hexagon) by projecting the rect-face endpoint onto the actual
+/// shape boundary using the adjacent path point as the approach direction.
+fn snap_backward_endpoints_to_shape(
+    path: &mut [FPoint],
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+) {
+    if path.len() < 2 {
+        return;
+    }
+
+    // Re-project source endpoint
+    if let Some((from_rect, from_shape)) =
+        endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+    {
+        if matches!(from_shape, Shape::Diamond | Shape::Hexagon) {
+            let approach = path[1];
+            path[0] = intersect_shape_boundary_float(from_rect, from_shape, approach);
+        }
+    }
+
+    // Re-project target endpoint
+    let last = path.len() - 1;
+    if let Some((to_rect, to_shape)) =
+        endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+    {
+        if matches!(to_shape, Shape::Diamond | Shape::Hexagon) {
+            let approach = path[last - 1];
+            path[last] = intersect_shape_boundary_float(to_rect, to_shape, approach);
         }
     }
 }

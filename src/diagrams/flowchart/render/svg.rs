@@ -9,7 +9,9 @@ use super::layout::{
     expand_parent_bounds_dagre, reconcile_sublayouts_dagre, resolve_sublayout_overlaps,
 };
 use super::route_policy::effective_edge_direction;
-use super::routing_core::{build_orthogonal_path_float, hexagon_vertices};
+use super::routing_core::{
+    build_orthogonal_path_float, hexagon_vertices, intersect_convex_polygon,
+};
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use super::unified_router::{UnifiedRoutingOptions, route_edges_unified};
@@ -2393,26 +2395,43 @@ fn adjust_edge_points_for_shapes(
     };
 
     let mut adjusted = points.to_vec();
-    // For non-rect shapes on non-self-loop edges, the router places endpoints on
-    // the actual shape boundary which is inside the rect bounding box. Skip the
-    // rect-face-proximity check — their endpoints are authoritative from the router.
+    // For non-rect shapes on non-self-loop forward edges, the router places
+    // endpoints on the actual shape boundary. Skip the rect-face-proximity check
+    // — their endpoints are authoritative from the router.
+    // Backward edges use dagre hint points that land on the bounding rect, so
+    // diamond/hexagon endpoints always need projection to the shape boundary.
     // Self-loops use a different path construction, so the safety net still applies.
     let is_self_loop = edge.from == edge.to;
     let source_shape_authoritative =
-        !is_self_loop && matches!(from_shape, Shape::Diamond | Shape::Hexagon);
+        !is_self_loop && !is_backward && matches!(from_shape, Shape::Diamond | Shape::Hexagon);
     let target_shape_authoritative =
-        !is_self_loop && matches!(to_shape, Shape::Diamond | Shape::Hexagon);
-    let source_needs_adjustment = !source_shape_authoritative
-        && endpoint_attachment_is_invalid(points[0], from_rect, direction, true, is_backward, EPS);
-    let target_needs_adjustment = !target_shape_authoritative
-        && endpoint_attachment_is_invalid(
-            points[points.len() - 1],
-            to_rect,
-            direction,
-            false,
-            is_backward,
-            EPS,
-        );
+        !is_self_loop && !is_backward && matches!(to_shape, Shape::Diamond | Shape::Hexagon);
+    // Backward edges with non-rect shapes: always project to shape boundary,
+    // since dagre hint points land on the bounding rect, not the shape.
+    let backward_source_needs_shape_projection =
+        !is_self_loop && is_backward && matches!(from_shape, Shape::Diamond | Shape::Hexagon);
+    let backward_target_needs_shape_projection =
+        !is_self_loop && is_backward && matches!(to_shape, Shape::Diamond | Shape::Hexagon);
+    let source_needs_adjustment = backward_source_needs_shape_projection
+        || (!source_shape_authoritative
+            && endpoint_attachment_is_invalid(
+                points[0],
+                from_rect,
+                direction,
+                true,
+                is_backward,
+                EPS,
+            ));
+    let target_needs_adjustment = backward_target_needs_shape_projection
+        || (!target_shape_authoritative
+            && endpoint_attachment_is_invalid(
+                points[points.len() - 1],
+                to_rect,
+                direction,
+                false,
+                is_backward,
+                EPS,
+            ));
 
     if source_needs_adjustment {
         let from_target = if points.len() > 1 {
@@ -3168,8 +3187,23 @@ fn marker_offset_component(point_a: Point, point_b: Point, offset: f64, use_x: b
 
 fn intersect_svg_node(rect: &Rect, point: Point, shape: Shape) -> Point {
     match shape {
-        Shape::Diamond | Shape::Hexagon => intersect_svg_diamond(rect, point),
+        Shape::Diamond => intersect_svg_diamond(rect, point),
+        Shape::Hexagon => intersect_svg_hexagon(rect, point),
         _ => intersect_svg_rect(rect, point),
+    }
+}
+
+/// Hexagon boundary intersection using polygon-ray from the shared kernel.
+fn intersect_svg_hexagon(rect: &Rect, point: Point) -> Point {
+    use crate::diagrams::flowchart::geometry::{FPoint, FRect};
+    let frect = FRect::new(rect.x, rect.y, rect.width, rect.height);
+    let verts = hexagon_vertices(frect);
+    let center = FPoint::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+    let approach = FPoint::new(point.x, point.y);
+    let result = intersect_convex_polygon(&verts, approach, center);
+    Point {
+        x: result.x,
+        y: result.y,
     }
 }
 
