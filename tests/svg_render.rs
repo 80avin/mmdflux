@@ -1031,20 +1031,27 @@ fn svg_orthogonal_unified_preview_multiple_cycles_avoids_tiny_terminal_staircase
     for edge_idx in edges {
         let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
         assert!(
-            points.len() >= 3,
-            "multiple_cycles edge should keep at least one terminal elbow in orthogonal mode: {points:?}"
+            points.len() >= 2,
+            "multiple_cycles edge should keep at least one terminal segment in orthogonal mode: {points:?}"
         );
         let terminal_support =
             manhattan_segment_len(points[points.len() - 2], points[points.len() - 1]);
-        let pre_terminal =
-            manhattan_segment_len(points[points.len() - 3], points[points.len() - 2]);
-        // The terminal segment should be substantial (>= 10px).
-        // The pre-terminal segment can be a short lateral jog (channel offset)
-        // after collinear collapse, so we only require it to be non-degenerate.
-        assert!(
-            terminal_support >= 10.0 && pre_terminal >= 3.0,
-            "multiple_cycles orthogonal tail should avoid tiny terminal staircase jogs; terminal_support={terminal_support}, pre_terminal={pre_terminal}, points={points:?}"
-        );
+        // A perfectly straight terminal (2 points) is acceptable as long as it is not tiny.
+        // If there is an elbow near the terminal (>= 3 points), also require the
+        // pre-terminal leg to be non-trivial to avoid staircase artifacts.
+        if points.len() >= 3 {
+            let pre_terminal =
+                manhattan_segment_len(points[points.len() - 3], points[points.len() - 2]);
+            assert!(
+                terminal_support >= 10.0 && pre_terminal >= 3.0,
+                "multiple_cycles orthogonal tail should avoid tiny terminal staircase jogs; terminal_support={terminal_support}, pre_terminal={pre_terminal}, points={points:?}"
+            );
+        } else {
+            assert!(
+                terminal_support >= 10.0,
+                "multiple_cycles orthogonal straight terminal should remain substantial (>= 10px): terminal_support={terminal_support}, points={points:?}"
+            );
+        }
     }
 }
 

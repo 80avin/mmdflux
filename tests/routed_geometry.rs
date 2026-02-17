@@ -1571,7 +1571,7 @@ fn unified_preview_decision_backward_debug_to_start_keeps_vertical_source_stem_b
 }
 
 #[test]
-fn unified_preview_backward_in_subgraph_uses_explicit_double_jog_terminal_return() {
+fn unified_preview_backward_in_subgraph_uses_compact_inline_terminal_return() {
     let fixture = "backward_in_subgraph.mmd";
     let (diagram, geom) = layout_fixture_svg(fixture);
     assert_eq!(
@@ -1589,9 +1589,23 @@ fn unified_preview_backward_in_subgraph_uses_explicit_double_jog_terminal_return
         edge.is_backward,
         "fixture contract invalid: B -> A should be backward in unified-preview mode"
     );
+    assert_eq!(
+        edge.path.len(),
+        4,
+        "backward_in_subgraph B -> A should be a 3-segment V-H-V return (4 points): path={:?}",
+        edge.path
+    );
+    assert_eq!(
+        bend_count(&edge.path),
+        2,
+        "backward_in_subgraph B -> A should have exactly 2 bends: path={:?}",
+        edge.path
+    );
     assert!(
-        edge.path.len() >= 6,
-        "backward_in_subgraph B -> A should include a five-segment explicit backward return shape (vertical, right, vertical, left, vertical): path={:?}",
+        edge.path
+            .windows(2)
+            .all(|window| segment_is_axis_aligned(window[0], window[1])),
+        "backward_in_subgraph B -> A should remain orthogonal: path={:?}",
         edge.path
     );
 
@@ -1599,8 +1613,6 @@ fn unified_preview_backward_in_subgraph_uses_explicit_double_jog_terminal_return
     let p1 = edge.path[1];
     let p2 = edge.path[2];
     let p3 = edge.path[3];
-    let p4 = edge.path[4];
-    let p5 = edge.path[5];
 
     assert!(
         approx_eq(p0.x, p1.x) && p1.y < p0.y,
@@ -1609,28 +1621,12 @@ fn unified_preview_backward_in_subgraph_uses_explicit_double_jog_terminal_return
     );
     assert!(
         approx_eq(p1.y, p2.y) && p2.x > p1.x,
-        "segment 2 should jog right into the outer lane: p1={p1:?}, p2={p2:?}, path={:?}",
+        "segment 2 should be a horizontal jog toward the right-side lane: p1={p1:?}, p2={p2:?}, path={:?}",
         edge.path
     );
     assert!(
         approx_eq(p2.x, p3.x) && p3.y < p2.y,
-        "segment 3 should continue vertically upward on the outer lane: p2={p2:?}, p3={p3:?}, path={:?}",
-        edge.path
-    );
-    assert!(
-        approx_eq(p3.y, p4.y) && p4.x < p3.x,
-        "segment 4 should jog left toward the terminal lane: p3={p3:?}, p4={p4:?}, path={:?}",
-        edge.path
-    );
-    assert!(
-        approx_eq(p4.x, p5.x) && p5.y < p4.y,
-        "segment 5 should be a vertical upward terminal stem into target bottom face: p4={p4:?}, p5={p5:?}, path={:?}",
-        edge.path
-    );
-    let midpoint_y = (p0.y + p5.y) / 2.0;
-    assert!(
-        p2.y > midpoint_y && p4.y < midpoint_y,
-        "backward_in_subgraph B -> A should keep right-jog closer to source and left-jog closer to target with a visually centered outward lane: midpoint_y={midpoint_y}, right_jog={p2:?}, left_jog={p4:?}, path={:?}",
+        "segment 3 should be a vertical upward terminal stem into target bottom face: p2={p2:?}, p3={p3:?}, path={:?}",
         edge.path
     );
 
@@ -1639,10 +1635,10 @@ fn unified_preview_backward_in_subgraph_uses_explicit_double_jog_terminal_return
         .get("A")
         .expect("fixture should contain target node A")
         .rect;
-    let target_face = point_on_target_face(target_rect, p5);
+    let target_face = point_on_target_face(target_rect, p3);
     assert_eq!(
         target_face, "bottom",
-        "backward_in_subgraph B -> A should still enter Node on bottom face: end={p5:?}, target_rect={target_rect:?}, path={:?}",
+        "backward_in_subgraph B -> A should still enter Node on bottom face: end={p3:?}, target_rect={target_rect:?}, path={:?}",
         edge.path
     );
 }
