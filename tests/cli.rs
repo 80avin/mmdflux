@@ -78,17 +78,13 @@ fn cli_accepts_svg_edge_path_style_orthogonal() {
 }
 
 #[test]
-fn cli_accepts_independent_policy_toggles_with_full_compute_rollback() {
+fn cli_accepts_long_skip_policy_toggle_with_full_compute_rollback() {
     mmdflux()
         .args([
             "--format",
             "svg",
             "--routing-mode",
             "full-compute",
-            "--policy-fan-in-face-overflow",
-            "off",
-            "--policy-label-anchor-revalidation",
-            "on",
             "--policy-long-skip-periphery-detour",
             "off",
         ])

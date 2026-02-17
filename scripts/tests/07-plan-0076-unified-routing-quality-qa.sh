@@ -33,7 +33,6 @@ print_section "Promotion record marker checks"
 for marker in \
   "### Rollback Playbook (Task 5.1)" \
   "--routing-mode full-compute" \
-  "--policy-fan-in-face-overflow off" \
   "--policy-long-skip-periphery-detour off"; do
   if ! rg -F -- "$marker" "$PROMOTION_DOC" >/dev/null; then
     echo "Missing promotion-record marker: $marker" >&2

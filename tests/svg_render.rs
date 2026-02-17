@@ -1935,7 +1935,6 @@ fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documen
         options.routing_mode = Some(RoutingMode::UnifiedPreview);
         options.path_detail = PathDetail::Full;
         options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-            fan_in_face_overflow: true,
             long_skip_periphery_detour: false,
             ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
         };
@@ -2043,37 +2042,32 @@ fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documen
     ) in backward_channel_cases
     {
         let diagram = load_flowchart_fixture_diagram(fixture_name);
-        for (mode_label, overflow_enabled) in [("overflow-on", true), ("overflow-off", false)] {
-            let mut options = RenderOptions::default_svg();
-            options.svg.edge_path_style = SvgEdgePathStyle::Linear;
-            options.routing_mode = Some(RoutingMode::UnifiedPreview);
-            options.path_detail = PathDetail::Full;
-            options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-                fan_in_face_overflow: overflow_enabled,
-                long_skip_periphery_detour: false,
-                ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
-            };
+        let mut options = RenderOptions::default_svg();
+        options.svg.edge_path_style = SvgEdgePathStyle::Linear;
+        options.routing_mode = Some(RoutingMode::UnifiedPreview);
+        options.path_detail = PathDetail::Full;
+        options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
+            long_skip_periphery_detour: false,
+            ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
+        };
 
-            let svg = render_svg(&diagram, &options);
-            let source_rect = node_rect_for_label(&svg, source_label).unwrap_or_else(|| {
-                panic!("missing source rect for {source_label} in {fixture_name}")
-            });
-            let target_rect = node_rect_for_label(&svg, target_label).unwrap_or_else(|| {
-                panic!("missing target rect for {target_label} in {fixture_name}")
-            });
-            let edge_idx = edge_index(&diagram, from, to);
-            let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
-            let source_face = svg_source_departure_face(source_rect, &points);
-            assert_eq!(
-                source_face, expected_source_face,
-                "fixture {fixture_name} edge {from}->{to} should keep expected backward source face {expected_source_face} ({mode_label}); points={points:?}"
-            );
-            let target_face = svg_terminal_approach_face_relaxed(target_rect, &points);
-            assert_eq!(
-                target_face, expected_target_face,
-                "fixture {fixture_name} edge {from}->{to} should keep expected backward target face {expected_target_face} ({mode_label}); points={points:?}"
-            );
-        }
+        let svg = render_svg(&diagram, &options);
+        let source_rect = node_rect_for_label(&svg, source_label)
+            .unwrap_or_else(|| panic!("missing source rect for {source_label} in {fixture_name}"));
+        let target_rect = node_rect_for_label(&svg, target_label)
+            .unwrap_or_else(|| panic!("missing target rect for {target_label} in {fixture_name}"));
+        let edge_idx = edge_index(&diagram, from, to);
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        let source_face = svg_source_departure_face(source_rect, &points);
+        assert_eq!(
+            source_face, expected_source_face,
+            "fixture {fixture_name} edge {from}->{to} should keep expected backward source face {expected_source_face}; points={points:?}"
+        );
+        let target_face = svg_terminal_approach_face_relaxed(target_rect, &points);
+        assert_eq!(
+            target_face, expected_target_face,
+            "fixture {fixture_name} edge {from}->{to} should keep expected backward target face {expected_target_face}; points={points:?}"
+        );
     }
 }
 

@@ -3102,30 +3102,28 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_
         )
     }
 
-    let render_with_registry =
-        |fixture_name: &str, format: OutputFormat, overflow_enabled: bool| {
-            let input = load_fixture(fixture_name);
-            let registry = default_registry();
-            let mut instance = registry
-                .create("flowchart")
-                .expect("flowchart instance should exist");
-            instance.parse(&input).expect("fixture should parse");
-            instance
-                .render(
-                    format,
-                    &RenderConfig {
-                        routing_mode: Some(RoutingMode::UnifiedPreview),
-                        svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
-                        routing_policies: RoutingPolicyToggles {
-                            fan_in_face_overflow: overflow_enabled,
-                            long_skip_periphery_detour: false,
-                            ..RoutingPolicyToggles::all_enabled()
-                        },
-                        ..RenderConfig::default()
+    let render_with_registry = |fixture_name: &str, format: OutputFormat| {
+        let input = load_fixture(fixture_name);
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(&input).expect("fixture should parse");
+        instance
+            .render(
+                format,
+                &RenderConfig {
+                    routing_mode: Some(RoutingMode::UnifiedPreview),
+                    svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
+                    routing_policies: RoutingPolicyToggles {
+                        long_skip_periphery_detour: false,
+                        ..RoutingPolicyToggles::all_enabled()
                     },
-                )
-                .expect("render should succeed")
-        };
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("render should succeed")
+    };
 
     let fan_in_cases = [
         ("stacked_fan_in.mmd", "C", "Bot", 0usize),
@@ -3134,12 +3132,12 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_
     ];
     for (fixture_name, target_id, target_label, min_side_faces) in fan_in_cases {
         let diagram = parse_and_build(fixture_name);
-        let text = render_with_registry(fixture_name, OutputFormat::Text, true);
+        let text = render_with_registry(fixture_name, OutputFormat::Text);
         assert!(
             text.contains(target_label),
             "text output should contain target label {target_label} for {fixture_name}"
         );
-        let svg = render_with_registry(fixture_name, OutputFormat::Svg, true);
+        let svg = render_with_registry(fixture_name, OutputFormat::Svg);
         let rect = node_rect_for_label(&svg, target_label)
             .unwrap_or_else(|| panic!("missing target rect for {target_label} in {fixture_name}"));
         let inbound_indices: Vec<usize> = diagram
@@ -3241,37 +3239,33 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_
     ) in backward_channel_cases
     {
         let diagram = parse_and_build(fixture_name);
-        for (mode_label, overflow_enabled) in [("overflow-on", true), ("overflow-off", false)] {
-            let text = render_with_registry(fixture_name, OutputFormat::Text, overflow_enabled);
-            assert!(
-                text.contains(target_label),
-                "text output should contain target label {target_label} for {fixture_name} ({mode_label})"
-            );
-            let svg = render_with_registry(fixture_name, OutputFormat::Svg, overflow_enabled);
-            let source_rect = node_rect_for_label(&svg, source_label).unwrap_or_else(|| {
-                panic!("missing source rect for {source_label} in {fixture_name}")
-            });
-            let target_rect = node_rect_for_label(&svg, target_label).unwrap_or_else(|| {
-                panic!("missing target rect for {target_label} in {fixture_name}")
-            });
-            let edge_index = diagram
-                .edges
-                .iter()
-                .find(|edge| edge.from == from && edge.to == to)
-                .unwrap_or_else(|| panic!("expected edge {from} -> {to} in {fixture_name}"))
-                .index;
-            let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
-            let source_face = svg_source_departure_face(source_rect, &points);
-            assert_eq!(
-                source_face, expected_source_face,
-                "fixture {fixture_name} edge {from}->{to} should keep expected backward source face {expected_source_face} ({mode_label}); points={points:?}"
-            );
-            let target_face = svg_terminal_approach_face_relaxed(target_rect, &points);
-            assert_eq!(
-                target_face, expected_target_face,
-                "fixture {fixture_name} edge {from}->{to} should keep expected backward target face {expected_target_face} ({mode_label}); points={points:?}"
-            );
-        }
+        let text = render_with_registry(fixture_name, OutputFormat::Text);
+        assert!(
+            text.contains(target_label),
+            "text output should contain target label {target_label} for {fixture_name}"
+        );
+        let svg = render_with_registry(fixture_name, OutputFormat::Svg);
+        let source_rect = node_rect_for_label(&svg, source_label)
+            .unwrap_or_else(|| panic!("missing source rect for {source_label} in {fixture_name}"));
+        let target_rect = node_rect_for_label(&svg, target_label)
+            .unwrap_or_else(|| panic!("missing target rect for {target_label} in {fixture_name}"));
+        let edge_index = diagram
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("expected edge {from} -> {to} in {fixture_name}"))
+            .index;
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+        let source_face = svg_source_departure_face(source_rect, &points);
+        assert_eq!(
+            source_face, expected_source_face,
+            "fixture {fixture_name} edge {from}->{to} should keep expected backward source face {expected_source_face}; points={points:?}"
+        );
+        let target_face = svg_terminal_approach_face_relaxed(target_rect, &points);
+        assert_eq!(
+            target_face, expected_target_face,
+            "fixture {fixture_name} edge {from}->{to} should keep expected backward target face {expected_target_face}; points={points:?}"
+        );
     }
 }
 
@@ -3673,14 +3667,6 @@ fn full_compute_rollback_is_stable_across_policy_toggle_matrix_for_text_and_svg(
     let input = load_fixture("simple_cycle.mmd");
     let policy_matrix = [
         RoutingPolicyToggles::all_enabled(),
-        RoutingPolicyToggles {
-            fan_in_face_overflow: false,
-            ..RoutingPolicyToggles::all_enabled()
-        },
-        RoutingPolicyToggles {
-            label_anchor_revalidation: false,
-            ..RoutingPolicyToggles::all_enabled()
-        },
         RoutingPolicyToggles {
             long_skip_periphery_detour: false,
             ..RoutingPolicyToggles::all_enabled()

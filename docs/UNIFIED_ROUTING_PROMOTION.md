@@ -75,8 +75,7 @@ These specs are documented and test-scaffolded before runtime behavior changes.
     - `http_request.mmd`
     - `git_workflow.mmd`
 - Decision:
-  - Keep fan-in overflow/backward-channel behavior **default-enabled** for unified preview.
-  - Keep `--policy-fan-in-face-overflow off` available as an explicit rollback/diagnostic override.
+  - Keep fan-in overflow/backward-channel behavior **always enabled** for unified preview.
 - Evidence gates:
   - `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies` (`tests/routed_geometry.rs`)
   - `svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces` (`tests/svg_render.rs`)
@@ -233,7 +232,7 @@ mmdflux --routing-mode full-compute <input.mmd>
 3. Disable staged policies explicitly for diagnosis/containment:
 
 ```bash
-mmdflux --routing-mode unified-preview --policy-fan-in-face-overflow off --policy-long-skip-periphery-detour off <input.mmd>
+mmdflux --routing-mode unified-preview --policy-long-skip-periphery-detour off <input.mmd>
 ```
 
 4. Re-run targeted gates and compare with baseline classifications:

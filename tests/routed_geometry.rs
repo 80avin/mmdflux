@@ -565,10 +565,7 @@ fn stale_label_anchor_is_replaced_with_valid_route_anchor() {
         &diagram,
         &stale_geom,
         RoutingMode::UnifiedPreview,
-        RoutingPolicyToggles {
-            label_anchor_revalidation: true,
-            ..RoutingPolicyToggles::default()
-        },
+        RoutingPolicyToggles::default(),
     );
     let routed_edge = routed
         .edges
@@ -2437,7 +2434,6 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
             &geom,
             RoutingMode::UnifiedPreview,
             RoutingPolicyToggles {
-                fan_in_face_overflow: true,
                 long_skip_periphery_detour: false,
                 ..RoutingPolicyToggles::all_enabled()
             },
@@ -2531,59 +2527,43 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
             .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {to}"))
             .rect;
 
-        let routed_overflow_on = route_graph_geometry_with_policies(
+        let routed = route_graph_geometry_with_policies(
             &diagram,
             &geom,
             RoutingMode::UnifiedPreview,
             RoutingPolicyToggles {
-                fan_in_face_overflow: true,
-                long_skip_periphery_detour: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        let routed_overflow_off = route_graph_geometry_with_policies(
-            &diagram,
-            &geom,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                fan_in_face_overflow: false,
                 long_skip_periphery_detour: false,
                 ..RoutingPolicyToggles::all_enabled()
             },
         );
 
-        for (mode_label, routed) in [
-            ("overflow-on", &routed_overflow_on),
-            ("overflow-off", &routed_overflow_off),
-        ] {
-            let edge = routed
-                .edges
-                .iter()
-                .find(|edge| edge.from == from && edge.to == to)
-                .unwrap_or_else(|| panic!("fixture {fixture} missing edge {from} -> {to}"));
-            let start = edge
-                .path
-                .first()
-                .copied()
-                .expect("backward edge should have source endpoint");
-            let start_face = point_on_target_face(source_rect, start);
-            assert_eq!(
-                start_face, expected_source_face,
-                "fixture {fixture} edge {from}->{to} should keep canonical backward source face {expected_source_face} ({mode_label}); start={start:?}, path={:?}",
-                edge.path
-            );
-            let end = edge
-                .path
-                .last()
-                .copied()
-                .expect("backward edge should have endpoint");
-            let end_face = point_on_target_face(target_rect, end);
-            assert_eq!(
-                end_face, expected_target_face,
-                "fixture {fixture} edge {from}->{to} should keep canonical backward target face {expected_target_face} ({mode_label}); end={end:?}, path={:?}",
-                edge.path
-            );
-        }
+        let edge = routed
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture {fixture} missing edge {from} -> {to}"));
+        let start = edge
+            .path
+            .first()
+            .copied()
+            .expect("backward edge should have source endpoint");
+        let start_face = point_on_target_face(source_rect, start);
+        assert_eq!(
+            start_face, expected_source_face,
+            "fixture {fixture} edge {from}->{to} should keep canonical backward source face {expected_source_face}; start={start:?}, path={:?}",
+            edge.path
+        );
+        let end = edge
+            .path
+            .last()
+            .copied()
+            .expect("backward edge should have endpoint");
+        let end_face = point_on_target_face(target_rect, end);
+        assert_eq!(
+            end_face, expected_target_face,
+            "fixture {fixture} edge {from}->{to} should keep canonical backward target face {expected_target_face}; end={end:?}, path={:?}",
+            edge.path
+        );
     }
 }
 

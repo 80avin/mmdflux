@@ -304,32 +304,17 @@ impl RoutingMode {
 
 /// Per-policy routing toggles for staged unified-routing rollout.
 ///
-/// Defaults are conservative: keep fan-in overflow and label revalidation
-/// enabled, while long-skip periphery detours start disabled until explicitly
-/// promoted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fan-in overflow handling and label-anchor revalidation are always enabled.
+/// Long-skip periphery detours remain configurable for staged rollout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RoutingPolicyToggles {
-    pub fan_in_face_overflow: bool,
-    pub label_anchor_revalidation: bool,
     pub long_skip_periphery_detour: bool,
 }
 
 impl RoutingPolicyToggles {
     pub const fn all_enabled() -> Self {
         Self {
-            fan_in_face_overflow: true,
-            label_anchor_revalidation: true,
             long_skip_periphery_detour: true,
-        }
-    }
-}
-
-impl Default for RoutingPolicyToggles {
-    fn default() -> Self {
-        Self {
-            fan_in_face_overflow: true,
-            label_anchor_revalidation: true,
-            long_skip_periphery_detour: false,
         }
     }
 }

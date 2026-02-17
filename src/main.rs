@@ -107,14 +107,6 @@ struct Cli {
     #[arg(long, value_enum)]
     routing_mode: Option<RoutingModeArg>,
 
-    /// Fan-in face-overflow policy toggle (on/off).
-    #[arg(long, value_enum)]
-    policy_fan_in_face_overflow: Option<PolicyToggleArg>,
-
-    /// Label-anchor revalidation policy toggle (on/off).
-    #[arg(long, value_enum)]
-    policy_label_anchor_revalidation: Option<PolicyToggleArg>,
-
     /// Long-skip periphery detour policy toggle (on/off).
     #[arg(long, value_enum)]
     policy_long_skip_periphery_detour: Option<PolicyToggleArg>,
@@ -301,12 +293,6 @@ fn main() -> io::Result<()> {
     let config = RenderConfig {
         routing_policies: {
             let mut policies = RoutingPolicyToggles::default();
-            if let Some(toggle) = cli.policy_fan_in_face_overflow {
-                policies.fan_in_face_overflow = toggle.is_enabled();
-            }
-            if let Some(toggle) = cli.policy_label_anchor_revalidation {
-                policies.label_anchor_revalidation = toggle.is_enabled();
-            }
             if let Some(toggle) = cli.policy_long_skip_periphery_detour {
                 policies.long_skip_periphery_detour = toggle.is_enabled();
             }

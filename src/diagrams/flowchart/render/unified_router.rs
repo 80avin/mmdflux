@@ -47,11 +47,7 @@ pub(crate) fn route_edges_unified(
     geometry: &GraphGeometry,
     options: UnifiedRoutingOptions,
 ) -> Vec<RoutedEdgeGeometry> {
-    let fan_in_target_conflict = if options.policy_toggles.fan_in_face_overflow {
-        fan_in_target_overflow_context(geometry, geometry.direction)
-    } else {
-        FanInTargetOverflowContext::default()
-    };
+    let fan_in_target_conflict = fan_in_target_overflow_context(geometry, geometry.direction);
     geometry
         .edges
         .iter()
@@ -95,11 +91,7 @@ pub(crate) fn route_edges_unified(
             if let Some((sx, sy)) = options.grid_snap {
                 path = snap_path_to_grid(&path, sx, sy);
             }
-            let label_position = if options.policy_toggles.label_anchor_revalidation {
-                revalidate_label_anchor(edge.label_position, &path)
-            } else {
-                edge.label_position
-            };
+            let label_position = revalidate_label_anchor(edge.label_position, &path);
 
             RoutedEdgeGeometry {
                 index: edge.index,

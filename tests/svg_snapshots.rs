@@ -446,14 +446,6 @@ fn svg_full_compute_rollback_is_stable_across_policy_toggle_matrix() {
     let policy_matrix = [
         RoutingPolicyToggles::all_enabled(),
         RoutingPolicyToggles {
-            fan_in_face_overflow: false,
-            ..RoutingPolicyToggles::all_enabled()
-        },
-        RoutingPolicyToggles {
-            label_anchor_revalidation: false,
-            ..RoutingPolicyToggles::all_enabled()
-        },
-        RoutingPolicyToggles {
             long_skip_periphery_detour: false,
             ..RoutingPolicyToggles::all_enabled()
         },
@@ -640,7 +632,6 @@ fn promotion_record_has_rollback_validation() {
     let required_markers = [
         "### Rollback Playbook (Task 5.1)",
         "--routing-mode full-compute",
-        "--policy-fan-in-face-overflow off",
         "--policy-long-skip-periphery-detour off",
         "./scripts/tests/07-plan-0076-unified-routing-quality-qa.sh",
     ];
