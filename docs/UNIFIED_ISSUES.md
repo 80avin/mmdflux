@@ -184,7 +184,7 @@ The list below reflects the latest side-by-side review and should be treated as 
 | Category | Type | Priority | Fixtures / Edges | Judgment |
 |----------|------|----------|------------------|----------|
 | Backward-edge marker visibility + approach-angle degradation in non-orth styles | Defect | P0 | `decision.mmd` (`Debug -> Start`), `labeled_edges.mmd` (`Handle Error -> Setup`), `http_request.mmd` (`Send Response -> Client`), `complex.mmd` (`More Data? -> Input`), `git_workflow.mmd` backward edges | Needs Work |
-| Hidden arrowheads when crossing container/subgraph boundaries | Defect | P0 | `subgraph_direction_nested_both.mmd` (`C -> A`, orthogonal/linear/rounded/basis), `animal_hierarchy.mmd` inheritance heads | Needs Work |
+| Cross-boundary direction/face mismatch in nested override subgraphs | Defect | P0 | `subgraph_direction_nested_both.mmd` (`C -> A`, orthogonal/linear/rounded/basis) | Needs Work |
 | Ambiguous orthogonal attachment points on routed edges | Defect | P1 | `inline_label_flowchart.mmd`: `Ingest Request -> Audit Log`, `Serve Cached -> Valid?`, `Audit Log -> Emit Metrics`, `Persist Result -> Emit Metrics` | Needs Work |
 | Fan-in terminal overlap / arrowhead occlusion under convergence pressure | Defect | P1 | `fan_in_lr.mmd` (basis/linear/rounded) and related fan-in variants | Needs Work |
 | Orthogonal over-jogging / circuitous path selection where straight route is obvious | Enhancement | P2 | `nested_subgraph_edges.mmd`, additional orthogonal cases with extra jogs | Improvement Candidate |
@@ -228,9 +228,9 @@ Shift: 38px
 
 ### Category B: Subgraph Edge Vertical Shift (NEW BUG)
 
-**Root cause:** Unified routing appears to use incorrect vertical offsets for edges within or between subgraphs, resulting in edges that are shifted up or collapsed to tiny segments.
+**Root cause:** Unified routing applies stale/root-direction geometry to some subgraph-crossing edges under nested direction overrides, producing wrong endpoint faces and large vertical drift.
 
-**Visual impact:** Edges completely miss their target nodes or collapse into near-invisible stubs.
+**Visual impact:** Cross-boundary edges can attach from the wrong face (for example top-entry instead of side-entry) and appear to route against the local override direction.
 
 **Affected fixtures (2):**
 
@@ -239,10 +239,10 @@ Shift: 38px
 - Edge ends at y=391 (unified) instead of y=421 (full), missing Database node by 34px
 - This is a NEW issue — full-compute has no problems here
 
-**B2: `subgraph_direction_nested_both`** — Edge collapsed to 8px stub
-- A → B edge in inner BT subgraph: full-compute spans y=230→184 (46px), unified spans y=176→184 (8px)
-- The 46px edge between two nodes has been collapsed to a tiny stub near the target node
-- Endpoint diff: 54px
+**B2: `subgraph_direction_nested_both`** — `C → A` face mismatch across nested override boundary
+- `C → A` should follow outer LR context (east→west side attachment), but unified-preview routes via top-entry into `A`
+- In orthogonal mode, full-compute is a horizontal segment (`M62.45,257.00 L167.91,257.00`) while unified-preview detours near the top (`M48.41,214.00 ... L179.91,226.00`)
+- Arrowheads remain visible; the defect is direction/attachment mismatch, not hidden markers
 
 **Fix priority:** CRITICAL — these produce visually broken output
 
@@ -356,7 +356,7 @@ Shift: 38px
 | `subgraph_direction_lr.mmd` | Acceptable | 8px | Minor shift in LR subgraph |
 | `subgraph_direction_mixed.mmd` | Acceptable | 8px | Minor shift in mixed-direction subgraphs |
 | `subgraph_direction_nested.mmd` | Acceptable | 8px | Minor shift in nested direction subgraphs |
-| `subgraph_direction_nested_both.mmd` | **Needs Work** | 54px | A→B edge collapsed to 8px stub (should span 46px) |
+| `subgraph_direction_nested_both.mmd` | **Needs Work** | 45px | `C→A` cross-boundary edge enters `A` from north/top in unified-preview instead of LR west-side attachment |
 | `subgraph_edges.mmd` | Good | 0px | Path simplification only |
 | `subgraph_edges_bottom_top.mmd` | Good | 0px | BT subgraph edges work correctly |
 | `subgraph_multi_word_title.mmd` | Good | 0px | Path simplification only |
@@ -402,10 +402,10 @@ Shift: 38px
    - NEW regression not present in full-compute
    - Investigate if border node offsets are applied incorrectly
 
-3. **Inner BT subgraph edge collapse** (Category B — `subgraph_direction_nested_both`)
-   - A→B edge in inner BT-direction subgraph collapsed to 8px stub
-   - 54px displacement; edge effectively disappears
-   - May be related to direction override + border node interaction
+3. **Nested override cross-boundary face mismatch** (Category B — `subgraph_direction_nested_both`)
+   - `C→A` routed as top-entry detour instead of LR side-entry
+   - ~45px endpoint displacement in orthogonal mode
+   - Likely direction-override cross-boundary policy not being applied during unified endpoint anchoring
 
 ### P1 — Nice to Fix
 

@@ -1321,6 +1321,96 @@ fn shared_builder_prefers_terminal_segment_matching_layout_entry_axis() {
 }
 
 #[test]
+fn unified_preview_nested_override_cross_boundary_edge_matches_lr_face_parity() {
+    let fixture = "subgraph_direction_nested_both.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    let source_rect = geom
+        .nodes
+        .get("C")
+        .unwrap_or_else(|| panic!("fixture {fixture} should contain source node C"))
+        .rect;
+    let target_rect = geom
+        .nodes
+        .get("A")
+        .unwrap_or_else(|| panic!("fixture {fixture} should contain target node A"))
+        .rect;
+
+    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let full_edge = full
+        .edges
+        .iter()
+        .find(|edge| edge.from == "C" && edge.to == "A")
+        .expect("fixture should contain C -> A in full-compute mode");
+    let unified_edge = unified
+        .edges
+        .iter()
+        .find(|edge| edge.from == "C" && edge.to == "A")
+        .expect("fixture should contain C -> A in unified-preview mode");
+
+    let full_start = full_edge
+        .path
+        .first()
+        .copied()
+        .expect("full-compute C -> A should have source endpoint");
+    let full_end = full_edge
+        .path
+        .last()
+        .copied()
+        .expect("full-compute C -> A should have target endpoint");
+    let unified_start = unified_edge
+        .path
+        .first()
+        .copied()
+        .expect("unified-preview C -> A should have source endpoint");
+    let unified_end = unified_edge
+        .path
+        .last()
+        .copied()
+        .expect("unified-preview C -> A should have target endpoint");
+
+    let full_source_face = point_on_target_face(source_rect, full_start);
+    let full_target_face = point_on_target_face(target_rect, full_end);
+    let unified_source_face = point_on_target_face(source_rect, unified_start);
+    let unified_target_face = point_on_target_face(target_rect, unified_end);
+
+    assert_eq!(
+        full_source_face, "right",
+        "fixture contract invalid: full-compute C -> A should depart C from east/right face: path={:?}",
+        full_edge.path
+    );
+    assert_eq!(
+        full_target_face, "left",
+        "fixture contract invalid: full-compute C -> A should enter A from west/left face: path={:?}",
+        full_edge.path
+    );
+    assert_eq!(
+        unified_source_face, full_source_face,
+        "unified-preview C -> A should match full-compute source face in nested override cross-boundary routing: full={full_source_face}, unified={unified_source_face}, full_path={:?}, unified_path={:?}",
+        full_edge.path, unified_edge.path
+    );
+    assert_eq!(
+        unified_target_face, full_target_face,
+        "unified-preview C -> A should match full-compute target face in nested override cross-boundary routing: full={full_target_face}, unified={unified_target_face}, full_path={:?}, unified_path={:?}",
+        full_edge.path, unified_edge.path
+    );
+
+    let n = unified_edge.path.len();
+    assert!(
+        n >= 2,
+        "unified-preview C -> A should include at least one segment: path={:?}",
+        unified_edge.path
+    );
+    let prev = unified_edge.path[n - 2];
+    assert!(
+        approx_eq(prev.y, unified_end.y) && !approx_eq(prev.x, unified_end.x),
+        "unified-preview C -> A should enter A on a horizontal LR terminal segment: prev={prev:?}, end={unified_end:?}, path={:?}",
+        unified_edge.path
+    );
+}
+
+#[test]
 fn shared_builder_reduces_midfield_jogs_for_large_horizontal_offset_edges() {
     let (diagram, geom) = layout_fixture("decision.mmd");
     let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);

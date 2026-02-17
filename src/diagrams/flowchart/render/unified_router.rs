@@ -5,7 +5,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::route_policy::effective_edge_direction;
+use super::route_policy::{build_override_node_map, effective_edge_direction};
 use super::routing_core::{
     Face, OverflowSide, build_orthogonal_path_float, canonical_backward_channel_face,
     fan_in_overflow_face_for_slot, fan_in_primary_face_capacity, fan_in_primary_target_face,
@@ -38,18 +38,21 @@ impl UnifiedRoutingOptions {
 
 /// Route all edges using float-first orthogonal routing.
 pub(crate) fn route_edges_unified(
-    _diagram: &Diagram,
+    diagram: &Diagram,
     geometry: &GraphGeometry,
     options: UnifiedRoutingOptions,
 ) -> Vec<RoutedEdgeGeometry> {
     let fan_in_target_conflict = fan_in_target_overflow_context(geometry, geometry.direction);
+    let override_nodes = build_override_node_map(diagram);
     geometry
         .edges
         .iter()
         .map(|edge| {
             let is_backward = geometry.reversed_edges.contains(&edge.index);
-            let edge_direction = effective_edge_direction(
+            let edge_direction = unified_edge_direction(
+                diagram,
                 &geometry.node_directions,
+                &override_nodes,
                 &edge.from,
                 &edge.to,
                 geometry.direction,
@@ -96,6 +99,88 @@ pub(crate) fn route_edges_unified(
             }
         })
         .collect()
+}
+
+fn unified_edge_direction(
+    diagram: &Diagram,
+    node_directions: &HashMap<String, Direction>,
+    override_nodes: &HashMap<String, String>,
+    from: &str,
+    to: &str,
+    fallback: Direction,
+) -> Direction {
+    let from_sg = override_nodes.get(from);
+    let to_sg = override_nodes.get(to);
+
+    match (from_sg, to_sg) {
+        (None, None) => effective_edge_direction(node_directions, from, to, fallback),
+        (Some(sg_a), Some(sg_b)) if sg_a == sg_b => {
+            effective_edge_direction(node_directions, from, to, fallback)
+        }
+        _ => cross_boundary_edge_direction(
+            diagram,
+            node_directions,
+            from_sg,
+            to_sg,
+            from,
+            to,
+            fallback,
+        ),
+    }
+}
+
+fn cross_boundary_edge_direction(
+    diagram: &Diagram,
+    node_directions: &HashMap<String, Direction>,
+    from_sg: Option<&String>,
+    to_sg: Option<&String>,
+    from_node: &str,
+    to_node: &str,
+    fallback: Direction,
+) -> Direction {
+    if let (Some(sg_a), Some(sg_b)) = (from_sg, to_sg) {
+        if is_ancestor_sg(diagram, sg_a, sg_b) {
+            return diagram
+                .subgraphs
+                .get(sg_a.as_str())
+                .and_then(|sg| sg.dir)
+                .unwrap_or(fallback);
+        }
+        if is_ancestor_sg(diagram, sg_b, sg_a) {
+            return diagram
+                .subgraphs
+                .get(sg_b.as_str())
+                .and_then(|sg| sg.dir)
+                .unwrap_or(fallback);
+        }
+        return fallback;
+    }
+
+    let outside_node = if from_sg.is_some() && to_sg.is_none() {
+        to_node
+    } else {
+        from_node
+    };
+
+    node_directions
+        .get(outside_node)
+        .copied()
+        .unwrap_or(fallback)
+}
+
+fn is_ancestor_sg(diagram: &Diagram, ancestor: &str, descendant: &str) -> bool {
+    let mut current = descendant;
+    while let Some(parent) = diagram
+        .subgraphs
+        .get(current)
+        .and_then(|sg| sg.parent.as_deref())
+    {
+        if parent == ancestor {
+            return true;
+        }
+        current = parent;
+    }
+    false
 }
 
 const LABEL_ANCHOR_REVALIDATION_MAX_DISTANCE: f64 = 2.0;

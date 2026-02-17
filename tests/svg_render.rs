@@ -2197,6 +2197,53 @@ fn unified_preview_inner_bt_subgraph_edge_does_not_collapse() {
 }
 
 #[test]
+fn unified_preview_nested_override_cross_boundary_edge_keeps_lr_side_faces() {
+    let diagram = load_flowchart_fixture_diagram("subgraph_direction_nested_both.mmd");
+    let edge_index = edge_index(&diagram, "C", "A");
+
+    let full_svg = render_fixture_svg(
+        &diagram,
+        RoutingMode::FullCompute,
+        SvgEdgePathStyle::Orthogonal,
+    );
+    let unified_svg = render_fixture_svg(
+        &diagram,
+        RoutingMode::UnifiedPreview,
+        SvgEdgePathStyle::Orthogonal,
+    );
+
+    let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
+    let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
+
+    let source_rect = node_rect_for_label(&full_svg, "C")
+        .expect("subgraph_direction_nested_both should render node rect for C");
+    let target_rect = node_rect_for_label(&full_svg, "A")
+        .expect("subgraph_direction_nested_both should render node rect for A");
+
+    let full_source_face = svg_source_departure_face(source_rect, &full_points);
+    let full_target_face = svg_terminal_approach_face_relaxed(target_rect, &full_points);
+    let unified_source_face = svg_source_departure_face(source_rect, &unified_points);
+    let unified_target_face = svg_terminal_approach_face_relaxed(target_rect, &unified_points);
+
+    assert_eq!(
+        full_source_face, "right",
+        "fixture contract invalid: full-compute C->A should depart C from east/right face: points={full_points:?}"
+    );
+    assert_eq!(
+        full_target_face, "left",
+        "fixture contract invalid: full-compute C->A should enter A from west/left face: points={full_points:?}"
+    );
+    assert_eq!(
+        unified_source_face, full_source_face,
+        "unified-preview C->A should preserve source face parity with full-compute in nested override cross-boundary routing: full={full_source_face}, unified={unified_source_face}, full_points={full_points:?}, unified_points={unified_points:?}"
+    );
+    assert_eq!(
+        unified_target_face, full_target_face,
+        "unified-preview C->A should preserve target face parity with full-compute in nested override cross-boundary routing: full={full_target_face}, unified={unified_target_face}, full_points={full_points:?}, unified_points={unified_points:?}"
+    );
+}
+
+#[test]
 fn render_svg_edge_styles_and_labels() {
     let input = "graph TD\nA ==>|yes| B\nB -.->|no| C\nC <--> D\n";
     let flowchart = parse_flowchart(input).unwrap();
