@@ -124,8 +124,10 @@ consolidated in:
 
 Policy posture carried into release gating:
 
-- `long_skip_periphery_detour` default-off; enable selectively with `--policy-long-skip-periphery-detour on`.
-- style-segment checks monitor-only; keep escalations tied to monitor
+- Long-skip policy toggles were retired; unified preview uses a single
+  canonical long-skip behavior and quality is tracked via non-viewBox sweep
+  metrics.
+- style-segment checks remain monitor-only; keep escalations tied to monitor
   violations.
 
 ## Task 0.2 Fan-In Overflow Policy Spec (2026-02-12)

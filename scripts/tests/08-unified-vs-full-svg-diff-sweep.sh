@@ -17,10 +17,6 @@ UNIFIED_FEEDBACK_BASELINE_HEADER=$'fixture\tstyle\tstatus\tdiff_lines\tfull_view
 ROUTE_ENVELOPE_ABS_DELTA_WARN_PX="${ROUTE_ENVELOPE_ABS_DELTA_WARN_PX:-24}"
 LABEL_POSITION_MAX_DRIFT_WARN_PX="${LABEL_POSITION_MAX_DRIFT_WARN_PX:-40}"
 LABEL_POSITION_MEAN_DRIFT_WARN_PX="${LABEL_POSITION_MEAN_DRIFT_WARN_PX:-20}"
-LONG_SKIP_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX="${LONG_SKIP_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX:-24}"
-LONG_SKIP_LABEL_POSITION_MAX_DRIFT_GATE_PX="${LONG_SKIP_LABEL_POSITION_MAX_DRIFT_GATE_PX:-40}"
-LONG_SKIP_LABEL_POSITION_MEAN_DRIFT_GATE_PX="${LONG_SKIP_LABEL_POSITION_MEAN_DRIFT_GATE_PX:-20}"
-LONG_SKIP_FIXTURES_DEFAULT="double_skip.mmd,skip_edge_collision.mmd,inline_label_flowchart.mmd"
 
 split_list() {
   local raw="${1:-}"
@@ -85,22 +81,6 @@ render_svg() {
     --geometry-level routed \
     --routing-mode "$mode" \
     --svg-edge-path-style "$style" \
-    "$fixture_path" >"$out_file"
-}
-
-render_svg_with_long_skip_policy() {
-  local mode="$1"
-  local style="$2"
-  local long_skip_policy="$3"
-  local fixture_path="$4"
-  local out_file="$5"
-
-  "$MMDFLUX_BIN" \
-    --format svg \
-    --geometry-level routed \
-    --routing-mode "$mode" \
-    --svg-edge-path-style "$style" \
-    --policy-long-skip-periphery-detour "$long_skip_policy" \
     "$fixture_path" >"$out_file"
 }
 
@@ -409,89 +389,6 @@ summarize_non_viewbox_metrics() {
   ' "$baseline"
 }
 
-summarize_long_skip_rank_span_metrics() {
-  local fixtures_raw="${LONG_SKIP_FIXTURES:-$LONG_SKIP_FIXTURES_DEFAULT}"
-  local report="$OUT_DIR/long-skip-rank-span-metrics.tsv"
-
-  printf '%s\n' "fixture\tstyle\troute_envelope_width_delta\troute_envelope_height_delta\tlabel_position_max_drift\tlabel_position_mean_drift" >"$report"
-
-  local max_route_abs_delta="0.00"
-  local max_label_max_drift="0.00"
-  local max_label_mean_drift="0.00"
-  local row_count=0
-
-  while IFS= read -r fixture_name; do
-    [[ -z "$fixture_name" ]] && continue
-    if [[ "$fixture_name" != *.mmd ]]; then
-      fixture_name="${fixture_name}.mmd"
-    fi
-
-    local fixture_path="$REPO_ROOT/tests/fixtures/flowchart/$fixture_name"
-    if [[ ! -f "$fixture_path" ]]; then
-      echo "Missing Long-skip fixture: $fixture_path" >&2
-      exit 1
-    fi
-
-    local stem="${fixture_name%.mmd}"
-    local off_svg="$OUT_DIR/long_skip_${stem}.off.svg"
-    local on_svg="$OUT_DIR/long_skip_${stem}.on.svg"
-
-    render_svg_with_long_skip_policy "unified-preview" "linear" "off" "$fixture_path" "$off_svg"
-    render_svg_with_long_skip_policy "unified-preview" "linear" "on" "$fixture_path" "$on_svg"
-
-    local off_route_w off_route_h on_route_w on_route_h
-    read -r off_route_w off_route_h <<<"$(extract_route_envelope_dimensions "$off_svg")"
-    read -r on_route_w on_route_h <<<"$(extract_route_envelope_dimensions "$on_svg")"
-
-    local route_w_delta route_h_delta
-    route_w_delta="$(format_delta "$off_route_w" "$on_route_w")"
-    route_h_delta="$(format_delta "$off_route_h" "$on_route_h")"
-
-    local _off_labels _on_labels _label_count_delta label_max_drift label_mean_drift
-    read -r _off_labels _on_labels _label_count_delta label_max_drift label_mean_drift <<<"$(extract_label_drift_stats "$off_svg" "$on_svg")"
-
-    printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
-      "$fixture_name" \
-      "linear" \
-      "$route_w_delta" \
-      "$route_h_delta" \
-      "$label_max_drift" \
-      "$label_mean_drift" >>"$report"
-
-    max_route_abs_delta="$(awk -v current="$max_route_abs_delta" -v w="$route_w_delta" -v h="$route_h_delta" '
-      function abs(v) { return v < 0 ? -v : v }
-      BEGIN {
-        candidate = abs(w)
-        if (abs(h) > candidate) candidate = abs(h)
-        if (candidate > current) printf "%.2f", candidate; else printf "%.2f", current
-      }
-    ')"
-    max_label_max_drift="$(awk -v current="$max_label_max_drift" -v candidate="$label_max_drift" '
-      BEGIN {
-        if (candidate + 0 > current + 0) printf "%.2f", candidate + 0; else printf "%.2f", current + 0
-      }
-    ')"
-    max_label_mean_drift="$(awk -v current="$max_label_mean_drift" -v candidate="$label_mean_drift" '
-      BEGIN {
-        if (candidate + 0 > current + 0) printf "%.2f", candidate + 0; else printf "%.2f", current + 0
-      }
-    ')"
-
-    row_count=$((row_count + 1))
-  done < <(split_list "$fixtures_raw")
-
-  echo "Long-skip rank-span metric summary: rows=${row_count} max_route_envelope_abs_delta=${max_route_abs_delta}px (gate<=${LONG_SKIP_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX}) max_label_position_max_drift=${max_label_max_drift}px (gate<=${LONG_SKIP_LABEL_POSITION_MAX_DRIFT_GATE_PX}) max_label_position_mean_drift=${max_label_mean_drift}px (gate<=${LONG_SKIP_LABEL_POSITION_MEAN_DRIFT_GATE_PX})" >&2
-
-  if awk -v route="$max_route_abs_delta" -v route_gate="$LONG_SKIP_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX" \
-        -v max_drift="$max_label_max_drift" -v max_gate="$LONG_SKIP_LABEL_POSITION_MAX_DRIFT_GATE_PX" \
-        -v mean_drift="$max_label_mean_drift" -v mean_gate="$LONG_SKIP_LABEL_POSITION_MEAN_DRIFT_GATE_PX" \
-        'BEGIN { exit !(route > route_gate || max_drift > max_gate || mean_drift > mean_gate) }'; then
-    echo "Long-skip rank-span metric gate warning: one or more non-viewBox-aligned thresholds exceeded; keep --policy-long-skip-periphery-detour off by default until remediated." >&2
-  fi
-
-  printf '%s\n' "$report"
-}
-
 style_badge_class() {
   case "$1" in
     basis) printf 'style-basis' ;;
@@ -755,12 +652,8 @@ BASELINE_PATH="$(generate_unified_feedback_baseline)"
 print_section "non-viewBox metric summary"
 summarize_non_viewbox_metrics "$BASELINE_PATH"
 
-print_section "Long-skip rank-span metric gate summary"
-LONG_SKIP_REPORT_PATH="$(summarize_long_skip_rank_span_metrics)"
-
 echo
 echo "Unified-vs-full SVG sweep complete."
 echo "Artifacts: $OUT_DIR"
 echo "Gallery: $GALLERY_PATH"
 echo "Unified feedback baseline: $BASELINE_PATH"
-echo "Long-skip rank-span metric report: $LONG_SKIP_REPORT_PATH"

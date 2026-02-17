@@ -3115,10 +3115,7 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_
                 &RenderConfig {
                     routing_mode: Some(RoutingMode::UnifiedPreview),
                     svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
-                    routing_policies: RoutingPolicyToggles {
-                        long_skip_periphery_detour: false,
-                        ..RoutingPolicyToggles::all_enabled()
-                    },
+                    routing_policies: RoutingPolicyToggles::all_enabled(),
                     ..RenderConfig::default()
                 },
             )
@@ -3324,7 +3321,8 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
     // Long backward edges (rank_span >= 6) use side-face channel routing in
     // unified-preview (R-BACK-7 Heuristic 4), so unified target face may differ
     // from full-compute.
-    let cases: [(&str, &str, &str, Option<&str>, &str, &str); 2] = [
+    type BackwardFaceCase<'a> = (&'a str, &'a str, &'a str, Option<&'a str>, &'a str, &'a str);
+    let cases: [BackwardFaceCase<'_>; 2] = [
         ("decision.mmd", "D", "A", Some("top"), "bottom", "bottom"),
         ("complex.mmd", "E", "A", None, "bottom", "right"),
     ];
@@ -3663,17 +3661,10 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
 }
 
 #[test]
-fn full_compute_rollback_is_stable_across_policy_toggle_matrix_for_text_and_svg() {
+fn full_compute_rollback_is_stable_for_text_and_svg() {
     let input = load_fixture("simple_cycle.mmd");
-    let policy_matrix = [
-        RoutingPolicyToggles::all_enabled(),
-        RoutingPolicyToggles {
-            long_skip_periphery_detour: false,
-            ..RoutingPolicyToggles::all_enabled()
-        },
-    ];
 
-    let render_with = |format: OutputFormat, policies: RoutingPolicyToggles| {
+    let render_with = |format: OutputFormat| {
         let registry = default_registry();
         let mut instance = registry
             .create("flowchart")
@@ -3685,30 +3676,26 @@ fn full_compute_rollback_is_stable_across_policy_toggle_matrix_for_text_and_svg(
                 &RenderConfig {
                     routing_mode: Some(RoutingMode::FullCompute),
                     svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
-                    routing_policies: policies,
+                    routing_policies: RoutingPolicyToggles::all_enabled(),
                     ..RenderConfig::default()
                 },
             )
             .expect("render should succeed")
     };
 
-    let baseline_text = render_with(OutputFormat::Text, RoutingPolicyToggles::all_enabled());
-    let baseline_svg = render_with(OutputFormat::Svg, RoutingPolicyToggles::all_enabled());
+    let baseline_text = render_with(OutputFormat::Text);
+    let baseline_svg = render_with(OutputFormat::Svg);
 
-    for policies in policy_matrix {
-        let text = render_with(OutputFormat::Text, policies);
-        let svg = render_with(OutputFormat::Svg, policies);
-        assert_eq!(
-            text, baseline_text,
-            "text rollback should be stable under policy toggle matrix: {:?}",
-            policies
-        );
-        assert_eq!(
-            svg, baseline_svg,
-            "svg rollback should be stable under policy toggle matrix: {:?}",
-            policies
-        );
-    }
+    let text = render_with(OutputFormat::Text);
+    let svg = render_with(OutputFormat::Svg);
+    assert_eq!(
+        text, baseline_text,
+        "text rollback should be stable across repeated renders"
+    );
+    assert_eq!(
+        svg, baseline_svg,
+        "svg rollback should be stable across repeated renders"
+    );
 }
 
 #[test]

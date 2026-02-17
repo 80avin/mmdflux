@@ -78,16 +78,9 @@ fn cli_accepts_svg_edge_path_style_orthogonal() {
 }
 
 #[test]
-fn cli_accepts_long_skip_policy_toggle_with_full_compute_rollback() {
+fn cli_accepts_full_compute_rollback_flag() {
     mmdflux()
-        .args([
-            "--format",
-            "svg",
-            "--routing-mode",
-            "full-compute",
-            "--policy-long-skip-periphery-detour",
-            "off",
-        ])
+        .args(["--format", "svg", "--routing-mode", "full-compute"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success()

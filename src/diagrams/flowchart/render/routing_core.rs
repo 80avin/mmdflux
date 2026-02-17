@@ -18,9 +18,6 @@ pub(crate) enum OverflowSide {
 /// Primary face capacity for deterministic overflow policy in `Task 0.2`.
 pub(crate) const FAN_IN_PRIMARY_FACE_CAPACITY_TD_BT: usize = 4;
 pub(crate) const FAN_IN_PRIMARY_FACE_CAPACITY_LR_RL: usize = 2;
-pub(crate) const LONG_SKIP_RANK_SPAN_TRIGGER: usize = 2;
-pub(crate) const LONG_SKIP_PERIPHERY_DETOUR_BASE: f64 = 28.0;
-pub(crate) const LONG_SKIP_PERIPHERY_DETOUR_MAX: f64 = 36.0;
 
 /// Return the deterministic base capacity for the primary incoming face.
 pub(crate) fn fan_in_primary_face_capacity(direction: Direction) -> usize {
@@ -28,21 +25,6 @@ pub(crate) fn fan_in_primary_face_capacity(direction: Direction) -> usize {
         Direction::TopDown | Direction::BottomTop => FAN_IN_PRIMARY_FACE_CAPACITY_TD_BT,
         Direction::LeftRight | Direction::RightLeft => FAN_IN_PRIMARY_FACE_CAPACITY_LR_RL,
     }
-}
-
-/// Determine whether long-skip policy is eligible by rank span.
-pub(crate) fn long_skip_rank_span_requires_periphery(rank_span: usize) -> bool {
-    rank_span >= LONG_SKIP_RANK_SPAN_TRIGGER
-}
-
-/// Compute required minimum periphery detour for long-skip edges.
-pub(crate) fn long_skip_required_periphery_detour(rank_span: usize) -> f64 {
-    if !long_skip_rank_span_requires_periphery(rank_span) {
-        return 0.0;
-    }
-
-    let rank_bonus = rank_span.saturating_sub(LONG_SKIP_RANK_SPAN_TRIGGER) as f64;
-    (LONG_SKIP_PERIPHERY_DETOUR_BASE + rank_bonus).min(LONG_SKIP_PERIPHERY_DETOUR_MAX)
 }
 
 /// Convert canonical fan-in spill slot into an overflow face for a direction.

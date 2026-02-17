@@ -141,7 +141,7 @@ impl Default for RenderOptions {
             padding: None,
             path_detail: PathDetail::default(),
             routing_mode: None,
-            routing_policies: RoutingPolicyToggles::default(),
+            routing_policies: RoutingPolicyToggles,
         }
     }
 }

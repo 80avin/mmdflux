@@ -426,7 +426,7 @@ The character grid imposes axis-aligned rendering. Text routing uses discrete gr
 | Bend cost tuning | Unified promotion | Expose bend cost as a tunable parameter (yFiles pattern) |
 | Port constraint API | Unified promotion | Allow user-specified port sides for block diagram use cases |
 | Style-aware segment constraints | Unified promotion | Minimum segment lengths for dotted/thick edges (research 0048 styled-segment findings) |
-| Long skip-edge periphery policy | Unified promotion | Explicit routing policy for edges spanning 3+ layers (research 0048 long-skip findings) |
+| Long skip-edge quality monitoring | Unified promotion | Keep long-skip outcomes visible through route-envelope and label-drift telemetry in unified-vs-full sweeps (research 0048 long-skip findings) |
 
 ---
 

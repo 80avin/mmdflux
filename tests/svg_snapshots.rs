@@ -442,33 +442,22 @@ fn svg_full_compute_override_matches_legacy_linear_core_subset() {
 }
 
 #[test]
-fn svg_full_compute_rollback_is_stable_across_policy_toggle_matrix() {
-    let policy_matrix = [
-        RoutingPolicyToggles::all_enabled(),
-        RoutingPolicyToggles {
-            long_skip_periphery_detour: false,
-            ..RoutingPolicyToggles::all_enabled()
-        },
-    ];
-
+fn svg_full_compute_rollback_is_stable_across_repeated_renders() {
     for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
         let baseline = render_svg_fixture_with_routing_mode_and_policies(
             fixture,
             RoutingMode::FullCompute,
             RoutingPolicyToggles::all_enabled(),
         );
-        for policies in policy_matrix {
-            let output = render_svg_fixture_with_routing_mode_and_policies(
-                fixture,
-                RoutingMode::FullCompute,
-                policies,
-            );
-            assert_eq!(
-                output, baseline,
-                "full-compute rollback should be stable for {fixture} under policy set {:?}",
-                policies
-            );
-        }
+        let output = render_svg_fixture_with_routing_mode_and_policies(
+            fixture,
+            RoutingMode::FullCompute,
+            RoutingPolicyToggles::all_enabled(),
+        );
+        assert_eq!(
+            output, baseline,
+            "full-compute rollback should be stable for fixture {fixture}"
+        );
     }
 }
 
@@ -632,7 +621,6 @@ fn promotion_record_has_rollback_validation() {
     let required_markers = [
         "### Rollback Playbook (Task 5.1)",
         "--routing-mode full-compute",
-        "--policy-long-skip-periphery-detour off",
         "./scripts/tests/07-plan-0076-unified-routing-quality-qa.sh",
     ];
 

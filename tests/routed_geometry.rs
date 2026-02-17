@@ -399,57 +399,6 @@ fn effective_edge_direction_for_test(
     }
 }
 
-fn edge_rank_span_from_dagre_hints(geom: &GraphGeometry, edge_index: usize) -> Option<usize> {
-    let EngineHints::Dagre(hints) = geom.engine_hints.as_ref()? else {
-        return None;
-    };
-    let edge = geom.edges.iter().find(|edge| edge.index == edge_index)?;
-    let src_rank = *hints.node_ranks.get(&edge.from)?;
-    let dst_rank = *hints.node_ranks.get(&edge.to)?;
-    Some(src_rank.abs_diff(dst_rank) as usize)
-}
-
-fn lateral_detour_from_endpoint_axis(path: &[FPoint], direction: mmdflux::Direction) -> f64 {
-    if path.len() < 2 {
-        return 0.0;
-    }
-    let start = path[0];
-    let end = path[path.len() - 1];
-
-    match direction {
-        mmdflux::Direction::TopDown | mmdflux::Direction::BottomTop => {
-            let baseline_min = start.x.min(end.x);
-            let baseline_max = start.x.max(end.x);
-            let route_min = path
-                .iter()
-                .map(|point| point.x)
-                .fold(f64::INFINITY, f64::min);
-            let route_max = path
-                .iter()
-                .map(|point| point.x)
-                .fold(f64::NEG_INFINITY, f64::max);
-            (baseline_min - route_min)
-                .max(route_max - baseline_max)
-                .max(0.0)
-        }
-        mmdflux::Direction::LeftRight | mmdflux::Direction::RightLeft => {
-            let baseline_min = start.y.min(end.y);
-            let baseline_max = start.y.max(end.y);
-            let route_min = path
-                .iter()
-                .map(|point| point.y)
-                .fold(f64::INFINITY, f64::min);
-            let route_max = path
-                .iter()
-                .map(|point| point.y)
-                .fold(f64::NEG_INFINITY, f64::max);
-            (baseline_min - route_min)
-                .max(route_max - baseline_max)
-                .max(0.0)
-        }
-    }
-}
-
 // -----------------------------------------------------------------------
 // Task 1.1: Routed geometry contract tests
 // -----------------------------------------------------------------------
@@ -565,7 +514,7 @@ fn stale_label_anchor_is_replaced_with_valid_route_anchor() {
         &diagram,
         &stale_geom,
         RoutingMode::UnifiedPreview,
-        RoutingPolicyToggles::default(),
+        RoutingPolicyToggles,
     );
     let routed_edge = routed
         .edges
@@ -2433,10 +2382,7 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
             &diagram,
             &geom,
             RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                long_skip_periphery_detour: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
+            RoutingPolicyToggles::all_enabled(),
         );
         let target_rect = geom
             .nodes
@@ -2531,10 +2477,7 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
             &diagram,
             &geom,
             RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                long_skip_periphery_detour: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
+            RoutingPolicyToggles::all_enabled(),
         );
 
         let edge = routed
@@ -2563,69 +2506,6 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
             end_face, expected_target_face,
             "fixture {fixture} edge {from}->{to} should keep canonical backward target face {expected_target_face}; end={end:?}, path={:?}",
             edge.path
-        );
-    }
-}
-
-// -----------------------------------------------------------------------
-// Task 3.1: Long-skip periphery detour regressions
-// -----------------------------------------------------------------------
-
-#[test]
-fn long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
-    let cases = [
-        ("double_skip.mmd", "A", "D"),
-        ("skip_edge_collision.mmd", "A", "D"),
-    ];
-
-    for (fixture, from, to) in cases {
-        let (diagram, geom) = layout_fixture_svg(fixture);
-        let long_skip_off = route_graph_geometry_with_policies(
-            &diagram,
-            &geom,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                long_skip_periphery_detour: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        let long_skip_on = route_graph_geometry_with_policies(
-            &diagram,
-            &geom,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                long_skip_periphery_detour: true,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-
-        let edge_off = long_skip_off
-            .edges
-            .iter()
-            .find(|edge| edge.from == from && edge.to == to)
-            .unwrap_or_else(|| panic!("fixture {fixture} should contain edge {from} -> {to}"));
-        let edge_on = long_skip_on
-            .edges
-            .iter()
-            .find(|edge| edge.from == from && edge.to == to)
-            .unwrap_or_else(|| panic!("fixture {fixture} should contain edge {from} -> {to}"));
-
-        let rank_span =
-            edge_rank_span_from_dagre_hints(&geom, edge_on.index).unwrap_or_else(|| {
-                panic!("fixture {fixture} edge {from}->{to} should have dagre rank metadata")
-            });
-        assert!(
-            rank_span >= 2,
-            "fixture contract invalid for Long-skip periphery: {fixture} edge {from}->{to} must be a long-skip edge with rank_span>=2, got {rank_span}"
-        );
-
-        let detour_off = lateral_detour_from_endpoint_axis(&edge_off.path, geom.direction);
-        let detour_on = lateral_detour_from_endpoint_axis(&edge_on.path, geom.direction);
-        assert!(
-            detour_on > detour_off + 0.5,
-            "Long-skip periphery rank-span policy should increase periphery detour for {fixture} edge {from}->{to}: rank_span={rank_span}, detour_off={detour_off}, detour_on={detour_on}, off_path={:?}, on_path={:?}",
-            edge_off.path,
-            edge_on.path
         );
     }
 }

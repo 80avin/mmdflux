@@ -4,8 +4,7 @@ use crate::diagrams::flowchart::geometry::{FPoint, FRect};
 use crate::diagrams::flowchart::render::routing_core::{
     Face, OverflowSide, build_orthogonal_path_float, canonical_backward_channel_face,
     classify_face_float, edge_faces, fan_in_overflow_face_for_slot, fan_in_primary_face_capacity,
-    long_skip_rank_span_requires_periphery, long_skip_required_periphery_detour, plan_attachments,
-    point_on_face_float, resolve_overflow_backward_channel_conflict,
+    plan_attachments, point_on_face_float, resolve_overflow_backward_channel_conflict,
 };
 use crate::graph::{Diagram, Node};
 use crate::render::intersect::NodeFace;
@@ -1271,23 +1270,6 @@ fn overflow_backward_channel_precedence_resolver_is_stable_and_direction_aware()
             "resolver must be deterministic across repeated evaluation"
         );
     }
-}
-
-#[test]
-fn long_skip_rank_span_helpers_enforce_simple_threshold_and_bounded_detour() {
-    assert!(!long_skip_rank_span_requires_periphery(1));
-    assert!(long_skip_rank_span_requires_periphery(2));
-    assert!(long_skip_rank_span_requires_periphery(6));
-
-    assert_eq!(long_skip_required_periphery_detour(1), 0.0);
-    assert!(
-        long_skip_required_periphery_detour(2) >= 28.0,
-        "rank-span trigger should start at documented base detour"
-    );
-    assert!(
-        long_skip_required_periphery_detour(8) <= 36.0,
-        "detour should remain bounded for large spans"
-    );
 }
 
 #[test]

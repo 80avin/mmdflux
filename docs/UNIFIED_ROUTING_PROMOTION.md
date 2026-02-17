@@ -98,25 +98,13 @@ These specs are documented and test-scaffolded before runtime behavior changes.
   - `LABEL_POSITION_MAX_DRIFT_WARN_PX=40`
   - `LABEL_POSITION_MEAN_DRIFT_WARN_PX=20`
 
-### Long-Skip Rank-Span Policy + Metric Gate (Task 3.2)
+### Long-Skip Toggle Retirement (2026-02-17)
 
-- Long-skip activation rule is intentionally simple for initial rollout:
-  - apply periphery detour only when `rank_span >= 2`
-- Required detour is bounded and rank-aware in shared policy helpers:
-  - base `28px`, capped at `36px`
-- long-skip on vs off fixture subset classification (unified preview, linear SVG):
-  - `must-diff`: `double_skip.mmd`, `skip_edge_collision.mmd`, `inline_label_flowchart.mmd`
-  - `must-match`: none in this subset
-- long-skip-specific non-viewBox-aligned metric gate is now scripted in:
+- `long_skip_periphery_detour` policy plumbing was removed from runtime, CLI, and tests.
+- Unified preview now has a single canonical path for long-skip edges (no on/off matrix).
+- Long-skip quality monitoring continues via the shared non-viewBox sweep metrics in:
   - `scripts/tests/08-unified-vs-full-svg-diff-sweep.sh`
-  - report output: `long-skip-rank-span-metrics.tsv`
-  - thresholds:
-    - `LONG_SKIP_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX=24`
-    - `LONG_SKIP_LABEL_POSITION_MAX_DRIFT_GATE_PX=40`
-    - `LONG_SKIP_LABEL_POSITION_MEAN_DRIFT_GATE_PX=20`
-- Default posture:
-  - keep `long_skip_periphery_detour` **off by default** in `RoutingPolicyToggles::default()`
-  - use `--policy-long-skip-periphery-detour on` for controlled validation and staged rollout
+  - `docs/unified_feedback_baseline.tsv`
 
 ## Accepted Deltas (Release N, Flowchart Scope)
 
@@ -204,8 +192,7 @@ Plan 0077.
 
 | Policy Area | Fixture Subset | Classification | Gate |
 | ---- | ---- | ---- | ---- |
-| Fan-in overflow/backward-channel behavior | `stacked_fan_in.mmd`, `fan_in.mmd`, `five_fan_in.mmd`, `multiple_cycles.mmd`, `http_request.mmd`, `git_workflow.mmd`, `fan_in_backward_channel_conflict.mmd` | Must preserve documented face policies with overflow `on` and `off` where applicable | `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies`, `svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces`, `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg` |
-| Long-skip periphery toggle (unified preview, linear SVG) | `double_skip.mmd`, `skip_edge_collision.mmd`, `inline_label_flowchart.mmd` | `must-diff` for known long-skip edges; `must-match` for short control edge | `long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane`, `svg_linear_long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane`, `svg_linear_long_skip_periphery_toggle_keeps_short_inline_edge_stable` |
+| Fan-in overflow/backward-channel behavior | `stacked_fan_in.mmd`, `fan_in.mmd`, `five_fan_in.mmd`, `multiple_cycles.mmd`, `http_request.mmd`, `git_workflow.mmd`, `fan_in_backward_channel_conflict.mmd` | Must preserve documented face policies with deterministic overflow lanes | `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies`, `svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces`, `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg` |
 | Style-segment monitor-only (styled segment minimum) | `edge_styles.mmd`, `inline_edge_labels.mmd` | monitor-only; escalate on violations | `style_segment_monitor_reports_actionable_summary_for_routed_geometry`, `style_segment_monitor_reports_actionable_summary_for_svg` |
 | Label-revalidation text parity | `labeled_edges.mmd`, `inline_label_flowchart.mmd` | `must-match` between `unified-preview` and `full-compute` text output | `text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes` |
 | Rollback parity (legacy linear core) | `simple.mmd`, `chain.mmd`, `simple_cycle.mmd` | `must-match-legacy` under rollback mode | `svg_full_compute_override_matches_legacy_linear_core_subset` |
@@ -229,24 +216,15 @@ Use this playbook if rollout metrics or fixture gates regress.
 mmdflux --routing-mode full-compute <input.mmd>
 ```
 
-3. Disable staged policies explicitly for diagnosis/containment:
+3. Re-run targeted gates and compare with baseline classifications:
 
-```bash
-mmdflux --routing-mode unified-preview --policy-long-skip-periphery-detour off <input.mmd>
-```
-
-4. Re-run targeted gates and compare with baseline classifications:
   - `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies`
   - `svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces`
-  - `long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane`
-  - `svg_linear_long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane`
-  - `svg_linear_long_skip_periphery_toggle_keeps_short_inline_edge_stable`
   - `style_segment_monitor_reports_actionable_summary_for_svg`
   - `svg_full_compute_override_matches_legacy_linear_core_subset`
 
-5. Keep `long_skip_periphery_detour` default-off until gates are green and
-   findings are resolved. Keep style-segment checks monitor-only (no runtime
-   policy toggle) until explicit enforcement is approved.
+4. Keep style-segment checks monitor-only (no runtime policy toggle) until
+   explicit enforcement is approved.
 
 ## Code Change Checklist For Default Flip
 

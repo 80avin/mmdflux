@@ -412,21 +412,6 @@ fn horizontal_span(points: &[(f64, f64)]) -> f64 {
     max_x - min_x
 }
 
-fn horizontal_detour_from_endpoint_axis(points: &[(f64, f64)]) -> f64 {
-    if points.len() < 2 {
-        return 0.0;
-    }
-    let start = points[0];
-    let end = points[points.len() - 1];
-    let baseline_min = start.0.min(end.0);
-    let baseline_max = start.0.max(end.0);
-    let route_min = points.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
-    let route_max = points.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
-    (baseline_min - route_min)
-        .max(route_max - baseline_max)
-        .max(0.0)
-}
-
 fn segment_axis(a: (f64, f64), b: (f64, f64)) -> Option<char> {
     if (a.0 - b.0).abs() < 0.001 && (a.1 - b.1).abs() >= 0.001 {
         Some('V')
@@ -1934,10 +1919,7 @@ fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documen
         options.svg.edge_path_style = SvgEdgePathStyle::Linear;
         options.routing_mode = Some(RoutingMode::UnifiedPreview);
         options.path_detail = PathDetail::Full;
-        options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-            long_skip_periphery_detour: false,
-            ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
-        };
+        options.routing_policies = mmdflux::diagram::RoutingPolicyToggles::all_enabled();
 
         let svg = render_svg(&diagram, &options);
         let rect = node_rect_for_label(&svg, target_label)
@@ -2046,10 +2028,7 @@ fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documen
         options.svg.edge_path_style = SvgEdgePathStyle::Linear;
         options.routing_mode = Some(RoutingMode::UnifiedPreview);
         options.path_detail = PathDetail::Full;
-        options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-            long_skip_periphery_detour: false,
-            ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
-        };
+        options.routing_policies = mmdflux::diagram::RoutingPolicyToggles::all_enabled();
 
         let svg = render_svg(&diagram, &options);
         let source_rect = node_rect_for_label(&svg, source_label)
@@ -2069,72 +2048,6 @@ fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documen
             "fixture {fixture_name} edge {from}->{to} should keep expected backward target face {expected_target_face}; points={points:?}"
         );
     }
-}
-
-#[test]
-fn svg_linear_long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
-    let long_skip_cases = [
-        ("double_skip.mmd", "A", "D"),
-        ("skip_edge_collision.mmd", "A", "D"),
-    ];
-
-    for (fixture_name, from, to) in long_skip_cases {
-        let diagram = load_flowchart_fixture_diagram(fixture_name);
-        let edge_idx = edge_index(&diagram, from, to);
-
-        let render_for_long_skip_policy = |long_skip_enabled: bool| {
-            let mut options = RenderOptions::default_svg();
-            options.svg.edge_path_style = SvgEdgePathStyle::Linear;
-            options.routing_mode = Some(RoutingMode::UnifiedPreview);
-            options.path_detail = PathDetail::Full;
-            options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-                long_skip_periphery_detour: long_skip_enabled,
-                ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
-            };
-            render_svg(&diagram, &options)
-        };
-
-        let off_svg = render_for_long_skip_policy(false);
-        let on_svg = render_for_long_skip_policy(true);
-        let off_points = edge_path_for_svg_order(&diagram, &off_svg, edge_idx);
-        let on_points = edge_path_for_svg_order(&diagram, &on_svg, edge_idx);
-        let off_detour = horizontal_detour_from_endpoint_axis(&off_points);
-        let on_detour = horizontal_detour_from_endpoint_axis(&on_points);
-
-        assert!(
-            on_detour > off_detour + 0.5,
-            "Long-skip periphery policy should increase SVG long-skip periphery detour for {fixture_name} edge {from}->{to}: detour_off={off_detour}, detour_on={on_detour}, off_points={off_points:?}, on_points={on_points:?}"
-        );
-    }
-}
-
-#[test]
-fn svg_linear_long_skip_periphery_toggle_keeps_short_inline_edge_stable() {
-    let fixture_name = "inline_label_flowchart.mmd";
-    let diagram = load_flowchart_fixture_diagram(fixture_name);
-    let edge_idx = edge_index(&diagram, "start", "ingest");
-
-    let render_for_long_skip_policy = |long_skip_enabled: bool| {
-        let mut options = RenderOptions::default_svg();
-        options.svg.edge_path_style = SvgEdgePathStyle::Linear;
-        options.routing_mode = Some(RoutingMode::UnifiedPreview);
-        options.path_detail = PathDetail::Full;
-        options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-            long_skip_periphery_detour: long_skip_enabled,
-            ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
-        };
-        render_svg(&diagram, &options)
-    };
-
-    let off_svg = render_for_long_skip_policy(false);
-    let on_svg = render_for_long_skip_policy(true);
-    let off_points = edge_path_for_svg_order(&diagram, &off_svg, edge_idx);
-    let on_points = edge_path_for_svg_order(&diagram, &on_svg, edge_idx);
-
-    assert_eq!(
-        on_points, off_points,
-        "Long-skip periphery toggle should not perturb short edge start->ingest in {fixture_name}; off_points={off_points:?}, on_points={on_points:?}"
-    );
 }
 
 #[test]

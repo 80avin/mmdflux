@@ -32,8 +32,7 @@ print_section "Targeted parity/determinism/path-detail gates"
 print_section "Promotion record marker checks"
 for marker in \
   "### Rollback Playbook (Task 5.1)" \
-  "--routing-mode full-compute" \
-  "--policy-long-skip-periphery-detour off"; do
+  "--routing-mode full-compute"; do
   if ! rg -F -- "$marker" "$PROMOTION_DOC" >/dev/null; then
     echo "Missing promotion-record marker: $marker" >&2
     exit 1

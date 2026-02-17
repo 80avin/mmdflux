@@ -106,10 +106,6 @@ struct Cli {
     /// Routing mode override for routed-geometry preview.
     #[arg(long, value_enum)]
     routing_mode: Option<RoutingModeArg>,
-
-    /// Long-skip periphery detour policy toggle (on/off).
-    #[arg(long, value_enum)]
-    policy_long_skip_periphery_detour: Option<PolicyToggleArg>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -230,18 +226,6 @@ impl From<RoutingModeArg> for RoutingMode {
     }
 }
 
-#[derive(Clone, Copy, ValueEnum, Debug)]
-enum PolicyToggleArg {
-    On,
-    Off,
-}
-
-impl PolicyToggleArg {
-    fn is_enabled(self) -> bool {
-        matches!(self, PolicyToggleArg::On)
-    }
-}
-
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
@@ -291,13 +275,7 @@ fn main() -> io::Result<()> {
     };
 
     let config = RenderConfig {
-        routing_policies: {
-            let mut policies = RoutingPolicyToggles::default();
-            if let Some(toggle) = cli.policy_long_skip_periphery_detour {
-                policies.long_skip_periphery_detour = toggle.is_enabled();
-            }
-            policies
-        },
+        routing_policies: RoutingPolicyToggles,
         layout: LayoutConfig {
             node_sep: cli.node_spacing.unwrap_or(50.0),
             edge_sep: cli.edge_spacing.unwrap_or(20.0),
