@@ -985,7 +985,7 @@ pub(crate) fn intersect_convex_polygon(
         let t = ((a.x - center.x) * ey - (a.y - center.y) * ex) / denom;
         let s = ((a.x - center.x) * dy - (a.y - center.y) * dx) / denom;
 
-        if t > 0.0 && s >= 0.0 && s <= 1.0 && t < best_t {
+        if t > 0.0 && (0.0..=1.0).contains(&s) && t < best_t {
             best_t = t;
             best_point = FPoint::new(center.x + t * dx, center.y + t * dy);
         }

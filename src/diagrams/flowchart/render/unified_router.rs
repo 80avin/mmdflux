@@ -1902,22 +1902,20 @@ fn snap_backward_endpoints_to_shape(
     // Re-project source endpoint
     if let Some((from_rect, from_shape)) =
         endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+        && matches!(from_shape, Shape::Diamond | Shape::Hexagon)
     {
-        if matches!(from_shape, Shape::Diamond | Shape::Hexagon) {
-            let approach = path[1];
-            path[0] = intersect_shape_boundary_float(from_rect, from_shape, approach);
-        }
+        let approach = path[1];
+        path[0] = intersect_shape_boundary_float(from_rect, from_shape, approach);
     }
 
     // Re-project target endpoint
     let last = path.len() - 1;
     if let Some((to_rect, to_shape)) =
         endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+        && matches!(to_shape, Shape::Diamond | Shape::Hexagon)
     {
-        if matches!(to_shape, Shape::Diamond | Shape::Hexagon) {
-            let approach = path[last - 1];
-            path[last] = intersect_shape_boundary_float(to_rect, to_shape, approach);
-        }
+        let approach = path[last - 1];
+        path[last] = intersect_shape_boundary_float(to_rect, to_shape, approach);
     }
 }
 
