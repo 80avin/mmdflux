@@ -2,10 +2,10 @@ use super::super::layout::{LayoutConfig, compute_layout_direct};
 use super::*;
 use crate::diagrams::flowchart::geometry::{FPoint, FRect};
 use crate::diagrams::flowchart::render::routing_core::{
-    Face, Q1OverflowSide, build_orthogonal_path_float, classify_face_float, edge_faces,
-    plan_attachments, point_on_face_float, q1_overflow_face_for_slot, q1_primary_face_capacity,
-    q2_backward_channel_face, q4_rank_span_should_use_periphery, q4_required_periphery_detour,
-    resolve_q1_q2_face_conflict,
+    Face, OverflowSide, build_orthogonal_path_float, canonical_backward_channel_face,
+    classify_face_float, edge_faces, fan_in_overflow_face_for_slot, fan_in_primary_face_capacity,
+    long_skip_rank_span_requires_periphery, long_skip_required_periphery_detour, plan_attachments,
+    point_on_face_float, resolve_overflow_backward_channel_conflict,
 };
 use crate::graph::{Diagram, Node};
 use crate::render::intersect::NodeFace;
@@ -1127,42 +1127,42 @@ fn routing_core_build_orthogonal_path_float_emits_axis_aligned_segments() {
 }
 
 #[test]
-fn q1_q2_precedence_prefers_backward_channel_over_overflow_target_slot() {
+fn overflow_backward_channel_precedence_prefers_backward_channel_over_overflow_target_slot() {
     assert_eq!(
-        q1_primary_face_capacity(Direction::TopDown),
+        fan_in_primary_face_capacity(Direction::TopDown),
         4,
         "TD/Bt primary capacity should remain in sync with contract"
     );
     assert_eq!(
-        q1_primary_face_capacity(Direction::LeftRight),
+        fan_in_primary_face_capacity(Direction::LeftRight),
         2,
         "LR/RL primary capacity should remain in sync with contract"
     );
 
     assert_eq!(
-        q2_backward_channel_face(Direction::TopDown),
+        canonical_backward_channel_face(Direction::TopDown),
         Face::Right,
         "TD backward canonical channel should be right"
     );
     assert_eq!(
-        q2_backward_channel_face(Direction::LeftRight),
+        canonical_backward_channel_face(Direction::LeftRight),
         Face::Bottom,
         "LR backward canonical channel should be bottom"
     );
 
     assert_eq!(
-        q1_overflow_face_for_slot(Direction::TopDown, Q1OverflowSide::LeftOrTop),
+        fan_in_overflow_face_for_slot(Direction::TopDown, OverflowSide::LeftOrTop),
         Face::Left,
         "TD overflow slot 0 should map to left"
     );
     assert_eq!(
-        q1_overflow_face_for_slot(Direction::TopDown, Q1OverflowSide::RightOrBottom),
+        fan_in_overflow_face_for_slot(Direction::TopDown, OverflowSide::RightOrBottom),
         Face::Right,
         "TD overflow slot 1 should map to right"
     );
 
     assert_eq!(
-        resolve_q1_q2_face_conflict(
+        resolve_overflow_backward_channel_conflict(
             Direction::TopDown,
             true,
             true,
@@ -1172,11 +1172,17 @@ fn q1_q2_precedence_prefers_backward_channel_over_overflow_target_slot() {
         Face::Right
     );
     assert_eq!(
-        resolve_q1_q2_face_conflict(Direction::TopDown, true, true, Some(Face::Top), Face::Top),
+        resolve_overflow_backward_channel_conflict(
+            Direction::TopDown,
+            true,
+            true,
+            Some(Face::Top),
+            Face::Top
+        ),
         Face::Right
     );
     assert_eq!(
-        resolve_q1_q2_face_conflict(
+        resolve_overflow_backward_channel_conflict(
             Direction::TopDown,
             false,
             false,
@@ -1188,7 +1194,7 @@ fn q1_q2_precedence_prefers_backward_channel_over_overflow_target_slot() {
 }
 
 #[test]
-fn q1_q2_precedence_resolver_is_stable_and_direction_aware() {
+fn overflow_backward_channel_precedence_resolver_is_stable_and_direction_aware() {
     let cases = [
         (
             Direction::TopDown,
@@ -1242,14 +1248,14 @@ fn q1_q2_precedence_resolver_is_stable_and_direction_aware() {
 
     for (direction, is_backward, has_backward_conflict, overflow_face, proposed, expected) in cases
     {
-        let first = resolve_q1_q2_face_conflict(
+        let first = resolve_overflow_backward_channel_conflict(
             direction,
             is_backward,
             has_backward_conflict,
             overflow_face,
             proposed,
         );
-        let second = resolve_q1_q2_face_conflict(
+        let second = resolve_overflow_backward_channel_conflict(
             direction,
             is_backward,
             has_backward_conflict,
@@ -1268,18 +1274,18 @@ fn q1_q2_precedence_resolver_is_stable_and_direction_aware() {
 }
 
 #[test]
-fn q4_rank_span_helpers_enforce_simple_threshold_and_bounded_detour() {
-    assert!(!q4_rank_span_should_use_periphery(1));
-    assert!(q4_rank_span_should_use_periphery(2));
-    assert!(q4_rank_span_should_use_periphery(6));
+fn long_skip_rank_span_helpers_enforce_simple_threshold_and_bounded_detour() {
+    assert!(!long_skip_rank_span_requires_periphery(1));
+    assert!(long_skip_rank_span_requires_periphery(2));
+    assert!(long_skip_rank_span_requires_periphery(6));
 
-    assert_eq!(q4_required_periphery_detour(1), 0.0);
+    assert_eq!(long_skip_required_periphery_detour(1), 0.0);
     assert!(
-        q4_required_periphery_detour(2) >= 28.0,
+        long_skip_required_periphery_detour(2) >= 28.0,
         "rank-span trigger should start at documented base detour"
     );
     assert!(
-        q4_required_periphery_detour(8) <= 36.0,
+        long_skip_required_periphery_detour(8) <= 36.0,
         "detour should remain bounded for large spans"
     );
 }

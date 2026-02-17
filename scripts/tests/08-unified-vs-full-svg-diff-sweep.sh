@@ -17,10 +17,10 @@ UNIFIED_FEEDBACK_BASELINE_HEADER=$'fixture\tstyle\tstatus\tdiff_lines\tfull_view
 ROUTE_ENVELOPE_ABS_DELTA_WARN_PX="${ROUTE_ENVELOPE_ABS_DELTA_WARN_PX:-24}"
 LABEL_POSITION_MAX_DRIFT_WARN_PX="${LABEL_POSITION_MAX_DRIFT_WARN_PX:-40}"
 LABEL_POSITION_MEAN_DRIFT_WARN_PX="${LABEL_POSITION_MEAN_DRIFT_WARN_PX:-20}"
-Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX="${Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX:-24}"
-Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX="${Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX:-40}"
-Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX="${Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX:-20}"
-Q4_FIXTURES_DEFAULT="double_skip.mmd,skip_edge_collision.mmd,inline_label_flowchart.mmd"
+LONG_SKIP_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX="${LONG_SKIP_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX:-24}"
+LONG_SKIP_LABEL_POSITION_MAX_DRIFT_GATE_PX="${LONG_SKIP_LABEL_POSITION_MAX_DRIFT_GATE_PX:-40}"
+LONG_SKIP_LABEL_POSITION_MEAN_DRIFT_GATE_PX="${LONG_SKIP_LABEL_POSITION_MEAN_DRIFT_GATE_PX:-20}"
+LONG_SKIP_FIXTURES_DEFAULT="double_skip.mmd,skip_edge_collision.mmd,inline_label_flowchart.mmd"
 
 split_list() {
   local raw="${1:-}"
@@ -88,10 +88,10 @@ render_svg() {
     "$fixture_path" >"$out_file"
 }
 
-render_svg_with_q4_policy() {
+render_svg_with_long_skip_policy() {
   local mode="$1"
   local style="$2"
-  local q4_policy="$3"
+  local long_skip_policy="$3"
   local fixture_path="$4"
   local out_file="$5"
 
@@ -100,7 +100,7 @@ render_svg_with_q4_policy() {
     --geometry-level routed \
     --routing-mode "$mode" \
     --svg-edge-path-style "$style" \
-    --policy-q4 "$q4_policy" \
+    --policy-long-skip-periphery-detour "$long_skip_policy" \
     "$fixture_path" >"$out_file"
 }
 
@@ -352,7 +352,7 @@ generate_unified_feedback_baseline() {
   printf '%s\n' "$baseline"
 }
 
-summarize_q6_metrics() {
+summarize_non_viewbox_metrics() {
   local baseline="$1"
   awk -F $'\t' \
     -v route_warn="$ROUTE_ENVELOPE_ABS_DELTA_WARN_PX" \
@@ -369,7 +369,7 @@ summarize_q6_metrics() {
       required["label_position_mean_drift"] = 1
       for (name in required) {
         if (!(name in idx)) {
-          printf "Missing required Q6 metric column in baseline: %s\n", name > "/dev/stderr"
+          printf "Missing required non-viewBox metric column in baseline: %s\n", name > "/dev/stderr"
           exit 2
         }
       }
@@ -395,23 +395,23 @@ summarize_q6_metrics() {
     }
     END {
       if (row_count == 0) {
-        printf "Q6 metric summary: no baseline rows found\n"
+        printf "non-viewBox metric summary: no baseline rows found\n"
         exit
       }
 
-      printf "Q6 metric summary: rows=%d max_route_envelope_abs_delta=%.2fpx (warn>%.2f) max_label_position_max_drift=%.2fpx (warn>%.2f) max_label_position_mean_drift=%.2fpx (warn>%.2f)\n", \
+      printf "non-viewBox metric summary: rows=%d max_route_envelope_abs_delta=%.2fpx (warn>%.2f) max_label_position_max_drift=%.2fpx (warn>%.2f) max_label_position_mean_drift=%.2fpx (warn>%.2f)\n", \
         row_count, max_route_abs_delta, route_warn, max_label_max_drift, label_max_warn, max_label_mean_drift, label_mean_warn
 
       if (max_route_abs_delta > route_warn || max_label_max_drift > label_max_warn || max_label_mean_drift > label_mean_warn) {
-        printf "Q6 metric warning: one or more thresholds exceeded; review sweep gallery and baseline deltas before promotion.\n"
+        printf "non-viewBox metric warning: one or more thresholds exceeded; review sweep gallery and baseline deltas before promotion.\n"
       }
     }
   ' "$baseline"
 }
 
-summarize_q4_rank_span_metrics() {
-  local fixtures_raw="${Q4_FIXTURES:-$Q4_FIXTURES_DEFAULT}"
-  local report="$OUT_DIR/q4-rank-span-metrics.tsv"
+summarize_long_skip_rank_span_metrics() {
+  local fixtures_raw="${LONG_SKIP_FIXTURES:-$LONG_SKIP_FIXTURES_DEFAULT}"
+  local report="$OUT_DIR/long-skip-rank-span-metrics.tsv"
 
   printf '%s\n' "fixture\tstyle\troute_envelope_width_delta\troute_envelope_height_delta\tlabel_position_max_drift\tlabel_position_mean_drift" >"$report"
 
@@ -428,16 +428,16 @@ summarize_q4_rank_span_metrics() {
 
     local fixture_path="$REPO_ROOT/tests/fixtures/flowchart/$fixture_name"
     if [[ ! -f "$fixture_path" ]]; then
-      echo "Missing Q4 fixture: $fixture_path" >&2
+      echo "Missing Long-skip fixture: $fixture_path" >&2
       exit 1
     fi
 
     local stem="${fixture_name%.mmd}"
-    local off_svg="$OUT_DIR/q4_${stem}.off.svg"
-    local on_svg="$OUT_DIR/q4_${stem}.on.svg"
+    local off_svg="$OUT_DIR/long_skip_${stem}.off.svg"
+    local on_svg="$OUT_DIR/long_skip_${stem}.on.svg"
 
-    render_svg_with_q4_policy "unified-preview" "linear" "off" "$fixture_path" "$off_svg"
-    render_svg_with_q4_policy "unified-preview" "linear" "on" "$fixture_path" "$on_svg"
+    render_svg_with_long_skip_policy "unified-preview" "linear" "off" "$fixture_path" "$off_svg"
+    render_svg_with_long_skip_policy "unified-preview" "linear" "on" "$fixture_path" "$on_svg"
 
     local off_route_w off_route_h on_route_w on_route_h
     read -r off_route_w off_route_h <<<"$(extract_route_envelope_dimensions "$off_svg")"
@@ -480,13 +480,13 @@ summarize_q4_rank_span_metrics() {
     row_count=$((row_count + 1))
   done < <(split_list "$fixtures_raw")
 
-  echo "Q4 rank-span metric summary: rows=${row_count} max_route_envelope_abs_delta=${max_route_abs_delta}px (gate<=${Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX}) max_label_position_max_drift=${max_label_max_drift}px (gate<=${Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX}) max_label_position_mean_drift=${max_label_mean_drift}px (gate<=${Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX})" >&2
+  echo "Long-skip rank-span metric summary: rows=${row_count} max_route_envelope_abs_delta=${max_route_abs_delta}px (gate<=${LONG_SKIP_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX}) max_label_position_max_drift=${max_label_max_drift}px (gate<=${LONG_SKIP_LABEL_POSITION_MAX_DRIFT_GATE_PX}) max_label_position_mean_drift=${max_label_mean_drift}px (gate<=${LONG_SKIP_LABEL_POSITION_MEAN_DRIFT_GATE_PX})" >&2
 
-  if awk -v route="$max_route_abs_delta" -v route_gate="$Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX" \
-        -v max_drift="$max_label_max_drift" -v max_gate="$Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX" \
-        -v mean_drift="$max_label_mean_drift" -v mean_gate="$Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX" \
+  if awk -v route="$max_route_abs_delta" -v route_gate="$LONG_SKIP_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX" \
+        -v max_drift="$max_label_max_drift" -v max_gate="$LONG_SKIP_LABEL_POSITION_MAX_DRIFT_GATE_PX" \
+        -v mean_drift="$max_label_mean_drift" -v mean_gate="$LONG_SKIP_LABEL_POSITION_MEAN_DRIFT_GATE_PX" \
         'BEGIN { exit !(route > route_gate || max_drift > max_gate || mean_drift > mean_gate) }'; then
-    echo "Q4 rank-span metric gate warning: one or more Q6-aligned thresholds exceeded; keep --policy-q4 off by default until remediated." >&2
+    echo "Long-skip rank-span metric gate warning: one or more non-viewBox-aligned thresholds exceeded; keep --policy-long-skip-periphery-detour off by default until remediated." >&2
   fi
 
   printf '%s\n' "$report"
@@ -752,15 +752,15 @@ GALLERY_PATH="$(generate_gallery)"
 print_section "Generating unified feedback baseline"
 BASELINE_PATH="$(generate_unified_feedback_baseline)"
 
-print_section "Q6 metric summary"
-summarize_q6_metrics "$BASELINE_PATH"
+print_section "non-viewBox metric summary"
+summarize_non_viewbox_metrics "$BASELINE_PATH"
 
-print_section "Q4 rank-span metric gate summary"
-Q4_REPORT_PATH="$(summarize_q4_rank_span_metrics)"
+print_section "Long-skip rank-span metric gate summary"
+LONG_SKIP_REPORT_PATH="$(summarize_long_skip_rank_span_metrics)"
 
 echo
 echo "Unified-vs-full SVG sweep complete."
 echo "Artifacts: $OUT_DIR"
 echo "Gallery: $GALLERY_PATH"
 echo "Unified feedback baseline: $BASELINE_PATH"
-echo "Q4 rank-span metric report: $Q4_REPORT_PATH"
+echo "Long-skip rank-span metric report: $LONG_SKIP_REPORT_PATH"

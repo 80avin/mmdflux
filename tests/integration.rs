@@ -2808,7 +2808,7 @@ fn mmds_integration_fixture_matrix() {
 }
 
 #[test]
-fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() {
+fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() {
     fn edge_path_data(svg: &str) -> Vec<String> {
         svg.lines()
             .map(str::trim)
@@ -3102,36 +3102,37 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
         )
     }
 
-    let render_with_registry = |fixture_name: &str, format: OutputFormat, q1_enabled: bool| {
-        let input = load_fixture(fixture_name);
-        let registry = default_registry();
-        let mut instance = registry
-            .create("flowchart")
-            .expect("flowchart instance should exist");
-        instance.parse(&input).expect("fixture should parse");
-        instance
-            .render(
-                format,
-                &RenderConfig {
-                    routing_mode: Some(RoutingMode::UnifiedPreview),
-                    svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
-                    routing_policies: RoutingPolicyToggles {
-                        q1_overflow: q1_enabled,
-                        q4_rank_span_periphery: false,
-                        ..RoutingPolicyToggles::all_enabled()
+    let render_with_registry =
+        |fixture_name: &str, format: OutputFormat, overflow_enabled: bool| {
+            let input = load_fixture(fixture_name);
+            let registry = default_registry();
+            let mut instance = registry
+                .create("flowchart")
+                .expect("flowchart instance should exist");
+            instance.parse(&input).expect("fixture should parse");
+            instance
+                .render(
+                    format,
+                    &RenderConfig {
+                        routing_mode: Some(RoutingMode::UnifiedPreview),
+                        svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
+                        routing_policies: RoutingPolicyToggles {
+                            fan_in_face_overflow: overflow_enabled,
+                            long_skip_periphery_detour: false,
+                            ..RoutingPolicyToggles::all_enabled()
+                        },
+                        ..RenderConfig::default()
                     },
-                    ..RenderConfig::default()
-                },
-            )
-            .expect("render should succeed")
-    };
+                )
+                .expect("render should succeed")
+        };
 
-    let q1_cases = [
+    let fan_in_cases = [
         ("stacked_fan_in.mmd", "C", "Bot", 0usize),
         ("fan_in.mmd", "D", "Target", 0usize),
         ("five_fan_in.mmd", "F", "Target", 1usize),
     ];
-    for (fixture_name, target_id, target_label, min_side_faces) in q1_cases {
+    for (fixture_name, target_id, target_label, min_side_faces) in fan_in_cases {
         let diagram = parse_and_build(fixture_name);
         let text = render_with_registry(fixture_name, OutputFormat::Text, true);
         assert!(
@@ -3167,7 +3168,7 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
 
         assert_eq!(
             interior_or_corner_count, 0,
-            "fixture {fixture_name} should keep inbound endpoints on a concrete target face under Q1 policy"
+            "fixture {fixture_name} should keep inbound endpoints on a concrete target face under Fan-in overflow policy"
         );
         if min_side_faces == 0 {
             assert_eq!(
@@ -3177,12 +3178,12 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
         } else {
             assert!(
                 side_face_count >= min_side_faces,
-                "fixture {fixture_name} should spill overflow arrivals to side faces under Q1 policy: expected >= {min_side_faces}, actual={side_face_count}"
+                "fixture {fixture_name} should spill overflow arrivals to side faces under Fan-in overflow policy: expected >= {min_side_faces}, actual={side_face_count}"
             );
         }
     }
 
-    let q2_cases = [
+    let backward_channel_cases = [
         (
             "simple_cycle.mmd",
             "C",
@@ -3202,8 +3203,8 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
             "bottom",
         ),
         (
-            "q1_q2_conflict.mmd",
-            "Q2",
+            "fan_in_backward_channel_conflict.mmd",
+            "Loop",
             "B",
             "Sink",
             "Target",
@@ -3237,16 +3238,16 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() 
         target_label,
         expected_source_face,
         expected_target_face,
-    ) in q2_cases
+    ) in backward_channel_cases
     {
         let diagram = parse_and_build(fixture_name);
-        for (mode_label, q1_enabled) in [("q1-on", true), ("q1-off", false)] {
-            let text = render_with_registry(fixture_name, OutputFormat::Text, q1_enabled);
+        for (mode_label, overflow_enabled) in [("overflow-on", true), ("overflow-off", false)] {
+            let text = render_with_registry(fixture_name, OutputFormat::Text, overflow_enabled);
             assert!(
                 text.contains(target_label),
                 "text output should contain target label {target_label} for {fixture_name} ({mode_label})"
             );
-            let svg = render_with_registry(fixture_name, OutputFormat::Svg, q1_enabled);
+            let svg = render_with_registry(fixture_name, OutputFormat::Svg, overflow_enabled);
             let source_rect = node_rect_for_label(&svg, source_label).unwrap_or_else(|| {
                 panic!("missing source rect for {source_label} in {fixture_name}")
             });
@@ -3668,78 +3669,20 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
 }
 
 #[test]
-fn q1_q2_outputs_are_deterministic_under_toggle_matrix_for_text_and_svg() {
-    let fixtures = [
-        "stacked_fan_in.mmd",
-        "fan_in.mmd",
-        "five_fan_in.mmd",
-        "multiple_cycles.mmd",
-        "http_request.mmd",
-        "git_workflow.mmd",
-    ];
-
-    let render_with_registry = |fixture_name: &str, format: OutputFormat, q1_enabled: bool| {
-        let input = load_fixture(fixture_name);
-        let registry = default_registry();
-        let mut instance = registry
-            .create("flowchart")
-            .expect("flowchart instance should exist");
-        instance.parse(&input).expect("fixture should parse");
-        instance
-            .render(
-                format,
-                &RenderConfig {
-                    routing_mode: Some(RoutingMode::UnifiedPreview),
-                    svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
-                    routing_policies: RoutingPolicyToggles {
-                        q1_overflow: q1_enabled,
-                        q4_rank_span_periphery: false,
-                        ..RoutingPolicyToggles::all_enabled()
-                    },
-                    ..RenderConfig::default()
-                },
-            )
-            .expect("render should succeed")
-    };
-
-    for fixture in fixtures {
-        for q1_enabled in [true, false] {
-            let text_first = render_with_registry(fixture, OutputFormat::Text, q1_enabled);
-            let text_second = render_with_registry(fixture, OutputFormat::Text, q1_enabled);
-            assert_eq!(
-                text_second, text_first,
-                "Q1/Q2 toggle matrix replay is nondeterministic for text output fixture {fixture} (q1={q1_enabled})"
-            );
-
-            let svg_first = render_with_registry(fixture, OutputFormat::Svg, q1_enabled);
-            let svg_second = render_with_registry(fixture, OutputFormat::Svg, q1_enabled);
-            assert_eq!(
-                svg_second, svg_first,
-                "Q1/Q2 toggle matrix replay is nondeterministic for SVG output fixture {fixture} (q1={q1_enabled})"
-            );
-        }
-    }
-}
-
-#[test]
 fn full_compute_rollback_is_stable_across_policy_toggle_matrix_for_text_and_svg() {
     let input = load_fixture("simple_cycle.mmd");
     let policy_matrix = [
         RoutingPolicyToggles::all_enabled(),
         RoutingPolicyToggles {
-            q1_overflow: false,
+            fan_in_face_overflow: false,
             ..RoutingPolicyToggles::all_enabled()
         },
         RoutingPolicyToggles {
-            q3_label_revalidation: false,
+            label_anchor_revalidation: false,
             ..RoutingPolicyToggles::all_enabled()
         },
         RoutingPolicyToggles {
-            q4_rank_span_periphery: false,
-            ..RoutingPolicyToggles::all_enabled()
-        },
-        RoutingPolicyToggles {
-            q5_style_min_segment: false,
+            long_skip_periphery_detour: false,
             ..RoutingPolicyToggles::all_enabled()
         },
     ];
@@ -3783,7 +3726,7 @@ fn full_compute_rollback_is_stable_across_policy_toggle_matrix_for_text_and_svg(
 }
 
 #[test]
-fn text_q3_fixtures_match_between_unified_preview_and_full_compute_modes() {
+fn text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes() {
     let fixtures = ["labeled_edges.mmd", "inline_label_flowchart.mmd"];
 
     let render_with_mode = |input: &str, mode: RoutingMode| {
@@ -3810,13 +3753,13 @@ fn text_q3_fixtures_match_between_unified_preview_and_full_compute_modes() {
         let unified = render_with_mode(&input, RoutingMode::UnifiedPreview);
         assert_eq!(
             unified, full,
-            "Q3 text parity guard failed for fixture {fixture}: unified-preview text output diverged from full-compute"
+            "Label revalidation text parity guard failed for fixture {fixture}: unified-preview text output diverged from full-compute"
         );
     }
 }
 
 #[test]
-fn text_renderer_rejects_stale_precomputed_label_anchor_for_q3_fixture() {
+fn text_renderer_rejects_stale_precomputed_label_anchor_for_label_revalidation_fixture() {
     fn distance_to_segment(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> f64 {
         let (px, py) = point;
         let (sx, sy) = start;

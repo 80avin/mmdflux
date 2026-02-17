@@ -24,21 +24,17 @@ print_section "Targeted parity/determinism/path-detail gates"
   cargo test --test mmds_json routed_mmds_defaults_to_full_path_detail -- --exact
   cargo test --test svg_render path_detail_monotonicity_holds_full_compact_simplified -- --exact
   cargo test --test mmds_json path_detail_monotonicity_holds_full_compact_simplified -- --exact
-  cargo test --test svg_snapshots q4_rank_span_toggle_fixture_subset_matches_expected_classification -- --exact
-  cargo test --test svg_snapshots q4_rank_span_policy_respects_q6_metric_gates_for_fixture_subset -- --exact
-  cargo test --test routed_geometry q5_styled_segment_monitor_reports_actionable_summary_for_routed_geometry -- --exact
-  cargo test --test svg_render q5_styled_segment_monitor_reports_actionable_summary_for_svg -- --exact
-  cargo test --test svg_snapshots promotion_record_has_fixture_classification_and_rollback_validation -- --exact
+  cargo test --test routed_geometry style_segment_monitor_reports_actionable_summary_for_routed_geometry -- --exact
+  cargo test --test svg_render style_segment_monitor_reports_actionable_summary_for_svg -- --exact
+  cargo test --test svg_snapshots promotion_record_has_rollback_validation -- --exact
 ) | tee "$OUT_DIR/targeted-gates.log"
 
 print_section "Promotion record marker checks"
 for marker in \
-  "### Final Fixture Classification (Task 5.1)" \
   "### Rollback Playbook (Task 5.1)" \
   "--routing-mode full-compute" \
-  "--policy-q1 off" \
-  "--policy-q4 off" \
-  "--policy-q5 off"; do
+  "--policy-fan-in-face-overflow off" \
+  "--policy-long-skip-periphery-detour off"; do
   if ! rg -F -- "$marker" "$PROMOTION_DOC" >/dev/null; then
     echo "Missing promotion-record marker: $marker" >&2
     exit 1

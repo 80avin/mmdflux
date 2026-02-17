@@ -7,10 +7,11 @@ use std::collections::{HashMap, HashSet};
 
 use super::route_policy::effective_edge_direction;
 use super::routing_core::{
-    Face, Q1OverflowSide, build_orthogonal_path_float, intersect_shape_boundary_float,
-    normalize_orthogonal_route_contracts, q1_overflow_face_for_slot, q1_primary_face_capacity,
-    q1_primary_target_face, q2_backward_channel_face, q4_rank_span_should_use_periphery,
-    q4_required_periphery_detour, resolve_q1_q2_face_conflict,
+    Face, OverflowSide, build_orthogonal_path_float, canonical_backward_channel_face,
+    fan_in_overflow_face_for_slot, fan_in_primary_face_capacity, fan_in_primary_target_face,
+    intersect_shape_boundary_float, long_skip_rank_span_requires_periphery,
+    long_skip_required_periphery_detour, normalize_orthogonal_route_contracts,
+    resolve_overflow_backward_channel_conflict,
 };
 use crate::diagram::RoutingPolicyToggles;
 use crate::diagrams::flowchart::geometry::{
@@ -46,10 +47,10 @@ pub(crate) fn route_edges_unified(
     geometry: &GraphGeometry,
     options: UnifiedRoutingOptions,
 ) -> Vec<RoutedEdgeGeometry> {
-    let q1_target_conflict = if options.policy_toggles.q1_overflow {
-        q1_target_overflow_context(geometry, geometry.direction)
+    let fan_in_target_conflict = if options.policy_toggles.fan_in_face_overflow {
+        fan_in_target_overflow_context(geometry, geometry.direction)
     } else {
-        Q1TargetOverflowContext::default()
+        FanInTargetOverflowContext::default()
     };
     geometry
         .edges
@@ -67,34 +68,34 @@ pub(crate) fn route_edges_unified(
             } else {
                 edge_direction
             };
-            let q1_policy_target_face = q1_target_conflict
+            let overflow_policy_target_face = fan_in_target_conflict
                 .target_face_for_edge
                 .get(&edge.index)
                 .copied();
-            let target_overflowed = q1_target_conflict.overflow_targeted.contains(&edge.to);
-            let target_has_backward_conflict = q1_target_conflict
+            let target_overflowed = fan_in_target_conflict.overflow_targeted.contains(&edge.to);
+            let target_has_backward_conflict = fan_in_target_conflict
                 .targets_with_backward_inbound
                 .contains(&edge.to);
             let rank_span = edge_rank_span(geometry, edge).unwrap_or(0);
-            let q4_rank_span_active = options.policy_toggles.q4_rank_span_periphery
+            let long_skip_periphery_active = options.policy_toggles.long_skip_periphery_detour
                 && !is_backward
-                && q4_rank_span_should_use_periphery(rank_span);
+                && long_skip_rank_span_requires_periphery(rank_span);
             let mut path = build_unified_path(
                 edge,
                 geometry,
                 route_direction,
                 is_backward,
-                q1_policy_target_face,
+                overflow_policy_target_face,
                 target_overflowed,
                 target_has_backward_conflict,
-                q4_rank_span_active,
+                long_skip_periphery_active,
                 rank_span,
             );
 
             if let Some((sx, sy)) = options.grid_snap {
                 path = snap_path_to_grid(&path, sx, sy);
             }
-            let label_position = if options.policy_toggles.q3_label_revalidation {
+            let label_position = if options.policy_toggles.label_anchor_revalidation {
                 revalidate_label_anchor(edge.label_position, &path)
             } else {
                 edge.label_position
@@ -114,7 +115,7 @@ pub(crate) fn route_edges_unified(
         .collect()
 }
 
-const Q3_LABEL_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
+const LABEL_ANCHOR_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
 const POINT_EPS: f64 = 0.000_001;
 const MIN_PORT_CORNER_INSET_FORWARD: f64 = 8.0;
 const MIN_PORT_CORNER_INSET_BACKWARD: f64 = 12.0;
@@ -142,7 +143,7 @@ fn revalidate_label_anchor(label_position: Option<FPoint>, path: &[FPoint]) -> O
         return route_derived_label_anchor(path);
     };
     let drift = distance_point_to_path(anchor, path);
-    if drift <= Q3_LABEL_REVALIDATION_MAX_DISTANCE {
+    if drift <= LABEL_ANCHOR_REVALIDATION_MAX_DISTANCE {
         return Some(anchor);
     }
     route_derived_label_anchor(path).or(Some(anchor))
@@ -217,11 +218,11 @@ fn build_unified_path(
     geometry: &GraphGeometry,
     direction: Direction,
     is_backward: bool,
-    q1_policy_target_face: Option<Face>,
+    overflow_policy_target_face: Option<Face>,
     target_overflowed: bool,
     target_has_backward_conflict: bool,
-    q4_rank_span_active: bool,
-    q4_rank_span: usize,
+    long_skip_periphery_active: bool,
+    rank_span: usize,
 ) -> Vec<FPoint> {
     let (backward_source_face_override, backward_target_face_override) =
         backward_td_bt_face_overrides(
@@ -230,7 +231,7 @@ fn build_unified_path(
             direction,
             is_backward,
             target_overflowed,
-            q4_rank_span,
+            rank_span,
         );
     let control_points = build_path_from_hints(edge, geometry);
     let mut path = build_contracted_path(&control_points, direction);
@@ -240,7 +241,7 @@ fn build_unified_path(
         geometry,
         direction,
         is_backward,
-        q1_policy_target_face,
+        overflow_policy_target_face,
         target_overflowed,
         target_has_backward_conflict,
     );
@@ -260,9 +261,9 @@ fn build_unified_path(
     if is_backward {
         ensure_backward_outer_lane_clearance(&mut normalized, direction, 12.0);
     }
-    if q4_rank_span_active {
-        let required_detour = q4_required_periphery_detour(q4_rank_span);
-        apply_q4_rank_span_periphery_detour(&mut normalized, direction, required_detour);
+    if long_skip_periphery_active {
+        let required_detour = long_skip_required_periphery_detour(rank_span);
+        apply_long_skip_periphery_detour(&mut normalized, direction, required_detour);
         if path_has_diagonal_segments(&normalized) {
             normalized = build_contracted_path(&normalized, direction);
             anchor_path_endpoints_to_endpoint_faces(
@@ -271,7 +272,7 @@ fn build_unified_path(
                 geometry,
                 direction,
                 is_backward,
-                q1_policy_target_face,
+                overflow_policy_target_face,
                 target_overflowed,
                 target_has_backward_conflict,
             );
@@ -336,8 +337,8 @@ fn build_unified_path(
         enforce_backward_minimum_channel_floor(&mut finalized, edge, geometry, direction, 12.0);
         collapse_backward_terminal_node_intrusion(&mut finalized, edge, geometry, direction);
         enforce_backward_terminal_corner_inset(&mut finalized, edge, geometry);
-        let canonical_terminal_face =
-            backward_target_face_override.unwrap_or_else(|| q2_backward_channel_face(direction));
+        let canonical_terminal_face = backward_target_face_override
+            .unwrap_or_else(|| canonical_backward_channel_face(direction));
         if let Some((target_rect, _)) =
             endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
         {
@@ -420,16 +421,16 @@ fn backward_td_bt_face_overrides(
 }
 
 #[derive(Default)]
-struct Q1TargetOverflowContext {
+struct FanInTargetOverflowContext {
     target_face_for_edge: HashMap<usize, Face>,
     overflow_targeted: HashSet<String>,
     targets_with_backward_inbound: HashSet<String>,
 }
 
-fn q1_target_overflow_context(
+fn fan_in_target_overflow_context(
     geometry: &GraphGeometry,
     direction: Direction,
-) -> Q1TargetOverflowContext {
+) -> FanInTargetOverflowContext {
     let mut incoming_by_target: HashMap<
         String,
         Vec<&crate::diagrams::flowchart::geometry::LayoutEdge>,
@@ -441,8 +442,8 @@ fn q1_target_overflow_context(
             .push(edge);
     }
 
-    let capacity = q1_primary_face_capacity(direction);
-    let primary_face = q1_primary_target_face(direction);
+    let capacity = fan_in_primary_face_capacity(direction);
+    let primary_face = fan_in_primary_target_face(direction);
     let mut target_face_for_edge: HashMap<usize, Face> = HashMap::new();
     let mut overflow_targeted: HashSet<String> = HashSet::new();
     let mut targets_with_backward_inbound: HashSet<String> = HashSet::new();
@@ -480,16 +481,16 @@ fn q1_target_overflow_context(
         let overflow_edges = &forward_edges[capacity..];
         for (idx, edge) in overflow_edges.iter().enumerate() {
             let overflow_slot = if idx % 2 == 0 {
-                Q1OverflowSide::LeftOrTop
+                OverflowSide::LeftOrTop
             } else {
-                Q1OverflowSide::RightOrBottom
+                OverflowSide::RightOrBottom
             };
-            let face = q1_overflow_face_for_slot(direction, overflow_slot);
+            let face = fan_in_overflow_face_for_slot(direction, overflow_slot);
             target_face_for_edge.insert(edge.index, face);
         }
     }
 
-    Q1TargetOverflowContext {
+    FanInTargetOverflowContext {
         target_face_for_edge,
         overflow_targeted,
         targets_with_backward_inbound,
@@ -506,7 +507,7 @@ fn edge_rank_span(
     Some(src_rank.abs_diff(dst_rank) as usize)
 }
 
-fn apply_q4_rank_span_periphery_detour(
+fn apply_long_skip_periphery_detour(
     path: &mut [FPoint],
     direction: Direction,
     required_detour: f64,
@@ -1488,7 +1489,7 @@ fn enforce_backward_terminal_tangent_direction(
 
     let last = path.len() - 1;
     let canonical_face =
-        preferred_target_face.unwrap_or_else(|| q2_backward_channel_face(direction));
+        preferred_target_face.unwrap_or_else(|| canonical_backward_channel_face(direction));
     let left = target_rect.x;
     let right = target_rect.x + target_rect.width;
     let top = target_rect.y;
@@ -1943,7 +1944,7 @@ fn collapse_backward_terminal_node_intrusion(
         return false;
     }
 
-    let canonical_face = q2_backward_channel_face(direction);
+    let canonical_face = canonical_backward_channel_face(direction);
     let point_is_intrusion =
         |point: FPoint| point.x > left && point.x < right && point.y > top && point.y < bottom;
     let point_is_clean_for_face = |point: FPoint| match canonical_face {
@@ -2042,7 +2043,7 @@ fn enforce_backward_source_tangent_direction(
     };
 
     let canonical_face =
-        preferred_source_face.unwrap_or_else(|| q2_backward_channel_face(direction));
+        preferred_source_face.unwrap_or_else(|| canonical_backward_channel_face(direction));
     let left = source_rect.x;
     let right = source_rect.x + source_rect.width;
     let top = source_rect.y;
@@ -2356,7 +2357,7 @@ fn anchor_path_endpoints_to_endpoint_faces(
     geometry: &GraphGeometry,
     direction: Direction,
     is_backward: bool,
-    q1_policy_target_face: Option<Face>,
+    overflow_policy_target_face: Option<Face>,
     target_overflowed: bool,
     target_has_backward_conflict: bool,
 ) {
@@ -2400,7 +2401,7 @@ fn anchor_path_endpoints_to_endpoint_faces(
                 direction,
                 is_backward,
                 true,
-                q1_policy_target_face,
+                overflow_policy_target_face,
                 target_overflowed,
                 target_has_backward_conflict,
             );
@@ -2553,7 +2554,7 @@ fn clip_point_to_axis_face(
     direction: Direction,
     preserve_existing_face: bool,
     is_target_endpoint: bool,
-    q1_policy_face: Option<Face>,
+    overflow_policy_face: Option<Face>,
     target_overflowed: bool,
     target_has_backward_conflict: bool,
 ) -> FPoint {
@@ -2577,12 +2578,12 @@ fn clip_point_to_axis_face(
     };
 
     if preserve_existing_face && is_target_endpoint {
-        let canonical_face = q2_backward_channel_face(direction);
-        let resolved_face = resolve_q1_q2_face_conflict(
+        let canonical_face = canonical_backward_channel_face(direction);
+        let resolved_face = resolve_overflow_backward_channel_conflict(
             direction,
             true,
             target_has_backward_conflict,
-            q1_policy_face,
+            overflow_policy_face,
             canonical_face,
         );
         let mut clipped = clip_point_to_rect_face_with_inset(
@@ -2615,14 +2616,14 @@ fn clip_point_to_axis_face(
         return clipped;
     }
 
-    if let Some(policy_face) = q1_policy_face {
+    if let Some(policy_face) = overflow_policy_face {
         let terminal_is_horizontal = dy.abs() <= EPS && dx.abs() > EPS;
         let terminal_is_vertical = dx.abs() <= EPS && dy.abs() > EPS;
         let policy_face_is_compatible = match policy_face {
             Face::Left | Face::Right => terminal_is_horizontal,
             Face::Top | Face::Bottom => terminal_is_vertical,
         };
-        let resolved_face = resolve_q1_q2_face_conflict(
+        let resolved_face = resolve_overflow_backward_channel_conflict(
             direction,
             false,
             target_has_backward_conflict,
@@ -2653,7 +2654,7 @@ fn clip_point_to_axis_face(
         } else {
             Face::Bottom
         };
-        let resolved_fallback = resolve_q1_q2_face_conflict(
+        let resolved_fallback = resolve_overflow_backward_channel_conflict(
             direction,
             false,
             target_has_backward_conflict,
@@ -2669,7 +2670,7 @@ fn clip_point_to_axis_face(
     }
 
     if !preserve_existing_face && target_overflowed {
-        let canonical = map_face_to_rect_face(q2_backward_channel_face(direction));
+        let canonical = map_face_to_rect_face(canonical_backward_channel_face(direction));
         if let Some(actual_face) = boundary_face_excluding_corners(endpoint, rect, 0.5)
             && actual_face == canonical
         {

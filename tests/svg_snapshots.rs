@@ -33,33 +33,6 @@ const UNIFIED_PARITY_ACCEPTED_DELTAS: &[&str] = &[
 ];
 
 const UNIFIED_PARITY_MUST_MATCH: &[&str] = &[];
-const Q1_Q2_TOGGLE_FIXTURE_SUBSET: &[&str] = &[
-    "stacked_fan_in.mmd",
-    "fan_in.mmd",
-    "five_fan_in.mmd",
-    "multiple_cycles.mmd",
-    "http_request.mmd",
-    "git_workflow.mmd",
-];
-const Q1_Q2_TOGGLE_MUST_DIFF: &[&str] = &["five_fan_in.mmd"];
-const Q1_Q2_TOGGLE_MUST_MATCH: &[&str] = &[
-    "fan_in.mmd",
-    "git_workflow.mmd",
-    "http_request.mmd",
-    "multiple_cycles.mmd",
-    "stacked_fan_in.mmd",
-];
-const Q4_RANK_SPAN_TOGGLE_FIXTURE_SUBSET: &[&str] = &[
-    "double_skip.mmd",
-    "skip_edge_collision.mmd",
-    "inline_label_flowchart.mmd",
-];
-const Q4_RANK_SPAN_TOGGLE_MUST_DIFF: &[&str] = &[
-    "double_skip.mmd",
-    "skip_edge_collision.mmd",
-    "inline_label_flowchart.mmd",
-];
-const Q4_RANK_SPAN_TOGGLE_MUST_MATCH: &[&str] = &[];
 const UNIFIED_FEEDBACK_BASELINE_FILE: &str = "docs/unified_feedback_baseline.tsv";
 const UNIFIED_PROMOTION_RECORD_FILE: &str = "docs/UNIFIED_ROUTING_PROMOTION.md";
 const UNIFIED_FEEDBACK_BASELINE_COLUMNS: &[&str] = &[
@@ -193,40 +166,6 @@ fn assert_unified_parity_classification_is_complete() {
     assert_eq!(
         classified, fixture_subset,
         "fixture subset classification is incomplete or duplicated"
-    );
-}
-
-fn assert_q1_q2_toggle_classification_is_complete() {
-    let mut classified: Vec<&str> = Q1_Q2_TOGGLE_MUST_DIFF
-        .iter()
-        .chain(Q1_Q2_TOGGLE_MUST_MATCH.iter())
-        .copied()
-        .collect();
-    classified.sort_unstable();
-
-    let mut fixture_subset = Q1_Q2_TOGGLE_FIXTURE_SUBSET.to_vec();
-    fixture_subset.sort_unstable();
-
-    assert_eq!(
-        classified, fixture_subset,
-        "Q1/Q2 toggle classification is incomplete or duplicated"
-    );
-}
-
-fn assert_q4_rank_span_toggle_classification_is_complete() {
-    let mut classified: Vec<&str> = Q4_RANK_SPAN_TOGGLE_MUST_DIFF
-        .iter()
-        .chain(Q4_RANK_SPAN_TOGGLE_MUST_MATCH.iter())
-        .copied()
-        .collect();
-    classified.sort_unstable();
-
-    let mut fixture_subset = Q4_RANK_SPAN_TOGGLE_FIXTURE_SUBSET.to_vec();
-    fixture_subset.sort_unstable();
-
-    assert_eq!(
-        classified, fixture_subset,
-        "Q4 rank-span toggle classification is incomplete or duplicated"
     );
 }
 
@@ -491,175 +430,6 @@ fn unified_preview_svg_output_is_deterministic_for_fixture_subset() {
 }
 
 #[test]
-fn q1_q2_outputs_are_deterministic_under_toggle_matrix() {
-    for fixture in Q1_Q2_TOGGLE_FIXTURE_SUBSET {
-        for q1_enabled in [true, false] {
-            let policies = RoutingPolicyToggles {
-                q1_overflow: q1_enabled,
-                q4_rank_span_periphery: false,
-                ..RoutingPolicyToggles::all_enabled()
-            };
-            let first = render_svg_fixture_with_routing_mode_and_policies(
-                fixture,
-                RoutingMode::UnifiedPreview,
-                policies,
-            );
-            let second = render_svg_fixture_with_routing_mode_and_policies(
-                fixture,
-                RoutingMode::UnifiedPreview,
-                policies,
-            );
-            assert_eq!(
-                second, first,
-                "Q1/Q2 toggle matrix replay is nondeterministic for fixture {fixture} (q1={q1_enabled})"
-            );
-        }
-    }
-}
-
-#[test]
-fn q1_q2_toggle_matrix_fixture_subset_matches_expected_classification() {
-    assert_q1_q2_toggle_classification_is_complete();
-
-    let mut differing: Vec<&str> = Vec::new();
-    for fixture in Q1_Q2_TOGGLE_FIXTURE_SUBSET {
-        let on = render_svg_fixture_with_routing_mode_and_policies(
-            fixture,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q1_overflow: true,
-                q4_rank_span_periphery: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        let off = render_svg_fixture_with_routing_mode_and_policies(
-            fixture,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q1_overflow: false,
-                q4_rank_span_periphery: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        if on != off {
-            differing.push(fixture);
-        }
-    }
-
-    assert_eq!(
-        differing, Q1_Q2_TOGGLE_MUST_DIFF,
-        "Q1/Q2 toggle expected-delta set changed; reclassify fixture subset"
-    );
-
-    for fixture in Q1_Q2_TOGGLE_MUST_MATCH {
-        let on = render_svg_fixture_with_routing_mode_and_policies(
-            fixture,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q1_overflow: true,
-                q4_rank_span_periphery: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        let off = render_svg_fixture_with_routing_mode_and_policies(
-            fixture,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q1_overflow: false,
-                q4_rank_span_periphery: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        assert_eq!(
-            on, off,
-            "fixture {fixture} is classified as Q1 toggle must-match but diverged"
-        );
-    }
-}
-
-#[test]
-fn q4_rank_span_outputs_are_deterministic_under_toggle_matrix() {
-    for fixture in Q4_RANK_SPAN_TOGGLE_FIXTURE_SUBSET {
-        for q4_enabled in [true, false] {
-            let policies = RoutingPolicyToggles {
-                q4_rank_span_periphery: q4_enabled,
-                ..RoutingPolicyToggles::all_enabled()
-            };
-            let first = render_svg_fixture_with_routing_mode_and_policies(
-                fixture,
-                RoutingMode::UnifiedPreview,
-                policies,
-            );
-            let second = render_svg_fixture_with_routing_mode_and_policies(
-                fixture,
-                RoutingMode::UnifiedPreview,
-                policies,
-            );
-            assert_eq!(
-                second, first,
-                "Q4 rank-span toggle replay is nondeterministic for fixture {fixture} (q4={q4_enabled})"
-            );
-        }
-    }
-}
-
-#[test]
-fn q4_rank_span_toggle_fixture_subset_matches_expected_classification() {
-    assert_q4_rank_span_toggle_classification_is_complete();
-
-    let mut differing: Vec<&str> = Vec::new();
-    for fixture in Q4_RANK_SPAN_TOGGLE_FIXTURE_SUBSET {
-        let on = render_svg_fixture_with_routing_mode_and_policies(
-            fixture,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q4_rank_span_periphery: true,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        let off = render_svg_fixture_with_routing_mode_and_policies(
-            fixture,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q4_rank_span_periphery: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        if on != off {
-            differing.push(fixture);
-        }
-    }
-
-    assert_eq!(
-        differing, Q4_RANK_SPAN_TOGGLE_MUST_DIFF,
-        "Q4 rank-span toggle expected-delta set changed; reclassify fixture subset"
-    );
-
-    for fixture in Q4_RANK_SPAN_TOGGLE_MUST_MATCH {
-        let on = render_svg_fixture_with_routing_mode_and_policies(
-            fixture,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q4_rank_span_periphery: true,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        let off = render_svg_fixture_with_routing_mode_and_policies(
-            fixture,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q4_rank_span_periphery: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        assert_eq!(
-            on, off,
-            "fixture {fixture} is classified as Q4 toggle must-match but diverged"
-        );
-    }
-}
-
-#[test]
 fn svg_full_compute_override_matches_legacy_linear_core_subset() {
     for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
         let legacy = render_svg_fixture_with_curve(fixture, SvgEdgePathStyle::Linear);
@@ -676,19 +446,15 @@ fn svg_full_compute_rollback_is_stable_across_policy_toggle_matrix() {
     let policy_matrix = [
         RoutingPolicyToggles::all_enabled(),
         RoutingPolicyToggles {
-            q1_overflow: false,
+            fan_in_face_overflow: false,
             ..RoutingPolicyToggles::all_enabled()
         },
         RoutingPolicyToggles {
-            q3_label_revalidation: false,
+            label_anchor_revalidation: false,
             ..RoutingPolicyToggles::all_enabled()
         },
         RoutingPolicyToggles {
-            q4_rank_span_periphery: false,
-            ..RoutingPolicyToggles::all_enabled()
-        },
-        RoutingPolicyToggles {
-            q5_style_min_segment: false,
+            long_skip_periphery_detour: false,
             ..RoutingPolicyToggles::all_enabled()
         },
     ];
@@ -790,7 +556,7 @@ fn unified_feedback_baseline_contains_required_fixtures_and_metrics() {
 }
 
 #[test]
-fn q6_metrics_include_route_envelope_and_label_drift() {
+fn non_viewbox_metrics_include_route_envelope_and_label_drift() {
     let baseline_path = unified_feedback_baseline_path();
     let raw = fs::read_to_string(&baseline_path).unwrap_or_else(|e| {
         panic!(
@@ -857,12 +623,12 @@ fn q6_metrics_include_route_envelope_and_label_drift() {
 
     assert!(
         has_non_viewbox_signal,
-        "Q6 baseline must include at least one non-viewBox route/label signal"
+        "baseline must include at least one non-viewBox route/label signal"
     );
 }
 
 #[test]
-fn promotion_record_has_fixture_classification_and_rollback_validation() {
+fn promotion_record_has_rollback_validation() {
     let record_path = unified_promotion_record_path();
     let raw = fs::read_to_string(&record_path).unwrap_or_else(|e| {
         panic!(
@@ -872,12 +638,10 @@ fn promotion_record_has_fixture_classification_and_rollback_validation() {
     });
 
     let required_markers = [
-        "### Final Fixture Classification (Task 5.1)",
         "### Rollback Playbook (Task 5.1)",
         "--routing-mode full-compute",
-        "--policy-q1 off",
-        "--policy-q4 off",
-        "--policy-q5 off",
+        "--policy-fan-in-face-overflow off",
+        "--policy-long-skip-periphery-detour off",
         "./scripts/tests/07-plan-0076-unified-routing-quality-qa.sh",
     ];
 

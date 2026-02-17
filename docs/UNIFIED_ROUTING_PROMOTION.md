@@ -33,7 +33,7 @@ This checklist assumes you are willing to ship breaking rendering deltas in a mi
 
 These specs are documented and test-scaffolded before runtime behavior changes.
 
-### Q1 Face-Anchor Overflow Spec (Task 0.2)
+### Fan-In Face-Anchor Overflow Spec (Task 0.2)
 
 - Primary face capacity is direction-specific:
   - `TD/BT`: `4`
@@ -50,46 +50,39 @@ These specs are documented and test-scaffolded before runtime behavior changes.
   - `five_fan_in.mmd` (`TD`, degree `5`) -> overflow
   - `fan_in_lr.mmd` (`LR`, degree `3`) -> overflow
 
-### Q1+Q2 Precedence Spec (Task 0.3)
+### Fan-In + Backward-Channel Precedence Spec (Task 0.3)
 
 - Canonical backward channel remains direction-fixed:
   - `TD/BT`: `Right`
   - `LR/RL`: `Bottom`
 - On overflowed targets, incoming edges are deterministically ordered by edge index.
-- Q1 overflow candidates use deterministic alternating spill slots from Task 0.2.
+- Fan-in overflow candidates use deterministic alternating spill slots from Task 0.2.
 - Precedence rule under contention:
-  - Backward edges retain canonical Q2 channel.
+  - Backward edges retain canonical backward channel.
   - Forward edges must not consume canonical backward channel on overflowed targets.
 - Fixture-backed precedence contract:
-  - `q1_q2_conflict.mmd` keeps `Q2 -> B` on the TD canonical right lane.
+  - `fan_in_backward_channel_conflict.mmd` keeps `Loop -> B` on the TD canonical right lane.
   - The same fixture enforces that exactly one inbound edge to `B` uses the right face.
 
-### Q1+Q2 Toggle Default Decision (Task 2.3)
+### Fan-In + Backward-Channel Toggle Default Decision (Task 2.3)
 
-- Determinism matrix status:
-  - Pass (`SVG` + `Text`) for Q1 toggle replay (`on`/`off`) across:
+- Fixture matrix status:
+  - Pass (`SVG` + `Text`) for fan-in overflow toggle replay (`on`/`off`) across:
     - `stacked_fan_in.mmd`
     - `fan_in.mmd`
     - `five_fan_in.mmd`
     - `multiple_cycles.mmd`
     - `http_request.mmd`
     - `git_workflow.mmd`
-- Toggle-delta classification under unified-preview linear SVG:
-  - `must-diff`: `fan_in.mmd`, `five_fan_in.mmd`, `http_request.mmd`
-  - `must-match`: `stacked_fan_in.mmd`, `multiple_cycles.mmd`, `git_workflow.mmd`
 - Decision:
-  - Keep Q1/Q2 behavior **default-enabled** for unified preview.
-  - Keep `--policy-q1 off` available as an explicit rollback/diagnostic override.
+  - Keep fan-in overflow/backward-channel behavior **default-enabled** for unified preview.
+  - Keep `--policy-fan-in-face-overflow off` available as an explicit rollback/diagnostic override.
 - Evidence gates:
-  - `q1_q2_outputs_are_deterministic_under_toggle_matrix` (`tests/svg_snapshots.rs`)
-  - `q1_q2_toggle_matrix_fixture_subset_matches_expected_classification` (`tests/svg_snapshots.rs`)
-  - `q1_q2_outputs_are_deterministic_under_toggle_matrix_for_text_and_svg` (`tests/integration.rs`)
-  - Existing interaction contracts remain green:
-    - `q1_q2_interaction_fixture_matrix_matches_documented_face_policies`
-    - `svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces`
-    - `q1_q2_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg`
+  - `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies` (`tests/routed_geometry.rs`)
+  - `svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces` (`tests/svg_render.rs`)
+  - `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg` (`tests/integration.rs`)
 
-### Q6 Non-ViewBox Metric Gate Spec (Task 0.4)
+### Non-ViewBox Metric Gate Spec (Task 0.4)
 
 - Sweep baseline must include non-viewBox route/label signals:
   - `route_envelope_width_delta`
@@ -106,25 +99,25 @@ These specs are documented and test-scaffolded before runtime behavior changes.
   - `LABEL_POSITION_MAX_DRIFT_WARN_PX=40`
   - `LABEL_POSITION_MEAN_DRIFT_WARN_PX=20`
 
-### Q4 Rank-Span Policy + Metric Gate (Task 3.2)
+### Long-Skip Rank-Span Policy + Metric Gate (Task 3.2)
 
-- Q4 activation rule is intentionally simple for initial rollout:
+- Long-skip activation rule is intentionally simple for initial rollout:
   - apply periphery detour only when `rank_span >= 2`
 - Required detour is bounded and rank-aware in shared policy helpers:
   - base `28px`, capped at `36px`
-- Q4-on vs Q4-off fixture subset classification (unified preview, linear SVG):
+- long-skip on vs off fixture subset classification (unified preview, linear SVG):
   - `must-diff`: `double_skip.mmd`, `skip_edge_collision.mmd`, `inline_label_flowchart.mmd`
   - `must-match`: none in this subset
-- Q4-specific Q6-aligned metric gate is now scripted in:
+- long-skip-specific non-viewBox-aligned metric gate is now scripted in:
   - `scripts/tests/08-unified-vs-full-svg-diff-sweep.sh`
-  - report output: `q4-rank-span-metrics.tsv`
+  - report output: `long-skip-rank-span-metrics.tsv`
   - thresholds:
-    - `Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX=24`
-    - `Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX=40`
-    - `Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX=20`
+    - `LONG_SKIP_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX=24`
+    - `LONG_SKIP_LABEL_POSITION_MAX_DRIFT_GATE_PX=40`
+    - `LONG_SKIP_LABEL_POSITION_MEAN_DRIFT_GATE_PX=20`
 - Default posture:
-  - keep `q4_rank_span_periphery` **off by default** in `RoutingPolicyToggles::default()`
-  - use `--policy-q4 on` for controlled validation and staged rollout
+  - keep `long_skip_periphery_detour` **off by default** in `RoutingPolicyToggles::default()`
+  - use `--policy-long-skip-periphery-detour on` for controlled validation and staged rollout
 
 ## Accepted Deltas (Release N, Flowchart Scope)
 
@@ -133,7 +126,7 @@ This is the decision record for known output differences when unified routing is
 | Area | Classification | Decision | Notes |
 | ---- | -------------- | -------- | ----- |
 | Flowchart SVG linear parity-classification subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`, `decision.mmd`, `fan_out.mmd`, `left_right.mmd`, `subgraph_direction_cross_boundary.mmd`, `multi_subgraph_direction_override.mmd`) | accepted-improvement | Accept for Release N | Unified-preview deltas are explicitly classified and test-enforced in `svg_unified_preview_parity_fixture_subset_matches_expected_classification`. |
-| Flowchart text Q3 fixture parity (`labeled_edges.mmd`, `inline_label_flowchart.mmd`) | must-match | Must match | `text_q3_fixtures_match_between_unified_preview_and_full_compute_modes` enforces routing-mode parity for text output across Q3 fixtures. |
+| Flowchart text label-revalidation fixture parity (`labeled_edges.mmd`, `inline_label_flowchart.mmd`) | must-match | Must match | `text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes` enforces routing-mode parity for text output across label-revalidation fixtures. |
 | Flowchart backward-edge routing behavior | accepted-design | Accept for Release N | Keep route-hint fallback as intentional behavior (stability-first) instead of forcing full backward-edge unification in this release. |
 | Rollback parity guard (`--routing-mode full-compute`) for linear core subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`) | must-match-legacy | Must match | `svg_full_compute_override_matches_legacy_linear_core_subset` requires byte-identical legacy parity when rollback mode is selected. |
 
@@ -149,8 +142,8 @@ This is the decision record for known output differences when unified routing is
   - `unified_preview_mmds_routed_output_is_deterministic_for_fixture_subset`
   - `routed_mmds_defaults_to_full_path_detail`
 - `tests/integration.rs`:
-  - `text_q3_fixtures_match_between_unified_preview_and_full_compute_modes`
-  - `text_renderer_rejects_stale_precomputed_label_anchor_for_q3_fixture`
+  - `text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes`
+  - `text_renderer_rejects_stale_precomputed_label_anchor_for_label_revalidation_fixture`
 
 ## Follow-Up Planning Items (Required Before Graph-Family Promotion)
 
@@ -212,10 +205,10 @@ Plan 0077.
 
 | Policy Area | Fixture Subset | Classification | Gate |
 | ---- | ---- | ---- | ---- |
-| Q1/Q2 toggle (unified preview, linear SVG) | `stacked_fan_in.mmd`, `fan_in.mmd`, `five_fan_in.mmd`, `multiple_cycles.mmd`, `http_request.mmd`, `git_workflow.mmd` | `must-diff`: `fan_in.mmd`, `five_fan_in.mmd`, `http_request.mmd`; `must-match`: `stacked_fan_in.mmd`, `multiple_cycles.mmd`, `git_workflow.mmd` | `q1_q2_toggle_matrix_fixture_subset_matches_expected_classification` |
-| Q4 toggle (unified preview, linear SVG) | `double_skip.mmd`, `skip_edge_collision.mmd`, `inline_label_flowchart.mmd` | `must-diff`: all listed fixtures; `must-match`: none in this subset | `q4_rank_span_toggle_fixture_subset_matches_expected_classification` |
-| Q5 monitor-only (styled segment minimum) | `edge_styles.mmd`, `inline_edge_labels.mmd` | monitor-only; escalate on violations | `q5_styled_segment_monitor_reports_actionable_summary_for_routed_geometry`, `q5_styled_segment_monitor_reports_actionable_summary_for_svg` |
-| Q3 text parity | `labeled_edges.mmd`, `inline_label_flowchart.mmd` | `must-match` between `unified-preview` and `full-compute` text output | `text_q3_fixtures_match_between_unified_preview_and_full_compute_modes` |
+| Fan-in overflow/backward-channel behavior | `stacked_fan_in.mmd`, `fan_in.mmd`, `five_fan_in.mmd`, `multiple_cycles.mmd`, `http_request.mmd`, `git_workflow.mmd`, `fan_in_backward_channel_conflict.mmd` | Must preserve documented face policies with overflow `on` and `off` where applicable | `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies`, `svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces`, `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg` |
+| Long-skip periphery toggle (unified preview, linear SVG) | `double_skip.mmd`, `skip_edge_collision.mmd`, `inline_label_flowchart.mmd` | `must-diff` for known long-skip edges; `must-match` for short control edge | `long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane`, `svg_linear_long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane`, `svg_linear_long_skip_periphery_toggle_keeps_short_inline_edge_stable` |
+| Style-segment monitor-only (styled segment minimum) | `edge_styles.mmd`, `inline_edge_labels.mmd` | monitor-only; escalate on violations | `style_segment_monitor_reports_actionable_summary_for_routed_geometry`, `style_segment_monitor_reports_actionable_summary_for_svg` |
+| Label-revalidation text parity | `labeled_edges.mmd`, `inline_label_flowchart.mmd` | `must-match` between `unified-preview` and `full-compute` text output | `text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes` |
 | Rollback parity (legacy linear core) | `simple.mmd`, `chain.mmd`, `simple_cycle.mmd` | `must-match-legacy` under rollback mode | `svg_full_compute_override_matches_legacy_linear_core_subset` |
 
 Operational context and escalation notes remain tracked in:
@@ -240,17 +233,21 @@ mmdflux --routing-mode full-compute <input.mmd>
 3. Disable staged policies explicitly for diagnosis/containment:
 
 ```bash
-mmdflux --routing-mode unified-preview --policy-q1 off --policy-q4 off --policy-q5 off <input.mmd>
+mmdflux --routing-mode unified-preview --policy-fan-in-face-overflow off --policy-long-skip-periphery-detour off <input.mmd>
 ```
 
 4. Re-run targeted gates and compare with baseline classifications:
-  - `q1_q2_toggle_matrix_fixture_subset_matches_expected_classification`
-  - `q4_rank_span_toggle_fixture_subset_matches_expected_classification`
-  - `q5_styled_segment_monitor_reports_actionable_summary_for_svg`
+  - `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies`
+  - `svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces`
+  - `long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane`
+  - `svg_linear_long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane`
+  - `svg_linear_long_skip_periphery_toggle_keeps_short_inline_edge_stable`
+  - `style_segment_monitor_reports_actionable_summary_for_svg`
   - `svg_full_compute_override_matches_legacy_linear_core_subset`
 
-5. Keep `q4_rank_span_periphery` and `q5_style_min_segment` default-off until
-   gates are green and findings are resolved.
+5. Keep `long_skip_periphery_detour` default-off until gates are green and
+   findings are resolved. Keep style-segment checks monitor-only (no runtime
+   policy toggle) until explicit enforcement is approved.
 
 ## Code Change Checklist For Default Flip
 

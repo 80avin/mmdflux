@@ -112,7 +112,7 @@ fn distance_point_to_path(point: FPoint, path: &[FPoint]) -> f64 {
 }
 
 #[derive(Debug)]
-struct Q5RoutedStyleMonitorReport {
+struct RoutedStyleMonitorReport {
     scanned_styled_edges: usize,
     violations: Vec<String>,
     summary_line: String,
@@ -124,10 +124,10 @@ fn min_segment_len(path: &[FPoint]) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
-fn q5_style_segment_monitor_report_for_routed_geometry(
+fn style_segment_monitor_report_for_routed_geometry(
     fixtures: &[&str],
     min_segment_threshold: f64,
-) -> Q5RoutedStyleMonitorReport {
+) -> RoutedStyleMonitorReport {
     use mmdflux::graph::Stroke;
 
     let mut scanned_styled_edges = 0usize;
@@ -139,10 +139,7 @@ fn q5_style_segment_monitor_report_for_routed_geometry(
             &diagram,
             &geom,
             RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q5_style_min_segment: true,
-                ..RoutingPolicyToggles::all_enabled()
-            },
+            RoutingPolicyToggles::all_enabled(),
         );
 
         for edge in diagram
@@ -171,10 +168,10 @@ fn q5_style_segment_monitor_report_for_routed_geometry(
         }
     }
 
-    Q5RoutedStyleMonitorReport {
+    RoutedStyleMonitorReport {
         scanned_styled_edges,
         summary_line: format!(
-            "q5_monitor_routed scanned={} violations={} threshold={:.2}",
+            "style_monitor_routed scanned={} violations={} threshold={:.2}",
             scanned_styled_edges,
             violations.len(),
             min_segment_threshold
@@ -504,7 +501,7 @@ fn routed_geometry_preserves_label_positions() {
     );
 }
 
-const Q3_MAX_LABEL_DISTANCE_TO_ACTIVE_SEGMENT: f64 = 2.0;
+const LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT: f64 = 2.0;
 
 #[test]
 fn unified_labels_remain_attached_to_active_segments_labeled_edges() {
@@ -513,11 +510,11 @@ fn unified_labels_remain_attached_to_active_segments_labeled_edges() {
     let failures = labeled_edge_label_drift_failures(
         &diagram,
         &routed,
-        Q3_MAX_LABEL_DISTANCE_TO_ACTIVE_SEGMENT,
+        LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT,
     );
     assert!(
         failures.is_empty(),
-        "Q3 regression: labeled_edges has off-path labels:\n{}",
+        "Label revalidation regression: labeled_edges has off-path labels:\n{}",
         failures.join("\n")
     );
 }
@@ -529,11 +526,11 @@ fn unified_labels_remain_attached_to_active_segments_inline_label_flowchart() {
     let failures = labeled_edge_label_drift_failures(
         &diagram,
         &routed,
-        Q3_MAX_LABEL_DISTANCE_TO_ACTIVE_SEGMENT,
+        LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT,
     );
     assert!(
         failures.is_empty(),
-        "Q3 regression: inline_label_flowchart has off-path labels:\n{}",
+        "Label revalidation regression: inline_label_flowchart has off-path labels:\n{}",
         failures.join("\n")
     );
 }
@@ -569,7 +566,7 @@ fn stale_label_anchor_is_replaced_with_valid_route_anchor() {
         &stale_geom,
         RoutingMode::UnifiedPreview,
         RoutingPolicyToggles {
-            q3_label_revalidation: true,
+            label_anchor_revalidation: true,
             ..RoutingPolicyToggles::default()
         },
     );
@@ -585,12 +582,12 @@ fn stale_label_anchor_is_replaced_with_valid_route_anchor() {
     let original_drift = distance_point_to_path(original_anchor, &routed_edge.path);
     let validated_drift = distance_point_to_path(validated_anchor, &routed_edge.path);
     assert!(
-        original_drift > Q3_MAX_LABEL_DISTANCE_TO_ACTIVE_SEGMENT,
+        original_drift > LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT,
         "fixture contract invalid: original anchor should be stale for this test (drift={original_drift}, path={:?})",
         routed_edge.path
     );
     assert!(
-        validated_drift <= Q3_MAX_LABEL_DISTANCE_TO_ACTIVE_SEGMENT,
+        validated_drift <= LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT,
         "validated anchor should be on/near active segment after fallback (drift={validated_drift}, anchor={validated_anchor:?}, path={:?})",
         routed_edge.path
     );
@@ -1819,7 +1816,7 @@ fn unified_preview_td_backward_followup_edges_match_full_compute_entry_face_pari
     let cases = [
         ("simple_cycle.mmd", "C", "A"),
         ("multiple_cycles.mmd", "C", "A"),
-        ("q1_q2_conflict.mmd", "Q2", "B"),
+        ("fan_in_backward_channel_conflict.mmd", "Loop", "B"),
     ];
 
     for (fixture, from, to) in cases {
@@ -2181,11 +2178,11 @@ fn unified_preview_http_request_backward_response_to_client_preserves_min_right_
 }
 
 // -----------------------------------------------------------------------
-// Task 0.2: Q1 policy spec contracts
+// Task 0.2: Fan-in overflow policy spec contracts
 // -----------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug)]
-enum Q1SpecDirection {
+enum FanInSpecDirection {
     TopDown,
     BottomTop,
     LeftRight,
@@ -2193,101 +2190,105 @@ enum Q1SpecDirection {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Q1OverflowSide {
+enum OverflowSide {
     LeftOrTop,
     RightOrBottom,
 }
 
-const Q1_PRIMARY_FACE_CAPACITY_TD_BT: usize = 4;
-const Q1_PRIMARY_FACE_CAPACITY_LR_RL: usize = 2;
+const FAN_IN_PRIMARY_FACE_CAPACITY_TD_BT: usize = 4;
+const FAN_IN_PRIMARY_FACE_CAPACITY_LR_RL: usize = 2;
 
-fn q1_primary_face_capacity(direction: Q1SpecDirection) -> usize {
+fn fan_in_primary_face_capacity(direction: FanInSpecDirection) -> usize {
     match direction {
-        Q1SpecDirection::TopDown | Q1SpecDirection::BottomTop => Q1_PRIMARY_FACE_CAPACITY_TD_BT,
-        Q1SpecDirection::LeftRight | Q1SpecDirection::RightLeft => Q1_PRIMARY_FACE_CAPACITY_LR_RL,
+        FanInSpecDirection::TopDown | FanInSpecDirection::BottomTop => {
+            FAN_IN_PRIMARY_FACE_CAPACITY_TD_BT
+        }
+        FanInSpecDirection::LeftRight | FanInSpecDirection::RightLeft => {
+            FAN_IN_PRIMARY_FACE_CAPACITY_LR_RL
+        }
     }
 }
 
-fn q1_overflow_activates(direction: Q1SpecDirection, incoming_degree: usize) -> bool {
-    incoming_degree > q1_primary_face_capacity(direction)
+fn fan_in_overflow_activates(direction: FanInSpecDirection, incoming_degree: usize) -> bool {
+    incoming_degree > fan_in_primary_face_capacity(direction)
 }
 
-fn q1_overflow_distribution_order(
-    _direction: Q1SpecDirection,
+fn fan_in_overflow_distribution_order(
+    _direction: FanInSpecDirection,
     overflow_count: usize,
-) -> Vec<Q1OverflowSide> {
+) -> Vec<OverflowSide> {
     let mut order = Vec::with_capacity(overflow_count);
     for index in 0..overflow_count {
         if index % 2 == 0 {
-            order.push(Q1OverflowSide::LeftOrTop);
+            order.push(OverflowSide::LeftOrTop);
         } else {
-            order.push(Q1OverflowSide::RightOrBottom);
+            order.push(OverflowSide::RightOrBottom);
         }
     }
     order
 }
 
 #[test]
-fn q1_policy_spec_defines_when_overflow_must_activate() {
+fn fan_in_overflow_policy_spec_defines_when_overflow_must_activate() {
     let cases = [
-        ("stacked_fan_in.mmd", Q1SpecDirection::TopDown, 2, false),
-        ("fan_in.mmd", Q1SpecDirection::TopDown, 3, false),
-        ("five_fan_in.mmd", Q1SpecDirection::TopDown, 5, true),
-        ("fan_in_lr.mmd", Q1SpecDirection::LeftRight, 3, true),
+        ("stacked_fan_in.mmd", FanInSpecDirection::TopDown, 2, false),
+        ("fan_in.mmd", FanInSpecDirection::TopDown, 3, false),
+        ("five_fan_in.mmd", FanInSpecDirection::TopDown, 5, true),
+        ("fan_in_lr.mmd", FanInSpecDirection::LeftRight, 3, true),
     ];
 
     for (fixture, direction, incoming_degree, expected_overflow) in cases {
-        let actual = q1_overflow_activates(direction, incoming_degree);
+        let actual = fan_in_overflow_activates(direction, incoming_degree);
         assert_eq!(
             actual, expected_overflow,
-            "Q1 overflow activation contract mismatch for fixture {fixture}: direction={direction:?}, incoming_degree={incoming_degree}"
+            "Fan-in overflow activation contract mismatch for fixture {fixture}: direction={direction:?}, incoming_degree={incoming_degree}"
         );
     }
 }
 
 #[test]
-fn q1_policy_spec_defines_spill_distribution_order() {
-    let td_order = q1_overflow_distribution_order(Q1SpecDirection::TopDown, 4);
+fn fan_in_overflow_policy_spec_defines_spill_distribution_order() {
+    let td_order = fan_in_overflow_distribution_order(FanInSpecDirection::TopDown, 4);
     assert_eq!(
         td_order,
         vec![
-            Q1OverflowSide::LeftOrTop,
-            Q1OverflowSide::RightOrBottom,
-            Q1OverflowSide::LeftOrTop,
-            Q1OverflowSide::RightOrBottom,
+            OverflowSide::LeftOrTop,
+            OverflowSide::RightOrBottom,
+            OverflowSide::LeftOrTop,
+            OverflowSide::RightOrBottom,
         ],
         "TD/BT overflow slots should alternate side lanes for deterministic spread"
     );
 
-    let lr_order = q1_overflow_distribution_order(Q1SpecDirection::LeftRight, 3);
+    let lr_order = fan_in_overflow_distribution_order(FanInSpecDirection::LeftRight, 3);
     assert_eq!(
         lr_order,
         vec![
-            Q1OverflowSide::LeftOrTop,
-            Q1OverflowSide::RightOrBottom,
-            Q1OverflowSide::LeftOrTop,
+            OverflowSide::LeftOrTop,
+            OverflowSide::RightOrBottom,
+            OverflowSide::LeftOrTop,
         ],
         "LR/RL overflow slots should alternate side lanes for deterministic spread"
     );
 
-    let bt_order = q1_overflow_distribution_order(Q1SpecDirection::BottomTop, 2);
+    let bt_order = fan_in_overflow_distribution_order(FanInSpecDirection::BottomTop, 2);
     assert_eq!(
         bt_order,
-        vec![Q1OverflowSide::LeftOrTop, Q1OverflowSide::RightOrBottom],
+        vec![OverflowSide::LeftOrTop, OverflowSide::RightOrBottom],
         "BT overflow slots should mirror TD side-lane alternation"
     );
 
-    let rl_order = q1_overflow_distribution_order(Q1SpecDirection::RightLeft, 2);
+    let rl_order = fan_in_overflow_distribution_order(FanInSpecDirection::RightLeft, 2);
     assert_eq!(
         rl_order,
-        vec![Q1OverflowSide::LeftOrTop, Q1OverflowSide::RightOrBottom],
+        vec![OverflowSide::LeftOrTop, OverflowSide::RightOrBottom],
         "RL overflow slots should mirror LR side-lane alternation"
     );
 }
 
 #[test]
-fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
-    let fixture = "q1_q2_conflict.mmd";
+fn fan_in_backward_channel_conflict_resolution_is_deterministic_and_documented() {
+    let fixture = "fan_in_backward_channel_conflict.mmd";
     let (diagram, geom) = layout_fixture_svg(fixture);
     let first = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
     let second = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
@@ -2301,23 +2302,23 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
     let target_rect = geom
         .nodes
         .get("B")
-        .expect("q1_q2_conflict fixture should contain node B")
+        .expect("fan_in_backward_channel_conflict fixture should contain node B")
         .rect;
     let conflict = first
         .edges
         .iter()
-        .find(|edge| edge.from == "Q2" && edge.to == "B")
-        .expect("fixture should contain Q2 -> B");
+        .find(|edge| edge.from == "Loop" && edge.to == "B")
+        .expect("fixture should contain Loop -> B");
 
     assert!(
         conflict.is_backward,
-        "Q2 -> B must be backward in unified preview layout for this fixture"
+        "Loop -> B must be backward in unified preview layout for this fixture"
     );
 
     let source_rect = geom
         .nodes
-        .get("Q2")
-        .expect("q1_q2_conflict fixture should contain node Q2")
+        .get("Loop")
+        .expect("fan_in_backward_channel_conflict fixture should contain node Loop")
         .rect;
     let conflict_start = conflict
         .path
@@ -2327,7 +2328,7 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
     let conflict_start_face = point_on_target_face(source_rect, conflict_start);
     assert_eq!(
         conflict_start_face, "top",
-        "Q2 -> B should depart from the TD parity source lane (top face): start={conflict_start:?}, path={:?}",
+        "Loop -> B should depart from the TD parity source lane (top face): start={conflict_start:?}, path={:?}",
         conflict.path
     );
     let source_face_margin = match conflict_start_face {
@@ -2345,7 +2346,7 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
     };
     assert!(
         source_face_margin >= 5.0,
-        "Q2 -> B source departure should stay away from source face borders (closer to center) to avoid cramped hooks: margin={source_face_margin}, source_rect={source_rect:?}, start={conflict_start:?}, path={:?}",
+        "Loop -> B source departure should stay away from source face borders (closer to center) to avoid cramped hooks: margin={source_face_margin}, source_rect={source_rect:?}, start={conflict_start:?}, path={:?}",
         conflict.path
     );
     let conflict_next = conflict
@@ -2355,7 +2356,7 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
         .expect("backward edge should have source support point");
     assert!(
         source_support_is_normal_to_attached_rect_face(source_rect, conflict_start, conflict_next),
-        "Q2 -> B should leave the canonical source face on its outward normal axis: start={conflict_start:?}, next={conflict_next:?}, path={:?}",
+        "Loop -> B should leave the canonical source face on its outward normal axis: start={conflict_start:?}, next={conflict_next:?}, path={:?}",
         conflict.path
     );
 
@@ -2367,7 +2368,7 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
     assert_eq!(
         conflict_face,
         "bottom",
-        "Q2 -> B should enter B on the TD parity target lane (bottom face) under fan-in pressure: end={conflict_end:?}, path={path:?}",
+        "Loop -> B should enter B on the TD parity target lane (bottom face) under fan-in pressure: end={conflict_end:?}, path={path:?}",
         conflict_end = conflict_end,
         path = conflict.path
     );
@@ -2378,12 +2379,12 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
         .expect("backward edge should have terminal support point");
     assert!(
         terminal_support_is_normal_to_attached_rect_face(target_rect, conflict_prev, conflict_end),
-        "Q2 -> B should approach the canonical right face with a face-normal terminal segment: prev={conflict_prev:?}, end={conflict_end:?}, path={:?}",
+        "Loop -> B should approach the canonical right face with a face-normal terminal segment: prev={conflict_prev:?}, end={conflict_end:?}, path={:?}",
         conflict.path
     );
 
     let incoming_to_b: Vec<_> = first.edges.iter().filter(|edge| edge.to == "B").collect();
-    if std::env::var("MMDFLUX_DEBUG_Q1").is_ok_and(|v| v == "1") {
+    if std::env::var("MMDFLUX_DEBUG_FAN_IN").is_ok_and(|v| v == "1") {
         for edge in &incoming_to_b {
             let end = edge
                 .path
@@ -2400,7 +2401,7 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
     assert_eq!(
         incoming_to_b.len(),
         6,
-        "q1_q2_conflict should create exactly six inbound edges to B"
+        "fan_in_backward_channel_conflict should create exactly six inbound edges to B"
     );
 
     let right_face_count = incoming_to_b
@@ -2417,27 +2418,27 @@ fn q1_q2_conflict_resolution_is_deterministic_and_documented() {
 
     assert_eq!(
         right_face_count, 0,
-        "Q2 conflict parity policy should avoid reserving B's right lane as a special backward channel: right_face_count={right_face_count}"
+        "Loop conflict parity policy should avoid reserving B's right lane as a special backward channel: right_face_count={right_face_count}"
     );
 }
 
 #[test]
-fn q1_q2_interaction_fixture_matrix_matches_documented_face_policies() {
-    let q1_cases = [
+fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies() {
+    let fan_in_cases = [
         ("stacked_fan_in.mmd", "C", 0usize),
         ("fan_in.mmd", "D", 0usize),
         ("five_fan_in.mmd", "F", 1usize),
     ];
 
-    for (fixture, target, min_side_faces) in q1_cases {
+    for (fixture, target, min_side_faces) in fan_in_cases {
         let (diagram, geom) = layout_fixture_svg(fixture);
         let routed = route_graph_geometry_with_policies(
             &diagram,
             &geom,
             RoutingMode::UnifiedPreview,
             RoutingPolicyToggles {
-                q1_overflow: true,
-                q4_rank_span_periphery: false,
+                fan_in_face_overflow: true,
+                long_skip_periphery_detour: false,
                 ..RoutingPolicyToggles::all_enabled()
             },
         );
@@ -2471,7 +2472,7 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_face_policies() {
         assert_eq!(
             interior_count,
             0,
-            "fixture {fixture} should not place inbound endpoints inside target interior under Q1 policy (target={target}, routed={:?})",
+            "fixture {fixture} should not place inbound endpoints inside target interior under fan-in overflow policy (target={target}, routed={:?})",
             inbound
                 .iter()
                 .map(|edge| (edge.from.as_str(), edge.path.clone()))
@@ -2498,20 +2499,26 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_face_policies() {
         } else {
             assert!(
                 side_face_count >= min_side_faces,
-                "fixture {fixture} should spill overflow arrivals to side faces under Q1 policy: expected >= {min_side_faces}, actual={side_face_count}, target={target}"
+                "fixture {fixture} should spill overflow arrivals to side faces under fan-in overflow policy: expected >= {min_side_faces}, actual={side_face_count}, target={target}"
             );
         }
     }
 
-    let q2_cases = [
+    let backward_channel_cases = [
         ("simple_cycle.mmd", "C", "A", "bottom", "top"),
         ("multiple_cycles.mmd", "C", "A", "bottom", "top"),
-        ("q1_q2_conflict.mmd", "Q2", "B", "bottom", "top"),
+        (
+            "fan_in_backward_channel_conflict.mmd",
+            "Loop",
+            "B",
+            "bottom",
+            "top",
+        ),
         ("http_request.mmd", "Response", "Client", "right", "right"),
         ("git_workflow.mmd", "Remote", "Working", "bottom", "bottom"),
     ];
 
-    for (fixture, from, to, expected_target_face, expected_source_face) in q2_cases {
+    for (fixture, from, to, expected_target_face, expected_source_face) in backward_channel_cases {
         let (diagram, geom) = layout_fixture_svg(fixture);
         let source_rect = geom
             .nodes
@@ -2524,28 +2531,31 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_face_policies() {
             .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {to}"))
             .rect;
 
-        let routed_q1_on = route_graph_geometry_with_policies(
+        let routed_overflow_on = route_graph_geometry_with_policies(
             &diagram,
             &geom,
             RoutingMode::UnifiedPreview,
             RoutingPolicyToggles {
-                q1_overflow: true,
-                q4_rank_span_periphery: false,
+                fan_in_face_overflow: true,
+                long_skip_periphery_detour: false,
                 ..RoutingPolicyToggles::all_enabled()
             },
         );
-        let routed_q1_off = route_graph_geometry_with_policies(
+        let routed_overflow_off = route_graph_geometry_with_policies(
             &diagram,
             &geom,
             RoutingMode::UnifiedPreview,
             RoutingPolicyToggles {
-                q1_overflow: false,
-                q4_rank_span_periphery: false,
+                fan_in_face_overflow: false,
+                long_skip_periphery_detour: false,
                 ..RoutingPolicyToggles::all_enabled()
             },
         );
 
-        for (mode_label, routed) in [("q1-on", &routed_q1_on), ("q1-off", &routed_q1_off)] {
+        for (mode_label, routed) in [
+            ("overflow-on", &routed_overflow_on),
+            ("overflow-off", &routed_overflow_off),
+        ] {
             let edge = routed
                 .edges
                 .iter()
@@ -2578,11 +2588,11 @@ fn q1_q2_interaction_fixture_matrix_matches_documented_face_policies() {
 }
 
 // -----------------------------------------------------------------------
-// Task 3.1: Q4 rank-span long-skip RED regressions
+// Task 3.1: Long-skip periphery detour regressions
 // -----------------------------------------------------------------------
 
 #[test]
-fn q4_rank_span_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
+fn long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
     let cases = [
         ("double_skip.mmd", "A", "D"),
         ("skip_edge_collision.mmd", "A", "D"),
@@ -2590,31 +2600,31 @@ fn q4_rank_span_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
 
     for (fixture, from, to) in cases {
         let (diagram, geom) = layout_fixture_svg(fixture);
-        let q4_off = route_graph_geometry_with_policies(
+        let long_skip_off = route_graph_geometry_with_policies(
             &diagram,
             &geom,
             RoutingMode::UnifiedPreview,
             RoutingPolicyToggles {
-                q4_rank_span_periphery: false,
+                long_skip_periphery_detour: false,
                 ..RoutingPolicyToggles::all_enabled()
             },
         );
-        let q4_on = route_graph_geometry_with_policies(
+        let long_skip_on = route_graph_geometry_with_policies(
             &diagram,
             &geom,
             RoutingMode::UnifiedPreview,
             RoutingPolicyToggles {
-                q4_rank_span_periphery: true,
+                long_skip_periphery_detour: true,
                 ..RoutingPolicyToggles::all_enabled()
             },
         );
 
-        let edge_off = q4_off
+        let edge_off = long_skip_off
             .edges
             .iter()
             .find(|edge| edge.from == from && edge.to == to)
             .unwrap_or_else(|| panic!("fixture {fixture} should contain edge {from} -> {to}"));
-        let edge_on = q4_on
+        let edge_on = long_skip_on
             .edges
             .iter()
             .find(|edge| edge.from == from && edge.to == to)
@@ -2626,14 +2636,14 @@ fn q4_rank_span_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
             });
         assert!(
             rank_span >= 2,
-            "fixture contract invalid for Q4: {fixture} edge {from}->{to} must be a long-skip edge with rank_span>=2, got {rank_span}"
+            "fixture contract invalid for Long-skip periphery: {fixture} edge {from}->{to} must be a long-skip edge with rank_span>=2, got {rank_span}"
         );
 
         let detour_off = lateral_detour_from_endpoint_axis(&edge_off.path, geom.direction);
         let detour_on = lateral_detour_from_endpoint_axis(&edge_on.path, geom.direction);
         assert!(
             detour_on > detour_off + 0.5,
-            "Q4 rank-span policy should increase periphery detour for {fixture} edge {from}->{to}: rank_span={rank_span}, detour_off={detour_off}, detour_on={detour_on}, off_path={:?}, on_path={:?}",
+            "Long-skip periphery rank-span policy should increase periphery detour for {fixture} edge {from}->{to}: rank_span={rank_span}, detour_off={detour_off}, detour_on={detour_on}, off_path={:?}, on_path={:?}",
             edge_off.path,
             edge_on.path
         );
@@ -2641,22 +2651,22 @@ fn q4_rank_span_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
 }
 
 #[test]
-fn q5_styled_segment_monitor_reports_actionable_summary_for_routed_geometry() {
-    let report = q5_style_segment_monitor_report_for_routed_geometry(
+fn style_segment_monitor_reports_actionable_summary_for_routed_geometry() {
+    let report = style_segment_monitor_report_for_routed_geometry(
         &["edge_styles.mmd", "inline_edge_labels.mmd"],
         12.0,
     );
     assert!(
         report.scanned_styled_edges > 0,
-        "Q5 monitor should scan at least one styled edge; report={report:?}"
+        "style monitor should scan at least one styled edge; report={report:?}"
     );
     assert!(
         !report.summary_line.is_empty(),
-        "Q5 monitor should emit a stable summary line for CI parsing"
+        "style monitor should emit a stable summary line for CI parsing"
     );
     assert!(
         report.violations.is_empty(),
-        "Q5 monitor detected styled-segment violations: {:#?}",
+        "style monitor detected styled-segment violations: {:#?}",
         report
     );
 }

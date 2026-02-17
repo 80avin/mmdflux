@@ -107,21 +107,17 @@ struct Cli {
     #[arg(long, value_enum)]
     routing_mode: Option<RoutingModeArg>,
 
-    /// Q1 face-overflow policy toggle (on/off).
+    /// Fan-in face-overflow policy toggle (on/off).
     #[arg(long, value_enum)]
-    policy_q1: Option<PolicyToggleArg>,
+    policy_fan_in_face_overflow: Option<PolicyToggleArg>,
 
-    /// Q3 label-revalidation policy toggle (on/off).
+    /// Label-anchor revalidation policy toggle (on/off).
     #[arg(long, value_enum)]
-    policy_q3: Option<PolicyToggleArg>,
+    policy_label_anchor_revalidation: Option<PolicyToggleArg>,
 
-    /// Q4 rank-span periphery policy toggle (on/off).
+    /// Long-skip periphery detour policy toggle (on/off).
     #[arg(long, value_enum)]
-    policy_q4: Option<PolicyToggleArg>,
-
-    /// Q5 style-min-segment policy toggle (on/off).
-    #[arg(long, value_enum)]
-    policy_q5: Option<PolicyToggleArg>,
+    policy_long_skip_periphery_detour: Option<PolicyToggleArg>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -305,17 +301,14 @@ fn main() -> io::Result<()> {
     let config = RenderConfig {
         routing_policies: {
             let mut policies = RoutingPolicyToggles::default();
-            if let Some(toggle) = cli.policy_q1 {
-                policies.q1_overflow = toggle.is_enabled();
+            if let Some(toggle) = cli.policy_fan_in_face_overflow {
+                policies.fan_in_face_overflow = toggle.is_enabled();
             }
-            if let Some(toggle) = cli.policy_q3 {
-                policies.q3_label_revalidation = toggle.is_enabled();
+            if let Some(toggle) = cli.policy_label_anchor_revalidation {
+                policies.label_anchor_revalidation = toggle.is_enabled();
             }
-            if let Some(toggle) = cli.policy_q4 {
-                policies.q4_rank_span_periphery = toggle.is_enabled();
-            }
-            if let Some(toggle) = cli.policy_q5 {
-                policies.q5_style_min_segment = toggle.is_enabled();
+            if let Some(toggle) = cli.policy_long_skip_periphery_detour {
+                policies.long_skip_periphery_detour = toggle.is_enabled();
             }
             policies
         },

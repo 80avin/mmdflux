@@ -304,24 +304,22 @@ impl RoutingMode {
 
 /// Per-policy routing toggles for staged unified-routing rollout.
 ///
-/// Defaults are conservative: keep established Q1 overflow behavior enabled,
-/// while future Q3/Q4/Q5 policy tranches start disabled until explicitly
-/// implemented and promoted.
+/// Defaults are conservative: keep fan-in overflow and label revalidation
+/// enabled, while long-skip periphery detours start disabled until explicitly
+/// promoted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RoutingPolicyToggles {
-    pub q1_overflow: bool,
-    pub q3_label_revalidation: bool,
-    pub q4_rank_span_periphery: bool,
-    pub q5_style_min_segment: bool,
+    pub fan_in_face_overflow: bool,
+    pub label_anchor_revalidation: bool,
+    pub long_skip_periphery_detour: bool,
 }
 
 impl RoutingPolicyToggles {
     pub const fn all_enabled() -> Self {
         Self {
-            q1_overflow: true,
-            q3_label_revalidation: true,
-            q4_rank_span_periphery: true,
-            q5_style_min_segment: true,
+            fan_in_face_overflow: true,
+            label_anchor_revalidation: true,
+            long_skip_periphery_detour: true,
         }
     }
 }
@@ -329,10 +327,9 @@ impl RoutingPolicyToggles {
 impl Default for RoutingPolicyToggles {
     fn default() -> Self {
         Self {
-            q1_overflow: true,
-            q3_label_revalidation: true,
-            q4_rank_span_periphery: false,
-            q5_style_min_segment: false,
+            fan_in_face_overflow: true,
+            label_anchor_revalidation: true,
+            long_skip_periphery_detour: false,
         }
     }
 }

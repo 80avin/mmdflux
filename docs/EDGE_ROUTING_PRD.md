@@ -278,7 +278,7 @@ The long backward edge uses same-face exit and entry on the channel side, produc
 | ID | Requirement | Priority | Rationale |
 |----|-------------|----------|-----------|
 | R-BACK-1 | Backward edges must be visually distinguishable from forward edges through path shape | P0 | Cycle identification is a core comprehension task |
-| R-BACK-2 | Backward edges use a canonical channel policy: right lane for TD/BT, bottom lane for LR/RL | P1 | Deterministic and readable; validated by VEIL C11 criterion and iongraph convention (research 0048 Q2) |
+| R-BACK-2 | Backward edges use a canonical channel policy: right lane for TD/BT, bottom lane for LR/RL | P1 | Deterministic and readable; validated by VEIL C11 criterion and iongraph convention (research 0048 backward-channel findings) |
 | R-BACK-3 | Backward edge routing must not cross node bodies | P0 | Collision avoidance |
 | R-BACK-5 | Collision detection for backward edge routing must use shape-aware boundaries, not rectangular bounding boxes, for non-rectangular node shapes (diamond, circle, stadium, etc.) | P1 | A rectangular bounding box underestimates the collision area of a diamond by ~50%. Backward edges routed around a diamond's bbox can cut through the diamond's actual geometry. **Note (c62bbc9):** The `decision.mmd` diamond graze originally attributed to this gap was actually caused by an SVG render-layer issue — `endpoint_attachment_is_invalid()` in `adjust_edge_points_for_shapes()` was hard-coded to reject backward target entries unless near the right face, triggering unwanted reclipping via `intersect_svg_node()` that pulled the terminal lane inward. The router geometry was already correct. Fix: backward target validity now accepts any near-boundary attachment and only reclips when the endpoint drifts into the node interior. The shape-aware collision requirement remains valid as a general principle but has no known triggering fixture as of this update. |
 | R-BACK-4 | Synthetic backward waypoints in float space must produce equivalent grid-snapped output for text rendering | P1 | Unification correctness gate (research 0047) |
@@ -293,7 +293,7 @@ The long backward edge uses same-face exit and entry on the channel side, produc
 | ID | Requirement | Priority | Rationale |
 |----|-------------|----------|-----------|
 | R-LABEL-1 | Edge labels are anchored to the midpoint of the longest segment | P1 | Maximizes label readability |
-| R-LABEL-2 | Label anchors must be revalidated after path normalization/compaction | P0 | Post-normalization can remove the segment context (research 0048 Q3) |
+| R-LABEL-2 | Label anchors must be revalidated after path normalization/compaction | P0 | Post-normalization can remove the segment context (research 0048 label-anchor findings) |
 | R-LABEL-3 | Labels must not overlap node bodies or other labels | P1 | Basic collision avoidance |
 | R-LABEL-4 | Multi-edge label spacing must survive path compaction | P1 | Prevents label overlap on parallel edges (research 0049) |
 
@@ -425,8 +425,8 @@ The character grid imposes axis-aligned rendering. Text routing uses discrete gr
 | Unified router promotion | 0076, 0077, 0078 complete | Make `unified-preview` the default `full-compute` mode |
 | Bend cost tuning | Unified promotion | Expose bend cost as a tunable parameter (yFiles pattern) |
 | Port constraint API | Unified promotion | Allow user-specified port sides for block diagram use cases |
-| Style-aware segment constraints | Unified promotion | Minimum segment lengths for dotted/thick edges (research 0048 Q5) |
-| Long skip-edge periphery policy | Unified promotion | Explicit routing policy for edges spanning 3+ layers (research 0048 Q4) |
+| Style-aware segment constraints | Unified promotion | Minimum segment lengths for dotted/thick edges (research 0048 styled-segment findings) |
+| Long skip-edge periphery policy | Unified promotion | Explicit routing policy for edges spanning 3+ layers (research 0048 long-skip findings) |
 
 ---
 
@@ -438,7 +438,7 @@ These questions are not yet resolved and may require spikes or additional resear
 
 2. **Float-to-grid round-trip fidelity for backward edges.** Can float-space synthetic backward waypoints produce identical grid-snapped text output? (Research 0047, deferred pending spike.)
 
-3. **Face capacity thresholds.** What fan-in/fan-out count triggers face overflow? Current formula does not activate on test fixtures. (Research 0048 Q1.)
+3. **Face capacity thresholds.** What fan-in/fan-out count triggers face overflow? Current formula does not activate on test fixtures. (Research 0048 face-capacity findings.)
 
 4. **Interaction between bend count and crossing angle.** When a bend reduces a crossing angle toward 90°, is the combined effect positive or negative?
 
@@ -446,7 +446,7 @@ These questions are not yet resolved and may require spikes or additional resear
 
 6. **Impact of edge thickness on bend perception.** Thicker edges may make bends more visually prominent, potentially changing the bend cost calculus for styled edges.
 
-7. **Bounding box metric definition.** Current SVG sweep viewBox deltas are uniformly zero; a stronger metric is needed before gating quality changes. (Research 0048 Q6.)
+7. **Bounding box metric definition.** Current SVG sweep viewBox deltas are uniformly zero; a stronger metric is needed before gating quality changes. (Research 0048 non-viewBox metric findings.)
 
 8. **Basis curvature control from orthogonal waypoints.** Unified-preview basis curves appear better controlled (lower curvature) than full-compute basis because the orthogonal waypoints constrain the spline. Should the unified router's tighter waypoint structure be treated as a quality improvement for basis style, or does it over-constrain the curves? Observed in `diamond_fan.mmd`: full-compute produces excessively wide lateral curves; unified-preview produces more restrained curves closer to the low-curvature Lombardi profile that Xu et al. found performs comparably to straight edges.
 

@@ -8,67 +8,67 @@ use crate::diagrams::flowchart::geometry::{FPoint, FRect};
 use crate::graph::{Direction, Edge, Shape, Stroke};
 use crate::render::intersect::{NodeFace, classify_face};
 
-/// Direction-specific overflow lane for Q1 fan-in spill candidates.
+/// Direction-specific overflow lane for fan-in spill candidates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Q1OverflowSide {
+pub(crate) enum OverflowSide {
     LeftOrTop,
     RightOrBottom,
 }
 
 /// Primary face capacity for deterministic overflow policy in `Task 0.2`.
-pub(crate) const Q1_PRIMARY_FACE_CAPACITY_TD_BT: usize = 4;
-pub(crate) const Q1_PRIMARY_FACE_CAPACITY_LR_RL: usize = 2;
-pub(crate) const Q4_LONG_SKIP_RANK_SPAN_TRIGGER: usize = 2;
-pub(crate) const Q4_MIN_PERIPHERY_DETOUR_BASE: f64 = 28.0;
-pub(crate) const Q4_MIN_PERIPHERY_DETOUR_MAX: f64 = 36.0;
+pub(crate) const FAN_IN_PRIMARY_FACE_CAPACITY_TD_BT: usize = 4;
+pub(crate) const FAN_IN_PRIMARY_FACE_CAPACITY_LR_RL: usize = 2;
+pub(crate) const LONG_SKIP_RANK_SPAN_TRIGGER: usize = 2;
+pub(crate) const LONG_SKIP_PERIPHERY_DETOUR_BASE: f64 = 28.0;
+pub(crate) const LONG_SKIP_PERIPHERY_DETOUR_MAX: f64 = 36.0;
 
 /// Return the deterministic base capacity for the primary incoming face.
-pub(crate) fn q1_primary_face_capacity(direction: Direction) -> usize {
+pub(crate) fn fan_in_primary_face_capacity(direction: Direction) -> usize {
     match direction {
-        Direction::TopDown | Direction::BottomTop => Q1_PRIMARY_FACE_CAPACITY_TD_BT,
-        Direction::LeftRight | Direction::RightLeft => Q1_PRIMARY_FACE_CAPACITY_LR_RL,
+        Direction::TopDown | Direction::BottomTop => FAN_IN_PRIMARY_FACE_CAPACITY_TD_BT,
+        Direction::LeftRight | Direction::RightLeft => FAN_IN_PRIMARY_FACE_CAPACITY_LR_RL,
     }
 }
 
-/// Determine whether Q4 long-skip policy is eligible by rank span.
-pub(crate) fn q4_rank_span_should_use_periphery(rank_span: usize) -> bool {
-    rank_span >= Q4_LONG_SKIP_RANK_SPAN_TRIGGER
+/// Determine whether long-skip policy is eligible by rank span.
+pub(crate) fn long_skip_rank_span_requires_periphery(rank_span: usize) -> bool {
+    rank_span >= LONG_SKIP_RANK_SPAN_TRIGGER
 }
 
-/// Compute required minimum periphery detour for Q4 long-skip edges.
-pub(crate) fn q4_required_periphery_detour(rank_span: usize) -> f64 {
-    if !q4_rank_span_should_use_periphery(rank_span) {
+/// Compute required minimum periphery detour for long-skip edges.
+pub(crate) fn long_skip_required_periphery_detour(rank_span: usize) -> f64 {
+    if !long_skip_rank_span_requires_periphery(rank_span) {
         return 0.0;
     }
 
-    let rank_bonus = rank_span.saturating_sub(Q4_LONG_SKIP_RANK_SPAN_TRIGGER) as f64;
-    (Q4_MIN_PERIPHERY_DETOUR_BASE + rank_bonus).min(Q4_MIN_PERIPHERY_DETOUR_MAX)
+    let rank_bonus = rank_span.saturating_sub(LONG_SKIP_RANK_SPAN_TRIGGER) as f64;
+    (LONG_SKIP_PERIPHERY_DETOUR_BASE + rank_bonus).min(LONG_SKIP_PERIPHERY_DETOUR_MAX)
 }
 
-/// Convert canonical Q1 spill slot into an overflow face for a direction.
-pub(crate) fn q1_overflow_face_for_slot(direction: Direction, slot: Q1OverflowSide) -> Face {
+/// Convert canonical fan-in spill slot into an overflow face for a direction.
+pub(crate) fn fan_in_overflow_face_for_slot(direction: Direction, slot: OverflowSide) -> Face {
     match direction {
         Direction::TopDown | Direction::BottomTop => match slot {
-            Q1OverflowSide::LeftOrTop => Face::Left,
-            Q1OverflowSide::RightOrBottom => Face::Right,
+            OverflowSide::LeftOrTop => Face::Left,
+            OverflowSide::RightOrBottom => Face::Right,
         },
         Direction::LeftRight | Direction::RightLeft => match slot {
-            Q1OverflowSide::LeftOrTop => Face::Top,
-            Q1OverflowSide::RightOrBottom => Face::Bottom,
+            OverflowSide::LeftOrTop => Face::Top,
+            OverflowSide::RightOrBottom => Face::Bottom,
         },
     }
 }
 
-/// Canonical backward channel for Q2 policy.
-pub(crate) fn q2_backward_channel_face(direction: Direction) -> Face {
+/// Canonical backward channel for backward-channel policy.
+pub(crate) fn canonical_backward_channel_face(direction: Direction) -> Face {
     match direction {
         Direction::TopDown | Direction::BottomTop => Face::Right,
         Direction::LeftRight | Direction::RightLeft => Face::Bottom,
     }
 }
 
-/// Primary incoming target face for forward edges under Q1 policy.
-pub(crate) fn q1_primary_target_face(direction: Direction) -> Face {
+/// Primary incoming target face for forward edges under fan-in policy.
+pub(crate) fn fan_in_primary_target_face(direction: Direction) -> Face {
     match direction {
         Direction::TopDown => Face::Top,
         Direction::BottomTop => Face::Bottom,
@@ -77,16 +77,16 @@ pub(crate) fn q1_primary_target_face(direction: Direction) -> Face {
     }
 }
 
-fn q1_non_canonical_overflow_face(direction: Direction) -> Face {
+fn fan_in_non_canonical_overflow_face(direction: Direction) -> Face {
     match direction {
         Direction::TopDown | Direction::BottomTop => Face::Left,
         Direction::LeftRight | Direction::RightLeft => Face::Top,
     }
 }
 
-/// Resolve a target/source face with explicit precedence when both Q1 overflow and
-/// Q2 backward channels are in contention.
-pub(crate) fn resolve_q1_q2_face_conflict(
+/// Resolve a target/source face with explicit precedence when both fan-in overflow and
+/// backward channels are in contention.
+pub(crate) fn resolve_overflow_backward_channel_conflict(
     direction: Direction,
     is_backward: bool,
     target_has_backward_conflict: bool,
@@ -96,14 +96,14 @@ pub(crate) fn resolve_q1_q2_face_conflict(
     if !is_backward || overflow_face.is_none() {
         if target_has_backward_conflict
             && overflow_face.is_some()
-            && proposed_face == q2_backward_channel_face(direction)
+            && proposed_face == canonical_backward_channel_face(direction)
         {
-            return q1_non_canonical_overflow_face(direction);
+            return fan_in_non_canonical_overflow_face(direction);
         }
         return proposed_face;
     }
 
-    q2_backward_channel_face(direction)
+    canonical_backward_channel_face(direction)
 }
 
 /// Which face of a rectangular node an edge attaches to.

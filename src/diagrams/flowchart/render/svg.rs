@@ -1151,7 +1151,7 @@ fn clip_points_to_rect_end(points: &[Point], rect: &Rect) -> Vec<Point> {
     out
 }
 
-const Q3_LABEL_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
+const LABEL_ANCHOR_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
 const LABEL_POINT_EPS: f64 = 0.000_001;
 
 fn revalidate_svg_label_anchor(candidate: Point, rendered_path: Option<&[Point]>) -> Point {
@@ -1163,7 +1163,7 @@ fn revalidate_svg_label_anchor(candidate: Point, rendered_path: Option<&[Point]>
     }
 
     let drift = distance_point_to_svg_path(candidate, path);
-    if drift <= Q3_LABEL_REVALIDATION_MAX_DISTANCE {
+    if drift <= LABEL_ANCHOR_REVALIDATION_MAX_DISTANCE {
         return candidate;
     }
     svg_path_midpoint(path).unwrap_or(candidate)

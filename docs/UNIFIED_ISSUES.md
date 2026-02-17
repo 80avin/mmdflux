@@ -45,9 +45,9 @@ Required fixture coverage in this baseline:
 - `double_skip.mmd`
 - `skip_edge_collision.mmd`
 
-## Task 0.4 Q6 Metric Gate Spec (2026-02-12)
+## Task 0.4 Non-ViewBox Metric Gate Spec (2026-02-12)
 
-Q6 gate now tracks non-viewBox path-level signals in the sweep baseline:
+Non-viewBox gate now tracks path-level signals in the sweep baseline:
 
 - Route-envelope deltas:
   - `route_envelope_width_delta`
@@ -63,7 +63,7 @@ Reproducible monitor thresholds (script-configurable):
 - `LABEL_POSITION_MAX_DRIFT_WARN_PX` (default `40`)
 - `LABEL_POSITION_MEAN_DRIFT_WARN_PX` (default `20`)
 
-Sweep script reports these in a `Q6 metric summary` section:
+Sweep script reports these in a `non-viewBox metric summary` section:
 
 ```bash
 ./scripts/tests/08-unified-vs-full-svg-diff-sweep.sh
@@ -71,13 +71,13 @@ Sweep script reports these in a `Q6 metric summary` section:
 
 ## Task 1.3 Text Label Parity Guard (2026-02-12)
 
-Q3 anchor-revalidation delivery now includes an explicit text-render guard:
+Label-anchor revalidation delivery now includes an explicit text-render guard:
 
 - Precomputed text label anchors are accepted only when the anchor remains
   within `2` cells of the active routed path.
 - If a precomputed anchor is stale, text rendering falls back to a
   route-midpoint anchor (with existing collision-avoidance safety).
-- Routing-mode parity for text is now fixture-gated for Q3 defects:
+- Routing-mode parity for text is now fixture-gated for label-anchor defects:
   - `labeled_edges.mmd`
   - `inline_label_flowchart.mmd`
 
@@ -87,17 +87,17 @@ Renderer semantics note:
 - The guard intent is the same in both renderers: stale anchors must not pull
   labels away from the active routed segment.
 
-## Task 4.1 Q5 Monitor-Only Checks (2026-02-12)
+## Task 4.1 Style Segment Monitor-Only Checks (2026-02-12)
 
-Q5 remains monitor-only in this plan tranche. No runtime stretching/enforcement
+Style-segment checks remain monitor-only in this plan tranche. No runtime stretching/enforcement
 is applied yet.
 
 Active monitor checks:
 
 - Routed geometry monitor:
-  - `q5_styled_segment_monitor_reports_actionable_summary_for_routed_geometry`
+  - `style_segment_monitor_reports_actionable_summary_for_routed_geometry`
 - SVG monitor:
-  - `q5_styled_segment_monitor_reports_actionable_summary_for_svg`
+  - `style_segment_monitor_reports_actionable_summary_for_svg`
 
 Current monitor threshold:
 
@@ -107,10 +107,11 @@ Escalation criteria:
 
 - Any monitor violation in CI triggers issue/finding capture (do not silently
   promote).
-- If violations persist across repeated sweeps/CI runs, escalate Q5 from
+- If violations persist across repeated sweeps/CI runs, escalate style-segment checks from
   monitor-only to an enforcement task in a follow-up phase.
-- Until escalation is approved, keep `q5_style_min_segment` default-off and use
-  monitor output as release-gating telemetry only.
+- Until escalation is approved, keep style-segment checks monitor-only (no
+  runtime enforcement toggle) and use monitor output as release-gating telemetry
+  only.
 
 ## Task 5.1 Promotion + Rollback Finalization (2026-02-12)
 
@@ -123,13 +124,13 @@ consolidated in:
 
 Policy posture carried into release gating:
 
-- `q4_rank_span_periphery` default-off; enable selectively with `--policy-q4 on`.
-- `q5_style_min_segment` monitor-only and default-off; keep escalations tied to
-  monitor violations.
+- `long_skip_periphery_detour` default-off; enable selectively with `--policy-long-skip-periphery-detour on`.
+- style-segment checks monitor-only; keep escalations tied to monitor
+  violations.
 
-## Task 0.2 Q1 Policy Spec (2026-02-12)
+## Task 0.2 Fan-In Overflow Policy Spec (2026-02-12)
 
-Q1 overflow policy is now explicitly fixture-backed and documented as a Phase-0
+Fan-in overflow policy is now explicitly fixture-backed and documented as a Phase-0
 spec (no runtime behavior change in this task):
 
 - Primary face capacity:

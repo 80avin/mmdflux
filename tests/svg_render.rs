@@ -143,7 +143,7 @@ fn distance_point_to_svg_path(point: (f64, f64), path: &[(f64, f64)]) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
-fn q3_svg_label_drift_failures(
+fn svg_label_drift_failures(
     svg: &str,
     diagram: &mmdflux::Diagram,
     max_distance: f64,
@@ -485,7 +485,7 @@ fn has_primary_axis_backtrack(points: &[(f64, f64)], direction: mmdflux::Directi
 }
 
 #[derive(Debug)]
-struct Q5SvgStyleMonitorReport {
+struct SvgStyleMonitorReport {
     scanned_styled_paths: usize,
     violations: Vec<String>,
     summary_line: String,
@@ -502,10 +502,10 @@ fn min_svg_segment_len(points: &[(f64, f64)]) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
-fn q5_style_segment_monitor_report_for_svg(
+fn style_segment_monitor_report_for_svg(
     fixtures: &[&str],
     min_segment_threshold: f64,
-) -> Q5SvgStyleMonitorReport {
+) -> SvgStyleMonitorReport {
     let mut scanned_styled_paths = 0usize;
     let mut violations = Vec::new();
 
@@ -515,10 +515,7 @@ fn q5_style_segment_monitor_report_for_svg(
         options.svg.edge_path_style = SvgEdgePathStyle::Linear;
         options.routing_mode = Some(RoutingMode::UnifiedPreview);
         options.path_detail = PathDetail::Full;
-        options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-            q5_style_min_segment: true,
-            ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
-        };
+        options.routing_policies = mmdflux::diagram::RoutingPolicyToggles::all_enabled();
         let svg = render_svg(&diagram, &options);
 
         for line in svg.lines().map(str::trim) {
@@ -555,10 +552,10 @@ fn q5_style_segment_monitor_report_for_svg(
         }
     }
 
-    Q5SvgStyleMonitorReport {
+    SvgStyleMonitorReport {
         scanned_styled_paths,
         summary_line: format!(
-            "q5_monitor_svg scanned={} violations={} threshold={:.2}",
+            "style_monitor_svg scanned={} violations={} threshold={:.2}",
             scanned_styled_paths,
             violations.len(),
             min_segment_threshold
@@ -841,7 +838,7 @@ fn routed_svg_defaults_to_full_path_detail() {
     }
 }
 
-const Q3_MAX_SVG_LABEL_DISTANCE_TO_ACTIVE_SEGMENT: f64 = 2.0;
+const SVG_LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT: f64 = 2.0;
 
 #[test]
 fn svg_orthogonal_unified_preview_labeled_edges_labels_remain_attached_to_active_segments() {
@@ -852,11 +849,14 @@ fn svg_orthogonal_unified_preview_labeled_edges_labels_remain_attached_to_active
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
-    let failures =
-        q3_svg_label_drift_failures(&svg, &diagram, Q3_MAX_SVG_LABEL_DISTANCE_TO_ACTIVE_SEGMENT);
+    let failures = svg_label_drift_failures(
+        &svg,
+        &diagram,
+        SVG_LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT,
+    );
     assert!(
         failures.is_empty(),
-        "Q3 regression: labeled_edges rendered off-path edge labels:\n{}",
+        "Label revalidation regression: labeled_edges rendered off-path edge labels:\n{}",
         failures.join("\n")
     );
 }
@@ -871,11 +871,14 @@ fn svg_orthogonal_unified_preview_inline_label_flowchart_labels_remain_attached_
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
-    let failures =
-        q3_svg_label_drift_failures(&svg, &diagram, Q3_MAX_SVG_LABEL_DISTANCE_TO_ACTIVE_SEGMENT);
+    let failures = svg_label_drift_failures(
+        &svg,
+        &diagram,
+        SVG_LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT,
+    );
     assert!(
         failures.is_empty(),
-        "Q3 regression: inline_label_flowchart rendered off-path edge labels:\n{}",
+        "Label revalidation regression: inline_label_flowchart rendered off-path edge labels:\n{}",
         failures.join("\n")
     );
 }
@@ -1695,16 +1698,16 @@ fn svg_orthogonal_unified_preview_label_spacing_keeps_td_departure_stems_from_so
 }
 
 #[test]
-fn svg_non_orth_unified_preview_q1_q2_conflict_keeps_backward_canonical_face() {
+fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_keeps_backward_canonical_face() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
         .join("flowchart")
-        .join("q1_q2_conflict.mmd");
+        .join("fan_in_backward_channel_conflict.mmd");
     let input = fs::read_to_string(&fixture).expect("fixture should load");
     let flowchart = parse_flowchart(&input).expect("fixture should parse");
     let diagram = build_diagram(&flowchart);
-    let edge_idx = edge_index(&diagram, "Q2", "B");
+    let edge_idx = edge_index(&diagram, "Loop", "B");
 
     let styles = [
         SvgEdgePathStyle::Linear,
@@ -1724,7 +1727,7 @@ fn svg_non_orth_unified_preview_q1_q2_conflict_keeps_backward_canonical_face() {
             Some(rect) => rect,
             None => {
                 let parsed = node_rect_for_label(&svg, "Target")
-                    .expect("expected target rect for q1_q2_conflict fixture");
+                    .expect("expected target rect for fan_in_backward_channel_conflict fixture");
                 rect = Some(parsed);
                 parsed
             }
@@ -1740,15 +1743,16 @@ fn svg_non_orth_unified_preview_q1_q2_conflict_keeps_backward_canonical_face() {
 
         assert_eq!(
             end_face, "bottom",
-            "Q2-conflict edge should follow TD parity target entry (bottom face) for {style:?}: end={end:?}, rect={rect:?}, points={points:?}"
+            "Loop-conflict edge should follow TD parity target entry (bottom face) for {style:?}: end={end:?}, rect={rect:?}, points={points:?}"
         );
     }
 }
 
 #[test]
-fn svg_basis_unified_preview_q1_q2_conflict_avoids_tiny_terminal_hook_before_arrow() {
-    let diagram = load_flowchart_fixture_diagram("q1_q2_conflict.mmd");
-    let edge_idx = edge_index(&diagram, "Q2", "B");
+fn svg_basis_unified_preview_fan_in_backward_channel_conflict_avoids_tiny_terminal_hook_before_arrow()
+ {
+    let diagram = load_flowchart_fixture_diagram("fan_in_backward_channel_conflict.mmd");
+    let edge_idx = edge_index(&diagram, "Loop", "B");
 
     let mut options = RenderOptions::default_svg();
     options.svg.edge_path_style = SvgEdgePathStyle::Basis;
@@ -1759,7 +1763,7 @@ fn svg_basis_unified_preview_q1_q2_conflict_avoids_tiny_terminal_hook_before_arr
 
     assert!(
         points.len() >= 3,
-        "q1_q2_conflict backward edge should keep at least one terminal support segment in basis mode: points={points:?}"
+        "fan_in_backward_channel_conflict backward edge should keep at least one terminal support segment in basis mode: points={points:?}"
     );
 
     let terminal = manhattan_segment_len(points[points.len() - 2], points[points.len() - 1]);
@@ -1771,9 +1775,9 @@ fn svg_basis_unified_preview_q1_q2_conflict_avoids_tiny_terminal_hook_before_arr
 }
 
 #[test]
-fn svg_non_orth_unified_preview_q1_q2_conflict_preserves_lower_terminal_lane() {
-    let diagram = load_flowchart_fixture_diagram("q1_q2_conflict.mmd");
-    let edge_idx = edge_index(&diagram, "Q2", "B");
+fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_preserves_lower_terminal_lane() {
+    let diagram = load_flowchart_fixture_diagram("fan_in_backward_channel_conflict.mmd");
+    let edge_idx = edge_index(&diagram, "Loop", "B");
     let styles = [
         SvgEdgePathStyle::Linear,
         SvgEdgePathStyle::Rounded,
@@ -1791,7 +1795,7 @@ fn svg_non_orth_unified_preview_q1_q2_conflict_preserves_lower_terminal_lane() {
             Some(rect) => rect,
             None => {
                 let parsed = node_rect_for_label(&svg, "Target")
-                    .expect("expected target rect for q1_q2_conflict fixture");
+                    .expect("expected target rect for fan_in_backward_channel_conflict fixture");
                 rect = Some(parsed);
                 parsed
             }
@@ -1800,19 +1804,20 @@ fn svg_non_orth_unified_preview_q1_q2_conflict_preserves_lower_terminal_lane() {
         let end = points
             .last()
             .copied()
-            .expect("q1_q2_conflict backward edge should have path points");
+            .expect("fan_in_backward_channel_conflict backward edge should have path points");
 
         assert!(
             end.1 >= ty + th - 2.0,
-            "Q2-conflict non-orth terminal lane should stay near lower right-face channel for {style:?}: end={end:?}, target_rect_y={ty}, target_rect_h={th}, points={points:?}"
+            "Loop-conflict non-orth terminal lane should stay near lower right-face channel for {style:?}: end={end:?}, target_rect_y={ty}, target_rect_h={th}, points={points:?}"
         );
     }
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_q1_q2_conflict_avoids_terminal_axis_backtrack() {
-    let diagram = load_flowchart_fixture_diagram("q1_q2_conflict.mmd");
-    let edge_idx = edge_index(&diagram, "Q2", "B");
+fn svg_orthogonal_unified_preview_fan_in_backward_channel_conflict_avoids_terminal_axis_backtrack()
+{
+    let diagram = load_flowchart_fixture_diagram("fan_in_backward_channel_conflict.mmd");
+    let edge_idx = edge_index(&diagram, "Loop", "B");
 
     let mut options = RenderOptions::default_svg();
     options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
@@ -1823,7 +1828,7 @@ fn svg_orthogonal_unified_preview_q1_q2_conflict_avoids_terminal_axis_backtrack(
 
     assert!(
         !has_immediate_axis_backtrack(&points),
-        "q1_q2_conflict orthogonal backward edge should not axis-backtrack near the terminal hook; points={points:?}"
+        "fan_in_backward_channel_conflict orthogonal backward edge should not axis-backtrack near the terminal hook; points={points:?}"
     );
 }
 
@@ -1916,22 +1921,22 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_preserves_routed_termin
 }
 
 #[test]
-fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
-    let q1_cases = [
+fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces() {
+    let fan_in_cases = [
         ("stacked_fan_in.mmd", "C", "Bot", 0usize),
         ("fan_in.mmd", "D", "Target", 0usize),
         ("five_fan_in.mmd", "F", "Target", 1usize),
     ];
 
-    for (fixture_name, target_id, target_label, min_side_faces) in q1_cases {
+    for (fixture_name, target_id, target_label, min_side_faces) in fan_in_cases {
         let diagram = load_flowchart_fixture_diagram(fixture_name);
         let mut options = RenderOptions::default_svg();
         options.svg.edge_path_style = SvgEdgePathStyle::Linear;
         options.routing_mode = Some(RoutingMode::UnifiedPreview);
         options.path_detail = PathDetail::Full;
         options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-            q1_overflow: true,
-            q4_rank_span_periphery: false,
+            fan_in_face_overflow: true,
+            long_skip_periphery_detour: false,
             ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
         };
 
@@ -1964,7 +1969,7 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
 
         assert_eq!(
             interior_or_corner_count, 0,
-            "fixture {fixture_name} should keep inbound endpoints on a concrete target face under Q1 policy"
+            "fixture {fixture_name} should keep inbound endpoints on a concrete target face under Fan-in overflow policy"
         );
         if min_side_faces == 0 {
             assert_eq!(
@@ -1974,12 +1979,12 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
         } else {
             assert!(
                 side_face_count >= min_side_faces,
-                "fixture {fixture_name} should spill overflow arrivals to side faces under Q1 policy: expected >= {min_side_faces}, actual={side_face_count}"
+                "fixture {fixture_name} should spill overflow arrivals to side faces under Fan-in overflow policy: expected >= {min_side_faces}, actual={side_face_count}"
             );
         }
     }
 
-    let q2_cases = [
+    let backward_channel_cases = [
         (
             "simple_cycle.mmd",
             "C",
@@ -1999,8 +2004,8 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
             "bottom",
         ),
         (
-            "q1_q2_conflict.mmd",
-            "Q2",
+            "fan_in_backward_channel_conflict.mmd",
+            "Loop",
             "B",
             "Sink",
             "Target",
@@ -2035,17 +2040,17 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
         target_label,
         expected_source_face,
         expected_target_face,
-    ) in q2_cases
+    ) in backward_channel_cases
     {
         let diagram = load_flowchart_fixture_diagram(fixture_name);
-        for (mode_label, q1_enabled) in [("q1-on", true), ("q1-off", false)] {
+        for (mode_label, overflow_enabled) in [("overflow-on", true), ("overflow-off", false)] {
             let mut options = RenderOptions::default_svg();
             options.svg.edge_path_style = SvgEdgePathStyle::Linear;
             options.routing_mode = Some(RoutingMode::UnifiedPreview);
             options.path_detail = PathDetail::Full;
             options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-                q1_overflow: q1_enabled,
-                q4_rank_span_periphery: false,
+                fan_in_face_overflow: overflow_enabled,
+                long_skip_periphery_detour: false,
                 ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
             };
 
@@ -2073,7 +2078,7 @@ fn svg_linear_q1_q2_interaction_fixture_matrix_matches_documented_faces() {
 }
 
 #[test]
-fn svg_linear_q4_rank_span_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
+fn svg_linear_long_skip_periphery_toggle_pushes_known_long_skip_edges_toward_periphery_lane() {
     let long_skip_cases = [
         ("double_skip.mmd", "A", "D"),
         ("skip_edge_collision.mmd", "A", "D"),
@@ -2083,20 +2088,20 @@ fn svg_linear_q4_rank_span_toggle_pushes_known_long_skip_edges_toward_periphery_
         let diagram = load_flowchart_fixture_diagram(fixture_name);
         let edge_idx = edge_index(&diagram, from, to);
 
-        let render_for_q4 = |q4_enabled: bool| {
+        let render_for_long_skip_policy = |long_skip_enabled: bool| {
             let mut options = RenderOptions::default_svg();
             options.svg.edge_path_style = SvgEdgePathStyle::Linear;
             options.routing_mode = Some(RoutingMode::UnifiedPreview);
             options.path_detail = PathDetail::Full;
             options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-                q4_rank_span_periphery: q4_enabled,
+                long_skip_periphery_detour: long_skip_enabled,
                 ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
             };
             render_svg(&diagram, &options)
         };
 
-        let off_svg = render_for_q4(false);
-        let on_svg = render_for_q4(true);
+        let off_svg = render_for_long_skip_policy(false);
+        let on_svg = render_for_long_skip_policy(true);
         let off_points = edge_path_for_svg_order(&diagram, &off_svg, edge_idx);
         let on_points = edge_path_for_svg_order(&diagram, &on_svg, edge_idx);
         let off_detour = horizontal_detour_from_endpoint_axis(&off_points);
@@ -2104,57 +2109,55 @@ fn svg_linear_q4_rank_span_toggle_pushes_known_long_skip_edges_toward_periphery_
 
         assert!(
             on_detour > off_detour + 0.5,
-            "Q4 rank-span policy should increase SVG long-skip periphery detour for {fixture_name} edge {from}->{to}: detour_off={off_detour}, detour_on={on_detour}, off_points={off_points:?}, on_points={on_points:?}"
+            "Long-skip periphery policy should increase SVG long-skip periphery detour for {fixture_name} edge {from}->{to}: detour_off={off_detour}, detour_on={on_detour}, off_points={off_points:?}, on_points={on_points:?}"
         );
     }
 }
 
 #[test]
-fn svg_linear_q4_rank_span_toggle_keeps_short_inline_edge_stable() {
+fn svg_linear_long_skip_periphery_toggle_keeps_short_inline_edge_stable() {
     let fixture_name = "inline_label_flowchart.mmd";
     let diagram = load_flowchart_fixture_diagram(fixture_name);
     let edge_idx = edge_index(&diagram, "start", "ingest");
 
-    let render_for_q4 = |q4_enabled: bool| {
+    let render_for_long_skip_policy = |long_skip_enabled: bool| {
         let mut options = RenderOptions::default_svg();
         options.svg.edge_path_style = SvgEdgePathStyle::Linear;
         options.routing_mode = Some(RoutingMode::UnifiedPreview);
         options.path_detail = PathDetail::Full;
         options.routing_policies = mmdflux::diagram::RoutingPolicyToggles {
-            q4_rank_span_periphery: q4_enabled,
+            long_skip_periphery_detour: long_skip_enabled,
             ..mmdflux::diagram::RoutingPolicyToggles::all_enabled()
         };
         render_svg(&diagram, &options)
     };
 
-    let off_svg = render_for_q4(false);
-    let on_svg = render_for_q4(true);
+    let off_svg = render_for_long_skip_policy(false);
+    let on_svg = render_for_long_skip_policy(true);
     let off_points = edge_path_for_svg_order(&diagram, &off_svg, edge_idx);
     let on_points = edge_path_for_svg_order(&diagram, &on_svg, edge_idx);
 
     assert_eq!(
         on_points, off_points,
-        "Q4 rank-span toggle should not perturb short edge start->ingest in {fixture_name}; off_points={off_points:?}, on_points={on_points:?}"
+        "Long-skip periphery toggle should not perturb short edge start->ingest in {fixture_name}; off_points={off_points:?}, on_points={on_points:?}"
     );
 }
 
 #[test]
-fn q5_styled_segment_monitor_reports_actionable_summary_for_svg() {
-    let report = q5_style_segment_monitor_report_for_svg(
-        &["edge_styles.mmd", "inline_edge_labels.mmd"],
-        12.0,
-    );
+fn style_segment_monitor_reports_actionable_summary_for_svg() {
+    let report =
+        style_segment_monitor_report_for_svg(&["edge_styles.mmd", "inline_edge_labels.mmd"], 12.0);
     assert!(
         report.scanned_styled_paths > 0,
-        "Q5 SVG monitor should scan at least one styled path; report={report:?}"
+        "style monitor should scan at least one styled path; report={report:?}"
     );
     assert!(
         !report.summary_line.is_empty(),
-        "Q5 SVG monitor should emit a stable summary line for CI parsing"
+        "style monitor should emit a stable summary line for CI parsing"
     );
     assert!(
         report.violations.is_empty(),
-        "Q5 SVG monitor detected styled-segment violations: {:#?}",
+        "style monitor detected styled-segment violations: {:#?}",
         report
     );
 }
