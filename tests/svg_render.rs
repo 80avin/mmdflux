@@ -2658,3 +2658,15 @@ fn mmds_svg_diamond_endpoint_convergence_diamond_fan_out() {
         assert_mmds_svg_endpoint_convergence(&diagram, "A", to, tolerance);
     }
 }
+
+#[test]
+fn mmds_svg_hexagon_endpoint_convergence_hexagon_flow() {
+    let diagram = load_flowchart_fixture_diagram("hexagon_flow.mmd");
+    let tolerance = 5.0;
+    // Fan-out from hexagon A
+    for to in ["B", "D"] {
+        assert_mmds_svg_endpoint_convergence(&diagram, "A", to, tolerance);
+    }
+    // Fan-in to hexagon A
+    assert_mmds_svg_endpoint_convergence(&diagram, "C", "A", tolerance);
+}

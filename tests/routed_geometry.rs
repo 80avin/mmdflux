@@ -2788,3 +2788,78 @@ fn diamond_fan_out_source_endpoints_spread() {
         "diamond fan-out source endpoints should spread, got: {source_xs:?}"
     );
 }
+
+#[test]
+fn hexagon_flow_target_lands_on_flat_top_edge() {
+    let (diagram, geom) = layout_fixture_svg("hexagon_flow.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let a_rect = geom.nodes.get("A").unwrap().rect;
+    let indent = a_rect.width * 0.2;
+
+    // C->A: target endpoint should be on hexagon's flat top edge
+    let edge = routed
+        .edges
+        .iter()
+        .find(|e| e.from == "C" && e.to == "A")
+        .unwrap_or_else(|| panic!("missing edge C->A"));
+    let end = *edge.path.last().unwrap();
+
+    // Flat top edge: y = a_rect.y, x in [a_rect.x + indent, a_rect.x + width - indent]
+    assert!(
+        (end.y - a_rect.y).abs() < 1.0,
+        "target should land on flat top edge, got y={}, expected y={}",
+        end.y,
+        a_rect.y
+    );
+    assert!(
+        end.x >= a_rect.x + indent - 1.0 && end.x <= a_rect.x + a_rect.width - indent + 1.0,
+        "target x should be within flat top edge [{}, {}], got x={}",
+        a_rect.x + indent,
+        a_rect.x + a_rect.width - indent,
+        end.x
+    );
+}
+
+#[test]
+fn hexagon_flow_sources_on_flat_bottom_edge() {
+    let (diagram, geom) = layout_fixture_svg("hexagon_flow.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let a_rect = geom.nodes.get("A").unwrap().rect;
+    let indent = a_rect.width * 0.2;
+    let bottom_y = a_rect.y + a_rect.height;
+
+    // A->B and A->D: source endpoints on hexagon's flat bottom edge
+    let mut source_xs = Vec::new();
+    for to in ["B", "D"] {
+        let edge = routed
+            .edges
+            .iter()
+            .find(|e| e.from == "A" && e.to == to)
+            .unwrap_or_else(|| panic!("missing edge A->{to}"));
+        let start = edge.path[0];
+
+        assert!(
+            (start.y - bottom_y).abs() < 1.0,
+            "A->{to} source should land on flat bottom edge, got y={}, expected y={}",
+            start.y,
+            bottom_y
+        );
+        assert!(
+            start.x >= a_rect.x + indent - 1.0 && start.x <= a_rect.x + a_rect.width - indent + 1.0,
+            "A->{to} source x should be within flat bottom edge [{}, {}], got x={}",
+            a_rect.x + indent,
+            a_rect.x + a_rect.width - indent,
+            start.x
+        );
+        source_xs.push((to.to_string(), start.x));
+    }
+
+    // Sources should not all collapse to the same x
+    if source_xs.len() >= 2 {
+        let all_same = source_xs.windows(2).all(|w| (w[0].1 - w[1].1).abs() < 0.5);
+        assert!(
+            !all_same,
+            "hexagon fan-out source endpoints should spread, got: {source_xs:?}"
+        );
+    }
+}
