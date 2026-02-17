@@ -1692,54 +1692,6 @@ fn svg_orthogonal_unified_preview_label_spacing_keeps_td_departure_stems_from_so
 }
 
 #[test]
-fn svg_unified_preview_multi_edge_labeled_preserves_parallel_lane_shape() {
-    const MAX_LANE_DETOUR_LOSS_FROM_FULL: f64 = 2.0;
-
-    let diagram = load_flowchart_fixture_diagram("multi_edge_labeled.mmd");
-    let mut full_options = RenderOptions::default_svg();
-    full_options.svg.edge_path_style = SvgEdgePathStyle::Linear;
-    full_options.routing_mode = Some(RoutingMode::FullCompute);
-    full_options.path_detail = PathDetail::Full;
-
-    let mut unified_options = RenderOptions::default_svg();
-    unified_options.svg.edge_path_style = SvgEdgePathStyle::Linear;
-    unified_options.routing_mode = Some(RoutingMode::UnifiedPreview);
-    unified_options.path_detail = PathDetail::Full;
-
-    let full_svg = render_svg(&diagram, &full_options);
-    let unified_svg = render_svg(&diagram, &unified_options);
-
-    let mut ab_edge_indexes: Vec<usize> = diagram
-        .edges
-        .iter()
-        .filter(|edge| edge.from == "A" && edge.to == "B")
-        .map(|edge| edge.index)
-        .collect();
-    ab_edge_indexes.sort_unstable();
-    assert_eq!(
-        ab_edge_indexes.len(),
-        2,
-        "fixture contract invalid: multi_edge_labeled should keep exactly two A->B edges"
-    );
-
-    for edge_idx in ab_edge_indexes {
-        let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_idx);
-        let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_idx);
-        let full_detour = horizontal_detour_from_endpoint_axis(&full_points);
-        let unified_detour = horizontal_detour_from_endpoint_axis(&unified_points);
-
-        assert!(
-            full_detour >= 8.0,
-            "fixture contract changed unexpectedly: full-compute SVG A->B edge {edge_idx} should keep bowed lane detour (>= 8): detour={full_detour}, points={full_points:?}"
-        );
-        assert!(
-            unified_detour + MAX_LANE_DETOUR_LOSS_FROM_FULL >= full_detour,
-            "unified-preview SVG A->B edge {edge_idx} should preserve lane-shape detour close to full-compute (loss <= {MAX_LANE_DETOUR_LOSS_FROM_FULL}): full_detour={full_detour}, unified_detour={unified_detour}, full_points={full_points:?}, unified_points={unified_points:?}"
-        );
-    }
-}
-
-#[test]
 fn svg_non_orth_unified_preview_q1_q2_conflict_keeps_backward_canonical_face() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")

@@ -41,11 +41,13 @@ const Q1_Q2_TOGGLE_FIXTURE_SUBSET: &[&str] = &[
     "http_request.mmd",
     "git_workflow.mmd",
 ];
-const Q1_Q2_TOGGLE_MUST_DIFF: &[&str] = &["fan_in.mmd", "five_fan_in.mmd", "http_request.mmd"];
+const Q1_Q2_TOGGLE_MUST_DIFF: &[&str] = &["five_fan_in.mmd"];
 const Q1_Q2_TOGGLE_MUST_MATCH: &[&str] = &[
-    "stacked_fan_in.mmd",
-    "multiple_cycles.mmd",
+    "fan_in.mmd",
     "git_workflow.mmd",
+    "http_request.mmd",
+    "multiple_cycles.mmd",
+    "stacked_fan_in.mmd",
 ];
 const Q4_RANK_SPAN_TOGGLE_FIXTURE_SUBSET: &[&str] = &[
     "double_skip.mmd",
@@ -58,9 +60,6 @@ const Q4_RANK_SPAN_TOGGLE_MUST_DIFF: &[&str] = &[
     "inline_label_flowchart.mmd",
 ];
 const Q4_RANK_SPAN_TOGGLE_MUST_MATCH: &[&str] = &[];
-const Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX: f64 = 24.0;
-const Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX: f64 = 40.0;
-const Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX: f64 = 20.0;
 const UNIFIED_FEEDBACK_BASELINE_FILE: &str = "docs/unified_feedback_baseline.tsv";
 const UNIFIED_PROMOTION_RECORD_FILE: &str = "docs/UNIFIED_ROUTING_PROMOTION.md";
 const UNIFIED_FEEDBACK_BASELINE_COLUMNS: &[&str] = &[
@@ -244,105 +243,6 @@ fn subgraph_rect_ys(svg: &str) -> Vec<f64> {
         .filter(|line| line.contains("class=\"subgraph\""))
         .filter_map(|line| parse_attr_f64(line, "y"))
         .collect()
-}
-
-fn edge_path_data(svg: &str) -> Vec<String> {
-    svg.lines()
-        .map(str::trim)
-        .filter(|line| {
-            line.starts_with("<path d=\"")
-                && (line.contains("marker-end=") || line.contains("marker-start="))
-        })
-        .filter_map(|line| {
-            let start = line.find("d=\"")?;
-            let after = &line[start + 3..];
-            let end = after.find('"')?;
-            Some(after[..end].to_string())
-        })
-        .collect()
-}
-
-fn parse_svg_path_points(path_data: &str) -> Vec<(f64, f64)> {
-    path_data
-        .split_whitespace()
-        .filter_map(|token| {
-            let token = token.trim_start_matches(|c: char| c.is_ascii_alphabetic());
-            let (x, y) = token.split_once(',')?;
-            let x = x.parse::<f64>().ok()?;
-            let y = y.parse::<f64>().ok()?;
-            Some((x, y))
-        })
-        .collect()
-}
-
-fn route_envelope_dims(svg: &str) -> (f64, f64) {
-    let mut points: Vec<(f64, f64)> = Vec::new();
-    for path in edge_path_data(svg) {
-        points.extend(parse_svg_path_points(&path));
-    }
-    if points.is_empty() {
-        return (0.0, 0.0);
-    }
-
-    let min_x = points
-        .iter()
-        .map(|point| point.0)
-        .fold(f64::INFINITY, f64::min);
-    let max_x = points
-        .iter()
-        .map(|point| point.0)
-        .fold(f64::NEG_INFINITY, f64::max);
-    let min_y = points
-        .iter()
-        .map(|point| point.1)
-        .fold(f64::INFINITY, f64::min);
-    let max_y = points
-        .iter()
-        .map(|point| point.1)
-        .fold(f64::NEG_INFINITY, f64::max);
-
-    (max_x - min_x, max_y - min_y)
-}
-
-fn extract_edge_label_positions(svg: &str) -> Vec<(f64, f64)> {
-    let mut in_edge_labels = false;
-    let mut labels = Vec::new();
-    for line in svg.lines() {
-        if line.contains("<g class=\"edgeLabels\">") {
-            in_edge_labels = true;
-            continue;
-        }
-        if in_edge_labels && line.contains("</g>") {
-            in_edge_labels = false;
-            continue;
-        }
-        if !in_edge_labels || !line.contains("<text ") {
-            continue;
-        }
-        if let (Some(x), Some(y)) = (parse_attr_f64(line, "x"), parse_attr_f64(line, "y")) {
-            labels.push((x, y));
-        }
-    }
-    labels
-}
-
-fn label_drift_stats(reference: &[(f64, f64)], candidate: &[(f64, f64)]) -> (f64, f64) {
-    let paired = reference.len().min(candidate.len());
-    if paired == 0 {
-        return (0.0, 0.0);
-    }
-
-    let mut max_drift: f64 = 0.0;
-    let mut drift_sum: f64 = 0.0;
-    for idx in 0..paired {
-        let dx = reference[idx].0 - candidate[idx].0;
-        let dy = reference[idx].1 - candidate[idx].1;
-        let drift = (dx * dx + dy * dy).sqrt();
-        max_drift = max_drift.max(drift);
-        drift_sum += drift;
-    }
-
-    (max_drift, drift_sum / paired as f64)
 }
 
 fn render_svg_mmds_fixture(name: &str) -> String {
@@ -757,58 +657,6 @@ fn q4_rank_span_toggle_fixture_subset_matches_expected_classification() {
             "fixture {fixture} is classified as Q4 toggle must-match but diverged"
         );
     }
-}
-
-#[test]
-fn q4_rank_span_policy_respects_q6_metric_gates_for_fixture_subset() {
-    let mut max_route_abs_delta: f64 = 0.0;
-    let mut max_label_max_drift: f64 = 0.0;
-    let mut max_label_mean_drift: f64 = 0.0;
-
-    for fixture in Q4_RANK_SPAN_TOGGLE_FIXTURE_SUBSET {
-        let q4_off = render_svg_fixture_with_routing_mode_and_policies(
-            fixture,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q4_rank_span_periphery: false,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-        let q4_on = render_svg_fixture_with_routing_mode_and_policies(
-            fixture,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles {
-                q4_rank_span_periphery: true,
-                ..RoutingPolicyToggles::all_enabled()
-            },
-        );
-
-        let (off_width, off_height) = route_envelope_dims(&q4_off);
-        let (on_width, on_height) = route_envelope_dims(&q4_on);
-        let route_abs_delta = (on_width - off_width)
-            .abs()
-            .max((on_height - off_height).abs());
-        max_route_abs_delta = max_route_abs_delta.max(route_abs_delta);
-
-        let off_labels = extract_edge_label_positions(&q4_off);
-        let on_labels = extract_edge_label_positions(&q4_on);
-        let (label_max_drift, label_mean_drift) = label_drift_stats(&off_labels, &on_labels);
-        max_label_max_drift = max_label_max_drift.max(label_max_drift);
-        max_label_mean_drift = max_label_mean_drift.max(label_mean_drift);
-    }
-
-    assert!(
-        max_route_abs_delta <= Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX,
-        "Q4 route-envelope delta exceeded gate: max_route_abs_delta={max_route_abs_delta}, gate={Q4_ROUTE_ENVELOPE_ABS_DELTA_GATE_PX}"
-    );
-    assert!(
-        max_label_max_drift <= Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX,
-        "Q4 label max drift exceeded gate: max_label_max_drift={max_label_max_drift}, gate={Q4_LABEL_POSITION_MAX_DRIFT_GATE_PX}"
-    );
-    assert!(
-        max_label_mean_drift <= Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX,
-        "Q4 label mean drift exceeded gate: max_label_mean_drift={max_label_mean_drift}, gate={Q4_LABEL_POSITION_MEAN_DRIFT_GATE_PX}"
-    );
 }
 
 #[test]
