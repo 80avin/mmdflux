@@ -628,6 +628,25 @@ fn edge_path_for_svg_order(
     )
 }
 
+fn edge_path_d_for_svg_order(diagram: &mmdflux::Diagram, svg: &str, edge_index: usize) -> String {
+    let mut visible_edge_indexes: Vec<usize> = diagram
+        .edges
+        .iter()
+        .filter(|edge| edge.stroke != Stroke::Invisible)
+        .map(|edge| edge.index)
+        .collect();
+    visible_edge_indexes.sort_unstable();
+
+    let svg_position = visible_edge_indexes
+        .iter()
+        .position(|idx| *idx == edge_index)
+        .expect("edge index should be visible in SVG");
+    edge_path_data(svg)
+        .get(svg_position)
+        .expect("edge path should exist at visible edge position")
+        .to_string()
+}
+
 fn load_flowchart_fixture_diagram(name: &str) -> mmdflux::Diagram {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -1538,25 +1557,68 @@ fn svg_linear_unified_preview_ci_pipeline_diamond_exits_avoid_extra_elbow_jogs()
 }
 
 #[test]
-fn svg_unified_preview_backward_edges_use_orthogonal_shape_in_non_orth_styles() {
+fn svg_unified_preview_backward_edges_preserve_selected_non_orth_style() {
     let diagram = load_flowchart_fixture_diagram("simple_cycle.mmd");
     let edge_idx = edge_index(&diagram, "C", "A");
 
-    let orth_svg = render_fixture_svg(
+    let basis_svg = render_fixture_svg(
         &diagram,
         RoutingMode::UnifiedPreview,
-        SvgEdgePathStyle::Orthogonal,
+        SvgEdgePathStyle::Basis,
     );
-    let orth_points = edge_path_for_svg_order(&diagram, &orth_svg, edge_idx);
+    let basis_d = edge_path_d_for_svg_order(&diagram, &basis_svg, edge_idx);
+    assert!(
+        basis_d.contains('C'),
+        "simple_cycle C->A backward edge should use basis-style cubic segments in unified preview: d={basis_d}"
+    );
 
-    for style in [SvgEdgePathStyle::Linear, SvgEdgePathStyle::Rounded] {
-        let svg = render_fixture_svg(&diagram, RoutingMode::UnifiedPreview, style);
-        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
-        assert_eq!(
-            points, orth_points,
-            "simple_cycle C->A backward edge should currently match orthogonal path shape in unified preview for style {style:?}; expected={orth_points:?}, actual={points:?}"
-        );
-    }
+    let rounded_svg = render_fixture_svg(
+        &diagram,
+        RoutingMode::UnifiedPreview,
+        SvgEdgePathStyle::Rounded,
+    );
+    let rounded_d = edge_path_d_for_svg_order(&diagram, &rounded_svg, edge_idx);
+    assert!(
+        rounded_d.contains('Q'),
+        "simple_cycle C->A backward edge should use rounded corner commands in unified preview: d={rounded_d}"
+    );
+    let rounded_points = edge_path_for_svg_order(&diagram, &rounded_svg, edge_idx);
+    assert!(
+        rounded_points.len() >= 2,
+        "simple_cycle C->A backward edge should expose at least two rounded points: {rounded_points:?}"
+    );
+    let rounded_prev = rounded_points[rounded_points.len() - 2];
+    let rounded_end = rounded_points[rounded_points.len() - 1];
+    let rounded_dx = (rounded_end.0 - rounded_prev.0).abs();
+    let rounded_dy = (rounded_end.1 - rounded_prev.1).abs();
+    assert!(
+        rounded_dx <= 0.5 || rounded_dy <= 0.5,
+        "simple_cycle C->A rounded backward terminal approach should stay axis-aligned (no diagonal terminal tail): prev={rounded_prev:?}, end={rounded_end:?}, d={rounded_d}"
+    );
+
+    let linear_svg = render_fixture_svg(
+        &diagram,
+        RoutingMode::UnifiedPreview,
+        SvgEdgePathStyle::Linear,
+    );
+    let linear_d = edge_path_d_for_svg_order(&diagram, &linear_svg, edge_idx);
+    assert!(
+        !linear_d.contains('Q') && !linear_d.contains('C'),
+        "simple_cycle C->A backward edge should remain polyline in linear mode: d={linear_d}"
+    );
+    let linear_points = edge_path_for_svg_order(&diagram, &linear_svg, edge_idx);
+    assert!(
+        linear_points.len() >= 2,
+        "simple_cycle C->A backward edge should expose at least two linear points: {linear_points:?}"
+    );
+    let linear_prev = linear_points[linear_points.len() - 2];
+    let linear_end = linear_points[linear_points.len() - 1];
+    let linear_dx = (linear_end.0 - linear_prev.0).abs();
+    let linear_dy = (linear_end.1 - linear_prev.1).abs();
+    assert!(
+        linear_dx <= 0.5 || linear_dy <= 0.5,
+        "simple_cycle C->A linear backward terminal approach should stay axis-aligned (no diagonal terminal tail): prev={linear_prev:?}, end={linear_end:?}, d={linear_d}"
+    );
 }
 
 #[test]

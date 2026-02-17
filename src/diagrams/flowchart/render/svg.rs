@@ -847,14 +847,14 @@ fn render_edges(
             diagram.direction
         };
         let is_backward = geom.reversed_edges.contains(&index);
-        let effective_edge_path_style = if matches!(routing_mode, RoutingMode::UnifiedPreview)
-            && is_backward
-            && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
-        {
-            SvgEdgePathStyle::Orthogonal
-        } else {
-            edge_path_style
-        };
+        let preserve_orthogonal_endpoint_contract = matches!(
+            (routing_mode, is_backward, edge_path_style),
+            (
+                RoutingMode::UnifiedPreview,
+                true,
+                SvgEdgePathStyle::Basis | SvgEdgePathStyle::Linear | SvgEdgePathStyle::Rounded
+            )
+        );
         // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
         // edges whose endpoints already land on the subgraph border).
         if !rerouted_edges.contains(&index) {
@@ -891,14 +891,16 @@ fn render_edges(
         };
         // Only densify corners for linear edges; basis and rounded
         // handle smoothing natively from sparse waypoints.
-        if matches!(effective_edge_path_style, SvgEdgePathStyle::Linear) {
+        if matches!(edge_path_style, SvgEdgePathStyle::Linear)
+            && !preserve_orthogonal_endpoint_contract
+        {
             points = fix_corner_points(&points);
         }
-        let allow_interior_nudges = !matches!(effective_edge_path_style, SvgEdgePathStyle::Linear)
+        let allow_interior_nudges = !matches!(edge_path_style, SvgEdgePathStyle::Linear)
             && !(matches!(routing_mode, RoutingMode::UnifiedPreview)
                 && edge_touches_diamond_endpoint(diagram, geom, edge));
         let enforce_primary_axis_no_backtrack = matches!(routing_mode, RoutingMode::UnifiedPreview)
-            && !matches!(effective_edge_path_style, SvgEdgePathStyle::Orthogonal)
+            && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
             && !is_backward
             && edge.from != edge.to;
         points = apply_marker_offsets(
@@ -908,27 +910,26 @@ fn render_edges(
             is_backward,
             allow_interior_nudges,
             enforce_primary_axis_no_backtrack,
-            matches!(effective_edge_path_style, SvgEdgePathStyle::Orthogonal),
+            matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
+                || preserve_orthogonal_endpoint_contract,
         );
         if matches!(routing_mode, RoutingMode::UnifiedPreview)
-            && !matches!(effective_edge_path_style, SvgEdgePathStyle::Orthogonal)
+            && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
+            && !preserve_orthogonal_endpoint_contract
             && edge.from != edge.to
             && edge_touches_diamond_endpoint(diagram, geom, edge)
         {
             points = collapse_tiny_linear_smoothing_jogs(&points, 30.0);
         }
-        let rendered_points = points_for_svg_path(
-            &points,
-            diagram.direction,
-            effective_edge_path_style,
-            path_detail,
-        );
-        let d = path_from_prepared_points(
-            &rendered_points,
-            scale,
-            effective_edge_path_style,
-            edge_path_radius,
-        );
+        let point_prep_style = if preserve_orthogonal_endpoint_contract {
+            SvgEdgePathStyle::Orthogonal
+        } else {
+            edge_path_style
+        };
+        let rendered_points =
+            points_for_svg_path(&points, diagram.direction, point_prep_style, path_detail);
+        let d =
+            path_from_prepared_points(&rendered_points, scale, edge_path_style, edge_path_radius);
         if d.is_empty() {
             continue;
         }
