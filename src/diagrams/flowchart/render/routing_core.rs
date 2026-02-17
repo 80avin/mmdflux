@@ -887,6 +887,9 @@ fn segment_sign(delta: f64) -> i8 {
 ///
 /// This is the single source of truth for endpoint geometry used by both the
 /// unified router and SVG renderer.
+///
+/// Coordinate convention: `FRect` uses top-left origin `(rect.x, rect.y)`
+/// with `width`/`height` extending right and down, matching SVG's `dagre::Rect`.
 pub(crate) fn intersect_shape_boundary_float(
     rect: FRect,
     shape: Shape,
@@ -1025,6 +1028,63 @@ mod tests {
         let approach = FPoint::new(35.0, 35.0); // bottom-right diagonal
         let result = intersect_shape_boundary_float(rect, Shape::Diamond, approach);
         assert_on_diamond_boundary(result, rect, 0.001);
+    }
+
+    #[test]
+    fn diamond_intersection_on_boundary_at_all_cardinal_angles() {
+        let rect = FRect::new(50.0, 30.0, 40.0, 40.0); // center (70, 50)
+        let center = FPoint::new(70.0, 50.0);
+        let angles = [0.0_f64, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0];
+        let radius = 100.0;
+        for angle_deg in angles {
+            let angle = angle_deg.to_radians();
+            let approach = FPoint::new(
+                center.x + radius * angle.cos(),
+                center.y + radius * angle.sin(),
+            );
+            let result = intersect_shape_boundary_float(rect, Shape::Diamond, approach);
+            assert_on_diamond_boundary(result, rect, 1e-6);
+        }
+    }
+
+    #[test]
+    fn diamond_vertices_match_svg_polygon() {
+        let rect = FRect::new(50.0, 30.0, 40.0, 40.0);
+        let verts = diamond_vertices(rect);
+        // SVG polygon: (cx, y), (x+w, cy), (cx, y+h), (x, cy)
+        let cx = 70.0;
+        let cy = 50.0;
+        assert!((verts[0].x - cx).abs() < 1e-6 && (verts[0].y - 30.0).abs() < 1e-6); // top
+        assert!((verts[1].x - 90.0).abs() < 1e-6 && (verts[1].y - cy).abs() < 1e-6); // right
+        assert!((verts[2].x - cx).abs() < 1e-6 && (verts[2].y - 70.0).abs() < 1e-6); // bottom
+        assert!((verts[3].x - 50.0).abs() < 1e-6 && (verts[3].y - cy).abs() < 1e-6); // left
+    }
+
+    #[test]
+    fn rect_intersection_on_boundary_at_all_cardinal_angles() {
+        let rect = FRect::new(50.0, 30.0, 40.0, 20.0); // center (70, 40)
+        let center = FPoint::new(70.0, 40.0);
+        let angles = [0.0_f64, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0];
+        let radius = 100.0;
+        for angle_deg in angles {
+            let angle = angle_deg.to_radians();
+            let approach = FPoint::new(
+                center.x + radius * angle.cos(),
+                center.y + radius * angle.sin(),
+            );
+            let result = intersect_shape_boundary_float(rect, Shape::Rectangle, approach);
+            // Point must be on the rect boundary (within epsilon of an edge)
+            let on_left = (result.x - rect.x).abs() < 1e-6;
+            let on_right = (result.x - (rect.x + rect.width)).abs() < 1e-6;
+            let on_top = (result.y - rect.y).abs() < 1e-6;
+            let on_bottom = (result.y - (rect.y + rect.height)).abs() < 1e-6;
+            assert!(
+                on_left || on_right || on_top || on_bottom,
+                "Result ({}, {}) at {angle_deg}° should be on rect boundary",
+                result.x,
+                result.y,
+            );
+        }
     }
 
     #[test]
