@@ -349,6 +349,12 @@ fn build_unified_path(
     if !is_backward
         && let Some(policy_face) = overflow_policy_target_face
         && policy_face != flow_target_face_for_direction(direction)
+        && endpoint_is_on_policy_face(
+            &finalized,
+            edge,
+            geometry,
+            map_face_to_rect_face(policy_face),
+        )
     {
         enforce_terminal_support_normal_to_face(&mut finalized, policy_face, 8.0);
         collapse_collinear_interior_points(&mut finalized);
@@ -3113,6 +3119,26 @@ fn flow_target_face_for_direction(direction: Direction) -> Face {
         Direction::LeftRight => Face::Left,
         Direction::RightLeft => Face::Right,
     }
+}
+
+fn endpoint_is_on_policy_face(
+    path: &[FPoint],
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    face: RectFace,
+) -> bool {
+    let Some(end) = path.last().copied() else {
+        return false;
+    };
+    let Some((target_rect, _)) =
+        endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+    else {
+        return false;
+    };
+
+    boundary_face_excluding_corners(end, target_rect, 0.5)
+        .or_else(|| boundary_face_including_corners(end, target_rect, 0.5))
+        == Some(face)
 }
 
 fn enforce_terminal_support_normal_to_face(path: &mut Vec<FPoint>, face: Face, min_support: f64) {
