@@ -326,6 +326,8 @@ fn build_unified_path(
             geometry,
         );
         collapse_tiny_backward_terminal_staircase(&mut finalized, direction, 8.0);
+        let collapsed_terminal_intrusion =
+            collapse_backward_terminal_node_intrusion(&mut finalized, edge, geometry, direction);
         enforce_backward_terminal_corner_inset(&mut finalized, edge, geometry);
         let canonical_terminal_face =
             backward_target_face_override.unwrap_or_else(|| q2_backward_channel_face(direction));
@@ -339,7 +341,9 @@ fn build_unified_path(
                 target_rect,
             );
         }
-        if matches!(direction, Direction::LeftRight | Direction::RightLeft) {
+        if matches!(direction, Direction::LeftRight | Direction::RightLeft)
+            && !collapsed_terminal_intrusion
+        {
             collapse_collinear_interior_points(&mut finalized);
         }
         // Backward edge processing (tangent direction, lane clearance, corner inset)
@@ -1838,6 +1842,111 @@ fn collapse_tiny_backward_terminal_staircase(
             idx += 1;
         }
     }
+}
+
+fn collapse_backward_terminal_node_intrusion(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+) -> bool {
+    const EPS: f64 = 0.000_001;
+    const INTRUSION_MARGIN: f64 = 1.0;
+    if !matches!(direction, Direction::LeftRight | Direction::RightLeft) || path.len() < 4 {
+        return false;
+    }
+
+    let Some((target_rect, _)) =
+        endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+    else {
+        return false;
+    };
+
+    let left = target_rect.x + INTRUSION_MARGIN;
+    let right = target_rect.x + target_rect.width - INTRUSION_MARGIN;
+    let top = target_rect.y + INTRUSION_MARGIN;
+    let bottom = target_rect.y + target_rect.height - INTRUSION_MARGIN;
+    if left >= right || top >= bottom {
+        return false;
+    }
+
+    let canonical_face = q2_backward_channel_face(direction);
+    let point_is_intrusion =
+        |point: FPoint| point.x > left && point.x < right && point.y > top && point.y < bottom;
+    let point_is_clean_for_face = |point: FPoint| match canonical_face {
+        Face::Top => point.y <= top,
+        Face::Bottom => point.y >= bottom,
+        Face::Left => point.x <= left,
+        Face::Right => point.x >= right,
+    };
+    let last = path.len() - 1;
+    let Some(first_intrusion_idx) = (1..last).find(|&idx| point_is_intrusion(path[idx])) else {
+        return false;
+    };
+    let Some(clean_idx) = (0..first_intrusion_idx).rev().find(|&idx| {
+        let point = path[idx];
+        !point_is_intrusion(point) && point_is_clean_for_face(point)
+    }) else {
+        return false;
+    };
+
+    let clean = path[clean_idx];
+    let endpoint = path[last];
+    let elbow = match canonical_face {
+        Face::Top | Face::Bottom => FPoint::new(endpoint.x, clean.y),
+        Face::Left | Face::Right => FPoint::new(clean.x, endpoint.y),
+    };
+
+    path.truncate(clean_idx + 1);
+    let tail = *path
+        .last()
+        .expect("truncated path should keep at least one clean point");
+    if !points_match(tail, elbow) && !points_match(elbow, endpoint) {
+        path.push(elbow);
+    }
+    let tail = *path
+        .last()
+        .expect("path should retain at least one point before terminal endpoint");
+    if !points_match(tail, endpoint) {
+        path.push(endpoint);
+    }
+
+    if path.len() > 5 && clean_idx > 2 {
+        match canonical_face {
+            Face::Top | Face::Bottom => {
+                let lane_y = path[clean_idx].y;
+                let stem_is_vertical =
+                    (path[0].x - path[1].x).abs() <= EPS && (path[0].y - path[1].y).abs() > EPS;
+                let run_is_horizontal = path[1..=clean_idx]
+                    .iter()
+                    .all(|point| (point.y - lane_y).abs() <= EPS);
+                if stem_is_vertical && run_is_horizontal {
+                    path.drain(2..clean_idx);
+                }
+            }
+            Face::Left | Face::Right => {
+                let lane_x = path[clean_idx].x;
+                let stem_is_horizontal =
+                    (path[0].y - path[1].y).abs() <= EPS && (path[0].x - path[1].x).abs() > EPS;
+                let run_is_vertical = path[1..=clean_idx]
+                    .iter()
+                    .all(|point| (point.x - lane_x).abs() <= EPS);
+                if stem_is_horizontal && run_is_vertical {
+                    path.drain(2..clean_idx);
+                }
+            }
+        }
+    }
+
+    let mut idx = 1usize;
+    while idx < path.len() {
+        if points_match(path[idx - 1], path[idx]) {
+            path.remove(idx);
+        } else {
+            idx += 1;
+        }
+    }
+    true
 }
 
 fn enforce_backward_source_tangent_direction(

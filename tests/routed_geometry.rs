@@ -2048,6 +2048,58 @@ fn unified_preview_git_workflow_backward_remote_to_working_preserves_min_lr_chan
 }
 
 #[test]
+fn unified_preview_git_workflow_backward_no_target_node_intrusion() {
+    const INTRUSION_MARGIN: f64 = 1.0;
+    const MAX_BACKWARD_POINT_COUNT: usize = 5;
+
+    let fixture = "git_workflow.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    assert_eq!(
+        geom.direction,
+        mmdflux::Direction::LeftRight,
+        "fixture {fixture} should be LR for target-node intrusion checks"
+    );
+
+    let target_rect = geom
+        .nodes
+        .get("Working")
+        .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Working"))
+        .rect;
+    let left = target_rect.x + INTRUSION_MARGIN;
+    let right = target_rect.x + target_rect.width - INTRUSION_MARGIN;
+    let top = target_rect.y + INTRUSION_MARGIN;
+    let bottom = target_rect.y + target_rect.height - INTRUSION_MARGIN;
+
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let edge = routed
+        .edges
+        .iter()
+        .find(|edge| edge.from == "Remote" && edge.to == "Working")
+        .expect("fixture should contain backward edge Remote -> Working in unified-preview mode");
+    assert!(
+        edge.is_backward,
+        "fixture contract invalid: Remote -> Working should be backward in unified-preview mode"
+    );
+    assert!(
+        edge.path.len() <= MAX_BACKWARD_POINT_COUNT,
+        "unified-preview Remote -> Working should stay compact after removing target-body intrusions (max points={MAX_BACKWARD_POINT_COUNT}): path={:?}",
+        edge.path
+    );
+
+    if edge.path.len() >= 3 && left < right && top < bottom {
+        for idx in 1..(edge.path.len() - 1) {
+            let point = edge.path[idx];
+            let inside = point.x > left && point.x < right && point.y > top && point.y < bottom;
+            assert!(
+                !inside,
+                "unified-preview Remote -> Working should not route interior support points through Working node body: idx={idx}, point={point:?}, target_rect={target_rect:?}, path={:?}",
+                edge.path
+            );
+        }
+    }
+}
+
+#[test]
 fn unified_preview_http_request_backward_response_to_client_preserves_min_right_clearance() {
     const MAX_RIGHT_CLEARANCE_SHRINK_FROM_FULL: f64 = 8.0;
 
