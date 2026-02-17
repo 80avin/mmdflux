@@ -42,7 +42,8 @@ pub(crate) fn route_edges_unified(
     geometry: &GraphGeometry,
     options: UnifiedRoutingOptions,
 ) -> Vec<RoutedEdgeGeometry> {
-    let fan_in_target_conflict = fan_in_target_overflow_context(geometry, geometry.direction);
+    let fan_in_target_conflict =
+        fan_in_target_overflow_context(geometry, geometry.direction, diagram.edges.len());
     let override_nodes = build_override_node_map(diagram);
     geometry
         .edges
@@ -66,6 +67,10 @@ pub(crate) fn route_edges_unified(
                 .target_face_for_edge
                 .get(&edge.index)
                 .copied();
+            let overflow_policy_target_fraction = fan_in_target_conflict
+                .target_fraction_for_edge
+                .get(&edge.index)
+                .copied();
             let target_overflowed = fan_in_target_conflict.overflow_targeted.contains(&edge.to);
             let target_has_backward_conflict = fan_in_target_conflict
                 .targets_with_backward_inbound
@@ -77,6 +82,7 @@ pub(crate) fn route_edges_unified(
                 route_direction,
                 is_backward,
                 overflow_policy_target_face,
+                overflow_policy_target_fraction,
                 target_overflowed,
                 target_has_backward_conflict,
                 rank_span,
@@ -114,9 +120,11 @@ fn unified_edge_direction(
 
     match (from_sg, to_sg) {
         (None, None) => effective_edge_direction(node_directions, from, to, fallback),
-        (Some(sg_a), Some(sg_b)) if sg_a == sg_b => {
-            effective_edge_direction(node_directions, from, to, fallback)
-        }
+        (Some(sg_a), Some(sg_b)) if sg_a == sg_b => diagram
+            .subgraphs
+            .get(sg_a.as_str())
+            .and_then(|sg| sg.dir)
+            .unwrap_or_else(|| effective_edge_direction(node_directions, from, to, fallback)),
         _ => cross_boundary_edge_direction(
             diagram,
             node_directions,
@@ -287,6 +295,7 @@ fn build_unified_path(
     direction: Direction,
     is_backward: bool,
     overflow_policy_target_face: Option<Face>,
+    overflow_policy_target_fraction: Option<f64>,
     target_overflowed: bool,
     target_has_backward_conflict: bool,
     rank_span: usize,
@@ -309,6 +318,7 @@ fn build_unified_path(
         direction,
         is_backward,
         overflow_policy_target_face,
+        overflow_policy_target_fraction,
         target_overflowed,
         target_has_backward_conflict,
     );
@@ -322,7 +332,12 @@ fn build_unified_path(
     ensure_endpoint_segments_axis_aligned(&mut path);
     collapse_source_turnback_spikes(&mut path);
     if !is_backward {
-        enforce_primary_axis_terminal_direction(&mut path, direction, 8.0);
+        enforce_primary_axis_terminal_direction(
+            &mut path,
+            direction,
+            8.0,
+            overflow_policy_target_face,
+        );
     }
     let mut normalized = normalize_orthogonal_route_contracts(&path, direction);
     if is_backward {
@@ -331,6 +346,13 @@ fn build_unified_path(
     collapse_source_turnback_spikes(&mut normalized);
     let base_finalized = normalize_orthogonal_route_contracts(&normalized, direction);
     let mut finalized = base_finalized.clone();
+    if !is_backward
+        && let Some(policy_face) = overflow_policy_target_face
+        && policy_face != flow_target_face_for_direction(direction)
+    {
+        enforce_terminal_support_normal_to_face(&mut finalized, policy_face, 8.0);
+        collapse_collinear_interior_points(&mut finalized);
+    }
     if is_backward {
         enforce_backward_source_tangent_direction(
             &mut finalized,
@@ -460,6 +482,7 @@ fn backward_td_bt_face_overrides(
 #[derive(Default)]
 struct FanInTargetOverflowContext {
     target_face_for_edge: HashMap<usize, Face>,
+    target_fraction_for_edge: HashMap<usize, f64>,
     overflow_targeted: HashSet<String>,
     targets_with_backward_inbound: HashSet<String>,
 }
@@ -467,12 +490,17 @@ struct FanInTargetOverflowContext {
 fn fan_in_target_overflow_context(
     geometry: &GraphGeometry,
     direction: Direction,
+    visible_edge_count: usize,
 ) -> FanInTargetOverflowContext {
     let mut incoming_by_target: HashMap<
         String,
         Vec<&crate::diagrams::flowchart::geometry::LayoutEdge>,
     > = HashMap::new();
-    for edge in &geometry.edges {
+    for edge in geometry
+        .edges
+        .iter()
+        .filter(|edge| edge.index < visible_edge_count)
+    {
         incoming_by_target
             .entry(edge.to.clone())
             .or_default()
@@ -482,8 +510,10 @@ fn fan_in_target_overflow_context(
     let capacity = fan_in_primary_face_capacity(direction);
     let primary_face = fan_in_primary_target_face(direction);
     let mut target_face_for_edge: HashMap<usize, Face> = HashMap::new();
+    let mut target_fraction_for_edge: HashMap<usize, f64> = HashMap::new();
     let mut overflow_targeted: HashSet<String> = HashSet::new();
     let mut targets_with_backward_inbound: HashSet<String> = HashSet::new();
+    const CENTER_EPS: f64 = 0.5;
 
     for (target_id, mut incoming_edges) in incoming_by_target {
         incoming_edges.sort_unstable_by_key(|edge| edge.index);
@@ -505,6 +535,14 @@ fn fan_in_target_overflow_context(
             continue;
         }
 
+        forward_edges.sort_by(|a, b| {
+            let a_cross = fan_in_source_cross_axis(geometry, a, direction);
+            let b_cross = fan_in_source_cross_axis(geometry, b, direction);
+            a_cross
+                .total_cmp(&b_cross)
+                .then_with(|| a.index.cmp(&b.index))
+        });
+
         let primary_count = forward_edges.len().min(capacity);
         for edge in &forward_edges[..primary_count] {
             target_face_for_edge.insert(edge.index, primary_face);
@@ -516,8 +554,18 @@ fn fan_in_target_overflow_context(
 
         overflow_targeted.insert(target_id);
         let overflow_edges = &forward_edges[capacity..];
+        let target_cross = overflow_edges
+            .first()
+            .and_then(|edge| endpoint_rect(geometry, &edge.to, edge.to_subgraph.as_deref()))
+            .map(|rect| face_cross_axis(rect, direction))
+            .unwrap_or(0.0);
         for (idx, edge) in overflow_edges.iter().enumerate() {
-            let overflow_slot = if idx % 2 == 0 {
+            let source_cross = fan_in_source_cross_axis(geometry, edge, direction);
+            let overflow_slot = if source_cross < target_cross - CENTER_EPS {
+                OverflowSide::LeftOrTop
+            } else if source_cross > target_cross + CENTER_EPS {
+                OverflowSide::RightOrBottom
+            } else if idx % 2 == 0 {
                 OverflowSide::LeftOrTop
             } else {
                 OverflowSide::RightOrBottom
@@ -525,12 +573,144 @@ fn fan_in_target_overflow_context(
             let face = fan_in_overflow_face_for_slot(direction, overflow_slot);
             target_face_for_edge.insert(edge.index, face);
         }
+
+        let mut edges_by_face: HashMap<Face, Vec<(usize, f64)>> = HashMap::new();
+        for edge in &forward_edges {
+            let Some(face) = target_face_for_edge.get(&edge.index).copied() else {
+                continue;
+            };
+            let source_cross = fan_in_source_cross_axis(geometry, edge, direction);
+            edges_by_face
+                .entry(face)
+                .or_default()
+                .push((edge.index, source_cross));
+        }
+
+        for (_face, mut face_edges) in edges_by_face {
+            face_edges.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+            let count = face_edges.len();
+            for (idx, (edge_index, _)) in face_edges.into_iter().enumerate() {
+                let fraction = if count <= 1 {
+                    0.5
+                } else {
+                    idx as f64 / (count - 1) as f64
+                };
+                target_fraction_for_edge.insert(edge_index, fraction);
+            }
+        }
+
+        if let Some(target_rect) = forward_edges
+            .first()
+            .and_then(|edge| endpoint_rect(geometry, &edge.to, edge.to_subgraph.as_deref()))
+        {
+            apply_near_aligned_primary_face_fraction_override(
+                geometry,
+                direction,
+                primary_face,
+                target_rect,
+                &forward_edges,
+                &target_face_for_edge,
+                &mut target_fraction_for_edge,
+            );
+        }
     }
 
     FanInTargetOverflowContext {
         target_face_for_edge,
+        target_fraction_for_edge,
         overflow_targeted,
         targets_with_backward_inbound,
+    }
+}
+
+fn fan_in_source_cross_axis(
+    geometry: &GraphGeometry,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    direction: Direction,
+) -> f64 {
+    let Some(rect) = endpoint_rect(geometry, &edge.from, edge.from_subgraph.as_deref()) else {
+        return edge.index as f64;
+    };
+    face_cross_axis(rect, direction)
+}
+
+fn apply_near_aligned_primary_face_fraction_override(
+    geometry: &GraphGeometry,
+    direction: Direction,
+    primary_face: Face,
+    target_rect: &FRect,
+    forward_edges: &[&crate::diagrams::flowchart::geometry::LayoutEdge],
+    target_face_for_edge: &HashMap<usize, Face>,
+    target_fraction_for_edge: &mut HashMap<usize, f64>,
+) {
+    let target_cross = face_cross_axis(target_rect, direction);
+    let mut best: Option<(usize, f64, f64)> = None;
+
+    for edge in forward_edges {
+        if target_face_for_edge.get(&edge.index).copied() != Some(primary_face) {
+            continue;
+        }
+        let Some(source_rect) = endpoint_rect(geometry, &edge.from, edge.from_subgraph.as_deref())
+        else {
+            continue;
+        };
+        let source_cross = face_cross_axis(source_rect, direction);
+        let delta = (source_cross - target_cross).abs();
+        if delta > near_alignment_threshold(source_rect, target_rect, direction) {
+            continue;
+        }
+
+        match best {
+            Some((best_index, _, best_delta))
+                if delta > best_delta
+                    || ((delta - best_delta).abs() <= f64::EPSILON && edge.index >= best_index) => {
+            }
+            _ => {
+                best = Some((edge.index, source_cross, delta));
+            }
+        }
+    }
+
+    if let Some((edge_index, source_cross, _)) = best {
+        let aligned_fraction = cross_axis_to_face_fraction(source_cross, target_rect, direction);
+        target_fraction_for_edge.insert(edge_index, aligned_fraction);
+    }
+}
+
+fn near_alignment_threshold(source_rect: &FRect, target_rect: &FRect, direction: Direction) -> f64 {
+    match direction {
+        Direction::TopDown | Direction::BottomTop => 0.5 * source_rect.width.min(target_rect.width),
+        Direction::LeftRight | Direction::RightLeft => {
+            0.5 * source_rect.height.min(target_rect.height)
+        }
+    }
+}
+
+fn cross_axis_to_face_fraction(cross: f64, rect: &FRect, direction: Direction) -> f64 {
+    const EPS: f64 = 0.000_001;
+    let raw = match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            if rect.width.abs() <= EPS {
+                0.5
+            } else {
+                (cross - rect.x) / rect.width
+            }
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            if rect.height.abs() <= EPS {
+                0.5
+            } else {
+                (cross - rect.y) / rect.height
+            }
+        }
+    };
+    raw.clamp(0.0, 1.0)
+}
+
+fn face_cross_axis(rect: &FRect, direction: Direction) -> f64 {
+    match direction {
+        Direction::TopDown | Direction::BottomTop => rect.x + rect.width / 2.0,
+        Direction::LeftRight | Direction::RightLeft => rect.y + rect.height / 2.0,
     }
 }
 
@@ -2154,6 +2334,7 @@ fn anchor_path_endpoints_to_endpoint_faces(
     direction: Direction,
     is_backward: bool,
     overflow_policy_target_face: Option<Face>,
+    overflow_policy_target_fraction: Option<f64>,
     target_overflowed: bool,
     target_has_backward_conflict: bool,
 ) {
@@ -2175,6 +2356,7 @@ fn anchor_path_endpoints_to_endpoint_faces(
                 direction,
                 is_backward,
                 false,
+                None,
                 None,
                 false,
                 false,
@@ -2198,6 +2380,7 @@ fn anchor_path_endpoints_to_endpoint_faces(
                 is_backward,
                 true,
                 overflow_policy_target_face,
+                overflow_policy_target_fraction,
                 target_overflowed,
                 target_has_backward_conflict,
             );
@@ -2351,6 +2534,7 @@ fn clip_point_to_axis_face(
     preserve_existing_face: bool,
     is_target_endpoint: bool,
     overflow_policy_face: Option<Face>,
+    overflow_policy_fraction: Option<f64>,
     target_overflowed: bool,
     target_has_backward_conflict: bool,
 ) -> FPoint {
@@ -2431,10 +2615,10 @@ fn clip_point_to_axis_face(
             || matches!(direction, Direction::TopDown | Direction::BottomTop)
         {
             let resolved_rect_face = map_face_to_rect_face(resolved_face);
-            return clip_point_to_rect_face_with_inset(
-                endpoint,
+            return clip_point_to_rect_face_fraction_with_inset(
                 rect,
                 resolved_rect_face,
+                overflow_policy_fraction.unwrap_or(0.5),
                 max_corner_inset,
             );
         }
@@ -2669,6 +2853,58 @@ fn clip_point_to_rect_face_with_inset(
     }
 }
 
+fn clip_point_to_rect_face_fraction_with_inset(
+    rect: FRect,
+    face: RectFace,
+    fraction: f64,
+    max_corner_inset: f64,
+) -> FPoint {
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+    let fraction = fraction.clamp(0.0, 1.0);
+
+    match face {
+        RectFace::Top => FPoint::new(
+            clamp_face_coordinate_with_corner_inset(
+                left + rect.width * fraction,
+                left,
+                right,
+                max_corner_inset,
+            ),
+            top,
+        ),
+        RectFace::Bottom => FPoint::new(
+            clamp_face_coordinate_with_corner_inset(
+                left + rect.width * fraction,
+                left,
+                right,
+                max_corner_inset,
+            ),
+            bottom,
+        ),
+        RectFace::Left => FPoint::new(
+            left,
+            clamp_face_coordinate_with_corner_inset(
+                top + rect.height * fraction,
+                top,
+                bottom,
+                max_corner_inset,
+            ),
+        ),
+        RectFace::Right => FPoint::new(
+            right,
+            clamp_face_coordinate_with_corner_inset(
+                top + rect.height * fraction,
+                top,
+                bottom,
+                max_corner_inset,
+            ),
+        ),
+    }
+}
+
 fn boundary_face_including_corners(point: FPoint, rect: FRect, eps: f64) -> Option<RectFace> {
     let left = rect.x;
     let right = rect.x + rect.width;
@@ -2806,6 +3042,7 @@ fn enforce_primary_axis_terminal_direction(
     points: &mut [FPoint],
     direction: Direction,
     min_terminal_support: f64,
+    preferred_target_face: Option<Face>,
 ) {
     if points.len() < 2 || min_terminal_support <= 0.0 {
         return;
@@ -2814,9 +3051,11 @@ fn enforce_primary_axis_terminal_direction(
     let n = points.len();
     let end_idx = n - 1;
     let penult_idx = n - 2;
+    let flow_face = flow_target_face_for_direction(direction);
+    let target_face = preferred_target_face.unwrap_or(flow_face);
 
-    match direction {
-        Direction::TopDown => {
+    match target_face {
+        Face::Top => {
             let target_penult_y = points[end_idx].y - min_terminal_support;
             if points[penult_idx].y > target_penult_y {
                 points[penult_idx].y = target_penult_y;
@@ -2828,7 +3067,7 @@ fn enforce_primary_axis_terminal_direction(
                 }
             }
         }
-        Direction::BottomTop => {
+        Face::Bottom => {
             let target_penult_y = points[end_idx].y + min_terminal_support;
             if points[penult_idx].y < target_penult_y {
                 points[penult_idx].y = target_penult_y;
@@ -2840,7 +3079,7 @@ fn enforce_primary_axis_terminal_direction(
                 }
             }
         }
-        Direction::LeftRight => {
+        Face::Left => {
             let target_penult_x = points[end_idx].x - min_terminal_support;
             if points[penult_idx].x > target_penult_x {
                 points[penult_idx].x = target_penult_x;
@@ -2852,7 +3091,7 @@ fn enforce_primary_axis_terminal_direction(
                 }
             }
         }
-        Direction::RightLeft => {
+        Face::Right => {
             let target_penult_x = points[end_idx].x + min_terminal_support;
             if points[penult_idx].x < target_penult_x {
                 points[penult_idx].x = target_penult_x;
@@ -2864,5 +3103,63 @@ fn enforce_primary_axis_terminal_direction(
                 }
             }
         }
+    }
+}
+
+fn flow_target_face_for_direction(direction: Direction) -> Face {
+    match direction {
+        Direction::TopDown => Face::Top,
+        Direction::BottomTop => Face::Bottom,
+        Direction::LeftRight => Face::Left,
+        Direction::RightLeft => Face::Right,
+    }
+}
+
+fn enforce_terminal_support_normal_to_face(path: &mut Vec<FPoint>, face: Face, min_support: f64) {
+    const EPS: f64 = 0.000_001;
+    if path.len() < 2 || min_support <= 0.0 {
+        return;
+    }
+
+    let last = path.len() - 1;
+    let end = path[last];
+    let support = match face {
+        Face::Top => FPoint::new(end.x, end.y - min_support),
+        Face::Bottom => FPoint::new(end.x, end.y + min_support),
+        Face::Left => FPoint::new(end.x - min_support, end.y),
+        Face::Right => FPoint::new(end.x + min_support, end.y),
+    };
+
+    if path.len() == 2 {
+        if !points_match(path[0], support) && !points_match(support, end) {
+            path.insert(1, support);
+        }
+        return;
+    }
+
+    let penult_idx = last - 1;
+    path[penult_idx] = support;
+
+    if penult_idx == 0 {
+        return;
+    }
+
+    let pre_idx = penult_idx - 1;
+    let pre = path[pre_idx];
+    let penult = path[penult_idx];
+    let pre_to_penult_axis = (pre.x - penult.x).abs() <= EPS || (pre.y - penult.y).abs() <= EPS;
+    if pre_to_penult_axis {
+        return;
+    }
+
+    let elbow_primary = FPoint::new(pre.x, penult.y);
+    if !points_match(elbow_primary, pre) && !points_match(elbow_primary, penult) {
+        path.insert(penult_idx, elbow_primary);
+        return;
+    }
+
+    let elbow_fallback = FPoint::new(penult.x, pre.y);
+    if !points_match(elbow_fallback, pre) && !points_match(elbow_fallback, penult) {
+        path.insert(penult_idx, elbow_fallback);
     }
 }

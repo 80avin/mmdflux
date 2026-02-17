@@ -2058,6 +2058,28 @@ fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documen
 }
 
 #[test]
+fn svg_unified_preview_five_fan_in_keeps_e_terminal_not_left_of_d() {
+    let diagram = load_flowchart_fixture_diagram("five_fan_in.mmd");
+    let d_edge = edge_index(&diagram, "D", "F");
+    let e_edge = edge_index(&diagram, "E", "F");
+
+    let mut options = RenderOptions::default_svg();
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.svg.edge_path_style = SvgEdgePathStyle::Basis;
+    let svg = render_svg(&diagram, &options);
+
+    let d_points = edge_path_for_svg_order(&diagram, &svg, d_edge);
+    let e_points = edge_path_for_svg_order(&diagram, &svg, e_edge);
+    let d_end = d_points[d_points.len() - 1];
+    let e_end = e_points[e_points.len() - 1];
+
+    assert!(
+        e_end.0 + 1.0 >= d_end.0,
+        "five_fan_in unified-preview should not place E->Target terminal left of D->Target: d_end={d_end:?}, e_end={e_end:?}, d_points={d_points:?}, e_points={e_points:?}"
+    );
+}
+
+#[test]
 fn style_segment_monitor_reports_actionable_summary_for_svg() {
     let report =
         style_segment_monitor_report_for_svg(&["edge_styles.mmd", "inline_edge_labels.mmd"], 12.0);

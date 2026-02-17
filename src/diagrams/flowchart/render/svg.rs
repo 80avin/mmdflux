@@ -251,6 +251,7 @@ fn render_svg_with_geometry_context(
         &mut writer,
         diagram,
         geom,
+        override_nodes,
         &self_edge_paths,
         rerouted_edges,
         routing_mode,
@@ -795,6 +796,7 @@ fn render_edges(
     writer: &mut SvgWriter,
     diagram: &Diagram,
     geom: &GraphGeometry,
+    override_nodes: &HashMap<String, String>,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     rerouted_edges: &std::collections::HashSet<usize>,
     routing_mode: RoutingMode,
@@ -835,8 +837,10 @@ fn render_edges(
         }
         let mut points = points;
         let edge_direction = if matches!(routing_mode, RoutingMode::UnifiedPreview) {
-            effective_edge_direction(
+            unified_preview_edge_direction(
+                diagram,
                 &geom.node_directions,
+                override_nodes,
                 &edge.from,
                 &edge.to,
                 diagram.direction,
@@ -2279,6 +2283,89 @@ fn edge_endpoint_shape_rects(
     Some((from, to))
 }
 
+fn unified_preview_edge_direction(
+    diagram: &Diagram,
+    node_directions: &HashMap<String, Direction>,
+    override_nodes: &HashMap<String, String>,
+    from: &str,
+    to: &str,
+    fallback: Direction,
+) -> Direction {
+    let from_sg = override_nodes.get(from);
+    let to_sg = override_nodes.get(to);
+
+    match (from_sg, to_sg) {
+        (None, None) => effective_edge_direction(node_directions, from, to, fallback),
+        (Some(sg_a), Some(sg_b)) if sg_a == sg_b => diagram
+            .subgraphs
+            .get(sg_a.as_str())
+            .and_then(|sg| sg.dir)
+            .unwrap_or_else(|| effective_edge_direction(node_directions, from, to, fallback)),
+        _ => unified_preview_cross_boundary_direction(
+            diagram,
+            node_directions,
+            from_sg,
+            to_sg,
+            from,
+            to,
+            fallback,
+        ),
+    }
+}
+
+fn unified_preview_cross_boundary_direction(
+    diagram: &Diagram,
+    node_directions: &HashMap<String, Direction>,
+    from_sg: Option<&String>,
+    to_sg: Option<&String>,
+    from_node: &str,
+    to_node: &str,
+    fallback: Direction,
+) -> Direction {
+    if let (Some(sg_a), Some(sg_b)) = (from_sg, to_sg) {
+        if is_ancestor_subgraph(diagram, sg_a, sg_b) {
+            return diagram
+                .subgraphs
+                .get(sg_a.as_str())
+                .and_then(|sg| sg.dir)
+                .unwrap_or(fallback);
+        }
+        if is_ancestor_subgraph(diagram, sg_b, sg_a) {
+            return diagram
+                .subgraphs
+                .get(sg_b.as_str())
+                .and_then(|sg| sg.dir)
+                .unwrap_or(fallback);
+        }
+        return fallback;
+    }
+
+    let outside_node = if from_sg.is_some() && to_sg.is_none() {
+        to_node
+    } else {
+        from_node
+    };
+    node_directions
+        .get(outside_node)
+        .copied()
+        .unwrap_or(fallback)
+}
+
+fn is_ancestor_subgraph(diagram: &Diagram, ancestor: &str, descendant: &str) -> bool {
+    let mut current = descendant;
+    while let Some(parent) = diagram
+        .subgraphs
+        .get(current)
+        .and_then(|sg| sg.parent.as_deref())
+    {
+        if parent == ancestor {
+            return true;
+        }
+        current = parent;
+    }
+    false
+}
+
 fn should_adjust_rerouted_edge_endpoints(
     diagram: &Diagram,
     geom: &GraphGeometry,
@@ -2286,6 +2373,7 @@ fn should_adjust_rerouted_edge_endpoints(
     points: &[Point],
     direction: Direction,
 ) -> bool {
+    const FACE_PROXIMITY: f64 = 6.0;
     const EPS: f64 = 0.5;
     if points.len() < 2 {
         return false;
@@ -2297,19 +2385,85 @@ fn should_adjust_rerouted_edge_endpoints(
     };
 
     // For unified-preview, the router produces authoritative endpoint geometry.
-    // This adjustment only fires when endpoints drift inside node interior
-    // (safety net for router bugs).
-    let is_backward = geom.reversed_edges.contains(&edge.index);
+    // Keep intentional non-flow-face attachments (e.g. fan-in overflow) but
+    // still re-adjust when endpoints drift inside/outside or violate expected
+    // flow faces on the primary axis.
+    if endpoint_drifted_inside_or_outside(points[0], from_rect, EPS)
+        || endpoint_drifted_inside_or_outside(points[points.len() - 1], to_rect, EPS)
+    {
+        return true;
+    }
 
-    endpoint_attachment_is_invalid(points[0], from_rect, direction, true, is_backward, EPS)
-        || endpoint_attachment_is_invalid(
+    let is_backward = geom.reversed_edges.contains(&edge.index);
+    if is_backward {
+        return endpoint_attachment_is_invalid(points[0], from_rect, direction, true, true, EPS)
+            || endpoint_attachment_is_invalid(
+                points[points.len() - 1],
+                to_rect,
+                direction,
+                false,
+                true,
+                EPS,
+            );
+    }
+
+    if !endpoint_on_non_flow_face(points[0], from_rect, direction, FACE_PROXIMITY)
+        && endpoint_attachment_is_invalid(points[0], from_rect, direction, true, false, EPS)
+    {
+        return true;
+    }
+    if !endpoint_on_non_flow_face(points[points.len() - 1], to_rect, direction, FACE_PROXIMITY)
+        && endpoint_attachment_is_invalid(
             points[points.len() - 1],
             to_rect,
             direction,
             false,
-            is_backward,
+            false,
             EPS,
         )
+    {
+        return true;
+    }
+
+    false
+}
+
+fn endpoint_drifted_inside_or_outside(point: Point, rect: Rect, eps: f64) -> bool {
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    if point.x < left - eps
+        || point.x > right + eps
+        || point.y < top - eps
+        || point.y > bottom + eps
+    {
+        return true;
+    }
+
+    point_inside_rect(&rect, point)
+}
+
+fn endpoint_on_non_flow_face(
+    point: Point,
+    rect: Rect,
+    proximity: Direction,
+    face_tol: f64,
+) -> bool {
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+    let near_left = (point.x - left) <= face_tol;
+    let near_right = (right - point.x) <= face_tol;
+    let near_top = (point.y - top) <= face_tol;
+    let near_bottom = (bottom - point.y) <= face_tol;
+
+    match proximity {
+        Direction::TopDown | Direction::BottomTop => near_left || near_right,
+        Direction::LeftRight | Direction::RightLeft => near_top || near_bottom,
+    }
 }
 
 fn endpoint_attachment_is_invalid(

@@ -2597,6 +2597,106 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
 }
 
 #[test]
+fn fan_in_overflow_arrivals_on_same_side_face_are_spread_not_piled_up() {
+    let input = r#"
+graph TD
+    A --> T[Target]
+    B --> T
+    C --> T
+    D --> T
+    E --> T
+    F --> T
+    G --> T
+    H --> T
+"#;
+    let (diagram, geom) = layout_test_svg(input);
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        RoutingMode::UnifiedPreview,
+        RoutingPolicyToggles::all_enabled(),
+    );
+    let target_rect = geom
+        .nodes
+        .get("T")
+        .expect("inline fan-in fixture should contain target T")
+        .rect;
+
+    let inbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.to == "T" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        inbound.len(),
+        8,
+        "inline fan-in fixture should produce eight forward inbound edges to T"
+    );
+
+    let mut right_face_ys = Vec::new();
+    let mut left_face_ys = Vec::new();
+    for edge in &inbound {
+        let end = edge
+            .path
+            .last()
+            .copied()
+            .expect("inbound edge should have endpoint");
+        let face = point_on_target_face(target_rect, end);
+        if matches!(face, "left" | "right") {
+            let prev = edge.path[edge.path.len() - 2];
+            assert!(
+                terminal_support_is_normal_to_attached_rect_face(target_rect, prev, end),
+                "overflow fan-in side-face terminal should approach along face-normal axis for {} -> {}: face={face}, prev={prev:?}, end={end:?}, path={:?}",
+                edge.from,
+                edge.to,
+                edge.path
+            );
+        }
+        match face {
+            "right" => right_face_ys.push(end.y),
+            "left" => left_face_ys.push(end.y),
+            _ => {}
+        }
+    }
+
+    let side_face_count = right_face_ys.len() + left_face_ys.len();
+    assert!(
+        side_face_count >= 2,
+        "overflow fan-in should place at least two inbound endpoints on side faces: right={right_face_ys:?}, left={left_face_ys:?}"
+    );
+
+    let mut observed_multi_slot_side = false;
+    for (face, mut coords) in [("right", right_face_ys), ("left", left_face_ys)] {
+        if coords.len() <= 1 {
+            continue;
+        }
+        observed_multi_slot_side = true;
+        coords.sort_by(|a, b| a.total_cmp(b));
+        let mut unique_count = 0usize;
+        let mut last: Option<f64> = None;
+        for value in &coords {
+            let is_new = match last {
+                Some(prev) => (*value - prev).abs() > 0.5,
+                None => true,
+            };
+            if is_new {
+                unique_count += 1;
+                last = Some(*value);
+            }
+        }
+        assert_eq!(
+            unique_count,
+            coords.len(),
+            "side-face endpoints should use distinct attachment slots on {face}: coords={coords:?}"
+        );
+    }
+    assert!(
+        observed_multi_slot_side,
+        "expected at least one side face with multiple overflow arrivals to validate slot spreading"
+    );
+}
+
+#[test]
 fn style_segment_monitor_reports_actionable_summary_for_routed_geometry() {
     let report = style_segment_monitor_report_for_routed_geometry(
         &["edge_styles.mmd", "inline_edge_labels.mmd"],
