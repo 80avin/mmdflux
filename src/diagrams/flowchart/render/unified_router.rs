@@ -326,8 +326,8 @@ fn build_unified_path(
             geometry,
         );
         collapse_tiny_backward_terminal_staircase(&mut finalized, direction, 8.0);
-        let collapsed_terminal_intrusion =
-            collapse_backward_terminal_node_intrusion(&mut finalized, edge, geometry, direction);
+        enforce_backward_minimum_channel_floor(&mut finalized, edge, geometry, direction, 12.0);
+        collapse_backward_terminal_node_intrusion(&mut finalized, edge, geometry, direction);
         enforce_backward_terminal_corner_inset(&mut finalized, edge, geometry);
         let canonical_terminal_face =
             backward_target_face_override.unwrap_or_else(|| q2_backward_channel_face(direction));
@@ -341,9 +341,7 @@ fn build_unified_path(
                 target_rect,
             );
         }
-        if matches!(direction, Direction::LeftRight | Direction::RightLeft)
-            && !collapsed_terminal_intrusion
-        {
+        if matches!(direction, Direction::LeftRight | Direction::RightLeft) {
             collapse_collinear_interior_points(&mut finalized);
         }
         // Backward edge processing (tangent direction, lane clearance, corner inset)
@@ -871,6 +869,45 @@ fn ensure_backward_outer_lane_clearance(
             for idx in interior_at_max {
                 path[idx].y = target_y;
             }
+        }
+    }
+}
+
+/// After `align_backward_outer_lane_to_hint` pulls interior points to dagre's
+/// channel hint, the channel lane may sit too close to the node envelope.
+/// This function enforces a minimum vertical (LR/RL) clearance between the
+/// node bottom faces and the backward channel lane, matching R-BACK-8.
+fn enforce_backward_minimum_channel_floor(
+    path: &mut [FPoint],
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+    min_clearance: f64,
+) {
+    const EPS: f64 = 0.000_001;
+    if !matches!(direction, Direction::LeftRight | Direction::RightLeft)
+        || path.len() < 3
+        || min_clearance <= 0.0
+    {
+        return;
+    }
+
+    let src_bottom = endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+        .map(|(r, _)| r.y + r.height);
+    let tgt_bottom = endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+        .map(|(r, _)| r.y + r.height);
+    let node_envelope = match (src_bottom, tgt_bottom) {
+        (Some(s), Some(t)) => s.max(t),
+        (Some(s), None) => s,
+        (None, Some(t)) => t,
+        (None, None) => return,
+    };
+
+    let min_channel = node_envelope + min_clearance;
+    let last = path.len() - 1;
+    for point in path.iter_mut().take(last).skip(1) {
+        if point.y > node_envelope + EPS && point.y < min_channel - EPS {
+            point.y = min_channel;
         }
     }
 }

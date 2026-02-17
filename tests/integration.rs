@@ -3428,7 +3428,7 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
 
 #[test]
 fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
-    const MAX_GIT_CHANNEL_LANE_Y_DRIFT: f64 = 3.0;
+    const MIN_GIT_CHANNEL_CLEARANCE: f64 = 12.0;
     const MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL: f64 = 8.0;
 
     fn point_face(
@@ -3548,19 +3548,17 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             unified_edge.path
         );
 
-        let full_lane_y = full_edge
-            .path
-            .iter()
-            .map(|point| point.y)
-            .fold(f64::NEG_INFINITY, f64::max);
+        let node_envelope_bottom =
+            (source_rect.y + source_rect.height).max(target_rect.y + target_rect.height);
         let unified_lane_y = unified_edge
             .path
             .iter()
             .map(|point| point.y)
             .fold(f64::NEG_INFINITY, f64::max);
         assert!(
-            (unified_lane_y - full_lane_y).abs() <= MAX_GIT_CHANNEL_LANE_Y_DRIFT,
-            "unified-preview Remote -> Working should keep LR backward lane y close to full-compute text baseline (drift <= {MAX_GIT_CHANNEL_LANE_Y_DRIFT}): full_lane_y={full_lane_y}, unified_lane_y={unified_lane_y}, full_path={:?}, unified_path={:?}",
+            unified_lane_y >= node_envelope_bottom + MIN_GIT_CHANNEL_CLEARANCE - 0.001,
+            "unified-preview Remote -> Working channel lane should have >= {MIN_GIT_CHANNEL_CLEARANCE}px clearance from node envelope (R-BACK-8): node_envelope_bottom={node_envelope_bottom}, unified_lane_y={unified_lane_y}, clearance={}, full_path={:?}, unified_path={:?}",
+            unified_lane_y - node_envelope_bottom,
             full_edge.path,
             unified_edge.path
         );

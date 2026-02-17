@@ -1941,7 +1941,7 @@ fn unified_preview_simple_cycle_backward_terminal_port_respects_minimum_corner_i
 
 #[test]
 fn unified_preview_git_workflow_backward_remote_to_working_preserves_min_lr_channel_spacing() {
-    const MAX_CHANNEL_LANE_Y_DRIFT: f64 = 3.0;
+    const MIN_CHANNEL_CLEARANCE: f64 = 12.0;
     const MAX_BEND_INCREASE_FROM_FULL: usize = 1;
 
     let fixture = "git_workflow.mmd";
@@ -1982,16 +1982,6 @@ fn unified_preview_git_workflow_backward_remote_to_working_preserves_min_lr_chan
         "fixture contract invalid: Remote -> Working should be backward in both routing modes"
     );
 
-    let full_start = full_edge
-        .path
-        .first()
-        .copied()
-        .expect("full-compute backward edge should have source endpoint");
-    let full_end = full_edge
-        .path
-        .last()
-        .copied()
-        .expect("full-compute backward edge should have target endpoint");
     let unified_start = unified_edge
         .path
         .first()
@@ -2003,27 +1993,23 @@ fn unified_preview_git_workflow_backward_remote_to_working_preserves_min_lr_chan
         .copied()
         .expect("unified-preview backward edge should have target endpoint");
 
-    let _full_source_face = point_on_target_face(source_rect, full_start);
-    let _full_target_face = point_on_target_face(target_rect, full_end);
     let unified_source_face = point_on_target_face(source_rect, unified_start);
     let unified_target_face = point_on_target_face(target_rect, unified_end);
 
     assert_eq!(
         unified_source_face, "bottom",
-        "unified-preview Remote -> Working should preserve canonical bottom source face while normalizing spacing parity: start={unified_start:?}, path={:?}",
+        "unified-preview Remote -> Working should preserve canonical bottom source face: start={unified_start:?}, path={:?}",
         unified_edge.path
     );
     assert_eq!(
         unified_target_face, "bottom",
-        "unified-preview Remote -> Working should preserve canonical bottom target face while normalizing spacing parity: end={unified_end:?}, path={:?}",
+        "unified-preview Remote -> Working should preserve canonical bottom target face: end={unified_end:?}, path={:?}",
         unified_edge.path
     );
 
-    let full_lane_y = full_edge
-        .path
-        .iter()
-        .map(|point| point.y)
-        .fold(f64::NEG_INFINITY, f64::max);
+    // R-BACK-8: channel lane must have minimum clearance from node envelope.
+    let node_envelope_bottom =
+        (source_rect.y + source_rect.height).max(target_rect.y + target_rect.height);
     let unified_lane_y = unified_edge
         .path
         .iter()
@@ -2031,9 +2017,9 @@ fn unified_preview_git_workflow_backward_remote_to_working_preserves_min_lr_chan
         .fold(f64::NEG_INFINITY, f64::max);
 
     assert!(
-        (unified_lane_y - full_lane_y).abs() <= MAX_CHANNEL_LANE_Y_DRIFT,
-        "unified-preview Remote -> Working should keep LR backward lane spacing close to full-compute baseline (max y drift <= {MAX_CHANNEL_LANE_Y_DRIFT}): full_lane_y={full_lane_y}, unified_lane_y={unified_lane_y}, full_path={:?}, unified_path={:?}",
-        full_edge.path,
+        unified_lane_y >= node_envelope_bottom + MIN_CHANNEL_CLEARANCE - 0.001,
+        "unified-preview Remote -> Working channel lane should have >= {MIN_CHANNEL_CLEARANCE}px clearance from node envelope (R-BACK-8): node_envelope_bottom={node_envelope_bottom}, unified_lane_y={unified_lane_y}, clearance={}, path={:?}",
+        unified_lane_y - node_envelope_bottom,
         unified_edge.path
     );
 

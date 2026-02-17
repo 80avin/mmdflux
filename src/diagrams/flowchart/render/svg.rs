@@ -2337,11 +2337,12 @@ fn endpoint_attachment_is_invalid(
         return true;
     }
 
-    if is_backward && !is_source {
-        // Backward target attachments can legitimately land on different faces
+    if is_backward {
+        // Backward endpoints can legitimately land on different faces
         // depending on local routing contracts (e.g. TD parity bottom entry vs
-        // LR/RL right/bottom channels). Treat any near-boundary attachment as
-        // valid and only reclip when the endpoint drifts into the interior.
+        // LR/RL right/bottom channels, LR backward source departing from bottom
+        // face). Treat any near-boundary attachment as valid and only reclip
+        // when the endpoint drifts into the interior.
         let near_left = (point.x - left) <= FACE_PROXIMITY;
         let near_right = (right - point.x) <= FACE_PROXIMITY;
         let near_top = (point.y - top) <= FACE_PROXIMITY;
