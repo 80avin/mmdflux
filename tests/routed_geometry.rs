@@ -224,6 +224,42 @@ fn point_inside_rect(rect: FRect, point: FPoint) -> bool {
         && point.y < rect.y + rect.height - eps
 }
 
+/// Check if an axis-aligned segment strictly passes through the interior of a rect.
+/// Returns true when any interior portion of the segment overlaps the rect's interior.
+fn axis_aligned_segment_crosses_rect_interior(a: FPoint, b: FPoint, rect: FRect) -> bool {
+    let eps = 0.5;
+    let left = rect.x + eps;
+    let right = rect.x + rect.width - eps;
+    let top = rect.y + eps;
+    let bottom = rect.y + rect.height - eps;
+    if left >= right || top >= bottom {
+        return false;
+    }
+
+    // Horizontal segment
+    if (a.y - b.y).abs() < eps {
+        let seg_y = a.y;
+        if seg_y <= top || seg_y >= bottom {
+            return false;
+        }
+        let seg_min_x = a.x.min(b.x);
+        let seg_max_x = a.x.max(b.x);
+        seg_max_x > left && seg_min_x < right
+    }
+    // Vertical segment
+    else if (a.x - b.x).abs() < eps {
+        let seg_x = a.x;
+        if seg_x <= left || seg_x >= right {
+            return false;
+        }
+        let seg_min_y = a.y.min(b.y);
+        let seg_max_y = a.y.max(b.y);
+        seg_max_y > top && seg_min_y < bottom
+    } else {
+        false
+    }
+}
+
 fn point_on_target_face(rect: FRect, point: FPoint) -> &'static str {
     let eps = 0.5;
     let left = rect.x;
@@ -2830,4 +2866,89 @@ fn mixed_shape_chain_no_staircase_artifacts() {
             edge.path
         );
     }
+}
+
+// -----------------------------------------------------------------------
+// R-BACK-3: Backward edges must not cross intermediate node bodies
+// -----------------------------------------------------------------------
+
+#[test]
+fn unified_preview_complex_backward_edge_clears_intermediate_nodes() {
+    let (diagram, geom) = layout_fixture_svg("complex.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    // Find backward edge E→A ("More Data?" → "Input")
+    let backward_edge = routed
+        .edges
+        .iter()
+        .find(|e| e.from == "E" && e.to == "A")
+        .expect("complex.mmd should have backward edge E→A");
+    assert!(backward_edge.is_backward, "E→A should be backward");
+
+    // Node C ("Process") is the intermediate node the edge must avoid
+    let process_rect = geom
+        .nodes
+        .get("C")
+        .expect("complex.mmd should have node C (Process)")
+        .rect;
+
+    // All interior path points must be outside Process's bounding rect
+    for (i, point) in backward_edge.path.iter().enumerate() {
+        assert!(
+            !point_inside_rect(process_rect, *point),
+            "backward edge E→A path point {i} at ({:.1}, {:.1}) is inside Process node rect {:?}",
+            point.x,
+            point.y,
+            process_rect,
+        );
+    }
+
+    // No axis-aligned path segment should cross Process's interior
+    for seg in backward_edge.path.windows(2) {
+        assert!(
+            !axis_aligned_segment_crosses_rect_interior(seg[0], seg[1], process_rect),
+            "backward edge E→A segment ({:.1},{:.1})→({:.1},{:.1}) crosses Process node rect {:?}",
+            seg[0].x,
+            seg[0].y,
+            seg[1].x,
+            seg[1].y,
+            process_rect,
+        );
+    }
+}
+
+#[test]
+fn unified_preview_backward_edges_clear_all_intermediate_node_bodies() {
+    let fixtures = ["complex.mmd", "multiple_cycles.mmd", "simple_cycle.mmd"];
+    let mut failures = Vec::new();
+
+    for fixture in &fixtures {
+        let (diagram, geom) = layout_fixture_svg(fixture);
+        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+        for edge in routed.edges.iter().filter(|e| e.is_backward) {
+            for seg in edge.path.windows(2) {
+                for node in geom.nodes.values() {
+                    // Skip the edge's own endpoints
+                    if node.id == edge.from || node.id == edge.to {
+                        continue;
+                    }
+                    if axis_aligned_segment_crosses_rect_interior(seg[0], seg[1], node.rect) {
+                        failures.push(format!(
+                            "{fixture} backward {}->{} seg ({:.1},{:.1})→({:.1},{:.1}) crosses node {} rect {:?}",
+                            edge.from, edge.to,
+                            seg[0].x, seg[0].y, seg[1].x, seg[1].y,
+                            node.id, node.rect,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "R-BACK-3 violations: backward edges crossing intermediate node bodies:\n{}",
+        failures.join("\n"),
+    );
 }

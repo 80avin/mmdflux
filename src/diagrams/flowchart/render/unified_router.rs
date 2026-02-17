@@ -346,6 +346,7 @@ fn build_unified_path(
         // overrides shape-aware endpoints with rect-aligned positions.
         // Re-project endpoints to actual shape boundaries as a final step.
         snap_backward_endpoints_to_shape(&mut finalized, edge, geometry);
+        fix_backward_diagonal_node_collision(&mut finalized, edge, geometry, direction);
     }
     finalized
 }
@@ -868,6 +869,348 @@ fn ensure_backward_outer_lane_clearance(
             }
         }
     }
+}
+
+/// After `snap_backward_endpoints_to_shape`, diamond/hexagon source endpoints
+/// may create diagonal segments.  When the SVG orthogonal renderer splits
+/// these into axis-aligned steps (vertical-first), the vertical leg can cut
+/// through an intermediate node.
+///
+/// Fix: detect diagonal source segments whose vertical-first orthogonalization
+/// would cross an intermediate node and reroute through the outer lane so the
+/// path goes horizontal-first (at source y) then vertical (at outer lane x).
+/// The same logic applies symmetrically for target-side diagonals and LR/RL.
+fn fix_backward_diagonal_node_collision(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+) {
+    const EPS: f64 = 0.000_001;
+    const MARGIN: f64 = 8.0;
+
+    if path.len() < 3 {
+        return;
+    }
+
+    match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            fix_backward_diagonal_source_td_bt(path, edge, geometry, MARGIN, EPS);
+            fix_backward_diagonal_target_td_bt(path, edge, geometry, MARGIN, EPS);
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            fix_backward_diagonal_source_lr_rl(path, edge, geometry, MARGIN, EPS);
+            fix_backward_diagonal_target_lr_rl(path, edge, geometry, MARGIN, EPS);
+        }
+    }
+}
+
+/// TD/BT source-side: if [0]→[1] is diagonal and the vertical-first
+/// orthogonalization would cross an intermediate node, reroute through
+/// the outer lane (max-x of interior points).
+fn fix_backward_diagonal_source_td_bt(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    margin: f64,
+    eps: f64,
+) {
+    if path.len() < 3 {
+        return;
+    }
+    let source = path[0];
+    let next = path[1];
+
+    // Only act on diagonal segments.
+    let dx = (source.x - next.x).abs();
+    let dy = (source.y - next.y).abs();
+    if dx <= eps || dy <= eps {
+        return;
+    }
+
+    // Would a vertical-first step (at source.x) cross an intermediate node?
+    let vert_x = source.x;
+    let vert_y_min = source.y.min(next.y);
+    let vert_y_max = source.y.max(next.y);
+
+    let collides = geometry.nodes.values().any(|node| {
+        if node.id == edge.from || node.id == edge.to {
+            return false;
+        }
+        let n_left = node.rect.x;
+        let n_right = node.rect.x + node.rect.width;
+        let n_top = node.rect.y;
+        let n_bottom = node.rect.y + node.rect.height;
+        vert_x > n_left + eps
+            && vert_x < n_right - eps
+            && vert_y_max > n_top + eps
+            && vert_y_min < n_bottom - eps
+    });
+    if !collides {
+        return;
+    }
+
+    // Find a safe x for the vertical: start from the outer lane (max-x of
+    // interior points) and push past any node whose x-range contains safe_x.
+    let last = path.len() - 1;
+    let mut safe_x = path[1..last]
+        .iter()
+        .map(|p| p.x)
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    // Iteratively push safe_x past overlapping nodes until it converges.
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for node in geometry.nodes.values() {
+            if node.id == edge.from || node.id == edge.to {
+                continue;
+            }
+            let n_left = node.rect.x;
+            let n_right = node.rect.x + node.rect.width;
+            let n_top = node.rect.y;
+            let n_bottom = node.rect.y + node.rect.height;
+            // Node must overlap the vertical y-range AND contain safe_x.
+            if n_bottom > vert_y_min + eps
+                && n_top < vert_y_max - eps
+                && safe_x > n_left + eps
+                && safe_x < n_right - eps
+            {
+                safe_x = n_right + margin;
+                changed = true;
+            }
+        }
+    }
+
+    // Replace diagonal [0]→[1] with orthogonal: [0] → (safe_x, source.y) → (safe_x, next.y).
+    // Then drop old [1] since (safe_x, next.y) replaces it.
+    path[1] = FPoint::new(safe_x, next.y);
+    path.insert(1, FPoint::new(safe_x, source.y));
+}
+
+/// TD/BT target-side: same check for the last segment.
+fn fix_backward_diagonal_target_td_bt(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    margin: f64,
+    eps: f64,
+) {
+    if path.len() < 3 {
+        return;
+    }
+    let last = path.len() - 1;
+    let target = path[last];
+    let prev = path[last - 1];
+
+    let dx = (target.x - prev.x).abs();
+    let dy = (target.y - prev.y).abs();
+    if dx <= eps || dy <= eps {
+        return;
+    }
+
+    let vert_x = target.x;
+    let vert_y_min = target.y.min(prev.y);
+    let vert_y_max = target.y.max(prev.y);
+
+    let collides = geometry.nodes.values().any(|node| {
+        if node.id == edge.from || node.id == edge.to {
+            return false;
+        }
+        let n_left = node.rect.x;
+        let n_right = node.rect.x + node.rect.width;
+        let n_top = node.rect.y;
+        let n_bottom = node.rect.y + node.rect.height;
+        vert_x > n_left + eps
+            && vert_x < n_right - eps
+            && vert_y_max > n_top + eps
+            && vert_y_min < n_bottom - eps
+    });
+    if !collides {
+        return;
+    }
+
+    let last = path.len() - 1;
+    let mut safe_x = path[1..last]
+        .iter()
+        .map(|p| p.x)
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for node in geometry.nodes.values() {
+            if node.id == edge.from || node.id == edge.to {
+                continue;
+            }
+            let n_left = node.rect.x;
+            let n_right = node.rect.x + node.rect.width;
+            let n_top = node.rect.y;
+            let n_bottom = node.rect.y + node.rect.height;
+            if n_bottom > vert_y_min + eps
+                && n_top < vert_y_max - eps
+                && safe_x > n_left + eps
+                && safe_x < n_right - eps
+            {
+                safe_x = n_right + margin;
+                changed = true;
+            }
+        }
+    }
+
+    let last = path.len() - 1;
+    path[last - 1] = FPoint::new(safe_x, prev.y);
+    path.insert(last, FPoint::new(safe_x, target.y));
+}
+
+/// LR/RL source-side: if [0]→[1] is diagonal and the horizontal-first
+/// orthogonalization would cross an intermediate node, reroute through
+/// the outer lane (max-y of interior points).
+fn fix_backward_diagonal_source_lr_rl(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    margin: f64,
+    eps: f64,
+) {
+    if path.len() < 3 {
+        return;
+    }
+    let source = path[0];
+    let next = path[1];
+
+    let dx = (source.x - next.x).abs();
+    let dy = (source.y - next.y).abs();
+    if dx <= eps || dy <= eps {
+        return;
+    }
+
+    let horiz_y = source.y;
+    let horiz_x_min = source.x.min(next.x);
+    let horiz_x_max = source.x.max(next.x);
+
+    let collides = geometry.nodes.values().any(|node| {
+        if node.id == edge.from || node.id == edge.to {
+            return false;
+        }
+        let n_left = node.rect.x;
+        let n_right = node.rect.x + node.rect.width;
+        let n_top = node.rect.y;
+        let n_bottom = node.rect.y + node.rect.height;
+        horiz_y > n_top + eps
+            && horiz_y < n_bottom - eps
+            && horiz_x_max > n_left + eps
+            && horiz_x_min < n_right - eps
+    });
+    if !collides {
+        return;
+    }
+
+    let last = path.len() - 1;
+    let mut safe_y = path[1..last]
+        .iter()
+        .map(|p| p.y)
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for node in geometry.nodes.values() {
+            if node.id == edge.from || node.id == edge.to {
+                continue;
+            }
+            let n_top = node.rect.y;
+            let n_bottom = node.rect.y + node.rect.height;
+            let n_left = node.rect.x;
+            let n_right = node.rect.x + node.rect.width;
+            if n_right > horiz_x_min + eps
+                && n_left < horiz_x_max - eps
+                && safe_y > n_top + eps
+                && safe_y < n_bottom - eps
+            {
+                safe_y = n_bottom + margin;
+                changed = true;
+            }
+        }
+    }
+
+    path[1] = FPoint::new(next.x, safe_y);
+    path.insert(1, FPoint::new(source.x, safe_y));
+}
+
+/// LR/RL target-side.
+fn fix_backward_diagonal_target_lr_rl(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    margin: f64,
+    eps: f64,
+) {
+    if path.len() < 3 {
+        return;
+    }
+    let last = path.len() - 1;
+    let target = path[last];
+    let prev = path[last - 1];
+
+    let dx = (target.x - prev.x).abs();
+    let dy = (target.y - prev.y).abs();
+    if dx <= eps || dy <= eps {
+        return;
+    }
+
+    let horiz_y = target.y;
+    let horiz_x_min = target.x.min(prev.x);
+    let horiz_x_max = target.x.max(prev.x);
+
+    let collides = geometry.nodes.values().any(|node| {
+        if node.id == edge.from || node.id == edge.to {
+            return false;
+        }
+        let n_left = node.rect.x;
+        let n_right = node.rect.x + node.rect.width;
+        let n_top = node.rect.y;
+        let n_bottom = node.rect.y + node.rect.height;
+        horiz_y > n_top + eps
+            && horiz_y < n_bottom - eps
+            && horiz_x_max > n_left + eps
+            && horiz_x_min < n_right - eps
+    });
+    if !collides {
+        return;
+    }
+
+    let last = path.len() - 1;
+    let mut safe_y = path[1..last]
+        .iter()
+        .map(|p| p.y)
+        .fold(f64::NEG_INFINITY, f64::max);
+
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for node in geometry.nodes.values() {
+            if node.id == edge.from || node.id == edge.to {
+                continue;
+            }
+            let n_top = node.rect.y;
+            let n_bottom = node.rect.y + node.rect.height;
+            let n_left = node.rect.x;
+            let n_right = node.rect.x + node.rect.width;
+            if n_right > horiz_x_min + eps
+                && n_left < horiz_x_max - eps
+                && safe_y > n_top + eps
+                && safe_y < n_bottom - eps
+            {
+                safe_y = n_bottom + margin;
+                changed = true;
+            }
+        }
+    }
+
+    let last = path.len() - 1;
+    path[last - 1] = FPoint::new(prev.x, safe_y);
+    path.insert(last, FPoint::new(target.x, safe_y));
 }
 
 fn align_backward_source_stem_to_outer_lane(
