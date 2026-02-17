@@ -896,9 +896,7 @@ fn render_edges(
         {
             points = fix_corner_points(&points);
         }
-        let allow_interior_nudges = !matches!(edge_path_style, SvgEdgePathStyle::Linear)
-            && !(matches!(routing_mode, RoutingMode::UnifiedPreview)
-                && edge_touches_diamond_endpoint(diagram, geom, edge));
+        let allow_interior_nudges = !matches!(edge_path_style, SvgEdgePathStyle::Linear);
         let enforce_primary_axis_no_backtrack = matches!(routing_mode, RoutingMode::UnifiedPreview)
             && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
             && !is_backward
@@ -913,11 +911,12 @@ fn render_edges(
             matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
                 || preserve_orthogonal_endpoint_contract,
         );
+        // Collapse tiny near-collinear jogs introduced by SVG marker offset
+        // smoothing on unified-preview paths.
         if matches!(routing_mode, RoutingMode::UnifiedPreview)
             && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
             && !preserve_orthogonal_endpoint_contract
             && edge.from != edge.to
-            && edge_touches_diamond_endpoint(diagram, geom, edge)
         {
             points = collapse_tiny_linear_smoothing_jogs(&points, 30.0);
         }
@@ -2281,15 +2280,6 @@ fn edge_endpoint_shape_rects(
     Some((from, to))
 }
 
-fn edge_touches_diamond_endpoint(diagram: &Diagram, geom: &GraphGeometry, edge: &Edge) -> bool {
-    edge_endpoint_shape_rects(diagram, geom, edge).is_some_and(
-        |((_from_rect, from_shape), (_to_rect, to_shape))| {
-            matches!(from_shape, Shape::Diamond | Shape::Hexagon)
-                || matches!(to_shape, Shape::Diamond | Shape::Hexagon)
-        },
-    )
-}
-
 fn should_adjust_rerouted_edge_endpoints(
     diagram: &Diagram,
     geom: &GraphGeometry,
@@ -2302,18 +2292,15 @@ fn should_adjust_rerouted_edge_endpoints(
         return false;
     }
 
-    let Some(((from_rect, from_shape), (to_rect, to_shape))) =
+    let Some(((from_rect, _from_shape), (to_rect, _to_shape))) =
         edge_endpoint_shape_rects(diagram, geom, edge)
     else {
         return false;
     };
 
-    if matches!(from_shape, Shape::Diamond | Shape::Hexagon)
-        || matches!(to_shape, Shape::Diamond | Shape::Hexagon)
-    {
-        return true;
-    }
-
+    // For unified-preview, the router produces authoritative endpoint geometry.
+    // This adjustment only fires when endpoints drift inside node interior
+    // (safety net for router bugs).
     let is_backward = geom.reversed_edges.contains(&edge.index);
 
     endpoint_attachment_is_invalid(points[0], from_rect, direction, true, is_backward, EPS)
@@ -2414,17 +2401,16 @@ fn adjust_edge_points_for_shapes(
     };
 
     let mut adjusted = points.to_vec();
-    let source_needs_adjustment = matches!(from_shape, Shape::Diamond | Shape::Hexagon)
-        || endpoint_attachment_is_invalid(points[0], from_rect, direction, true, is_backward, EPS);
-    let target_needs_adjustment = matches!(to_shape, Shape::Diamond | Shape::Hexagon)
-        || endpoint_attachment_is_invalid(
-            points[points.len() - 1],
-            to_rect,
-            direction,
-            false,
-            is_backward,
-            EPS,
-        );
+    let source_needs_adjustment =
+        endpoint_attachment_is_invalid(points[0], from_rect, direction, true, is_backward, EPS);
+    let target_needs_adjustment = endpoint_attachment_is_invalid(
+        points[points.len() - 1],
+        to_rect,
+        direction,
+        false,
+        is_backward,
+        EPS,
+    );
 
     if source_needs_adjustment {
         let from_target = if points.len() > 1 {

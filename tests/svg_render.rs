@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::diagram::{OutputFormat, PathDetail, RenderConfig, RoutingMode, SvgEdgePathStyle};
-use mmdflux::diagrams::flowchart::engine::DagreLayoutEngine;
+use mmdflux::diagrams::flowchart::engine::{DagreLayoutEngine, MeasurementMode};
 use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::graph::Stroke;
 use mmdflux::registry::DiagramInstance;
@@ -2237,26 +2237,36 @@ fn svg_linear_unified_preview_self_loop_tail_does_not_collapse_upward_before_arr
 #[test]
 fn unified_preview_diamond_boundary_clipping_matches_shape_boundary() {
     let diagram = load_flowchart_fixture_diagram("decision.mmd");
-    let edge_index = edge_index(&diagram, "B", "D");
 
-    let full_svg = render_fixture_svg(&diagram, RoutingMode::FullCompute, SvgEdgePathStyle::Basis);
-    let unified_svg = render_fixture_svg(
-        &diagram,
-        RoutingMode::UnifiedPreview,
-        SvgEdgePathStyle::Basis,
+    let mut options = RenderOptions::default_svg();
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+
+    let mode = mmdflux::diagrams::flowchart::engine::MeasurementMode::for_format(
+        OutputFormat::Svg,
+        &RenderConfig::default(),
     );
+    let engine = DagreLayoutEngine::with_mode(mode);
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let geom = engine.layout(&diagram, &config).unwrap();
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
 
-    let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
-    let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
-    let full_start = full_points[0];
-    let unified_start = unified_points[0];
-    let dx = (full_start.0 - unified_start.0).abs();
-    let dy = (full_start.1 - unified_start.1).abs();
-    let displacement = (dx * dx + dy * dy).sqrt();
-
+    // B is a diamond; B->D is a forward edge — verify source endpoint is on diamond boundary
+    let edge = routed
+        .edges
+        .iter()
+        .find(|e| e.from == "B" && e.to == "D")
+        .expect("missing B->D edge");
+    let start = edge.path.first().unwrap();
+    let b_rect = geom.nodes.get("B").unwrap().rect;
+    let cx = b_rect.x + b_rect.width / 2.0;
+    let cy = b_rect.y + b_rect.height / 2.0;
+    let w = b_rect.width / 2.0;
+    let h = b_rect.height / 2.0;
+    let boundary = (start.x - cx).abs() / w + (start.y - cy).abs() / h;
     assert!(
-        displacement <= 24.0,
-        "diamond exit clipping should avoid large endpoint displacement from full-compute (<=24px); full_start={full_start:?}, unified_start={unified_start:?}, displacement={displacement}, full_points={full_points:?}, unified_points={unified_points:?}"
+        (boundary - 1.0).abs() < 0.05,
+        "unified-preview B->D source should be on diamond boundary: boundary={boundary}, start={start:?}"
     );
 }
 

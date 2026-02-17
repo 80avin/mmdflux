@@ -7,10 +7,10 @@ use std::collections::{HashMap, HashSet};
 
 use super::route_policy::effective_edge_direction;
 use super::routing_core::{
-    Face, Q1OverflowSide, build_orthogonal_path_float, normalize_orthogonal_route_contracts,
-    q1_overflow_face_for_slot, q1_primary_face_capacity, q1_primary_target_face,
-    q2_backward_channel_face, q4_rank_span_should_use_periphery, q4_required_periphery_detour,
-    resolve_q1_q2_face_conflict,
+    Face, Q1OverflowSide, build_orthogonal_path_float, intersect_shape_boundary_float,
+    normalize_orthogonal_route_contracts, q1_overflow_face_for_slot, q1_primary_face_capacity,
+    q1_primary_target_face, q2_backward_channel_face, q4_rank_span_should_use_periphery,
+    q4_required_periphery_detour, resolve_q1_q2_face_conflict,
 };
 use crate::diagram::RoutingPolicyToggles;
 use crate::diagrams::flowchart::geometry::{
@@ -1333,7 +1333,14 @@ fn expand_compact_td_bt_backward_terminal_return(
         return;
     }
 
-    *path = vec![start, source_stem, right_jog, outer_vertical, left_jog, terminal];
+    *path = vec![
+        start,
+        source_stem,
+        right_jog,
+        outer_vertical,
+        left_jog,
+        terminal,
+    ];
 }
 
 fn collapse_terminal_turnback_spikes(path: &mut Vec<FPoint>, canonical_face: Face) {
@@ -1833,7 +1840,6 @@ fn anchor_path_endpoints_to_endpoint_faces(
 
     if let Some((from_rect, from_shape)) =
         endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
-        && !matches!(from_shape, Shape::Diamond | Shape::Hexagon)
     {
         let start = path[0];
         let next = path[1];
@@ -1849,19 +1855,18 @@ fn anchor_path_endpoints_to_endpoint_faces(
                 false,
                 false,
             );
-            path[0] = clipped;
+            path[0] = project_endpoint_to_shape(clipped, next, from_rect, from_shape);
         }
     }
 
     if let Some((to_rect, to_shape)) =
         endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
-        && !matches!(to_shape, Shape::Diamond | Shape::Hexagon)
     {
         let last = path.len() - 1;
         let end = path[last];
         let prev = path[last - 1];
         if point_on_or_inside_rect(end, &to_rect, EPS) {
-            path[last] = clip_point_to_axis_face(
+            let clipped = clip_point_to_axis_face(
                 end,
                 prev,
                 to_rect,
@@ -1872,7 +1877,22 @@ fn anchor_path_endpoints_to_endpoint_faces(
                 target_overflowed,
                 target_has_backward_conflict,
             );
+            path[last] = project_endpoint_to_shape(clipped, prev, to_rect, to_shape);
         }
+    }
+}
+
+/// Project a rect-clipped endpoint to the actual shape boundary for non-rect shapes.
+/// For rectangles, returns the rect-clipped point unchanged.
+fn project_endpoint_to_shape(
+    rect_clipped: FPoint,
+    approach: FPoint,
+    rect: FRect,
+    shape: Shape,
+) -> FPoint {
+    match shape {
+        Shape::Diamond | Shape::Hexagon => intersect_shape_boundary_float(rect, shape, approach),
+        _ => rect_clipped,
     }
 }
 

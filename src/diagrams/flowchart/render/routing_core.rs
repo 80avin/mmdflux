@@ -919,6 +919,7 @@ fn intersect_diamond_boundary(rect: FRect, approach: FPoint) -> FPoint {
 
 /// Return the 4 vertices of a diamond (rhombus) inscribed in `rect`.
 /// Order: top, right, bottom, left (clockwise from top).
+#[cfg(test)]
 pub(crate) fn diamond_vertices(rect: FRect) -> [FPoint; 4] {
     let cx = rect.x + rect.width / 2.0;
     let cy = rect.y + rect.height / 2.0;

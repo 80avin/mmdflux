@@ -1037,22 +1037,30 @@ fn unified_route_contracts_keep_primary_axis_departure_stem_for_off_center_td_so
             edge.path
         );
 
-        let source_rect = geom
+        let source_node = geom
             .nodes
             .get(from)
-            .unwrap_or_else(|| panic!("fixture should contain source {from}"))
-            .rect;
+            .unwrap_or_else(|| panic!("fixture should contain source {from}"));
+        let source_rect = source_node.rect;
         let start = edge.path[0];
         let next = edge.path[1];
         let center_x = source_rect.x + source_rect.width / 2.0;
         let source_offset = (start.x - center_x).abs();
-        let min_off_center = 1.0;
 
-        assert!(
-            source_offset >= min_off_center,
-            "fixture expectation invalid: {from} -> {to} source should be off-center, got offset={source_offset}, min={min_off_center}, path={:?}",
-            edge.path
+        // Diamond shapes exit through the bottom vertex which is at center-x,
+        // so the off-center assertion only applies to non-diamond shapes.
+        let is_diamond = matches!(
+            source_node.shape,
+            mmdflux::graph::Shape::Diamond | mmdflux::graph::Shape::Hexagon
         );
+        if !is_diamond {
+            let min_off_center = 1.0;
+            assert!(
+                source_offset >= min_off_center,
+                "fixture expectation invalid: {from} -> {to} source should be off-center, got offset={source_offset}, min={min_off_center}, path={:?}",
+                edge.path
+            );
+        }
         assert!(
             (next.x - start.x).abs() <= ROUTE_EPS && (next.y - start.y).abs() > ROUTE_EPS,
             "off-center TD source should keep a primary-axis departure stem before sweeping for {from} -> {to}: start={start:?}, next={next:?}, path={:?}",
@@ -2703,4 +2711,32 @@ fn q5_styled_segment_monitor_reports_actionable_summary_for_routed_geometry() {
         "Q5 monitor detected styled-segment violations: {:#?}",
         report
     );
+}
+
+#[test]
+fn unified_preview_diamond_source_endpoints_on_boundary() {
+    let (diagram, geom) = layout_fixture_svg("decision.mmd");
+    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    // B is a diamond node; B->C and B->D are forward edges from B
+    for (from, to) in [("B", "C"), ("B", "D")] {
+        let edge = unified
+            .edges
+            .iter()
+            .find(|e| e.from == from && e.to == to)
+            .unwrap_or_else(|| panic!("missing edge {from}->{to}"));
+        let start = edge.path.first().unwrap();
+        let b_node = geom.nodes.get("B").unwrap();
+        let b_rect = b_node.rect;
+        let cx = b_rect.x + b_rect.width / 2.0;
+        let cy = b_rect.y + b_rect.height / 2.0;
+        let w = b_rect.width / 2.0;
+        let h = b_rect.height / 2.0;
+        let boundary = (start.x - cx).abs() / w + (start.y - cy).abs() / h;
+        assert!(
+            (boundary - 1.0).abs() < 0.05,
+            "diamond source endpoint for {from}->{to} should be on diamond boundary, \
+             got {boundary}: {start:?}"
+        );
+    }
 }
