@@ -1538,6 +1538,28 @@ fn svg_linear_unified_preview_ci_pipeline_diamond_exits_avoid_extra_elbow_jogs()
 }
 
 #[test]
+fn svg_unified_preview_backward_edges_use_orthogonal_shape_in_non_orth_styles() {
+    let diagram = load_flowchart_fixture_diagram("simple_cycle.mmd");
+    let edge_idx = edge_index(&diagram, "C", "A");
+
+    let orth_svg = render_fixture_svg(
+        &diagram,
+        RoutingMode::UnifiedPreview,
+        SvgEdgePathStyle::Orthogonal,
+    );
+    let orth_points = edge_path_for_svg_order(&diagram, &orth_svg, edge_idx);
+
+    for style in [SvgEdgePathStyle::Linear, SvgEdgePathStyle::Rounded] {
+        let svg = render_fixture_svg(&diagram, RoutingMode::UnifiedPreview, style);
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        assert_eq!(
+            points, orth_points,
+            "simple_cycle C->A backward edge should currently match orthogonal path shape in unified preview for style {style:?}; expected={orth_points:?}, actual={points:?}"
+        );
+    }
+}
+
+#[test]
 fn svg_orthogonal_unified_preview_label_spacing_keeps_td_departure_stems_from_source() {
     let diagram = load_flowchart_fixture_diagram("label_spacing.mmd");
     let mut options = RenderOptions::default_svg();
