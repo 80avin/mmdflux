@@ -896,7 +896,12 @@ pub(crate) fn intersect_shape_boundary_float(
     approach: FPoint,
 ) -> FPoint {
     match shape {
-        Shape::Diamond | Shape::Hexagon => intersect_diamond_boundary(rect, approach),
+        Shape::Hexagon => {
+            let verts = hexagon_vertices(rect);
+            let center = FPoint::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+            intersect_convex_polygon(&verts, approach, center)
+        }
+        Shape::Diamond => intersect_diamond_boundary(rect, approach),
         _ => intersect_rect_boundary(rect, approach),
     }
 }
@@ -933,6 +938,58 @@ pub(crate) fn hexagon_vertices(rect: FRect) -> [FPoint; 6] {
         FPoint::new(rect.x + indent, rect.y + rect.height), // bottom-left
         FPoint::new(rect.x, cy),                           // left
     ]
+}
+
+/// Intersect a ray from `center` toward `approach` with a convex polygon.
+///
+/// Returns the point where the ray first crosses the polygon boundary.
+/// For degenerate cases (approach == center), returns the bottom-most vertex.
+/// Vertices must be in order (clockwise or counter-clockwise).
+pub(crate) fn intersect_convex_polygon(
+    vertices: &[FPoint],
+    approach: FPoint,
+    center: FPoint,
+) -> FPoint {
+    let dx = approach.x - center.x;
+    let dy = approach.y - center.y;
+
+    if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+        // Degenerate: return bottom-most vertex
+        return vertices
+            .iter()
+            .copied()
+            .max_by(|a, b| a.y.partial_cmp(&b.y).unwrap())
+            .unwrap_or(center);
+    }
+
+    let n = vertices.len();
+    let mut best_t = f64::INFINITY;
+    let mut best_point = center;
+
+    for i in 0..n {
+        let a = vertices[i];
+        let b = vertices[(i + 1) % n];
+
+        // Edge vector
+        let ex = b.x - a.x;
+        let ey = b.y - a.y;
+
+        // Solve: center + t * (dx, dy) = a + s * (ex, ey)
+        let denom = dx * ey - dy * ex;
+        if denom.abs() < f64::EPSILON {
+            continue; // Parallel
+        }
+
+        let t = ((a.x - center.x) * ey - (a.y - center.y) * ex) / denom;
+        let s = ((a.x - center.x) * dy - (a.y - center.y) * dx) / denom;
+
+        if t > 0.0 && s >= 0.0 && s <= 1.0 && t < best_t {
+            best_t = t;
+            best_point = FPoint::new(center.x + t * dx, center.y + t * dy);
+        }
+    }
+
+    best_point
 }
 
 /// Return the 4 vertices of a diamond (rhombus) inscribed in `rect`.
@@ -1141,6 +1198,76 @@ mod tests {
         // left
         assert!((verts[5].x - 50.0).abs() < 1e-6);
         assert!((verts[5].y - cy).abs() < 1e-6);
+    }
+
+    #[test]
+    fn polygon_ray_hexagon_vertical_approach_hits_flat_top() {
+        let rect = FRect::new(50.0, 30.0, 100.0, 60.0);
+        let verts = hexagon_vertices(rect);
+        let center = FPoint::new(100.0, 60.0);
+        // Approach from directly above, slightly off-center
+        let approach = FPoint::new(90.0, 0.0);
+        let result = intersect_convex_polygon(&verts, approach, center);
+        // Should hit the flat top edge at x=90 (between indent points 70 and 130)
+        assert!(
+            (result.y - 30.0).abs() < 0.01,
+            "should hit top edge, got y={}",
+            result.y
+        );
+        // Ray from (100,60) toward (90,0) hits top edge at x=95 (not 90, due to diagonal)
+        assert!(
+            (result.x - 95.0).abs() < 0.01,
+            "should hit top edge at projected x, got x={}",
+            result.x
+        );
+    }
+
+    #[test]
+    fn polygon_ray_hexagon_vertical_approach_center_hits_flat_top() {
+        let rect = FRect::new(50.0, 30.0, 100.0, 60.0);
+        let verts = hexagon_vertices(rect);
+        let center = FPoint::new(100.0, 60.0);
+        let approach = FPoint::new(100.0, 0.0);
+        let result = intersect_convex_polygon(&verts, approach, center);
+        assert!((result.y - 30.0).abs() < 0.01);
+        assert!((result.x - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn polygon_ray_hexagon_lateral_approach_hits_right_vertex() {
+        let rect = FRect::new(50.0, 30.0, 100.0, 60.0);
+        let verts = hexagon_vertices(rect);
+        let center = FPoint::new(100.0, 60.0);
+        let approach = FPoint::new(200.0, 60.0);
+        let result = intersect_convex_polygon(&verts, approach, center);
+        assert!((result.x - 150.0).abs() < 0.01, "should hit right vertex");
+        assert!((result.y - 60.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn polygon_ray_diamond_matches_closed_form() {
+        let rect = FRect::new(10.0, 10.0, 20.0, 20.0);
+        let verts = diamond_vertices(rect);
+        let center = FPoint::new(20.0, 20.0);
+        let angles = [
+            0.0_f64, 30.0, 45.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 240.0, 270.0, 300.0, 330.0,
+        ];
+        for angle_deg in angles {
+            let angle = angle_deg.to_radians();
+            let approach =
+                FPoint::new(center.x + 50.0 * angle.cos(), center.y + 50.0 * angle.sin());
+            let polygon_result = intersect_convex_polygon(&verts, approach, center);
+            let closed_result = intersect_shape_boundary_float(rect, Shape::Diamond, approach);
+            assert!(
+                (polygon_result.x - closed_result.x).abs() < 1e-6
+                    && (polygon_result.y - closed_result.y).abs() < 1e-6,
+                "Oracle mismatch at {angle_deg}°: poly=({}, {}), closed=({}, {})",
+                polygon_result.x,
+                polygon_result.y,
+                closed_result.x,
+                closed_result.y,
+            );
+        }
     }
 
     #[test]
