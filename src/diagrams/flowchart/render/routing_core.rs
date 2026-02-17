@@ -906,6 +906,8 @@ pub(crate) fn intersect_shape_boundary_float(
     }
 }
 
+/// Diamond boundary intersection using closed-form `|dx|/w + |dy|/h = 1`.
+/// Verified equivalent to `intersect_convex_polygon` by oracle property test.
 fn intersect_diamond_boundary(rect: FRect, approach: FPoint) -> FPoint {
     let cx = rect.x + rect.width / 2.0;
     let cy = rect.y + rect.height / 2.0;
@@ -1267,6 +1269,38 @@ mod tests {
                 closed_result.x,
                 closed_result.y,
             );
+        }
+    }
+
+    #[test]
+    fn diamond_closed_form_matches_polygon_all_angles() {
+        let rects = [
+            FRect::new(0.0, 0.0, 20.0, 20.0),    // square
+            FRect::new(0.0, 0.0, 40.0, 20.0),    // wide
+            FRect::new(0.0, 0.0, 20.0, 40.0),    // tall
+            FRect::new(50.0, 30.0, 100.0, 60.0), // offset
+        ];
+        for rect in rects {
+            let center = FPoint::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+            let verts = diamond_vertices(rect);
+            for angle_deg in (0..360).step_by(5) {
+                let angle = (angle_deg as f64).to_radians();
+                let approach = FPoint::new(
+                    center.x + 200.0 * angle.cos(),
+                    center.y + 200.0 * angle.sin(),
+                );
+                let closed = intersect_shape_boundary_float(rect, Shape::Diamond, approach);
+                let polygon = intersect_convex_polygon(&verts, approach, center);
+                assert!(
+                    (closed.x - polygon.x).abs() < 1e-10 && (closed.y - polygon.y).abs() < 1e-10,
+                    "Mismatch at {angle_deg}° for rect {:?}: closed=({}, {}), polygon=({}, {})",
+                    rect,
+                    closed.x,
+                    closed.y,
+                    polygon.x,
+                    polygon.y,
+                );
+            }
         }
     }
 
