@@ -972,8 +972,7 @@ fn align_backward_outer_lane_to_hint(
                     aligned = true;
                 }
             }
-            if !aligned {
-            }
+            if !aligned {}
         }
         Direction::LeftRight | Direction::RightLeft => {
             let hint_outer = hint

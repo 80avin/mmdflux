@@ -917,6 +917,24 @@ fn intersect_diamond_boundary(rect: FRect, approach: FPoint) -> FPoint {
     FPoint::new(cx + t * dx, cy + t * dy)
 }
 
+/// Indent fraction for hexagon flat top/bottom edges (matches SVG polygon).
+pub(crate) const HEXAGON_INDENT_FACTOR: f64 = 0.2;
+
+/// Return the 6 vertices of a hexagon inscribed in `rect`.
+/// Order: top-left, top-right, right, bottom-right, bottom-left, left (clockwise).
+pub(crate) fn hexagon_vertices(rect: FRect) -> [FPoint; 6] {
+    let indent = rect.width * HEXAGON_INDENT_FACTOR;
+    let cy = rect.y + rect.height / 2.0;
+    [
+        FPoint::new(rect.x + indent, rect.y),              // top-left
+        FPoint::new(rect.x + rect.width - indent, rect.y), // top-right
+        FPoint::new(rect.x + rect.width, cy),              // right
+        FPoint::new(rect.x + rect.width - indent, rect.y + rect.height), // bottom-right
+        FPoint::new(rect.x + indent, rect.y + rect.height), // bottom-left
+        FPoint::new(rect.x, cy),                           // left
+    ]
+}
+
 /// Return the 4 vertices of a diamond (rhombus) inscribed in `rect`.
 /// Order: top, right, bottom, left (clockwise from top).
 #[cfg(test)]
@@ -1096,6 +1114,33 @@ mod tests {
         assert!((verts[1].x - 30.0).abs() < 0.01 && (verts[1].y - 20.0).abs() < 0.01); // right
         assert!((verts[2].x - 20.0).abs() < 0.01 && (verts[2].y - 30.0).abs() < 0.01); // bottom
         assert!((verts[3].x - 10.0).abs() < 0.01 && (verts[3].y - 20.0).abs() < 0.01); // left
+    }
+
+    #[test]
+    fn hexagon_vertices_match_svg_polygon() {
+        let rect = FRect::new(50.0, 30.0, 100.0, 60.0);
+        let verts = hexagon_vertices(rect);
+        let indent = 100.0 * HEXAGON_INDENT_FACTOR; // 20.0
+        let cy = 30.0 + 30.0; // 60.0
+        assert_eq!(verts.len(), 6);
+        // top-left
+        assert!((verts[0].x - (50.0 + indent)).abs() < 1e-6);
+        assert!((verts[0].y - 30.0).abs() < 1e-6);
+        // top-right
+        assert!((verts[1].x - (50.0 + 100.0 - indent)).abs() < 1e-6);
+        assert!((verts[1].y - 30.0).abs() < 1e-6);
+        // right
+        assert!((verts[2].x - 150.0).abs() < 1e-6);
+        assert!((verts[2].y - cy).abs() < 1e-6);
+        // bottom-right
+        assert!((verts[3].x - (50.0 + 100.0 - indent)).abs() < 1e-6);
+        assert!((verts[3].y - 90.0).abs() < 1e-6);
+        // bottom-left
+        assert!((verts[4].x - (50.0 + indent)).abs() < 1e-6);
+        assert!((verts[4].y - 90.0).abs() < 1e-6);
+        // left
+        assert!((verts[5].x - 50.0).abs() < 1e-6);
+        assert!((verts[5].y - cy).abs() < 1e-6);
     }
 
     #[test]

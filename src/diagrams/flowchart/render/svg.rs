@@ -9,7 +9,7 @@ use super::layout::{
     expand_parent_bounds_dagre, reconcile_sublayouts_dagre, resolve_sublayout_overlaps,
 };
 use super::route_policy::effective_edge_direction;
-use super::routing_core::build_orthogonal_path_float;
+use super::routing_core::{build_orthogonal_path_float, hexagon_vertices};
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use super::unified_router::{UnifiedRoutingOptions, route_edges_unified};
@@ -1610,16 +1610,9 @@ fn render_node_shape(
             writer.push_line(&line);
         }
         Shape::Hexagon => {
-            let indent = rect.width * 0.2;
-            let cy = rect.y + rect.height / 2.0;
-            let points = vec![
-                (rect.x + indent, rect.y),
-                (rect.x + rect.width - indent, rect.y),
-                (rect.x + rect.width, cy),
-                (rect.x + rect.width - indent, rect.y + rect.height),
-                (rect.x + indent, rect.y + rect.height),
-                (rect.x, cy),
-            ];
+            let frect = geometry::FRect::new(rect.x, rect.y, rect.width, rect.height);
+            let verts = hexagon_vertices(frect);
+            let points: Vec<(f64, f64)> = verts.iter().map(|v| (v.x, v.y)).collect();
             let line = format!(
                 "<polygon points=\"{points}\"{style} />",
                 points = polygon_points(&points),
