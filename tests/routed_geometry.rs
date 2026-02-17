@@ -2863,3 +2863,32 @@ fn hexagon_flow_sources_on_flat_bottom_edge() {
         );
     }
 }
+
+#[test]
+fn diamond_backward_target_on_boundary() {
+    let (diagram, geom) = layout_fixture_svg("diamond_backward.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    // C->B backward edge: target endpoint on diamond B's boundary
+    let edge = routed
+        .edges
+        .iter()
+        .find(|e| e.from == "C" && e.to == "B")
+        .unwrap_or_else(|| panic!("missing edge C->B"));
+    assert!(edge.is_backward, "C->B should be a backward edge");
+    let end = *edge.path.last().unwrap();
+    let b_rect = geom.nodes.get("B").unwrap().rect;
+    let cx = b_rect.x + b_rect.width / 2.0;
+    let cy = b_rect.y + b_rect.height / 2.0;
+    let w = b_rect.width / 2.0;
+    let h = b_rect.height / 2.0;
+    let boundary = (end.x - cx).abs() / w + (end.y - cy).abs() / h;
+    // Backward edge post-processing (lane clearance, normalization) may push the
+    // endpoint slightly beyond the diamond boundary. The key contract is that the
+    // endpoint is not deep inside the diamond (boundary >> 0.5 would indicate the
+    // router collapsed it to center).
+    assert!(
+        boundary >= 0.8,
+        "backward target on diamond B should be near or outside boundary, got {boundary}: {end:?}"
+    );
+}

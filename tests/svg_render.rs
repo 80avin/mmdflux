@@ -2670,3 +2670,14 @@ fn mmds_svg_hexagon_endpoint_convergence_hexagon_flow() {
     // Fan-in to hexagon A
     assert_mmds_svg_endpoint_convergence(&diagram, "C", "A", tolerance);
 }
+
+#[test]
+fn mmds_svg_diamond_backward_endpoint_convergence() {
+    let diagram = load_flowchart_fixture_diagram("diamond_backward.mmd");
+    let tolerance = 5.0;
+    // Forward edges to/from diamond B
+    assert_mmds_svg_endpoint_convergence(&diagram, "A", "B", tolerance);
+    assert_mmds_svg_endpoint_convergence(&diagram, "B", "C", tolerance);
+    // Backward edge C->B (target is diamond)
+    assert_mmds_svg_endpoint_convergence(&diagram, "C", "B", tolerance);
+}
