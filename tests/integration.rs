@@ -3523,9 +3523,15 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .expect("fixture should contain edge Remote -> Working");
 
         let full_start = full_edge.path[0];
-        let _full_end = *full_edge.path.last().expect("full edge should have endpoint");
+        let _full_end = *full_edge
+            .path
+            .last()
+            .expect("full edge should have endpoint");
         let unified_start = unified_edge.path[0];
-        let unified_end = *unified_edge.path.last().expect("unified edge should have endpoint");
+        let unified_end = *unified_edge
+            .path
+            .last()
+            .expect("unified edge should have endpoint");
         let _full_source_face = point_face(source_rect, full_start);
         assert_eq!(
             point_face(source_rect, unified_start),
@@ -3604,9 +3610,15 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .expect("fixture should contain edge Response -> Client");
 
         let full_start = full_edge.path[0];
-        let _full_end = *full_edge.path.last().expect("full edge should have endpoint");
+        let _full_end = *full_edge
+            .path
+            .last()
+            .expect("full edge should have endpoint");
         let unified_start = unified_edge.path[0];
-        let unified_end = *unified_edge.path.last().expect("unified edge should have endpoint");
+        let unified_end = *unified_edge
+            .path
+            .last()
+            .expect("unified edge should have endpoint");
         let _full_source_face = point_face(source_rect, full_start);
         assert_eq!(
             point_face(source_rect, unified_start),

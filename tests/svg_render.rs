@@ -1379,10 +1379,8 @@ fn svg_orthogonal_unified_preview_complex_backward_edge_keeps_arrowhead_visible(
         .copied()
         .expect("complex E->A should have SVG path points");
 
-    let ends_on_target_border_or_inside = end.0 >= tx - 0.5
-        && end.0 <= tx + tw + 0.5
-        && end.1 >= ty - 0.5
-        && end.1 <= ty + th + 0.5;
+    let ends_on_target_border_or_inside =
+        end.0 >= tx - 0.5 && end.0 <= tx + tw + 0.5 && end.1 >= ty - 0.5 && end.1 <= ty + th + 0.5;
     assert!(
         !ends_on_target_border_or_inside,
         "complex E->A orthogonal endpoint should be pulled outside the Input node envelope so arrowhead remains visible; end={end:?}, target_rect=({tx}, {ty}, {tw}, {th}), points={points:?}"
@@ -1536,6 +1534,31 @@ fn svg_linear_unified_preview_ci_pipeline_diamond_exits_avoid_extra_elbow_jogs()
                 "ci_pipeline {from}->{to} should avoid extra elbow jogs right after Deploy? in unified linear mode (prefer direct diagonal-to-lane): points={points:?}"
             );
         }
+    }
+}
+
+#[test]
+fn svg_orthogonal_unified_preview_label_spacing_keeps_td_departure_stems_from_source() {
+    let diagram = load_flowchart_fixture_diagram("label_spacing.mmd");
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    for (from, to) in [("A", "B"), ("A", "C")] {
+        let edge_idx = edge_index(&diagram, from, to);
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        assert!(
+            points.len() >= 2,
+            "label_spacing {from}->{to} should expose at least two points in orthogonal mode: {points:?}"
+        );
+        let start = points[0];
+        let next = points[1];
+        assert!(
+            (next.0 - start.0).abs() <= 0.5 && (next.1 - start.1).abs() > 0.5,
+            "label_spacing {from}->{to} unified orthogonal route should depart A along TD primary axis (vertical stem first), not lateral-first: start={start:?}, next={next:?}, points={points:?}"
+        );
     }
 }
 

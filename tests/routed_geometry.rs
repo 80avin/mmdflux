@@ -253,6 +253,27 @@ fn point_on_target_face(rect: FRect, point: FPoint) -> &'static str {
     }
 }
 
+fn face_corner_inset_margin(rect: FRect, point: FPoint) -> Option<f64> {
+    let eps = 0.5;
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    let on_top = (point.y - top).abs() <= eps;
+    let on_bottom = (point.y - bottom).abs() <= eps;
+    let on_left = (point.x - left).abs() <= eps;
+    let on_right = (point.x - right).abs() <= eps;
+
+    if on_top || on_bottom {
+        return Some((point.x - left).min(right - point.x));
+    }
+    if on_left || on_right {
+        return Some((point.y - top).min(bottom - point.y));
+    }
+    None
+}
+
 fn terminal_support_is_normal_to_attached_rect_face(
     rect: FRect,
     prev: FPoint,
@@ -490,16 +511,26 @@ fn stale_label_anchor_is_replaced_with_valid_route_anchor() {
         .find(|edge| edge.from == "Config" && edge.to == "Error")
         .expect("fixture should contain Config -> Error")
         .index;
-    let original_anchor = geom
-        .edges
-        .iter()
-        .find(|edge| edge.index == stale_edge_index)
-        .and_then(|edge| edge.label_position)
-        .expect("fixture should carry layout label anchor for Config -> Error");
+    let mut stale_geom = geom.clone();
+    let original_anchor = {
+        let edge = stale_geom
+            .edges
+            .iter_mut()
+            .find(|edge| edge.index == stale_edge_index)
+            .expect("fixture should contain layout edge for Config -> Error");
+        let anchor = edge
+            .label_position
+            .expect("fixture should carry layout label anchor for Config -> Error");
+        // Force a deterministic stale anchor so this contract does not depend
+        // on incidental route shape changes from unrelated source-stem tweaks.
+        let stale_anchor = FPoint::new(anchor.x + 60.0, anchor.y + 60.0);
+        edge.label_position = Some(stale_anchor);
+        stale_anchor
+    };
 
     let routed = route_graph_geometry_with_policies(
         &diagram,
-        &geom,
+        &stale_geom,
         RoutingMode::UnifiedPreview,
         RoutingPolicyToggles {
             q3_label_revalidation: true,
@@ -884,6 +915,72 @@ fn unified_preview_fan_in_lr_target_endpoints_stay_on_or_outside_target_border()
 }
 
 #[test]
+fn unified_preview_ports_keep_minimum_corner_inset_for_fan_edges() {
+    const MIN_CORNER_INSET: f64 = 8.0;
+    let cases = [
+        ("fan_out.mmd", "A", "B"),
+        ("fan_out.mmd", "A", "D"),
+        ("fan_in.mmd", "A", "D"),
+        ("fan_in.mmd", "C", "D"),
+        ("fan_in_lr.mmd", "A", "D"),
+        ("fan_in_lr.mmd", "C", "D"),
+    ];
+
+    for (fixture, from, to) in cases {
+        let (diagram, geom) = layout_fixture_svg(fixture);
+        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let edge = routed
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain edge {from} -> {to}"));
+
+        assert!(
+            edge.path.len() >= 2,
+            "fixture {fixture} edge {from}->{to} should have at least 2 routed points: {:?}",
+            edge.path
+        );
+
+        let source_rect = geom
+            .nodes
+            .get(from)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain source {from}"))
+            .rect;
+        let target_rect = geom
+            .nodes
+            .get(to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target {to}"))
+            .rect;
+
+        let start = edge.path[0];
+        let end = *edge.path.last().expect("edge should contain endpoint");
+        let source_margin = face_corner_inset_margin(source_rect, start).unwrap_or_else(|| {
+            panic!(
+                "fixture {fixture} edge {from}->{to} source endpoint should lie on source face: start={start:?}, source_rect={source_rect:?}, path={:?}",
+                edge.path
+            )
+        });
+        let target_margin = face_corner_inset_margin(target_rect, end).unwrap_or_else(|| {
+            panic!(
+                "fixture {fixture} edge {from}->{to} target endpoint should lie on target face: end={end:?}, target_rect={target_rect:?}, path={:?}",
+                edge.path
+            )
+        });
+
+        assert!(
+            source_margin >= MIN_CORNER_INSET,
+            "fixture {fixture} edge {from}->{to} source inset too small: margin={source_margin:.2}, expected>={MIN_CORNER_INSET:.2}, source_rect={source_rect:?}, start={start:?}, path={:?}",
+            edge.path
+        );
+        assert!(
+            target_margin >= MIN_CORNER_INSET,
+            "fixture {fixture} edge {from}->{to} target inset too small: margin={target_margin:.2}, expected>={MIN_CORNER_INSET:.2}, target_rect={target_rect:?}, end={end:?}, path={:?}",
+            edge.path
+        );
+    }
+}
+
+#[test]
 fn unified_preview_http_request_backward_edge_preserves_client_side_face_attachment() {
     let (diagram, geom) = layout_fixture("http_request.mmd");
     let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
@@ -923,7 +1020,7 @@ fn unified_preview_http_request_backward_edge_preserves_client_side_face_attachm
 }
 
 #[test]
-fn unified_route_contracts_prefer_lateral_exit_for_off_center_td_source_ports() {
+fn unified_route_contracts_keep_primary_axis_departure_stem_for_off_center_td_source_ports() {
     let (diagram, geom) = layout_fixture("compat_kitchen_sink.mmd");
     assert_eq!(geom.direction, mmdflux::Direction::TopDown);
     let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
@@ -957,8 +1054,8 @@ fn unified_route_contracts_prefer_lateral_exit_for_off_center_td_source_ports() 
             edge.path
         );
         assert!(
-            (next.y - start.y).abs() <= ROUTE_EPS && (next.x - start.x).abs() > ROUTE_EPS,
-            "off-center TD source should prefer lateral first segment to avoid down-then-sweep artifact for {from} -> {to}: start={start:?}, next={next:?}, path={:?}",
+            (next.x - start.x).abs() <= ROUTE_EPS && (next.y - start.y).abs() > ROUTE_EPS,
+            "off-center TD source should keep a primary-axis departure stem before sweeping for {from} -> {to}: start={start:?}, next={next:?}, path={:?}",
             edge.path
         );
     }
@@ -1017,7 +1114,7 @@ fn unified_route_contracts_keep_primary_stem_before_outward_td_fan_out_sweeps() 
 }
 
 #[test]
-fn unified_route_contracts_prefer_outward_first_source_exits_for_selected_fixtures() {
+fn unified_route_contracts_keep_directional_source_exits_for_selected_fixtures() {
     type EdgeExpectation = (&'static str, &'static str, f64);
     type FixtureExpectations = (&'static str, &'static [EdgeExpectation]);
 
@@ -1067,13 +1164,8 @@ fn unified_route_contracts_prefer_outward_first_source_exits_for_selected_fixtur
             let first_dy = next.y - start.y;
             if edge.path.len() >= 3 {
                 assert!(
-                    first_dy.abs() <= ROUTE_EPS && first_dx.abs() > ROUTE_EPS,
-                    "fixture {fixture} edge {from} -> {to} should leave source laterally first in TD when a bend is present: start={start:?}, next={next:?}, path={:?}",
-                    edge.path
-                );
-                assert!(
-                    first_dx.signum() == source_offset.signum(),
-                    "fixture {fixture} edge {from} -> {to} should move outward from source center on first segment: offset={source_offset}, first_dx={first_dx}, path={:?}",
+                    first_dx.abs() <= ROUTE_EPS && first_dy.abs() > ROUTE_EPS,
+                    "fixture {fixture} edge {from} -> {to} should leave source on TD primary axis first when a bend is present: start={start:?}, next={next:?}, path={:?}",
                     edge.path
                 );
             } else {
@@ -1926,7 +2018,10 @@ fn unified_preview_multi_edge_labeled_preserves_parallel_lane_separation() {
         "fixture contract invalid: unified-preview should keep two A->B parallel edges"
     );
 
-    for (full_edge, unified_edge) in full_parallel_edges.iter().zip(unified_parallel_edges.iter()) {
+    for (full_edge, unified_edge) in full_parallel_edges
+        .iter()
+        .zip(unified_parallel_edges.iter())
+    {
         let full_detour = lateral_detour_from_endpoint_axis(&full_edge.path, geom.direction);
         let unified_detour = lateral_detour_from_endpoint_axis(&unified_edge.path, geom.direction);
         assert!(

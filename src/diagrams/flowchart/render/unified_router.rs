@@ -116,6 +116,26 @@ pub(crate) fn route_edges_unified(
 
 const Q3_LABEL_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
 const POINT_EPS: f64 = 0.000_001;
+const MIN_PORT_CORNER_INSET_FORWARD: f64 = 8.0;
+const MIN_PORT_CORNER_INSET_BACKWARD: f64 = 5.0;
+
+fn clamp_face_coordinate_with_corner_inset(value: f64, min: f64, max: f64, max_inset: f64) -> f64 {
+    let lo = min.min(max);
+    let hi = min.max(max);
+    let span = hi - lo;
+    if span <= POINT_EPS {
+        (lo + hi) / 2.0
+    } else {
+        // Scale inset with face span so text-sized nodes keep usable side lanes,
+        // while SVG-sized nodes still enforce a visibly distinct stem offset.
+        let inset = (span * 0.2).clamp(1.0, max_inset);
+        if span <= inset * 2.0 {
+            (lo + hi) / 2.0
+        } else {
+            value.clamp(lo + inset, hi - inset)
+        }
+    }
+}
 
 fn revalidate_label_anchor(label_position: Option<FPoint>, path: &[FPoint]) -> Option<FPoint> {
     let Some(anchor) = label_position else {
@@ -204,13 +224,7 @@ fn build_unified_path(
     q4_rank_span: usize,
 ) -> Vec<FPoint> {
     let (backward_source_face_override, backward_target_face_override) =
-        backward_td_bt_face_overrides(
-            edge,
-            geometry,
-            direction,
-            is_backward,
-            target_overflowed,
-        );
+        backward_td_bt_face_overrides(edge, geometry, direction, is_backward, target_overflowed);
     let control_points = build_path_from_hints(edge, geometry);
     let mut path = build_contracted_path(&control_points, direction);
     anchor_path_endpoints_to_endpoint_faces(
@@ -222,13 +236,6 @@ fn build_unified_path(
         q1_policy_target_face,
         target_overflowed,
         target_has_backward_conflict,
-    );
-    prefer_lateral_exit_for_off_center_primary_axis_sources(
-        &mut path,
-        edge,
-        geometry,
-        direction,
-        is_backward,
     );
     ensure_primary_stem_for_flat_off_center_fanout_sources(
         &mut path,
@@ -292,7 +299,13 @@ fn build_unified_path(
         }
         if parity_override_active && has_immediate_axial_turnback(&finalized) {
             finalized = base_finalized;
-            enforce_backward_source_tangent_direction(&mut finalized, edge, geometry, direction, None);
+            enforce_backward_source_tangent_direction(
+                &mut finalized,
+                edge,
+                geometry,
+                direction,
+                None,
+            );
             ensure_backward_outer_lane_clearance(&mut finalized, direction, 12.0);
             align_backward_source_stem_to_outer_lane(&mut finalized, edge, geometry, direction);
             enforce_backward_terminal_tangent_direction(
@@ -304,7 +317,7 @@ fn build_unified_path(
                 None,
             );
         }
-        collapse_tiny_backward_terminal_staircase(&mut finalized, direction, 6.0);
+        collapse_tiny_backward_terminal_staircase(&mut finalized, direction, 8.0);
         align_backward_outer_lane_to_hint(
             &mut finalized,
             edge.layout_path_hint.as_deref(),
@@ -312,6 +325,7 @@ fn build_unified_path(
             edge,
             geometry,
         );
+        collapse_tiny_backward_terminal_staircase(&mut finalized, direction, 8.0);
         if matches!(direction, Direction::LeftRight | Direction::RightLeft) {
             collapse_collinear_interior_points(&mut finalized);
         }
@@ -609,72 +623,6 @@ fn path_has_diagonal_segments(path: &[FPoint]) -> bool {
     })
 }
 
-fn prefer_lateral_exit_for_off_center_primary_axis_sources(
-    path: &mut [FPoint],
-    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
-    geometry: &GraphGeometry,
-    direction: Direction,
-    is_backward: bool,
-) {
-    const MIN_OFF_CENTER_ABS: f64 = 1.0;
-    const SEG_EPS: f64 = 0.000_001;
-
-    if is_backward
-        || path.len() < 4
-        || !matches!(direction, Direction::TopDown | Direction::BottomTop)
-    {
-        return;
-    }
-
-    let Some((source_rect, _source_shape)) =
-        endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
-    else {
-        return;
-    };
-
-    let start = path[0];
-    let first = path[1];
-    let second = path[2];
-    let center_x = source_rect.x + source_rect.width / 2.0;
-    let source_offset = (start.x - center_x).abs();
-    if source_offset < MIN_OFF_CENTER_ABS {
-        return;
-    }
-
-    let first_is_vertical =
-        (start.x - first.x).abs() <= SEG_EPS && (start.y - first.y).abs() > SEG_EPS;
-    let second_is_horizontal =
-        (first.y - second.y).abs() <= SEG_EPS && (first.x - second.x).abs() > SEG_EPS;
-    if !first_is_vertical || !second_is_horizontal {
-        return;
-    }
-
-    let progresses_along_primary = match direction {
-        Direction::TopDown => first.y > start.y + SEG_EPS,
-        Direction::BottomTop => first.y < start.y - SEG_EPS,
-        _ => false,
-    };
-    if !progresses_along_primary {
-        return;
-    }
-
-    let lateral_delta = second.x - first.x;
-    if lateral_delta.abs() <= SEG_EPS {
-        return;
-    }
-    let outward_sign = (start.x - center_x).signum();
-    if outward_sign.abs() <= SEG_EPS || lateral_delta.signum() != outward_sign {
-        return;
-    }
-
-    let replacement = FPoint::new(second.x, start.y);
-    if (replacement.x - start.x).abs() <= SEG_EPS || (replacement.y - second.y).abs() <= SEG_EPS {
-        return;
-    }
-
-    path[1] = replacement;
-}
-
 fn ensure_primary_stem_for_flat_off_center_fanout_sources(
     path: &mut Vec<FPoint>,
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
@@ -929,8 +877,7 @@ fn align_backward_source_stem_to_outer_lane(
     let support = path[1];
     let next = path[2];
 
-    let start_on_top_or_bottom =
-        (start.y - top).abs() <= EPS || (start.y - bottom).abs() <= EPS;
+    let start_on_top_or_bottom = (start.y - top).abs() <= EPS || (start.y - bottom).abs() <= EPS;
     if !start_on_top_or_bottom {
         return;
     }
@@ -1094,7 +1041,6 @@ fn enforce_backward_terminal_tangent_direction(
 ) {
     const EPS: f64 = 0.000_001;
     const TANGENT_STEP: f64 = 8.0;
-    const FACE_CORNER_MARGIN: f64 = 1.0;
     if path.len() < 2 {
         return;
     }
@@ -1105,18 +1051,9 @@ fn enforce_backward_terminal_tangent_direction(
         return;
     };
 
-    let clamp_interior = |value: f64, min: f64, max: f64| {
-        let lo = min.min(max);
-        let hi = min.max(max);
-        if (hi - lo) <= FACE_CORNER_MARGIN * 2.0 {
-            (lo + hi) / 2.0
-        } else {
-            value.clamp(lo + FACE_CORNER_MARGIN, hi - FACE_CORNER_MARGIN)
-        }
-    };
-
     let last = path.len() - 1;
-    let canonical_face = preferred_target_face.unwrap_or_else(|| q2_backward_channel_face(direction));
+    let canonical_face =
+        preferred_target_face.unwrap_or_else(|| q2_backward_channel_face(direction));
     let left = target_rect.x;
     let right = target_rect.x + target_rect.width;
     let top = target_rect.y;
@@ -1132,21 +1069,41 @@ fn enforce_backward_terminal_tangent_direction(
     let mut support = match canonical_face {
         Face::Left => {
             end.x = left;
-            end.y = clamp_interior(end.y, top, bottom);
+            end.y = clamp_face_coordinate_with_corner_inset(
+                end.y,
+                top,
+                bottom,
+                MIN_PORT_CORNER_INSET_BACKWARD,
+            );
             FPoint::new(end.x - TANGENT_STEP, end.y)
         }
         Face::Right => {
             end.x = right;
-            end.y = clamp_interior(end.y, top, bottom);
+            end.y = clamp_face_coordinate_with_corner_inset(
+                end.y,
+                top,
+                bottom,
+                MIN_PORT_CORNER_INSET_BACKWARD,
+            );
             FPoint::new(end.x + TANGENT_STEP, end.y)
         }
         Face::Top => {
-            end.x = clamp_interior(end.x, left, right);
+            end.x = clamp_face_coordinate_with_corner_inset(
+                end.x,
+                left,
+                right,
+                MIN_PORT_CORNER_INSET_BACKWARD,
+            );
             end.y = top;
             FPoint::new(end.x, end.y - TANGENT_STEP)
         }
         Face::Bottom => {
-            end.x = clamp_interior(end.x, left, right);
+            end.x = clamp_face_coordinate_with_corner_inset(
+                end.x,
+                left,
+                right,
+                MIN_PORT_CORNER_INSET_BACKWARD,
+            );
             end.y = bottom;
             FPoint::new(end.x, end.y + TANGENT_STEP)
         }
@@ -1441,7 +1398,6 @@ fn enforce_backward_source_tangent_direction(
 ) {
     const EPS: f64 = 0.000_001;
     const TANGENT_STEP: f64 = 8.0;
-    const FACE_CORNER_MARGIN: f64 = 1.0;
     if path.len() < 2 {
         return;
     }
@@ -1452,17 +1408,8 @@ fn enforce_backward_source_tangent_direction(
         return;
     };
 
-    let clamp_interior = |value: f64, min: f64, max: f64| {
-        let lo = min.min(max);
-        let hi = min.max(max);
-        if (hi - lo) <= FACE_CORNER_MARGIN * 2.0 {
-            (lo + hi) / 2.0
-        } else {
-            value.clamp(lo + FACE_CORNER_MARGIN, hi - FACE_CORNER_MARGIN)
-        }
-    };
-
-    let canonical_face = preferred_source_face.unwrap_or_else(|| q2_backward_channel_face(direction));
+    let canonical_face =
+        preferred_source_face.unwrap_or_else(|| q2_backward_channel_face(direction));
     let left = source_rect.x;
     let right = source_rect.x + source_rect.width;
     let top = source_rect.y;
@@ -1474,23 +1421,48 @@ fn enforce_backward_source_tangent_direction(
     match canonical_face {
         Face::Left => {
             start.x = left;
-            start.y = clamp_interior(start.y, top, bottom);
+            start.y = clamp_face_coordinate_with_corner_inset(
+                start.y,
+                top,
+                bottom,
+                MIN_PORT_CORNER_INSET_BACKWARD,
+            );
         }
         Face::Right => {
             start.x = right;
-            start.y = clamp_interior(start.y, top, bottom);
+            start.y = clamp_face_coordinate_with_corner_inset(
+                start.y,
+                top,
+                bottom,
+                MIN_PORT_CORNER_INSET_BACKWARD,
+            );
         }
         Face::Top => {
-            start.x = clamp_interior(start.x, left, right);
+            start.x = clamp_face_coordinate_with_corner_inset(
+                start.x,
+                left,
+                right,
+                MIN_PORT_CORNER_INSET_BACKWARD,
+            );
             start.y = top;
         }
         Face::Bottom => {
-            start.x = clamp_interior(start.x, left, right);
+            start.x = clamp_face_coordinate_with_corner_inset(
+                start.x,
+                left,
+                right,
+                MIN_PORT_CORNER_INSET_BACKWARD,
+            );
             start.y = bottom;
         }
     }
     if matches!(canonical_face, Face::Left | Face::Right) {
-        start = bias_face_coordinate_toward_center(start, source_rect, 0.84);
+        start = bias_face_coordinate_toward_center(
+            start,
+            source_rect,
+            0.84,
+            MIN_PORT_CORNER_INSET_BACKWARD,
+        );
     }
     let mut support = match canonical_face {
         Face::Left => FPoint::new(start.x - TANGENT_STEP, start.y),
@@ -1917,6 +1889,11 @@ fn clip_point_to_axis_face(
 
     let dx = endpoint.x - adjacent.x;
     let dy = endpoint.y - adjacent.y;
+    let max_corner_inset = if preserve_existing_face {
+        MIN_PORT_CORNER_INSET_BACKWARD
+    } else {
+        MIN_PORT_CORNER_INSET_FORWARD
+    };
 
     if preserve_existing_face && is_target_endpoint {
         let canonical_face = q2_backward_channel_face(direction);
@@ -1927,17 +1904,29 @@ fn clip_point_to_axis_face(
             q1_policy_face,
             canonical_face,
         );
-        let mut clipped =
-            clip_point_to_rect_face(endpoint, rect, map_face_to_rect_face(resolved_face));
+        let mut clipped = clip_point_to_rect_face_with_inset(
+            endpoint,
+            rect,
+            map_face_to_rect_face(resolved_face),
+            max_corner_inset,
+        );
         if matches!(resolved_face, Face::Bottom) {
-            let left = rect.x + 1.0;
-            let right = rect.x + rect.width - 1.0;
             match direction {
                 Direction::LeftRight => {
-                    clipped.x = (adjacent.x - 1.0).clamp(left, right);
+                    clipped.x = clamp_face_coordinate_with_corner_inset(
+                        adjacent.x - 1.0,
+                        rect.x,
+                        rect.x + rect.width,
+                        max_corner_inset,
+                    );
                 }
                 Direction::RightLeft => {
-                    clipped.x = (adjacent.x + 1.0).clamp(left, right);
+                    clipped.x = clamp_face_coordinate_with_corner_inset(
+                        adjacent.x + 1.0,
+                        rect.x,
+                        rect.x + rect.width,
+                        max_corner_inset,
+                    );
                 }
                 _ => {}
             }
@@ -1964,7 +1953,12 @@ fn clip_point_to_axis_face(
             || matches!(direction, Direction::TopDown | Direction::BottomTop)
         {
             let resolved_rect_face = map_face_to_rect_face(resolved_face);
-            return clip_point_to_rect_face(endpoint, rect, resolved_rect_face);
+            return clip_point_to_rect_face_with_inset(
+                endpoint,
+                rect,
+                resolved_rect_face,
+                max_corner_inset,
+            );
         }
 
         let fallback_face = if terminal_is_horizontal || dx.abs() >= dy.abs() {
@@ -1985,7 +1979,12 @@ fn clip_point_to_axis_face(
             Some(policy_face),
             fallback_face,
         );
-        return clip_point_to_rect_face(endpoint, rect, map_face_to_rect_face(resolved_fallback));
+        return clip_point_to_rect_face_with_inset(
+            endpoint,
+            rect,
+            map_face_to_rect_face(resolved_fallback),
+            max_corner_inset,
+        );
     }
 
     if !preserve_existing_face && target_overflowed {
@@ -1993,7 +1992,12 @@ fn clip_point_to_axis_face(
         if let Some(actual_face) = boundary_face_excluding_corners(endpoint, rect, 0.5)
             && actual_face == canonical
         {
-            return clip_point_to_rect_face(endpoint, rect, opposite_rect_face(canonical));
+            return clip_point_to_rect_face_with_inset(
+                endpoint,
+                rect,
+                opposite_rect_face(canonical),
+                max_corner_inset,
+            );
         }
     }
 
@@ -2008,8 +2012,18 @@ fn clip_point_to_axis_face(
             && matches!(face, RectFace::Left | RectFace::Right)
         {
             return match face {
-                RectFace::Left => FPoint::new(left, endpoint.y.clamp(y_min, y_max)),
-                RectFace::Right => FPoint::new(right, endpoint.y.clamp(y_min, y_max)),
+                RectFace::Left => clip_point_to_rect_face_with_inset(
+                    endpoint,
+                    rect,
+                    RectFace::Left,
+                    max_corner_inset,
+                ),
+                RectFace::Right => clip_point_to_rect_face_with_inset(
+                    endpoint,
+                    rect,
+                    RectFace::Right,
+                    max_corner_inset,
+                ),
                 RectFace::Top | RectFace::Bottom => unreachable!("matched above"),
             };
         }
@@ -2031,20 +2045,42 @@ fn clip_point_to_axis_face(
             if (y - top).abs() <= EPS || (y - bottom).abs() <= EPS {
                 y = (top + bottom) / 2.0;
             }
-            return FPoint::new(x, y);
+            return if x <= left + EPS {
+                clip_point_to_rect_face_with_inset(
+                    FPoint::new(x, y),
+                    rect,
+                    RectFace::Left,
+                    max_corner_inset,
+                )
+            } else {
+                clip_point_to_rect_face_with_inset(
+                    FPoint::new(x, y),
+                    rect,
+                    RectFace::Right,
+                    max_corner_inset,
+                )
+            };
         }
     }
 
     // Terminal segment is horizontal: anchor endpoint on left/right face.
     if dy.abs() <= EPS && dx.abs() > EPS {
-        let x = if adjacent.x < endpoint.x { left } else { right };
-        return FPoint::new(x, endpoint.y.clamp(y_min, y_max));
+        let face = if adjacent.x < endpoint.x {
+            RectFace::Left
+        } else {
+            RectFace::Right
+        };
+        return clip_point_to_rect_face_with_inset(endpoint, rect, face, max_corner_inset);
     }
 
     // Terminal segment is vertical: anchor endpoint on top/bottom face.
     if dx.abs() <= EPS && dy.abs() > EPS {
-        let y = if adjacent.y < endpoint.y { top } else { bottom };
-        return FPoint::new(endpoint.x.clamp(x_min, x_max), y);
+        let face = if adjacent.y < endpoint.y {
+            RectFace::Top
+        } else {
+            RectFace::Bottom
+        };
+        return clip_point_to_rect_face_with_inset(endpoint, rect, face, max_corner_inset);
     }
 
     // Fallback: clamp interior drift to the rectangle boundary box.
@@ -2072,28 +2108,34 @@ fn opposite_rect_face(face: RectFace) -> RectFace {
     }
 }
 
-fn clip_point_to_rect_face(endpoint: FPoint, rect: FRect, face: RectFace) -> FPoint {
-    const FACE_CORNER_MARGIN: f64 = 1.0;
-
-    fn clamp_interior(value: f64, min: f64, max: f64) -> f64 {
-        let lo = min.min(max);
-        let hi = min.max(max);
-        if (hi - lo) <= FACE_CORNER_MARGIN * 2.0 {
-            return (lo + hi) / 2.0;
-        }
-        value.clamp(lo + FACE_CORNER_MARGIN, hi - FACE_CORNER_MARGIN)
-    }
-
+fn clip_point_to_rect_face_with_inset(
+    endpoint: FPoint,
+    rect: FRect,
+    face: RectFace,
+    max_corner_inset: f64,
+) -> FPoint {
     let left = rect.x;
     let right = rect.x + rect.width;
     let top = rect.y;
     let bottom = rect.y + rect.height;
 
     match face {
-        RectFace::Top => FPoint::new(clamp_interior(endpoint.x, left, right), top),
-        RectFace::Bottom => FPoint::new(clamp_interior(endpoint.x, left, right), bottom),
-        RectFace::Left => FPoint::new(left, clamp_interior(endpoint.y, top, bottom)),
-        RectFace::Right => FPoint::new(right, clamp_interior(endpoint.y, top, bottom)),
+        RectFace::Top => FPoint::new(
+            clamp_face_coordinate_with_corner_inset(endpoint.x, left, right, max_corner_inset),
+            top,
+        ),
+        RectFace::Bottom => FPoint::new(
+            clamp_face_coordinate_with_corner_inset(endpoint.x, left, right, max_corner_inset),
+            bottom,
+        ),
+        RectFace::Left => FPoint::new(
+            left,
+            clamp_face_coordinate_with_corner_inset(endpoint.y, top, bottom, max_corner_inset),
+        ),
+        RectFace::Right => FPoint::new(
+            right,
+            clamp_face_coordinate_with_corner_inset(endpoint.y, top, bottom, max_corner_inset),
+        ),
     }
 }
 
@@ -2123,7 +2165,12 @@ fn boundary_face_including_corners(point: FPoint, rect: FRect, eps: f64) -> Opti
     Some(RectFace::Bottom)
 }
 
-fn bias_face_coordinate_toward_center(point: FPoint, rect: FRect, preserve_factor: f64) -> FPoint {
+fn bias_face_coordinate_toward_center(
+    point: FPoint,
+    rect: FRect,
+    preserve_factor: f64,
+    max_corner_inset: f64,
+) -> FPoint {
     let factor = preserve_factor.clamp(0.0, 1.0);
     let center_x = rect.x + rect.width / 2.0;
     let center_y = rect.y + rect.height / 2.0;
@@ -2141,7 +2188,7 @@ fn bias_face_coordinate_toward_center(point: FPoint, rect: FRect, preserve_facto
     };
 
     match face {
-        Some(face) => clip_point_to_rect_face(biased, rect, face),
+        Some(face) => clip_point_to_rect_face_with_inset(biased, rect, face, max_corner_inset),
         None => biased,
     }
 }
