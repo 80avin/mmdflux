@@ -2,7 +2,7 @@
 
 **Status:** DRAFT — living document, updated as research and implementation progress
 
-**Last updated:** 2026-02-16
+**Last updated:** 2026-02-17
 
 **Owner:** Kevin Swiber
 
@@ -251,7 +251,29 @@ The convergent finding: **which side you pick matters far less than picking one 
 
 **Heuristic 3: Consistent side channel (C11).** All backward edges in a diagram route through the same side channel. For TD/BT layouts, mmdflux uses the right channel; for LR/RL, the bottom channel. This is the iongraph convention (counter-clockwise flow). The VEIL convention (left channel for TD) is equally valid — consistency is the critical property, not which side. The chosen convention also applies to text rendering, where backward edges route up the right gutter.
 
-**Heuristic 4: Side-face port attachment for long backward edges.** When a backward edge spans 3+ ranks in TD layout, it exits and enters on the right face (the channel side) rather than reversing the flow faces. This avoids routing the backward edge through intermediate layers where it would compete with forward edges for horizontal space. The edge departs horizontally from the right face of the source, runs vertically up the right channel, and enters horizontally into the right face of the target. For short backward edges (1–2 ranks), reversed flow-face attachment (exit north, enter south) remains appropriate because the edge forms a compact local loop that doesn't need channel routing. The span threshold for switching from flow-face reversal to side-face channeling is configurable but defaults to 3 ranks.
+**Heuristic 4: Face selection by rank span.** Backward edges use one of two face attachment strategies depending on how many ranks they span. The threshold defaults to 3 ranks.
+
+*Short backward edges (1–2 ranks):* Use **reversed flow-face attachment**. The edge exits the upstream face and enters the downstream face (the reverse of forward edges), then wraps around the channel side as a compact loop. This keeps short cycles tight and local.
+
+*Long backward edges (3+ ranks):* Use **side-face attachment**. The edge exits and enters on the channel-side face, with a straight channel run between. This avoids threading the backward path through intermediate layers and produces the 2-bend U-shape (R-BACK-9).
+
+Face selection table by layout direction:
+
+```
+Direction  │ Channel side │ Short backward (1–2 ranks)     │ Long backward (3+ ranks)
+           │              │ Exit face → Enter face          │ Exit face → Enter face
+───────────┼──────────────┼─────────────────────────────────┼──────────────────────────
+TD         │ Right        │ North → South (loop via right)  │ East → East
+BT         │ Right        │ South → North (loop via right)  │ East → East
+LR         │ Bottom       │ West → East (loop via bottom)   │ South → South
+RL         │ Bottom       │ East → West (loop via bottom)   │ South → South
+```
+
+The "loop via right/bottom" notation means the short backward edge exits the reversed flow face, routes through the channel side, and re-enters the reversed flow face on the target — producing a compact loop with the channel side determining which direction the loop bulges. The loop itself has 4 segments and 3 bends (exit stem → lateral jog to channel side → vertical/horizontal run → lateral jog back → entry stem), which is acceptable for short spans where the loop is visually compact.
+
+The long backward edge uses same-face exit and entry on the channel side, producing the 3-segment, 2-bend U-shape: departure stem → channel run → arrival stem. This is the minimum-bend solution for channeled routing.
+
+*2-rank borderline case:* If a 2-rank backward edge would collide with an intermediate node body when using reversed flow-face routing, it should be promoted to side-face attachment (treated as long). The collision check uses R-BACK-8's global offset computation. This ensures the threshold is geometry-aware rather than purely count-based.
 
 | ID | Requirement | Priority | Rationale |
 |----|-------------|----------|-----------|
@@ -261,7 +283,7 @@ The convergent finding: **which side you pick matters far less than picking one 
 | R-BACK-5 | Collision detection for backward edge routing must use shape-aware boundaries, not rectangular bounding boxes, for non-rectangular node shapes (diamond, circle, stadium, etc.) | P1 | A rectangular bounding box underestimates the collision area of a diamond by ~50%. Backward edges routed around a diamond's bbox can cut through the diamond's actual geometry. **Note (c62bbc9):** The `decision.mmd` diamond graze originally attributed to this gap was actually caused by an SVG render-layer issue — `endpoint_attachment_is_invalid()` in `adjust_edge_points_for_shapes()` was hard-coded to reject backward target entries unless near the right face, triggering unwanted reclipping via `intersect_svg_node()` that pulled the terminal lane inward. The router geometry was already correct. Fix: backward target validity now accepts any near-boundary attachment and only reclips when the endpoint drifts into the node interior. The shape-aware collision requirement remains valid as a general principle but has no known triggering fixture as of this update. |
 | R-BACK-4 | Synthetic backward waypoints in float space must produce equivalent grid-snapped output for text rendering | P1 | Unification correctness gate (research 0047) |
 | R-BACK-6 | All backward edges within a diagram must route through the same side channel | P0 | VEIL C11 and iongraph both demonstrate that consistent side selection is the critical property for backward edge comprehension. Inconsistent side selection (Graphviz behavior) forces the reader to re-learn the visual language per-edge. |
-| R-BACK-7 | Long backward edges (spanning ≥3 ranks) should use side-face port attachment (exit/enter on channel side face) rather than reversed flow-face attachment | P1 | Side-face channeling keeps long backward edges spatially separated from forward flow, avoids threading backward paths through intermediate layers, and uses channel height as a semantic signal for span distance (VEIL finding). Short backward edges (1–2 ranks) still use reversed flow-face attachment for compact local loops. |
+| R-BACK-7 | Backward edge face selection must follow the rank-span decision table in Heuristic 4: short edges (1–2 ranks) use reversed flow-face attachment with a compact loop via the channel side; long edges (≥3 ranks) use same-face attachment on the channel-side face with a 2-bend U-shape. A 2-rank edge is promoted to long (side-face) if reversed flow-face routing would collide with an intermediate node body. | P1 | See Heuristic 4 face selection table for the specific exit/enter faces per layout direction (TD/BT/LR/RL). Side-face channeling keeps long backward edges spatially separated from forward flow and uses channel height as a semantic signal for span distance (VEIL finding). Short backward edges use reversed flow-face attachment for compact local loops. The 2-rank promotion rule ensures geometry-aware face selection rather than a rigid count threshold. Observed in `git_workflow-td.mmd` TD rendering: a 4-rank backward edge incorrectly uses North → South (reversed flow-face) instead of East → East (side-face), producing 4 unnecessary bends and a collision with the Staging Area node body. |
 | R-BACK-8 | The side-channel offset for backward edges must be computed as a global maximum across all intermediate ranks, not just the source and target nodes | P0 | The channel must clear every node body between the source and target ranks. In TD, the right channel’s X coordinate is `max(right_edge of all nodes from source rank to target rank) + channel_padding`. In LR, the bottom channel’s Y coordinate is `max(bottom_edge of all nodes from source rank to target rank) + channel_padding`. Computing offset from only the source/target nodes produces collisions with wider intermediate nodes. Observed in `git_workflow.mmd` TD rendering where the right-channel backward edge conflicts with the Staging Area node body. |
 | R-BACK-9 | A side-channel backward edge must have exactly 2 bends: turn from departure stem into channel run, and turn from channel run into arrival stem | P1 | The 3-segment U-shape (departure stem → channel run → arrival stem) is the minimum-bend solution for side-channel routing. The departure and arrival stems are perpendicular to the channel run, creating exactly 2 direction changes. Any additional bends (jogs, asymmetric dips, outward-then-inward excursions) are waste that degrades readability per Purchase (1997) and Ware et al (2002). Observed in `git_workflow.mmd` LR rendering where the backward edge has extra bends due to an asymmetric downward dip near the target, and in the TD rendering where an outward-then-inward jog adds unnecessary bends before the channel run. |
 | R-BACK-10 | The channel run segment of a backward edge must maintain uniform offset from the node envelope along its entire length | P1 | VEIL’s layout produces uniform-offset channels where the distance from the channel to the nearest node body is consistent. Asymmetric clearance (hugging close to the source but dipping away near the target, or vice versa) introduces unnecessary bends and breaks the visual regularity that makes the channel readable as a single continuous path. The channel offset is set by R-BACK-8; the channel run must hold that offset as a constant for the full span between source and target departure/arrival bends. |
