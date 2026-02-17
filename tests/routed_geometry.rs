@@ -2892,3 +2892,71 @@ fn diamond_backward_target_on_boundary() {
         "backward target on diamond B should be near or outside boundary, got {boundary}: {end:?}"
     );
 }
+
+#[test]
+fn mixed_shape_chain_diamond_to_hexagon_endpoints() {
+    let (diagram, geom) = layout_fixture_svg("mixed_shape_chain.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    // B->C: diamond source, hexagon target
+    let edge = routed
+        .edges
+        .iter()
+        .find(|e| e.from == "B" && e.to == "C")
+        .unwrap_or_else(|| panic!("missing edge B->C"));
+
+    // Source on diamond boundary
+    let start = edge.path[0];
+    let b_rect = geom.nodes.get("B").unwrap().rect;
+    let cx = b_rect.x + b_rect.width / 2.0;
+    let cy = b_rect.y + b_rect.height / 2.0;
+    let w = b_rect.width / 2.0;
+    let h = b_rect.height / 2.0;
+    let boundary = (start.x - cx).abs() / w + (start.y - cy).abs() / h;
+    assert!(
+        (boundary - 1.0).abs() < 0.05,
+        "diamond source on boundary: {boundary}: {start:?}"
+    );
+
+    // Target on hexagon boundary (flat top edge for TD vertical approach)
+    let end = *edge.path.last().unwrap();
+    let c_rect = geom.nodes.get("C").unwrap().rect;
+    assert!(
+        (end.y - c_rect.y).abs() < 2.0,
+        "hexagon target should be near top edge, got y={}, expected y={}",
+        end.y,
+        c_rect.y
+    );
+}
+
+#[test]
+fn mixed_shape_chain_no_staircase_artifacts() {
+    let (diagram, geom) = layout_fixture_svg("mixed_shape_chain.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    // No edge should have excessive bends (staircase from shape mismatch)
+    for edge in &routed.edges {
+        // Count direction changes (bends)
+        let mut bends = 0;
+        for window in edge.path.windows(3) {
+            let dx1 = window[1].x - window[0].x;
+            let dy1 = window[1].y - window[0].y;
+            let dx2 = window[2].x - window[1].x;
+            let dy2 = window[2].y - window[1].y;
+            // A bend is when direction changes on either axis
+            let horizontal_change = (dx1.abs() > 0.1) != (dx2.abs() > 0.1);
+            let vertical_change = (dy1.abs() > 0.1) != (dy2.abs() > 0.1);
+            if horizontal_change || vertical_change {
+                bends += 1;
+            }
+        }
+        assert!(
+            bends <= 4,
+            "edge {}->{} has {} bends (staircase?), path: {:?}",
+            edge.from,
+            edge.to,
+            bends,
+            edge.path
+        );
+    }
+}

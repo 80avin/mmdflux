@@ -2681,3 +2681,13 @@ fn mmds_svg_diamond_backward_endpoint_convergence() {
     // Backward edge C->B (target is diamond)
     assert_mmds_svg_endpoint_convergence(&diagram, "C", "B", tolerance);
 }
+
+#[test]
+fn mmds_svg_mixed_shape_chain_endpoint_convergence() {
+    let diagram = load_flowchart_fixture_diagram("mixed_shape_chain.mmd");
+    let tolerance = 5.0;
+    // A[rect]->B{diamond}->C{{hexagon}}->D[rect]
+    assert_mmds_svg_endpoint_convergence(&diagram, "A", "B", tolerance);
+    assert_mmds_svg_endpoint_convergence(&diagram, "B", "C", tolerance);
+    assert_mmds_svg_endpoint_convergence(&diagram, "C", "D", tolerance);
+}
