@@ -1775,6 +1775,45 @@ fn unified_preview_td_backward_followup_edges_match_full_compute_entry_face_pari
     }
 }
 
+#[test]
+fn unified_preview_simple_cycle_backward_terminal_port_respects_minimum_corner_inset() {
+    const MIN_CORNER_INSET: f64 = 8.0;
+    let (diagram, geom) = layout_fixture_svg("simple_cycle.mmd");
+    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+
+    let edge = routed
+        .edges
+        .iter()
+        .find(|edge| edge.from == "C" && edge.to == "A")
+        .expect("simple_cycle should contain backward edge C -> A");
+    assert!(
+        edge.is_backward,
+        "simple_cycle contract invalid: C -> A should be backward in unified preview"
+    );
+
+    let target_rect = geom
+        .nodes
+        .get("A")
+        .expect("simple_cycle should contain target node A")
+        .rect;
+    let end = *edge
+        .path
+        .last()
+        .expect("backward edge should have terminal endpoint");
+    let margin = face_corner_inset_margin(target_rect, end).unwrap_or_else(|| {
+        panic!(
+            "simple_cycle C->A endpoint should lie on a target face: end={end:?}, target_rect={target_rect:?}, path={:?}",
+            edge.path
+        )
+    });
+
+    assert!(
+        margin >= MIN_CORNER_INSET,
+        "simple_cycle C->A backward terminal port should keep minimum corner inset to preserve visible terminal stem: margin={margin:.2}, min={MIN_CORNER_INSET:.2}, end={end:?}, target_rect={target_rect:?}, path={:?}",
+        edge.path
+    );
+}
+
 // -----------------------------------------------------------------------
 // Task 0.2: LR/RL backward clearance parity RED regressions
 // -----------------------------------------------------------------------

@@ -117,7 +117,7 @@ pub(crate) fn route_edges_unified(
 const Q3_LABEL_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
 const POINT_EPS: f64 = 0.000_001;
 const MIN_PORT_CORNER_INSET_FORWARD: f64 = 8.0;
-const MIN_PORT_CORNER_INSET_BACKWARD: f64 = 5.0;
+const MIN_PORT_CORNER_INSET_BACKWARD: f64 = 12.0;
 
 fn clamp_face_coordinate_with_corner_inset(value: f64, min: f64, max: f64, max_inset: f64) -> f64 {
     let lo = min.min(max);
@@ -326,6 +326,7 @@ fn build_unified_path(
             geometry,
         );
         collapse_tiny_backward_terminal_staircase(&mut finalized, direction, 8.0);
+        enforce_backward_terminal_corner_inset(&mut finalized, edge, geometry);
         if matches!(direction, Direction::LeftRight | Direction::RightLeft) {
             collapse_collinear_interior_points(&mut finalized);
         }
@@ -2088,6 +2089,58 @@ fn clip_point_to_axis_face(
         endpoint.x.clamp(x_min, x_max),
         endpoint.y.clamp(y_min, y_max),
     )
+}
+
+fn enforce_backward_terminal_corner_inset(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+) {
+    const EPS: f64 = 0.000_001;
+    if path.len() < 2 {
+        return;
+    }
+    let Some((target_rect, _)) =
+        endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+    else {
+        return;
+    };
+
+    let last = path.len() - 1;
+    let end = path[last];
+    let prev = path[last - 1];
+    let dx = (end.x - prev.x).abs();
+    let dy = (end.y - prev.y).abs();
+    let face = if dx <= EPS && dy > EPS {
+        let dist_top = (end.y - target_rect.y).abs();
+        let dist_bottom = (end.y - (target_rect.y + target_rect.height)).abs();
+        if dist_top <= dist_bottom {
+            RectFace::Top
+        } else {
+            RectFace::Bottom
+        }
+    } else if dy <= EPS && dx > EPS {
+        let dist_left = (end.x - target_rect.x).abs();
+        let dist_right = (end.x - (target_rect.x + target_rect.width)).abs();
+        if dist_left <= dist_right {
+            RectFace::Left
+        } else {
+            RectFace::Right
+        }
+    } else if let Some(boundary_face) = boundary_face_excluding_corners(end, target_rect, 0.5)
+        .or_else(|| boundary_face_including_corners(end, target_rect, 0.5))
+    {
+        boundary_face
+    } else {
+        return;
+    };
+
+    let clipped =
+        clip_point_to_rect_face_with_inset(end, target_rect, face, MIN_PORT_CORNER_INSET_BACKWARD);
+    if !points_match(clipped, end) {
+        path[last] = clipped;
+        ensure_endpoint_axis_aligned(path, false);
+    }
 }
 
 fn map_face_to_rect_face(face: Face) -> RectFace {
