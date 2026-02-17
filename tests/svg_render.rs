@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::diagram::{OutputFormat, PathDetail, RenderConfig, RoutingMode, SvgEdgePathStyle};
-use mmdflux::diagrams::flowchart::engine::{DagreLayoutEngine, MeasurementMode};
+use mmdflux::diagrams::flowchart::engine::DagreLayoutEngine;
 use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::graph::Stroke;
 use mmdflux::registry::DiagramInstance;

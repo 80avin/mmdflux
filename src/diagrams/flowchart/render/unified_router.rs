@@ -973,7 +973,6 @@ fn align_backward_outer_lane_to_hint(
                 }
             }
             if !aligned {
-                return;
             }
         }
         Direction::LeftRight | Direction::RightLeft => {
