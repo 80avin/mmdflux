@@ -2292,8 +2292,7 @@ fn should_adjust_rerouted_edge_endpoints(
         return false;
     }
 
-    let Some(((from_rect, _from_shape), (to_rect, _to_shape))) =
-        edge_endpoint_shape_rects(diagram, geom, edge)
+    let Some(((from_rect, _), (to_rect, _))) = edge_endpoint_shape_rects(diagram, geom, edge)
     else {
         return false;
     };
@@ -2401,16 +2400,26 @@ fn adjust_edge_points_for_shapes(
     };
 
     let mut adjusted = points.to_vec();
-    let source_needs_adjustment =
-        endpoint_attachment_is_invalid(points[0], from_rect, direction, true, is_backward, EPS);
-    let target_needs_adjustment = endpoint_attachment_is_invalid(
-        points[points.len() - 1],
-        to_rect,
-        direction,
-        false,
-        is_backward,
-        EPS,
-    );
+    // For non-rect shapes on non-self-loop edges, the router places endpoints on
+    // the actual shape boundary which is inside the rect bounding box. Skip the
+    // rect-face-proximity check — their endpoints are authoritative from the router.
+    // Self-loops use a different path construction, so the safety net still applies.
+    let is_self_loop = edge.from == edge.to;
+    let source_shape_authoritative =
+        !is_self_loop && matches!(from_shape, Shape::Diamond | Shape::Hexagon);
+    let target_shape_authoritative =
+        !is_self_loop && matches!(to_shape, Shape::Diamond | Shape::Hexagon);
+    let source_needs_adjustment = !source_shape_authoritative
+        && endpoint_attachment_is_invalid(points[0], from_rect, direction, true, is_backward, EPS);
+    let target_needs_adjustment = !target_shape_authoritative
+        && endpoint_attachment_is_invalid(
+            points[points.len() - 1],
+            to_rect,
+            direction,
+            false,
+            is_backward,
+            EPS,
+        );
 
     if source_needs_adjustment {
         let from_target = if points.len() > 1 {

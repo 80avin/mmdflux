@@ -2578,3 +2578,74 @@ fn render_svg_positioned_mmds_routed_basic_includes_paths_and_subgraph() {
     assert!(svg.contains("Start"));
     assert!(svg.contains("Group"));
 }
+
+/// Assert MMDS and SVG endpoints agree within `tolerance` for a given edge.
+fn assert_mmds_svg_endpoint_convergence(
+    diagram: &mmdflux::Diagram,
+    from: &str,
+    to: &str,
+    tolerance: f64,
+) {
+    // MMDS path (no SVG post-adjustment)
+    let mode = mmdflux::diagrams::flowchart::engine::MeasurementMode::for_format(
+        OutputFormat::Svg,
+        &RenderConfig::default(),
+    );
+    let engine = DagreLayoutEngine::with_mode(mode);
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let geom = engine.layout(diagram, &config).unwrap();
+    let routed = route_graph_geometry(diagram, &geom, RoutingMode::UnifiedPreview);
+    let mmds_edge = routed
+        .edges
+        .iter()
+        .find(|e| e.from == from && e.to == to)
+        .unwrap_or_else(|| panic!("MMDS should have edge {from}->{to}"));
+    let mmds_start = mmds_edge.path.first().unwrap();
+    let mmds_end = mmds_edge.path.last().unwrap();
+
+    // SVG path (with SVG post-adjustment pipeline)
+    let svg = render_fixture_svg(
+        diagram,
+        RoutingMode::UnifiedPreview,
+        SvgEdgePathStyle::Basis,
+    );
+    let edge_idx = edge_index(diagram, from, to);
+    let svg_points = edge_path_for_svg_order(diagram, &svg, edge_idx);
+    let svg_start = svg_points[0];
+    let svg_end = svg_points[svg_points.len() - 1];
+
+    // Source convergence
+    let dx = (mmds_start.x - svg_start.0).abs();
+    let dy = (mmds_start.y - svg_start.1).abs();
+    assert!(
+        dx <= tolerance && dy <= tolerance,
+        "MMDS/SVG source convergence failed for {from}->{to}: mmds={mmds_start:?}, svg={svg_start:?}, delta=({dx:.2}, {dy:.2})"
+    );
+
+    // Target convergence
+    let dx = (mmds_end.x - svg_end.0).abs();
+    let dy = (mmds_end.y - svg_end.1).abs();
+    assert!(
+        dx <= tolerance && dy <= tolerance,
+        "MMDS/SVG target convergence failed for {from}->{to}: mmds=({:.2}, {:.2}), svg={svg_end:?}, delta=({dx:.2}, {dy:.2})",
+        mmds_end.x,
+        mmds_end.y
+    );
+}
+
+#[test]
+fn mmds_svg_diamond_endpoint_convergence_decision() {
+    let diagram = load_flowchart_fixture_diagram("decision.mmd");
+
+    // Tolerance accounts for SVG marker offsets (~3-4px for arrow markers).
+    // Before single-sourcing, diamond endpoints diverged by 30-40+px.
+    let tolerance = 5.0;
+
+    // Test edges from diamond node B (source convergence)
+    for (from, to) in [("B", "C"), ("B", "D")] {
+        assert_mmds_svg_endpoint_convergence(&diagram, from, to, tolerance);
+    }
+
+    // Test edge into diamond node B (target convergence)
+    assert_mmds_svg_endpoint_convergence(&diagram, "A", "B", tolerance);
+}
