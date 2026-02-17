@@ -327,6 +327,18 @@ fn build_unified_path(
         );
         collapse_tiny_backward_terminal_staircase(&mut finalized, direction, 8.0);
         enforce_backward_terminal_corner_inset(&mut finalized, edge, geometry);
+        let canonical_terminal_face =
+            backward_target_face_override.unwrap_or_else(|| q2_backward_channel_face(direction));
+        if let Some((target_rect, _)) =
+            endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+        {
+            expand_compact_td_bt_backward_terminal_return(
+                &mut finalized,
+                canonical_terminal_face,
+                direction,
+                target_rect,
+            );
+        }
         if matches!(direction, Direction::LeftRight | Direction::RightLeft) {
             collapse_collinear_interior_points(&mut finalized);
         }
@@ -1041,7 +1053,7 @@ fn enforce_backward_terminal_tangent_direction(
     preferred_target_face: Option<Face>,
 ) {
     const EPS: f64 = 0.000_001;
-    const TANGENT_STEP: f64 = 8.0;
+    const TANGENT_STEP: f64 = 12.0;
     if path.len() < 2 {
         return;
     }
@@ -1206,6 +1218,7 @@ fn enforce_backward_terminal_tangent_direction(
     let support_is_axis_aligned =
         (prev.x - support.x).abs() <= EPS || (prev.y - support.y).abs() <= EPS;
     if support_is_axis_aligned {
+        expand_compact_td_bt_backward_terminal_return(path, canonical_face, direction, target_rect);
         if !preserve_terminal_lane_on_overflow_target {
             collapse_terminal_turnback_spikes(path, canonical_face);
         }
@@ -1236,6 +1249,91 @@ fn enforce_backward_terminal_tangent_direction(
     if !preserve_terminal_lane_on_overflow_target {
         collapse_terminal_turnback_spikes(path, canonical_face);
     }
+    expand_compact_td_bt_backward_terminal_return(path, canonical_face, direction, target_rect);
+}
+
+fn expand_compact_td_bt_backward_terminal_return(
+    path: &mut Vec<FPoint>,
+    canonical_face: Face,
+    direction: Direction,
+    target_rect: FRect,
+) {
+    const EPS: f64 = 0.000_001;
+    const MIN_VERTICAL_SPLIT: f64 = 4.0;
+    if path.len() != 4
+        || !matches!(direction, Direction::TopDown | Direction::BottomTop)
+        || !matches!(canonical_face, Face::Top | Face::Bottom)
+    {
+        return;
+    }
+
+    let start = path[0];
+    let pre = path[1];
+    let lane = path[2];
+    let end = path[3];
+    let start_to_pre_is_vertical = (start.x - pre.x).abs() <= EPS && (start.y - pre.y).abs() > EPS;
+    let pre_to_lane_is_horizontal = (pre.y - lane.y).abs() <= EPS && (pre.x - lane.x).abs() > EPS;
+    let lane_to_end_is_vertical = (lane.x - end.x).abs() <= EPS && (lane.y - end.y).abs() > EPS;
+    if !start_to_pre_is_vertical || !pre_to_lane_is_horizontal || !lane_to_end_is_vertical {
+        return;
+    }
+
+    let delta_y = end.y - start.y;
+    let total_gap = delta_y.abs();
+    if total_gap <= MIN_VERTICAL_SPLIT * 3.0 + EPS {
+        return;
+    }
+
+    let left = target_rect.x;
+    let right = target_rect.x + target_rect.width;
+    let target_x =
+        clamp_face_coordinate_with_corner_inset(pre.x, left, right, MIN_PORT_CORNER_INSET_BACKWARD);
+    if (target_x - lane.x).abs() <= EPS {
+        return;
+    }
+
+    // Place the right jog near the source and the left jog near the target,
+    // while keeping the outer vertical lane centered between endpoints.
+    let mut source_jog_y = start.y + delta_y * 0.30;
+    let mut target_jog_y = start.y + delta_y * 0.70;
+
+    let midpoint_y = (start.y + end.y) / 2.0;
+    if matches!(canonical_face, Face::Bottom) {
+        source_jog_y = source_jog_y.max(midpoint_y + MIN_VERTICAL_SPLIT);
+        target_jog_y = target_jog_y.min(midpoint_y - MIN_VERTICAL_SPLIT);
+    } else {
+        source_jog_y = source_jog_y.min(midpoint_y - MIN_VERTICAL_SPLIT);
+        target_jog_y = target_jog_y.max(midpoint_y + MIN_VERTICAL_SPLIT);
+    }
+
+    let source_stem = FPoint::new(start.x, source_jog_y);
+    let right_jog = FPoint::new(lane.x, source_jog_y);
+    let outer_vertical = FPoint::new(lane.x, target_jog_y);
+    let left_jog = FPoint::new(target_x, target_jog_y);
+    let terminal = FPoint::new(target_x, end.y);
+
+    let valid_progress = match canonical_face {
+        Face::Bottom => {
+            source_stem.y < start.y - EPS
+                && right_jog.y < start.y - EPS
+                && outer_vertical.y < right_jog.y - EPS
+                && left_jog.y < right_jog.y - EPS
+                && terminal.y < left_jog.y - EPS
+        }
+        Face::Top => {
+            source_stem.y > start.y + EPS
+                && right_jog.y > start.y + EPS
+                && outer_vertical.y > right_jog.y + EPS
+                && left_jog.y > right_jog.y + EPS
+                && terminal.y > left_jog.y + EPS
+        }
+        _ => false,
+    };
+    if !valid_progress {
+        return;
+    }
+
+    *path = vec![start, source_stem, right_jog, outer_vertical, left_jog, terminal];
 }
 
 fn collapse_terminal_turnback_spikes(path: &mut Vec<FPoint>, canonical_face: Face) {

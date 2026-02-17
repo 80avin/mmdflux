@@ -1381,6 +1381,51 @@ fn svg_non_orth_unified_preview_backward_edges_keep_terminal_arrowheads_visible(
 }
 
 #[test]
+fn svg_non_orth_unified_preview_backward_in_subgraph_avoids_tiny_terminal_tail_hooks() {
+    const MIN_TERMINAL_SUPPORT: f64 = 3.5;
+    let diagram = load_flowchart_fixture_diagram("backward_in_subgraph.mmd");
+    let edge_idx = edge_index(&diagram, "B", "A");
+    let styles = [
+        SvgEdgePathStyle::Linear,
+        SvgEdgePathStyle::Rounded,
+        SvgEdgePathStyle::Basis,
+    ];
+
+    for style in styles {
+        let mut options = RenderOptions::default_svg();
+        options.svg.edge_path_style = style;
+        options.routing_mode = Some(RoutingMode::UnifiedPreview);
+        options.path_detail = PathDetail::Full;
+        let svg = render_svg(&diagram, &options);
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        assert!(
+            points.len() >= 2,
+            "backward_in_subgraph B->A should have at least two points for {style:?}: {points:?}"
+        );
+
+        let rect = node_rect_for_label(&svg, "Node").expect("target rect should exist for Node");
+        let end_face = svg_terminal_approach_face_relaxed(rect, &points);
+        assert_eq!(
+            end_face, "bottom",
+            "backward_in_subgraph B->A should enter Node on bottom face for {style:?}: points={points:?}"
+        );
+
+        let terminal_support =
+            manhattan_segment_len(points[points.len() - 2], points[points.len() - 1]);
+        let min_terminal_support = if matches!(style, SvgEdgePathStyle::Basis) {
+            // Basis rendering intentionally tapers the final linear cap segment.
+            1.0
+        } else {
+            MIN_TERMINAL_SUPPORT
+        };
+        assert!(
+            terminal_support >= min_terminal_support,
+            "backward_in_subgraph B->A should avoid tiny terminal tail hooks before the arrowhead for {style:?}: terminal_support={terminal_support}, min={min_terminal_support}, points={points:?}"
+        );
+    }
+}
+
+#[test]
 fn svg_orthogonal_unified_preview_complex_backward_edge_keeps_arrowhead_visible() {
     let diagram = load_flowchart_fixture_diagram("complex.mmd");
     let edge_idx = edge_index(&diagram, "E", "A");

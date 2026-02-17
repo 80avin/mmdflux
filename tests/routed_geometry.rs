@@ -1584,6 +1584,83 @@ fn unified_preview_decision_backward_debug_to_start_keeps_vertical_source_stem_b
 }
 
 #[test]
+fn unified_preview_backward_in_subgraph_uses_explicit_double_jog_terminal_return() {
+    let fixture = "backward_in_subgraph.mmd";
+    let (diagram, geom) = layout_fixture_svg(fixture);
+    assert_eq!(
+        geom.direction,
+        mmdflux::Direction::TopDown,
+        "fixture {fixture} should be TD for compact backward return-shape checks"
+    );
+
+    let edge = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview)
+        .edges
+        .into_iter()
+        .find(|edge| edge.from == "B" && edge.to == "A")
+        .expect("fixture should contain backward edge B -> A in unified-preview mode");
+    assert!(
+        edge.is_backward,
+        "fixture contract invalid: B -> A should be backward in unified-preview mode"
+    );
+    assert!(
+        edge.path.len() >= 6,
+        "backward_in_subgraph B -> A should include a five-segment explicit backward return shape (vertical, right, vertical, left, vertical): path={:?}",
+        edge.path
+    );
+
+    let p0 = edge.path[0];
+    let p1 = edge.path[1];
+    let p2 = edge.path[2];
+    let p3 = edge.path[3];
+    let p4 = edge.path[4];
+    let p5 = edge.path[5];
+
+    assert!(
+        approx_eq(p0.x, p1.x) && p1.y < p0.y,
+        "segment 1 should be a vertical upward source stem: p0={p0:?}, p1={p1:?}, path={:?}",
+        edge.path
+    );
+    assert!(
+        approx_eq(p1.y, p2.y) && p2.x > p1.x,
+        "segment 2 should jog right into the outer lane: p1={p1:?}, p2={p2:?}, path={:?}",
+        edge.path
+    );
+    assert!(
+        approx_eq(p2.x, p3.x) && p3.y < p2.y,
+        "segment 3 should continue vertically upward on the outer lane: p2={p2:?}, p3={p3:?}, path={:?}",
+        edge.path
+    );
+    assert!(
+        approx_eq(p3.y, p4.y) && p4.x < p3.x,
+        "segment 4 should jog left toward the terminal lane: p3={p3:?}, p4={p4:?}, path={:?}",
+        edge.path
+    );
+    assert!(
+        approx_eq(p4.x, p5.x) && p5.y < p4.y,
+        "segment 5 should be a vertical upward terminal stem into target bottom face: p4={p4:?}, p5={p5:?}, path={:?}",
+        edge.path
+    );
+    let midpoint_y = (p0.y + p5.y) / 2.0;
+    assert!(
+        p2.y > midpoint_y && p4.y < midpoint_y,
+        "backward_in_subgraph B -> A should keep right-jog closer to source and left-jog closer to target with a visually centered outward lane: midpoint_y={midpoint_y}, right_jog={p2:?}, left_jog={p4:?}, path={:?}",
+        edge.path
+    );
+
+    let target_rect = geom
+        .nodes
+        .get("A")
+        .expect("fixture should contain target node A")
+        .rect;
+    let target_face = point_on_target_face(target_rect, p5);
+    assert_eq!(
+        target_face, "bottom",
+        "backward_in_subgraph B -> A should still enter Node on bottom face: end={p5:?}, target_rect={target_rect:?}, path={:?}",
+        edge.path
+    );
+}
+
+#[test]
 fn unified_preview_complex_backward_more_data_to_input_supports_td_entry_parity() {
     let fixture = "complex.mmd";
     let (diagram, geom) = layout_fixture_svg(fixture);
