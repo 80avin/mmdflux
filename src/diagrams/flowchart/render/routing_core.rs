@@ -882,6 +882,76 @@ fn segment_sign(delta: f64) -> i8 {
     }
 }
 
+/// Compute the point on a node's shape boundary closest to the approach ray
+/// from `approach` toward the node center.
+///
+/// This is the single source of truth for endpoint geometry used by both the
+/// unified router and SVG renderer.
+pub(crate) fn intersect_shape_boundary_float(
+    rect: FRect,
+    shape: Shape,
+    approach: FPoint,
+) -> FPoint {
+    match shape {
+        Shape::Diamond | Shape::Hexagon => intersect_diamond_boundary(rect, approach),
+        _ => intersect_rect_boundary(rect, approach),
+    }
+}
+
+fn intersect_diamond_boundary(rect: FRect, approach: FPoint) -> FPoint {
+    let cx = rect.x + rect.width / 2.0;
+    let cy = rect.y + rect.height / 2.0;
+    let dx = approach.x - cx;
+    let dy = approach.y - cy;
+    let w = rect.width / 2.0;
+    let h = rect.height / 2.0;
+
+    if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+        return FPoint::new(cx, cy + h);
+    }
+
+    let t = 1.0 / (dx.abs() / w + dy.abs() / h);
+    FPoint::new(cx + t * dx, cy + t * dy)
+}
+
+/// Return the 4 vertices of a diamond (rhombus) inscribed in `rect`.
+/// Order: top, right, bottom, left (clockwise from top).
+pub(crate) fn diamond_vertices(rect: FRect) -> [FPoint; 4] {
+    let cx = rect.x + rect.width / 2.0;
+    let cy = rect.y + rect.height / 2.0;
+    let hw = rect.width / 2.0;
+    let hh = rect.height / 2.0;
+    [
+        FPoint::new(cx, cy - hh), // top
+        FPoint::new(cx + hw, cy), // right
+        FPoint::new(cx, cy + hh), // bottom
+        FPoint::new(cx - hw, cy), // left
+    ]
+}
+
+fn intersect_rect_boundary(rect: FRect, approach: FPoint) -> FPoint {
+    let cx = rect.x + rect.width / 2.0;
+    let cy = rect.y + rect.height / 2.0;
+    let dx = approach.x - cx;
+    let dy = approach.y - cy;
+    let w = rect.width / 2.0;
+    let h = rect.height / 2.0;
+
+    if dx.abs() < f64::EPSILON && dy.abs() < f64::EPSILON {
+        return FPoint::new(cx, cy + h);
+    }
+
+    let (sx, sy) = if dy.abs() * w > dx.abs() * h {
+        let signed_h = if dy < 0.0 { -h } else { h };
+        (signed_h * dx / dy, signed_h)
+    } else {
+        let signed_w = if dx < 0.0 { -w } else { w };
+        (signed_w, signed_w * dy / dx)
+    };
+
+    FPoint::new(cx + sx, cy + sy)
+}
+
 fn preferred_mid_y_for_vertical_layout(start: FPoint, end: FPoint, direction: Direction) -> f64 {
     let mut mid_y = (start.y + end.y) / 2.0;
 
@@ -907,4 +977,83 @@ fn preferred_mid_y_for_vertical_layout(start: FPoint, end: FPoint, direction: Di
     }
 
     mid_y
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::Shape;
+
+    /// Assert that a point lies on the diamond boundary within `eps`.
+    fn assert_on_diamond_boundary(point: FPoint, rect: FRect, eps: f64) {
+        let cx = rect.x + rect.width / 2.0;
+        let cy = rect.y + rect.height / 2.0;
+        let w = rect.width / 2.0;
+        let h = rect.height / 2.0;
+        let boundary = (point.x - cx).abs() / w + (point.y - cy).abs() / h;
+        assert!(
+            (boundary - 1.0).abs() < eps,
+            "point ({}, {}) boundary value {boundary} should be ~1.0 (eps={eps})",
+            point.x,
+            point.y,
+        );
+    }
+
+    #[test]
+    fn intersect_shape_boundary_diamond_from_below() {
+        let rect = FRect::new(10.0, 10.0, 20.0, 20.0); // center (20, 20)
+        let approach = FPoint::new(20.0, 40.0); // directly below
+        let result = intersect_shape_boundary_float(rect, Shape::Diamond, approach);
+        // Should hit bottom vertex (20, 30)
+        assert!((result.x - 20.0).abs() < 0.01);
+        assert!((result.y - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn intersect_shape_boundary_diamond_from_right() {
+        let rect = FRect::new(10.0, 10.0, 20.0, 20.0);
+        let approach = FPoint::new(40.0, 20.0); // directly right
+        let result = intersect_shape_boundary_float(rect, Shape::Diamond, approach);
+        // Should hit right vertex (30, 20)
+        assert!((result.x - 30.0).abs() < 0.01);
+        assert!((result.y - 20.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn intersect_shape_boundary_diamond_diagonal() {
+        let rect = FRect::new(10.0, 10.0, 20.0, 20.0);
+        let approach = FPoint::new(35.0, 35.0); // bottom-right diagonal
+        let result = intersect_shape_boundary_float(rect, Shape::Diamond, approach);
+        assert_on_diamond_boundary(result, rect, 0.001);
+    }
+
+    #[test]
+    fn diamond_vertices_clockwise_from_top() {
+        let rect = FRect::new(10.0, 10.0, 20.0, 20.0); // center (20,20)
+        let verts = diamond_vertices(rect);
+        assert!((verts[0].x - 20.0).abs() < 0.01 && (verts[0].y - 10.0).abs() < 0.01); // top
+        assert!((verts[1].x - 30.0).abs() < 0.01 && (verts[1].y - 20.0).abs() < 0.01); // right
+        assert!((verts[2].x - 20.0).abs() < 0.01 && (verts[2].y - 30.0).abs() < 0.01); // bottom
+        assert!((verts[3].x - 10.0).abs() < 0.01 && (verts[3].y - 20.0).abs() < 0.01); // left
+    }
+
+    #[test]
+    fn intersect_shape_boundary_diamond_degenerate_center() {
+        let rect = FRect::new(10.0, 10.0, 20.0, 20.0);
+        let approach = FPoint::new(20.0, 20.0); // at center
+        let result = intersect_shape_boundary_float(rect, Shape::Diamond, approach);
+        // Should return bottom vertex as default
+        assert!((result.x - 20.0).abs() < 0.01);
+        assert!((result.y - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn intersect_shape_boundary_rect_from_below() {
+        let rect = FRect::new(10.0, 10.0, 20.0, 10.0);
+        let approach = FPoint::new(20.0, 30.0);
+        let result = intersect_shape_boundary_float(rect, Shape::Rectangle, approach);
+        // Should hit bottom edge at center
+        assert!((result.x - 20.0).abs() < 0.01);
+        assert!((result.y - 20.0).abs() < 0.01);
+    }
 }
