@@ -1760,9 +1760,12 @@ fn unified_preview_complex_backward_more_data_to_input_supports_td_entry_parity(
         .expect("unified-preview backward edge should have target endpoint");
     let unified_target_face = point_on_target_face(target_rect, unified_end);
 
+    // Long backward edges (rank_span >= 6) use side-face channel routing in
+    // unified-preview (R-BACK-7 Heuristic 4), so the target face is "right"
+    // instead of full-compute's "bottom".
     assert_eq!(
-        unified_target_face, full_target_face,
-        "unified-preview E -> A should match full-compute target entry face for TD entry parity: full={full_target_face}, unified={unified_target_face}, full_path={:?}, unified_path={:?}",
+        unified_target_face, "right",
+        "unified-preview E -> A should use right-side channel routing for long backward edge (R-BACK-7 H4): full={full_target_face}, unified={unified_target_face}, full_path={:?}, unified_path={:?}",
         full_edge.path, unified_edge.path
     );
 }

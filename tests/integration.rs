@@ -3325,12 +3325,18 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             .expect("text render should succeed")
     };
 
-    let cases = [
-        ("decision.mmd", "D", "A", Some("top"), "bottom"),
-        ("complex.mmd", "E", "A", None, "bottom"),
+    // (fixture, from, to, expected_source_face, full_target_face, unified_target_face)
+    // Long backward edges (rank_span >= 6) use side-face channel routing in
+    // unified-preview (R-BACK-7 Heuristic 4), so unified target face may differ
+    // from full-compute.
+    let cases: [(&str, &str, &str, Option<&str>, &str, &str); 2] = [
+        ("decision.mmd", "D", "A", Some("top"), "bottom", "bottom"),
+        ("complex.mmd", "E", "A", None, "bottom", "right"),
     ];
 
-    for (fixture, from, to, expected_source_face, expected_target_face) in cases {
+    for (fixture, from, to, expected_source_face, expected_full_target, expected_unified_target) in
+        cases
+    {
         let input = load_fixture(fixture);
         let flowchart = parse_flowchart(&input).expect("fixture should parse");
         let diagram = build_diagram(&flowchart);
@@ -3399,8 +3405,8 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             );
         }
         assert_eq!(
-            full_target_face, expected_target_face,
-            "fixture contract changed unexpectedly: full-compute {from}->{to} should use target face {expected_target_face}; path={:?}",
+            full_target_face, expected_full_target,
+            "fixture contract changed unexpectedly: full-compute {from}->{to} should use target face {expected_full_target}; path={:?}",
             full_edge.path
         );
 
@@ -3412,16 +3418,18 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             );
         }
         assert_eq!(
-            unified_target_face, expected_target_face,
-            "unified-preview {from}->{to} should match TD target-entry parity with text/full ({expected_target_face}) for fixture {fixture}; full_path={:?}, unified_path={:?}",
+            unified_target_face, expected_unified_target,
+            "unified-preview {from}->{to} target face should be {expected_unified_target} for fixture {fixture}; full_path={:?}, unified_path={:?}",
             full_edge.path, unified_edge.path
         );
 
+        // Text output should still match between routing modes (backward edge
+        // face differences only affect SVG path geometry, not text grid).
         let full_text = render_text_with_mode(&input, RoutingMode::FullCompute);
         let unified_text = render_text_with_mode(&input, RoutingMode::UnifiedPreview);
         assert_eq!(
             unified_text, full_text,
-            "fixture {fixture} unified-preview text should match full-compute text when TD backward entry-face parity is satisfied"
+            "fixture {fixture} unified-preview text should match full-compute text"
         );
     }
 }

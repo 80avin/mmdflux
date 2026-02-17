@@ -224,7 +224,14 @@ fn build_unified_path(
     q4_rank_span: usize,
 ) -> Vec<FPoint> {
     let (backward_source_face_override, backward_target_face_override) =
-        backward_td_bt_face_overrides(edge, geometry, direction, is_backward, target_overflowed);
+        backward_td_bt_face_overrides(
+            edge,
+            geometry,
+            direction,
+            is_backward,
+            target_overflowed,
+            q4_rank_span,
+        );
     let control_points = build_path_from_hints(edge, geometry);
     let mut path = build_contracted_path(&control_points, direction);
     anchor_path_endpoints_to_endpoint_faces(
@@ -341,9 +348,7 @@ fn build_unified_path(
                 target_rect,
             );
         }
-        if matches!(direction, Direction::LeftRight | Direction::RightLeft) {
-            collapse_collinear_interior_points(&mut finalized);
-        }
+        collapse_collinear_interior_points(&mut finalized);
         // Backward edge processing (tangent direction, lane clearance, corner inset)
         // overrides shape-aware endpoints with rect-aligned positions.
         // Re-project endpoints to actual shape boundaries as a final step.
@@ -359,12 +364,18 @@ fn backward_td_bt_face_overrides(
     direction: Direction,
     is_backward: bool,
     _target_overflowed: bool,
+    rank_span: usize,
 ) -> (Option<Face>, Option<Face>) {
     const MIN_OVERRIDE_RECT_SPAN: f64 = 20.0;
     if !is_backward || !matches!(direction, Direction::TopDown | Direction::BottomTop) {
         return (None, None);
     }
     if edge.from_subgraph.is_some() || edge.to_subgraph.is_some() {
+        return (None, None);
+    }
+    // Long backward edges (3+ user-visible rank gaps, normalized rank_span >= 6)
+    // use side-face channel routing (R-BACK-7 Heuristic 4).
+    if rank_span >= 6 {
         return (None, None);
     }
     let hint = edge.layout_path_hint.as_ref();
@@ -875,8 +886,8 @@ fn ensure_backward_outer_lane_clearance(
 
 /// After `align_backward_outer_lane_to_hint` pulls interior points to dagre's
 /// channel hint, the channel lane may sit too close to the node envelope.
-/// This function enforces a minimum vertical (LR/RL) clearance between the
-/// node bottom faces and the backward channel lane, matching R-BACK-8.
+/// This function enforces a minimum clearance between the node faces and
+/// the backward channel lane, matching R-BACK-8/9/10.
 fn enforce_backward_minimum_channel_floor(
     path: &mut [FPoint],
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
@@ -885,29 +896,54 @@ fn enforce_backward_minimum_channel_floor(
     min_clearance: f64,
 ) {
     const EPS: f64 = 0.000_001;
-    if !matches!(direction, Direction::LeftRight | Direction::RightLeft)
-        || path.len() < 3
-        || min_clearance <= 0.0
-    {
+    if path.len() < 3 || min_clearance <= 0.0 {
         return;
     }
 
-    let src_bottom = endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
-        .map(|(r, _)| r.y + r.height);
-    let tgt_bottom = endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
-        .map(|(r, _)| r.y + r.height);
-    let node_envelope = match (src_bottom, tgt_bottom) {
-        (Some(s), Some(t)) => s.max(t),
-        (Some(s), None) => s,
-        (None, Some(t)) => t,
-        (None, None) => return,
-    };
-
-    let min_channel = node_envelope + min_clearance;
     let last = path.len() - 1;
-    for point in path.iter_mut().take(last).skip(1) {
-        if point.y > node_envelope + EPS && point.y < min_channel - EPS {
-            point.y = min_channel;
+    match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            // Right-side channel: envelope = max right edge of source/target.
+            // Only applies when interior points already sit beyond the envelope
+            // (i.e. the edge uses side-face channel routing, not flow-face).
+            let src_rect =
+                endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref());
+            let tgt_rect = endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref());
+            let (Some((sr, _)), Some((tr, _))) = (src_rect, tgt_rect) else {
+                return;
+            };
+            let node_envelope = (sr.x + sr.width).max(tr.x + tr.width);
+            let any_beyond = path[1..last].iter().any(|p| p.x > node_envelope - EPS);
+            if !any_beyond {
+                return;
+            }
+            let min_channel = node_envelope + min_clearance;
+            for point in path.iter_mut().take(last).skip(1) {
+                if point.x > node_envelope + EPS && point.x < min_channel - EPS {
+                    point.x = min_channel;
+                }
+            }
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            // Bottom channel: envelope = max bottom edge of source/target
+            let src_bottom =
+                endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+                    .map(|(r, _)| r.y + r.height);
+            let tgt_bottom =
+                endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+                    .map(|(r, _)| r.y + r.height);
+            let node_envelope = match (src_bottom, tgt_bottom) {
+                (Some(s), Some(t)) => s.max(t),
+                (Some(s), None) => s,
+                (None, Some(t)) => t,
+                (None, None) => return,
+            };
+            let min_channel = node_envelope + min_clearance;
+            for point in path.iter_mut().take(last).skip(1) {
+                if point.y > node_envelope + EPS && point.y < min_channel - EPS {
+                    point.y = min_channel;
+                }
+            }
         }
     }
 }
