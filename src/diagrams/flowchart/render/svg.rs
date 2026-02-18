@@ -147,7 +147,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 
     let override_nodes = svg_router::build_override_node_map(diagram);
 
-    let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::FullCompute);
+    let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::UnifiedPreview);
     render_svg_with_geometry_context(
         diagram,
         options,

@@ -430,18 +430,6 @@ fn unified_preview_svg_output_is_deterministic_for_fixture_subset() {
 }
 
 #[test]
-fn svg_full_compute_override_matches_legacy_straight_core_subset() {
-    for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
-        let legacy = render_svg_fixture_with_curve(fixture, EdgeStyle::Straight);
-        let full_compute = render_svg_fixture_with_edge_routing(fixture, EdgeRouting::FullCompute);
-        assert_eq!(
-            full_compute, legacy,
-            "full-compute override should preserve legacy SVG for fixture {fixture}"
-        );
-    }
-}
-
-#[test]
 fn svg_full_compute_rollback_is_stable_across_repeated_renders() {
     for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
         let baseline = render_svg_fixture_with_edge_routing_and_policies(
