@@ -1214,10 +1214,14 @@ fn fan_in_target_overflow_context(
             continue;
         }
 
-        let target_rect = forward_edges
-            .first()
-            .and_then(|edge| endpoint_rect(geometry, &edge.to, edge.to_subgraph.as_deref()));
+        let target_rect_and_shape = forward_edges.first().and_then(|edge| {
+            endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+        });
+        let target_rect = target_rect_and_shape.map(|(rect, _)| rect);
+        let target_is_angular = target_rect_and_shape
+            .is_some_and(|(_, shape)| matches!(shape, Shape::Diamond | Shape::Hexagon));
         let capacity = target_rect
+            .as_ref()
             .map(|rect| adaptive_fan_in_primary_face_capacity(direction, rect))
             .unwrap_or_else(|| fan_in_primary_face_capacity(direction));
 
@@ -1274,15 +1278,24 @@ fn fan_in_target_overflow_context(
             face_edges.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
             let count = face_edges.len();
             for (idx, (edge_index, _)) in face_edges.iter().enumerate() {
-                let fraction = if count <= 1 {
+                let base_fraction = if count <= 1 {
                     0.5
                 } else {
                     idx as f64 / (count - 1) as f64
+                };
+                let fraction = if target_is_angular
+                    && face == primary_face
+                    && matches!(direction, Direction::TopDown | Direction::BottomTop)
+                {
+                    remap_angular_fan_in_target_fraction(base_fraction, count)
+                } else {
+                    base_fraction
                 };
                 target_fraction_for_edge.insert(*edge_index, fraction);
             }
             if face == primary_face && count > 1 {
                 let target_cross = target_rect
+                    .as_ref()
                     .map(|rect| face_cross_axis(rect, direction))
                     .unwrap_or_else(|| {
                         if count % 2 == 1 {
@@ -1348,7 +1361,7 @@ fn fan_in_target_overflow_context(
                 geometry,
                 direction,
                 primary_face,
-                target_rect,
+                &target_rect,
                 &forward_edges,
                 &target_face_for_edge,
                 &mut target_fraction_for_edge,
@@ -1532,6 +1545,19 @@ fn remap_angular_fan_out_source_fraction(base_fraction: f64, edge_count: usize) 
     // This increases vertical separation between outer/inner lateral branches
     // on angular sources (diamond/hexagon) in TD/BT fan-out.
     let exponent = (1.0 + (edge_count as f64 - 3.0)).clamp(1.0, 4.0);
+    let centered = (base_fraction.clamp(0.0, 1.0) * 2.0 - 1.0).clamp(-1.0, 1.0);
+    let remapped = centered.signum() * centered.abs().powf(exponent);
+    ((remapped + 1.0) * 0.5).clamp(0.0, 1.0)
+}
+
+fn remap_angular_fan_in_target_fraction(base_fraction: f64, edge_count: usize) -> f64 {
+    if edge_count <= 3 {
+        return base_fraction.clamp(0.0, 1.0);
+    }
+
+    // Favor visual spread for smaller fan-ins, then progressively tighten as
+    // port count grows (to preserve room for additional slots).
+    let exponent = (8.0 / edge_count as f64).clamp(1.0, 2.5);
     let centered = (base_fraction.clamp(0.0, 1.0) * 2.0 - 1.0).clamp(-1.0, 1.0);
     let remapped = centered.signum() * centered.abs().powf(exponent);
     ((remapped + 1.0) * 0.5).clamp(0.0, 1.0)
@@ -3501,7 +3527,20 @@ fn anchor_path_endpoints_to_endpoint_faces(
                 target_overflowed,
                 target_has_backward_conflict,
             );
-            path[last] = project_endpoint_to_shape(clipped, prev, to_rect, to_shape);
+            // For non-rect targets, projecting via `prev` can collapse distinct
+            // fan-in slot fractions to the same boundary point. When a policy
+            // fraction is active on forward TD/BT routing, preserve that slot.
+            let target_fraction_override_active = !is_backward
+                && overflow_policy_target_fraction.is_some()
+                && matches!(direction, Direction::TopDown | Direction::BottomTop);
+            let projection_approach = if target_fraction_override_active
+                && matches!(to_shape, Shape::Diamond | Shape::Hexagon)
+            {
+                clipped
+            } else {
+                prev
+            };
+            path[last] = project_endpoint_to_shape(clipped, projection_approach, to_rect, to_shape);
         }
     }
 }

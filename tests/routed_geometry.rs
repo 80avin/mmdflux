@@ -3000,6 +3000,56 @@ fn five_fan_in_primary_face_channels_are_staggered_without_overlap() {
 }
 
 #[test]
+fn five_fan_in_diamond_target_ports_use_distinct_primary_slots() {
+    let (diagram, geom) = layout_fixture_svg("five_fan_in_diamond.mmd");
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        RoutingMode::UnifiedPreview,
+        RoutingPolicyToggles::all_enabled(),
+    );
+
+    let inbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.to == "F" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        inbound.len(),
+        5,
+        "five_fan_in_diamond should produce five inbound forward edges to F"
+    );
+
+    let mut target_xs: Vec<f64> = inbound
+        .iter()
+        .map(|edge| {
+            edge.path
+                .last()
+                .copied()
+                .expect("edge should have endpoint")
+                .x
+        })
+        .collect();
+    target_xs.sort_by(|a, b| a.total_cmp(b));
+    let mut unique_target_count = 0usize;
+    let mut last_target: Option<f64> = None;
+    for value in &target_xs {
+        let is_new = match last_target {
+            Some(prev) => (*value - prev).abs() > 0.5,
+            None => true,
+        };
+        if is_new {
+            unique_target_count += 1;
+            last_target = Some(*value);
+        }
+    }
+    assert_eq!(
+        unique_target_count, 5,
+        "five_fan_in_diamond target ports should occupy five distinct primary-face slots instead of collapsing: target_xs={target_xs:?}"
+    );
+}
+
+#[test]
 fn five_fan_out_primary_face_channels_are_staggered_without_overlap() {
     let (diagram, geom) = layout_fixture_svg("five_fan_out.mmd");
     let routed = route_graph_geometry_with_policies(
