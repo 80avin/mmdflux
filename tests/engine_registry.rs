@@ -261,3 +261,61 @@ fn elk_edge_routing_is_pass_through_clip() {
         EdgeRouting::PassThroughClip
     );
 }
+
+// =============================================================================
+// Flux vs Mermaid routing: text-mode invariant
+// =============================================================================
+
+#[test]
+fn flux_vs_mermaid_text_output_identical_for_simple() {
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/simple.mmd").unwrap();
+    let mut instance = FlowchartInstance::new();
+    instance.parse(&input).unwrap();
+
+    let flux_config = RenderConfig {
+        edge_routing: Some(EdgeRouting::UnifiedPreview),
+        ..RenderConfig::default()
+    };
+    let mermaid_config = RenderConfig {
+        edge_routing: Some(EdgeRouting::FullCompute),
+        ..RenderConfig::default()
+    };
+
+    let flux_out = instance.render(OutputFormat::Text, &flux_config).unwrap();
+    let mermaid_out = instance
+        .render(OutputFormat::Text, &mermaid_config)
+        .unwrap();
+    assert_eq!(
+        flux_out, mermaid_out,
+        "text output should be routing-independent"
+    );
+}
+
+#[test]
+fn flux_vs_mermaid_svg_output_may_diverge_for_cycle() {
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/simple_cycle.mmd").unwrap();
+    let mut instance = FlowchartInstance::new();
+    instance.parse(&input).unwrap();
+
+    let flux_out = instance
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                edge_routing: Some(EdgeRouting::UnifiedPreview),
+                ..RenderConfig::default()
+            },
+        )
+        .unwrap();
+    let mermaid_out = instance
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                edge_routing: Some(EdgeRouting::FullCompute),
+                ..RenderConfig::default()
+            },
+        )
+        .unwrap();
+
+    // SVG paths will differ because routing topology changes — document, don't assert equal
+    let _ = (flux_out, mermaid_out); // classification: SVG-divergent
+}
