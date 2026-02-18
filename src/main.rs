@@ -274,6 +274,16 @@ fn main() -> io::Result<()> {
         None => None,
     };
 
+    let default_routing_mode = if cli.routing_mode.is_none()
+        && matches!(
+            layout_engine.unwrap_or(LayoutEngineId::Dagre),
+            LayoutEngineId::Dagre
+        ) {
+        Some(RoutingMode::UnifiedPreview)
+    } else {
+        None
+    };
+
     let config = RenderConfig {
         routing_policies: RoutingPolicyToggles,
         layout: LayoutConfig {
@@ -296,7 +306,7 @@ fn main() -> io::Result<()> {
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
         path_detail: cli.path_detail.map(Into::into).unwrap_or_default(),
-        routing_mode: cli.routing_mode.map(Into::into),
+        routing_mode: cli.routing_mode.map(Into::into).or(default_routing_mode),
     };
 
     // Use registry for detection and rendering

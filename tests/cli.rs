@@ -88,6 +88,45 @@ fn cli_accepts_full_compute_rollback_flag() {
 }
 
 #[test]
+fn cli_svg_defaults_to_unified_preview_routing_mode() {
+    let input = "graph TD\nA[Start] --> B{Check}\nB --> C[Yes]\nB --> D[No]\nD --> A\n";
+
+    let default = mmdflux()
+        .args(["--format", "svg", "--svg-edge-path-style", "linear"])
+        .write_stdin(input)
+        .output()
+        .expect("default render should execute");
+    assert!(
+        default.status.success(),
+        "default render failed: stderr={}",
+        String::from_utf8_lossy(&default.stderr)
+    );
+
+    let unified = mmdflux()
+        .args([
+            "--format",
+            "svg",
+            "--svg-edge-path-style",
+            "linear",
+            "--routing-mode",
+            "unified-preview",
+        ])
+        .write_stdin(input)
+        .output()
+        .expect("unified-preview render should execute");
+    assert!(
+        unified.status.success(),
+        "unified-preview render failed: stderr={}",
+        String::from_utf8_lossy(&unified.stderr)
+    );
+
+    assert_eq!(
+        default.stdout, unified.stdout,
+        "default svg render should match explicit unified-preview routing mode"
+    );
+}
+
+#[test]
 fn cli_rejects_legacy_svg_edge_curve_flag() {
     mmdflux()
         .args(["--format", "svg", "--svg-edge-curve", "orthogonal"])
