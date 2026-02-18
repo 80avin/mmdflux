@@ -375,6 +375,15 @@ fn build_unified_path(
         enforce_terminal_support_normal_to_face(&mut finalized, policy_face, 8.0);
         collapse_collinear_interior_points(&mut finalized);
     }
+    if !is_backward {
+        avoid_forward_td_bt_primary_lane_node_intrusion(
+            &mut finalized,
+            edge,
+            geometry,
+            direction,
+            target_primary_channel_depth,
+        );
+    }
     if is_backward {
         enforce_backward_source_tangent_direction(
             &mut finalized,
@@ -428,6 +437,12 @@ fn build_unified_path(
         );
         collapse_tiny_backward_terminal_staircase(&mut finalized, direction, 8.0);
         enforce_backward_minimum_channel_floor(&mut finalized, edge, geometry, direction, 12.0);
+        avoid_backward_td_bt_vertical_lane_node_intrusion(
+            &mut finalized,
+            edge,
+            geometry,
+            direction,
+        );
         collapse_backward_terminal_node_intrusion(&mut finalized, edge, geometry, direction);
         enforce_backward_terminal_corner_inset(&mut finalized, edge, geometry);
         collapse_collinear_interior_points(&mut finalized);
@@ -438,6 +453,429 @@ fn build_unified_path(
         fix_backward_diagonal_node_collision(&mut finalized, edge, geometry, direction);
     }
     finalized
+}
+
+fn avoid_forward_td_bt_primary_lane_node_intrusion(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+    target_primary_channel_depth: Option<f64>,
+) {
+    const EPS: f64 = 0.000_001;
+    const INTRUSION_MARGIN: f64 = 1.0;
+    const NODE_CLEARANCE: f64 = 8.0;
+    const MIN_SOURCE_STEM: f64 = 8.0;
+    const MIN_TARGET_STEM: f64 = 8.0;
+
+    if !matches!(direction, Direction::TopDown | Direction::BottomTop) || path.len() != 4 {
+        return;
+    }
+
+    let p0 = path[0];
+    let p1 = path[1];
+    let p2 = path[2];
+    let p3 = path[3];
+
+    let first_vertical = (p0.x - p1.x).abs() <= EPS && (p0.y - p1.y).abs() > EPS;
+    let middle_horizontal = (p1.y - p2.y).abs() <= EPS && (p1.x - p2.x).abs() > EPS;
+    let terminal_vertical = (p2.x - p3.x).abs() <= EPS && (p2.y - p3.y).abs() > EPS;
+    if !(first_vertical && middle_horizontal && terminal_vertical) {
+        return;
+    }
+
+    let flow_sign = if p3.y >= p0.y { 1.0 } else { -1.0 };
+    let mut candidate_lane_y = p1.y;
+    let mut saw_primary_intrusion = false;
+
+    for (node_id, node) in &geometry.nodes {
+        if node_id == &edge.from || node_id == &edge.to {
+            continue;
+        }
+        let rect = node.rect;
+        let first_crosses =
+            axis_aligned_segment_crosses_rect_interior(p0, p1, rect, INTRUSION_MARGIN);
+        let middle_crosses =
+            axis_aligned_segment_crosses_rect_interior(p1, p2, rect, INTRUSION_MARGIN);
+        if !first_crosses && !middle_crosses {
+            continue;
+        }
+
+        saw_primary_intrusion = true;
+        if flow_sign > 0.0 {
+            candidate_lane_y = candidate_lane_y.min(rect.y - NODE_CLEARANCE);
+        } else {
+            candidate_lane_y = candidate_lane_y.max(rect.y + rect.height + NODE_CLEARANCE);
+        }
+    }
+
+    if saw_primary_intrusion {
+        let min_lane = p0.y + flow_sign * MIN_SOURCE_STEM;
+        let max_lane = p3.y - flow_sign * MIN_TARGET_STEM;
+        let lane_y = if flow_sign > 0.0 {
+            if max_lane < min_lane {
+                return;
+            }
+            candidate_lane_y.clamp(min_lane, max_lane)
+        } else {
+            if min_lane < max_lane {
+                return;
+            }
+            candidate_lane_y.clamp(max_lane, min_lane)
+        };
+
+        if (lane_y - p1.y).abs() > EPS {
+            let new_p1 = FPoint::new(p1.x, lane_y);
+            let new_p2 = FPoint::new(p2.x, lane_y);
+            if (new_p1.y - p0.y).abs() > EPS
+                && (new_p2.x - new_p1.x).abs() > EPS
+                && (p3.y - new_p2.y).abs() > EPS
+            {
+                path[1] = new_p1;
+                path[2] = new_p2;
+            }
+        }
+    }
+
+    if let Some(detoured) = reroute_forward_td_bt_terminal_intrusion_with_safe_vertical_corridor(
+        path, edge, geometry, direction,
+    ) {
+        *path = detoured;
+    }
+
+    stagger_forward_td_bt_terminal_horizontal_support(path, target_primary_channel_depth);
+}
+
+fn axis_aligned_segment_crosses_rect_interior(
+    a: FPoint,
+    b: FPoint,
+    rect: FRect,
+    margin: f64,
+) -> bool {
+    let left = rect.x + margin;
+    let right = rect.x + rect.width - margin;
+    let top = rect.y + margin;
+    let bottom = rect.y + rect.height - margin;
+    if left >= right || top >= bottom {
+        return false;
+    }
+
+    if (a.y - b.y).abs() <= POINT_EPS {
+        let seg_y = a.y;
+        if seg_y <= top || seg_y >= bottom {
+            return false;
+        }
+        let seg_min_x = a.x.min(b.x);
+        let seg_max_x = a.x.max(b.x);
+        return seg_max_x > left && seg_min_x < right;
+    }
+
+    if (a.x - b.x).abs() <= POINT_EPS {
+        let seg_x = a.x;
+        if seg_x <= left || seg_x >= right {
+            return false;
+        }
+        let seg_min_y = a.y.min(b.y);
+        let seg_max_y = a.y.max(b.y);
+        return seg_max_y > top && seg_min_y < bottom;
+    }
+
+    false
+}
+
+fn reroute_forward_td_bt_terminal_intrusion_with_safe_vertical_corridor(
+    path: &[FPoint],
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+) -> Option<Vec<FPoint>> {
+    const MIN_TARGET_STEM: f64 = 8.0;
+    const NODE_CLEARANCE: f64 = 8.0;
+    const INTRUSION_MARGIN: f64 = 1.0;
+    const EPS: f64 = 0.000_001;
+
+    if !matches!(direction, Direction::TopDown | Direction::BottomTop) || path.len() != 4 {
+        return None;
+    }
+
+    let p0 = path[0];
+    let p1 = path[1];
+    let p2 = path[2];
+    let p3 = path[3];
+
+    let first_vertical = (p0.x - p1.x).abs() <= EPS && (p0.y - p1.y).abs() > EPS;
+    let middle_horizontal = (p1.y - p2.y).abs() <= EPS && (p1.x - p2.x).abs() > EPS;
+    let terminal_vertical = (p2.x - p3.x).abs() <= EPS && (p2.y - p3.y).abs() > EPS;
+    if !(first_vertical && middle_horizontal && terminal_vertical) {
+        return None;
+    }
+
+    if !segment_crosses_any_other_node_interior(edge, geometry, p2, p3, INTRUSION_MARGIN) {
+        return None;
+    }
+
+    let flow_sign = if p3.y >= p0.y { 1.0 } else { -1.0 };
+    let terminal_support_y = p3.y - flow_sign * MIN_TARGET_STEM;
+    if (terminal_support_y - p0.y).abs() <= EPS {
+        return None;
+    }
+    if flow_sign > 0.0 && terminal_support_y <= p0.y + EPS {
+        return None;
+    }
+    if flow_sign < 0.0 && terminal_support_y >= p0.y - EPS {
+        return None;
+    }
+
+    let y_min = p0.y.min(terminal_support_y);
+    let y_max = p0.y.max(terminal_support_y);
+    let mut candidates = vec![p0.x];
+    for (node_id, node) in &geometry.nodes {
+        if node_id == &edge.from || node_id == &edge.to {
+            continue;
+        }
+        let rect = node.rect;
+        if !ranges_overlap(y_min, y_max, rect.y, rect.y + rect.height) {
+            continue;
+        }
+        candidates.push(rect.x - NODE_CLEARANCE);
+        candidates.push(rect.x + rect.width + NODE_CLEARANCE);
+    }
+
+    candidates.sort_by(|a, b| a.total_cmp(b));
+    candidates.dedup_by(|a, b| (*a - *b).abs() <= 0.5);
+
+    let mut best: Option<(f64, Vec<FPoint>)> = None;
+    for corridor_x in candidates {
+        if (corridor_x - p3.x).abs() < MIN_TARGET_STEM {
+            continue;
+        }
+
+        let mut route: Vec<FPoint> = Vec::with_capacity(5);
+        route.push(p0);
+        if (corridor_x - p0.x).abs() > EPS {
+            route.push(FPoint::new(corridor_x, p0.y));
+        }
+        route.push(FPoint::new(corridor_x, terminal_support_y));
+        route.push(FPoint::new(p3.x, terminal_support_y));
+        route.push(p3);
+
+        let mut deduped: Vec<FPoint> = Vec::with_capacity(route.len());
+        for point in route {
+            if deduped
+                .last()
+                .is_none_or(|prev| !points_match(*prev, point))
+            {
+                deduped.push(point);
+            }
+        }
+
+        if deduped.len() < 4 {
+            continue;
+        }
+
+        let segments_clear = deduped.windows(2).all(|segment| {
+            !segment_crosses_any_other_node_interior(
+                edge,
+                geometry,
+                segment[0],
+                segment[1],
+                INTRUSION_MARGIN,
+            )
+        });
+        if !segments_clear {
+            continue;
+        }
+
+        let score = (corridor_x - p0.x).abs();
+        match &best {
+            Some((best_score, _)) if score >= *best_score => {}
+            _ => best = Some((score, deduped)),
+        }
+    }
+
+    best.map(|(_, route)| route)
+}
+
+fn avoid_backward_td_bt_vertical_lane_node_intrusion(
+    path: &mut [FPoint],
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+) {
+    const INTRUSION_MARGIN: f64 = 1.0;
+    const NODE_CLEARANCE: f64 = 8.0;
+    const MIN_SOURCE_STEM: f64 = 8.0;
+    const MIN_TARGET_STEM: f64 = 8.0;
+    const EPS: f64 = 0.000_001;
+
+    if !matches!(direction, Direction::TopDown | Direction::BottomTop) || path.len() < 4 {
+        return;
+    }
+
+    let n = path.len();
+    let p0 = path[0];
+    let p1 = path[1];
+    let p2 = path[n - 2];
+    let p3 = path[n - 1];
+    let first_horizontal = (p0.y - p1.y).abs() <= EPS && (p0.x - p1.x).abs() > EPS;
+    let middle_vertical = (p1.x - p2.x).abs() <= EPS && (p1.y - p2.y).abs() > EPS;
+    let terminal_horizontal = (p2.y - p3.y).abs() <= EPS && (p2.x - p3.x).abs() > EPS;
+    if !(first_horizontal && middle_vertical && terminal_horizontal) {
+        return;
+    }
+    let lane_x = p1.x;
+    let interior_stays_on_lane = path[1..(n - 1)]
+        .iter()
+        .all(|point| (point.x - lane_x).abs() <= EPS);
+    if !interior_stays_on_lane {
+        return;
+    }
+
+    if !segment_crosses_any_other_node_interior(edge, geometry, p1, p2, INTRUSION_MARGIN) {
+        return;
+    }
+
+    let y_min = p0.y.min(p3.y);
+    let y_max = p0.y.max(p3.y);
+    let mut candidates = vec![p1.x];
+    for (node_id, node) in &geometry.nodes {
+        if node_id == &edge.from || node_id == &edge.to {
+            continue;
+        }
+        let rect = node.rect;
+        if !ranges_overlap(y_min, y_max, rect.y, rect.y + rect.height) {
+            continue;
+        }
+        candidates.push(rect.x - NODE_CLEARANCE);
+        candidates.push(rect.x + rect.width + NODE_CLEARANCE);
+    }
+    candidates.sort_by(|a, b| a.total_cmp(b));
+    candidates.dedup_by(|a, b| (*a - *b).abs() <= 0.5);
+
+    let preferred_min_x = p0.x.max(p3.x);
+    let mut best: Option<(f64, f64)> = None;
+    for lane_x in candidates {
+        if (lane_x - p0.x).abs() < MIN_SOURCE_STEM || (lane_x - p3.x).abs() < MIN_TARGET_STEM {
+            continue;
+        }
+        let a = FPoint::new(lane_x, p0.y);
+        let b = FPoint::new(lane_x, p3.y);
+        let segments_clear =
+            !segment_crosses_any_other_node_interior(edge, geometry, p0, a, INTRUSION_MARGIN)
+                && !segment_crosses_any_other_node_interior(edge, geometry, a, b, INTRUSION_MARGIN)
+                && !segment_crosses_any_other_node_interior(
+                    edge,
+                    geometry,
+                    b,
+                    p3,
+                    INTRUSION_MARGIN,
+                );
+        if !segments_clear {
+            continue;
+        }
+
+        let side_penalty = if lane_x <= preferred_min_x + EPS {
+            10_000.0
+        } else {
+            0.0
+        };
+        let score = (lane_x - p1.x).abs() + side_penalty;
+        match &best {
+            Some((best_score, _)) if score >= *best_score => {}
+            _ => best = Some((score, lane_x)),
+        }
+    }
+
+    if let Some((_, lane_x)) = best {
+        for point in path.iter_mut().take(n - 1).skip(1) {
+            point.x = lane_x;
+        }
+    }
+}
+
+fn stagger_forward_td_bt_terminal_horizontal_support(
+    path: &mut [FPoint],
+    target_primary_channel_depth: Option<f64>,
+) {
+    const EPS: f64 = 0.000_001;
+    const MIN_TARGET_STEM: f64 = 8.0;
+    const MIN_SOURCE_STEM: f64 = 8.0;
+    const MAX_TERMINAL_STAGGER: f64 = 24.0;
+    const MIN_TOTAL_SPAN_FOR_STAGGER: f64 = 200.0;
+    let Some(depth) = target_primary_channel_depth else {
+        return;
+    };
+    if path.len() < 4 {
+        return;
+    }
+
+    let n = path.len();
+    let p0 = path[0];
+    let p_prev = path[n - 4];
+    let p_mid = path[n - 3];
+    let p_support = path[n - 2];
+    let p_end = path[n - 1];
+
+    let pre_segment_vertical =
+        (p_prev.x - p_mid.x).abs() <= EPS && (p_prev.y - p_mid.y).abs() > EPS;
+    let support_segment_horizontal =
+        (p_mid.y - p_support.y).abs() <= EPS && (p_mid.x - p_support.x).abs() > EPS;
+    let tail_segment_vertical =
+        (p_support.x - p_end.x).abs() <= EPS && (p_support.y - p_end.y).abs() > EPS;
+    if !(pre_segment_vertical && support_segment_horizontal && tail_segment_vertical) {
+        return;
+    }
+
+    let flow_sign = if p_end.y >= p0.y { 1.0 } else { -1.0 };
+    if (p_end.y - p0.y).abs() < MIN_TOTAL_SPAN_FOR_STAGGER {
+        return;
+    }
+    let source_anchor = p0.y + flow_sign * MIN_SOURCE_STEM;
+    let target_anchor = p_end.y - flow_sign * MIN_TARGET_STEM;
+    if (target_anchor - source_anchor).abs() <= EPS {
+        return;
+    }
+
+    let desired = target_anchor - flow_sign * MAX_TERMINAL_STAGGER * (1.0 - depth.clamp(0.0, 1.0));
+    let clamped = if flow_sign > 0.0 {
+        desired.clamp(
+            source_anchor.min(target_anchor),
+            source_anchor.max(target_anchor),
+        )
+    } else {
+        desired.clamp(
+            target_anchor.min(source_anchor),
+            target_anchor.max(source_anchor),
+        )
+    };
+
+    if (clamped - p_support.y).abs() <= 1.0 {
+        return;
+    }
+
+    path[n - 3].y = clamped;
+    path[n - 2].y = clamped;
+}
+
+fn segment_crosses_any_other_node_interior(
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    a: FPoint,
+    b: FPoint,
+    margin: f64,
+) -> bool {
+    geometry.nodes.iter().any(|(node_id, node)| {
+        if node_id == &edge.from || node_id == &edge.to {
+            return false;
+        }
+        axis_aligned_segment_crosses_rect_interior(a, b, node.rect, margin)
+    })
+}
+
+fn ranges_overlap(a_min: f64, a_max: f64, b_min: f64, b_max: f64) -> bool {
+    let low = a_min.max(b_min);
+    let high = a_max.min(b_max);
+    high > low + POINT_EPS
 }
 
 fn backward_td_bt_face_overrides(

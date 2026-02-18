@@ -934,13 +934,15 @@ fn render_edges(
             &points,
             edge,
             edge_direction,
-            is_backward,
-            allow_interior_nudges,
-            enforce_primary_axis_no_backtrack,
-            matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
-                || preserve_orthogonal_endpoint_contract,
-            !matches!(edge_path_style, SvgEdgePathStyle::Basis),
-            matches!(edge_path_style, SvgEdgePathStyle::Basis),
+            MarkerOffsetOptions {
+                is_backward,
+                allow_interior_nudges,
+                enforce_primary_axis_no_backtrack,
+                preserve_orthogonal: matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
+                    || preserve_orthogonal_endpoint_contract,
+                collapse_terminal_elbows: !matches!(edge_path_style, SvgEdgePathStyle::Basis),
+                is_basis_style: matches!(edge_path_style, SvgEdgePathStyle::Basis),
+            },
         );
         // Collapse tiny near-collinear jogs introduced by SVG marker offset
         // smoothing on unified-preview paths.
@@ -1057,8 +1059,8 @@ fn collapse_primary_face_fan_channel_for_basis(
                 if delta.abs()
                     > MIN_STEM_FOR_COLLAPSE + MIN_TERMINAL_STEM_FOR_COLLAPSE + MIN_CHANNEL_SPAN
                 {
-                    let source_stem = (delta.abs() * 0.28)
-                        .clamp(MIN_STEM_FOR_COLLAPSE, MAX_STEM_FOR_COLLAPSE);
+                    let source_stem =
+                        (delta.abs() * 0.28).clamp(MIN_STEM_FOR_COLLAPSE, MAX_STEM_FOR_COLLAPSE);
                     let max_terminal_stem = delta.abs() - source_stem - MIN_CHANNEL_SPAN;
                     if max_terminal_stem < MIN_TERMINAL_STEM_FOR_COLLAPSE {
                         return points.to_vec();
@@ -1099,8 +1101,8 @@ fn collapse_primary_face_fan_channel_for_basis(
                 if delta.abs()
                     > MIN_STEM_FOR_COLLAPSE + MIN_TERMINAL_STEM_FOR_COLLAPSE + MIN_CHANNEL_SPAN
                 {
-                    let source_stem = (delta.abs() * 0.28)
-                        .clamp(MIN_STEM_FOR_COLLAPSE, MAX_STEM_FOR_COLLAPSE);
+                    let source_stem =
+                        (delta.abs() * 0.28).clamp(MIN_STEM_FOR_COLLAPSE, MAX_STEM_FOR_COLLAPSE);
                     let max_terminal_stem = delta.abs() - source_stem - MIN_CHANNEL_SPAN;
                     if max_terminal_stem < MIN_TERMINAL_STEM_FOR_COLLAPSE {
                         return points.to_vec();
@@ -2958,20 +2960,34 @@ fn find_adjacent_point(point_a: Point, point_b: Point, distance: f64) -> Point {
     }
 }
 
-fn apply_marker_offsets(
-    points: &[Point],
-    edge: &Edge,
-    direction: Direction,
+#[derive(Debug, Clone, Copy)]
+struct MarkerOffsetOptions {
     is_backward: bool,
     allow_interior_nudges: bool,
     enforce_primary_axis_no_backtrack: bool,
     preserve_orthogonal: bool,
     collapse_terminal_elbows: bool,
     is_basis_style: bool,
+}
+
+fn apply_marker_offsets(
+    points: &[Point],
+    edge: &Edge,
+    direction: Direction,
+    options: MarkerOffsetOptions,
 ) -> Vec<Point> {
     if points.len() < 2 {
         return points.to_vec();
     }
+
+    let MarkerOffsetOptions {
+        is_backward,
+        allow_interior_nudges,
+        enforce_primary_axis_no_backtrack,
+        preserve_orthogonal,
+        collapse_terminal_elbows,
+        is_basis_style,
+    } = options;
 
     let mut start_offset: f64 = match edge.arrow_start {
         Arrow::Normal | Arrow::OpenTriangle => 4.0,

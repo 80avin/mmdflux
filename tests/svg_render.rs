@@ -607,6 +607,73 @@ fn node_rect_for_label(svg: &str, label: &str) -> Option<(f64, f64, f64, f64)> {
     })
 }
 
+fn axis_aligned_segment_crosses_rect_interior(
+    a: (f64, f64),
+    b: (f64, f64),
+    rect: (f64, f64, f64, f64),
+    margin: f64,
+) -> bool {
+    let (x, y, w, h) = rect;
+    let left = x + margin;
+    let right = x + w - margin;
+    let top = y + margin;
+    let bottom = y + h - margin;
+    if left >= right || top >= bottom {
+        return false;
+    }
+
+    let eps = 0.5;
+    if (a.1 - b.1).abs() <= eps {
+        let seg_y = a.1;
+        if seg_y <= top || seg_y >= bottom {
+            return false;
+        }
+        let seg_min_x = a.0.min(b.0);
+        let seg_max_x = a.0.max(b.0);
+        return seg_max_x > left && seg_min_x < right;
+    }
+
+    if (a.0 - b.0).abs() <= eps {
+        let seg_x = a.0;
+        if seg_x <= left || seg_x >= right {
+            return false;
+        }
+        let seg_min_y = a.1.min(b.1);
+        let seg_max_y = a.1.max(b.1);
+        return seg_max_y > top && seg_min_y < bottom;
+    }
+
+    false
+}
+
+fn path_crosses_rect_interior(
+    path: &[(f64, f64)],
+    rect: (f64, f64, f64, f64),
+    margin: f64,
+) -> bool {
+    path.windows(2).any(|segment| {
+        axis_aligned_segment_crosses_rect_interior(segment[0], segment[1], rect, margin)
+    })
+}
+
+fn vertical_lane_x_at_y(path: &[(f64, f64)], probe_y: f64) -> Option<f64> {
+    let eps = 0.5;
+    path.windows(2).find_map(|segment| {
+        let a = segment[0];
+        let b = segment[1];
+        if (a.0 - b.0).abs() > eps {
+            return None;
+        }
+        let min_y = a.1.min(b.1);
+        let max_y = a.1.max(b.1);
+        if probe_y >= min_y - eps && probe_y <= max_y + eps {
+            Some(a.0)
+        } else {
+            None
+        }
+    })
+}
+
 fn edge_path_for_svg_order(
     diagram: &mmdflux::Diagram,
     svg: &str,
@@ -887,6 +954,72 @@ fn svg_orthogonal_unified_preview_inline_label_flowchart_labels_remain_attached_
         failures.is_empty(),
         "Label revalidation regression: inline_label_flowchart rendered off-path edge labels:\n{}",
         failures.join("\n")
+    );
+}
+
+#[test]
+fn svg_orthogonal_unified_preview_inline_label_flowchart_avoids_known_node_intrusions() {
+    let diagram = load_flowchart_fixture_diagram("inline_label_flowchart.mmd");
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    let cache_to_validate = edge_index(&diagram, "cache", "validate");
+    let reject_to_metrics = edge_index(&diagram, "reject", "metrics");
+    let retry_to_queue = edge_index(&diagram, "retry", "queue");
+    let fastpath_to_metrics = edge_index(&diagram, "fastpath", "metrics");
+    let audit_to_metrics = edge_index(&diagram, "audit", "metrics");
+    let cache_to_validate_points = edge_path_for_svg_order(&diagram, &svg, cache_to_validate);
+    let reject_to_metrics_points = edge_path_for_svg_order(&diagram, &svg, reject_to_metrics);
+    let retry_to_queue_points = edge_path_for_svg_order(&diagram, &svg, retry_to_queue);
+    let fastpath_to_metrics_points = edge_path_for_svg_order(&diagram, &svg, fastpath_to_metrics);
+    let audit_to_metrics_points = edge_path_for_svg_order(&diagram, &svg, audit_to_metrics);
+
+    let serve_cached_rect =
+        node_rect_for_label(&svg, "Serve Cached").expect("missing Serve Cached rect");
+    let notify_user_rect =
+        node_rect_for_label(&svg, "Notify User").expect("missing Notify User rect");
+    let page_on_call_rect =
+        node_rect_for_label(&svg, "Page On-call").expect("missing Page On-call rect");
+
+    assert!(
+        !path_crosses_rect_interior(&cache_to_validate_points, serve_cached_rect, 1.0),
+        "Lookup Cache -> Valid? should not pass through Serve Cached interior in unified orthogonal mode; path={cache_to_validate_points:?}, serve_cached_rect={serve_cached_rect:?}"
+    );
+    assert!(
+        !path_crosses_rect_interior(&reject_to_metrics_points, notify_user_rect, 1.0),
+        "Reject -> Emit Metrics should not pass through Notify User interior in unified orthogonal mode; path={reject_to_metrics_points:?}, notify_user_rect={notify_user_rect:?}"
+    );
+    assert!(
+        !path_crosses_rect_interior(&reject_to_metrics_points, page_on_call_rect, 1.0),
+        "Reject -> Emit Metrics should not pass through Page On-call interior in unified orthogonal mode; path={reject_to_metrics_points:?}, page_on_call_rect={page_on_call_rect:?}"
+    );
+    assert!(
+        !path_crosses_rect_interior(&retry_to_queue_points, page_on_call_rect, 1.0),
+        "Retry -> Enqueue Job should not pass through Page On-call interior in unified orthogonal mode; path={retry_to_queue_points:?}, page_on_call_rect={page_on_call_rect:?}"
+    );
+
+    let fast_support = *fastpath_to_metrics_points
+        .get(fastpath_to_metrics_points.len().saturating_sub(2))
+        .expect("Serve Cached -> Emit Metrics should include terminal support point");
+    let audit_support = *audit_to_metrics_points
+        .get(audit_to_metrics_points.len().saturating_sub(2))
+        .expect("Audit Log -> Emit Metrics should include terminal support point");
+    assert!(
+        (fast_support.1 - audit_support.1).abs() >= 1.0,
+        "Serve Cached -> Emit Metrics and Audit Log -> Emit Metrics should stagger terminal horizontal support lanes into Emit Metrics; fast_support={fast_support:?}, audit_support={audit_support:?}, fast_path={fastpath_to_metrics_points:?}, audit_path={audit_to_metrics_points:?}"
+    );
+
+    let probe_y = 1000.0;
+    let retry_lane_x = vertical_lane_x_at_y(&retry_to_queue_points, probe_y)
+        .expect("Retry -> Enqueue Job should expose a vertical lane through probe y");
+    let fastpath_lane_x = vertical_lane_x_at_y(&fastpath_to_metrics_points, probe_y)
+        .expect("Serve Cached -> Emit Metrics should expose a vertical lane through probe y");
+    assert!(
+        (retry_lane_x - fastpath_lane_x).abs() >= 1.0,
+        "Retry -> Enqueue Job should not share the same vertical lane as Serve Cached -> Emit Metrics around y={probe_y}; retry_x={retry_lane_x}, fastpath_x={fastpath_lane_x}, retry_path={retry_to_queue_points:?}, fast_path={fastpath_to_metrics_points:?}"
     );
 }
 
