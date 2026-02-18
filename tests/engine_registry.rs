@@ -1,7 +1,8 @@
 //! Engine registry tests: typed engine IDs, parsing, availability, and registry lookup.
 
 use mmdflux::diagram::{
-    EdgeRouting, EngineCapabilities, LayoutEngineId, OutputFormat, RenderConfig, RenderError,
+    AlgorithmId, EdgeRouting, EngineAlgorithmId, EngineCapabilities, EngineId, LayoutEngineId,
+    OutputFormat, RenderConfig, RenderError,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::engines::graph::GraphEngineRegistry;
@@ -318,4 +319,90 @@ fn flux_vs_mermaid_svg_output_may_diverge_for_cycle() {
 
     // SVG paths will differ because routing topology changes — document, don't assert equal
     let _ = (flux_out, mermaid_out); // classification: SVG-divergent
+}
+
+// =============================================================================
+// EngineAlgorithmId taxonomy (plan-0081 Phase 1)
+// =============================================================================
+
+#[test]
+fn engine_algorithm_id_parses_flux_layered() {
+    let id = EngineAlgorithmId::parse("flux-layered").unwrap();
+    assert_eq!(id.engine(), EngineId::Flux);
+    assert_eq!(id.algorithm(), AlgorithmId::Layered);
+    assert_eq!(id.to_string(), "flux-layered");
+}
+
+#[test]
+fn engine_algorithm_id_parses_all_valid_ids() {
+    for (input, engine, algo) in [
+        ("flux-layered", EngineId::Flux, AlgorithmId::Layered),
+        ("mermaid-layered", EngineId::Mermaid, AlgorithmId::Layered),
+        ("elk-layered", EngineId::Elk, AlgorithmId::Layered),
+        ("elk-mrtree", EngineId::Elk, AlgorithmId::MrTree),
+    ] {
+        let id = EngineAlgorithmId::parse(input).unwrap();
+        assert_eq!(id.engine(), engine);
+        assert_eq!(id.algorithm(), algo);
+    }
+}
+
+#[test]
+fn engine_algorithm_id_is_case_insensitive() {
+    assert!(EngineAlgorithmId::parse("Flux-Layered").is_ok());
+    assert!(EngineAlgorithmId::parse("ELK-MRTREE").is_ok());
+    assert!(EngineAlgorithmId::parse("  elk-layered  ").is_ok());
+}
+
+#[test]
+fn engine_algorithm_id_rejects_legacy_dagre_with_migration() {
+    let err = EngineAlgorithmId::parse("dagre").unwrap_err();
+    assert!(
+        err.message.contains("flux-layered"),
+        "should suggest replacement: {}",
+        err
+    );
+}
+
+#[test]
+fn engine_algorithm_id_rejects_legacy_elk_with_migration() {
+    let err = EngineAlgorithmId::parse("elk").unwrap_err();
+    assert!(
+        err.message.contains("elk-layered"),
+        "should suggest replacement: {}",
+        err
+    );
+}
+
+#[test]
+fn engine_algorithm_id_rejects_legacy_cose() {
+    let err = EngineAlgorithmId::parse("cose").unwrap_err();
+    assert!(
+        err.message.contains("no longer supported") || err.message.contains("cose"),
+        "unexpected error: {}",
+        err
+    );
+}
+
+#[test]
+fn engine_algorithm_id_rejects_unknown() {
+    let err = EngineAlgorithmId::parse("bogus-engine").unwrap_err();
+    assert!(
+        err.message.contains("unknown") || err.message.contains("Valid options"),
+        "unexpected error: {}",
+        err
+    );
+}
+
+#[test]
+fn engine_algorithm_id_display_roundtrips() {
+    for input in [
+        "flux-layered",
+        "mermaid-layered",
+        "elk-layered",
+        "elk-mrtree",
+    ] {
+        let id = EngineAlgorithmId::parse(input).unwrap();
+        assert_eq!(id.to_string(), input);
+    }
 }

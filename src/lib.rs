@@ -49,8 +49,8 @@ pub mod render;
 
 // Re-export commonly used types for convenience
 pub use diagram::{
-    EdgeRouting, EngineCapabilities, EngineConfig, GeometryLevel, GraphLayoutEngine,
-    LayoutEngineId, OutputFormat, RenderConfig, RenderError,
+    AlgorithmId, EdgeRouting, EngineAlgorithmId, EngineCapabilities, EngineConfig, EngineId,
+    GeometryLevel, GraphLayoutEngine, LayoutEngineId, OutputFormat, RenderConfig, RenderError,
 };
 pub use graph::{Diagram, Direction, Edge, Node, Shape, build_diagram};
 pub use mmds::{MmdsGenerationError, generate_mermaid_from_mmds, generate_mermaid_from_mmds_str};

@@ -249,6 +249,104 @@ impl std::fmt::Display for LayoutEngineId {
     }
 }
 
+/// Engine family identifier used in the combined engine+algorithm taxonomy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EngineId {
+    /// mmdflux-native Sugiyama implementation (recommended default).
+    Flux,
+    /// Mermaid-compatible Sugiyama with dagre.js parity semantics.
+    Mermaid,
+    /// Eclipse Layout Kernel — requires `engine-elk` feature.
+    Elk,
+}
+
+/// Algorithm identifier used in the combined engine+algorithm taxonomy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AlgorithmId {
+    /// Sugiyama layered hierarchical layout.
+    Layered,
+    /// ELK Mr. Tree algorithm.
+    MrTree,
+}
+
+/// Combined engine+algorithm identifier for public selection.
+///
+/// Replaces the legacy `LayoutEngineId` in the public API. Accepted tokens:
+/// `flux-layered`, `mermaid-layered`, `elk-layered`, `elk-mrtree`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EngineAlgorithmId {
+    engine: EngineId,
+    algorithm: AlgorithmId,
+}
+
+impl EngineAlgorithmId {
+    pub fn new(engine: EngineId, algorithm: AlgorithmId) -> Self {
+        Self { engine, algorithm }
+    }
+
+    pub fn engine(&self) -> EngineId {
+        self.engine
+    }
+
+    pub fn algorithm(&self) -> AlgorithmId {
+        self.algorithm
+    }
+
+    /// Parse a combined engine+algorithm ID string (case-insensitive, trims whitespace).
+    ///
+    /// Accepts: `flux-layered`, `mermaid-layered`, `elk-layered`, `elk-mrtree`.
+    /// Legacy tokens (`dagre`, `elk`, `cose`) produce actionable migration errors.
+    pub fn parse(s: &str) -> Result<Self, RenderError> {
+        match normalize_enum_token(s).as_str() {
+            "flux-layered" => Ok(Self::new(EngineId::Flux, AlgorithmId::Layered)),
+            "mermaid-layered" => Ok(Self::new(EngineId::Mermaid, AlgorithmId::Layered)),
+            "elk-layered" => Ok(Self::new(EngineId::Elk, AlgorithmId::Layered)),
+            "elk-mrtree" => Ok(Self::new(EngineId::Elk, AlgorithmId::MrTree)),
+            "dagre" => Err(RenderError {
+                message: "\"dagre\" is no longer a valid engine ID. \
+                          Use \"flux-layered\" (recommended) or \"mermaid-layered\"."
+                    .into(),
+            }),
+            "elk" => Err(RenderError {
+                message: "\"elk\" is no longer a valid engine ID. \
+                          Use \"elk-layered\" or \"elk-mrtree\"."
+                    .into(),
+            }),
+            "cose" | "cose-bilkent" => Err(RenderError {
+                message: "\"cose\" is no longer supported. Use \"flux-layered\".".into(),
+            }),
+            other => Err(RenderError {
+                message: format!(
+                    "unknown engine: {other:?}. Valid options: \
+                     flux-layered, mermaid-layered, elk-layered, elk-mrtree"
+                ),
+            }),
+        }
+    }
+}
+
+impl std::fmt::Display for EngineAlgorithmId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match (self.engine, self.algorithm) {
+            (EngineId::Flux, AlgorithmId::Layered) => write!(f, "flux-layered"),
+            (EngineId::Mermaid, AlgorithmId::Layered) => write!(f, "mermaid-layered"),
+            (EngineId::Elk, AlgorithmId::Layered) => write!(f, "elk-layered"),
+            (EngineId::Elk, AlgorithmId::MrTree) => write!(f, "elk-mrtree"),
+            // Future variants — use engine-algorithm form as fallback
+            (EngineId::Flux, AlgorithmId::MrTree) => write!(f, "flux-mrtree"),
+            (EngineId::Mermaid, AlgorithmId::MrTree) => write!(f, "mermaid-mrtree"),
+        }
+    }
+}
+
+impl FromStr for EngineAlgorithmId {
+    type Err = RenderError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        EngineAlgorithmId::parse(s)
+    }
+}
+
 /// Engine-specific configuration envelope.
 ///
 /// Wraps engine-specific layout parameters. Phase 2 supports Dagre only;
