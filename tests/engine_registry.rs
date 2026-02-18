@@ -6,7 +6,7 @@ use mmdflux::diagram::{
     PathDetail, RenderConfig, RenderError, RouteOwnership,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
-use mmdflux::diagrams::flowchart::engine::FluxLayeredEngine;
+use mmdflux::diagrams::flowchart::engine::{FluxLayeredEngine, MermaidLayeredEngine};
 use mmdflux::engines::graph::GraphEngineRegistry;
 use mmdflux::registry::DiagramInstance;
 
@@ -633,4 +633,94 @@ fn flux_layered_solve_routed_level_has_routed_geometry() {
     );
     let routed = result.routed.unwrap();
     assert!(!routed.edges.is_empty());
+}
+
+// =============================================================================
+// MermaidLayeredEngine (plan-0081 Phase 3.3)
+// =============================================================================
+
+#[test]
+fn mermaid_layered_engine_id() {
+    let engine = MermaidLayeredEngine::text();
+    assert_eq!(
+        engine.id(),
+        EngineAlgorithmId::new(EngineId::Mermaid, AlgorithmId::Layered)
+    );
+}
+
+#[test]
+fn mermaid_layered_capabilities_are_hint_driven() {
+    let engine = MermaidLayeredEngine::text();
+    let caps = engine.capabilities();
+    assert_eq!(caps.route_ownership, RouteOwnership::HintDriven);
+    assert!(caps.supports_subgraphs);
+}
+
+#[test]
+fn mermaid_layered_solve_layout_level_has_no_routed_geometry() {
+    let diagram = build_simple_diagram();
+    let engine = MermaidLayeredEngine::text();
+    let request = GraphSolveRequest {
+        output_format: OutputFormat::Text,
+        geometry_level: GeometryLevel::Layout,
+        path_detail: PathDetail::Full,
+    };
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let result = engine.solve(&diagram, &config, &request).unwrap();
+
+    assert!(
+        result.routed.is_none(),
+        "layout level should not include routed geometry"
+    );
+    assert!(!result.geometry.nodes.is_empty());
+}
+
+#[test]
+fn mermaid_layered_layout_matches_flux_layered_layout() {
+    // Both engines share the dagre kernel — node positions should be identical
+    let diagram = build_simple_diagram();
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let layout_req = GraphSolveRequest {
+        output_format: OutputFormat::Text,
+        geometry_level: GeometryLevel::Layout,
+        path_detail: PathDetail::Full,
+    };
+
+    let flux = FluxLayeredEngine::text()
+        .solve(&diagram, &config, &layout_req)
+        .unwrap();
+    let mermaid = MermaidLayeredEngine::text()
+        .solve(&diagram, &config, &layout_req)
+        .unwrap();
+
+    assert_eq!(flux.geometry.nodes.len(), mermaid.geometry.nodes.len());
+    for (id, flux_node) in &flux.geometry.nodes {
+        let mermaid_node = mermaid.geometry.nodes.get(id).unwrap();
+        assert_eq!(
+            flux_node.rect.x, mermaid_node.rect.x,
+            "node {id} x mismatch"
+        );
+        assert_eq!(
+            flux_node.rect.y, mermaid_node.rect.y,
+            "node {id} y mismatch"
+        );
+    }
+}
+
+#[test]
+fn mermaid_layered_solve_routed_level_has_routed_geometry() {
+    let diagram = build_simple_diagram();
+    let engine = MermaidLayeredEngine::text();
+    let request = GraphSolveRequest {
+        output_format: OutputFormat::Text,
+        geometry_level: GeometryLevel::Routed,
+        path_detail: PathDetail::Full,
+    };
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let result = engine.solve(&diagram, &config, &request).unwrap();
+
+    assert!(
+        result.routed.is_some(),
+        "routed level should produce routed geometry"
+    );
 }

@@ -134,6 +134,19 @@ impl GraphLayoutEngine for DagreLayoutEngine {
     }
 }
 
+/// Run dagre layout with a given measurement mode.
+///
+/// Shared by `FluxLayeredEngine` and `MermaidLayeredEngine` — both use
+/// the same dagre kernel; only routing behavior differs.
+fn run_dagre_layout(
+    mode: &MeasurementMode,
+    diagram: &Diagram,
+    config: &EngineConfig,
+) -> Result<GraphGeometry, RenderError> {
+    let dagre = DagreLayoutEngine::with_mode(mode.clone());
+    dagre.layout(diagram, config)
+}
+
 /// Flux-layered engine: dagre layout + unified routing natively.
 ///
 /// Implements `GraphEngine::solve()` with `RouteOwnership::Native` —
@@ -176,17 +189,80 @@ impl GraphEngine for FluxLayeredEngine {
     ) -> Result<GraphSolveResult, RenderError> {
         use crate::diagram::EdgeRouting;
 
-        // Step 1: Run dagre layout.
-        let dagre = DagreLayoutEngine::with_mode(self.mode.clone());
-        let geometry = dagre.layout(diagram, config)?;
+        let geometry = run_dagre_layout(&self.mode, diagram, config)?;
 
-        // Step 2: Route when routed geometry is requested (Native ownership).
+        // Route when routed geometry is requested (Native ownership).
         let routed: Option<RoutedGraphGeometry> =
             if matches!(request.geometry_level, GeometryLevel::Routed) {
                 Some(super::routing::route_graph_geometry(
                     diagram,
                     &geometry,
                     EdgeRouting::UnifiedPreview,
+                ))
+            } else {
+                None
+            };
+
+        Ok(GraphSolveResult {
+            engine_id: self.id(),
+            geometry,
+            routed,
+        })
+    }
+}
+
+/// Mermaid-layered engine: dagre layout with legacy (FullCompute) routing.
+///
+/// Implements `GraphEngine::solve()` with `RouteOwnership::HintDriven` —
+/// layout uses the same dagre kernel as `FluxLayeredEngine`, but routing
+/// uses the legacy `FullCompute` path for Mermaid.js compatibility.
+pub struct MermaidLayeredEngine {
+    mode: MeasurementMode,
+}
+
+impl MermaidLayeredEngine {
+    /// Create with text-grid measurement mode.
+    pub fn text() -> Self {
+        Self {
+            mode: MeasurementMode::Text,
+        }
+    }
+
+    /// Create with the specified measurement mode.
+    pub fn with_mode(mode: MeasurementMode) -> Self {
+        Self { mode }
+    }
+}
+
+impl GraphEngine for MermaidLayeredEngine {
+    fn id(&self) -> EngineAlgorithmId {
+        EngineAlgorithmId::new(EngineId::Mermaid, AlgorithmId::Layered)
+    }
+
+    fn capabilities(&self) -> EngineAlgorithmCapabilities {
+        EngineAlgorithmCapabilities {
+            route_ownership: RouteOwnership::HintDriven,
+            supports_subgraphs: true,
+        }
+    }
+
+    fn solve(
+        &self,
+        diagram: &Diagram,
+        config: &EngineConfig,
+        request: &GraphSolveRequest,
+    ) -> Result<GraphSolveResult, RenderError> {
+        use crate::diagram::EdgeRouting;
+
+        let geometry = run_dagre_layout(&self.mode, diagram, config)?;
+
+        // HintDriven: route via legacy FullCompute path if routed level requested.
+        let routed: Option<RoutedGraphGeometry> =
+            if matches!(request.geometry_level, GeometryLevel::Routed) {
+                Some(super::routing::route_graph_geometry(
+                    diagram,
+                    &geometry,
+                    EdgeRouting::FullCompute,
                 ))
             } else {
                 None
