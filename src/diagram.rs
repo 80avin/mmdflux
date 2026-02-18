@@ -347,6 +347,62 @@ impl FromStr for EngineAlgorithmId {
     }
 }
 
+/// How edge routing is owned for a given engine+algorithm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RouteOwnership {
+    /// Engine+algo computes final routed paths natively (e.g., flux-layered).
+    Native,
+    /// Engine provides waypoint hints; compatibility router finalizes paths (e.g., mermaid-layered).
+    HintDriven,
+    /// External engine returns fully routed paths (e.g., elk-layered, elk-mrtree).
+    EngineProvided,
+}
+
+impl RouteOwnership {
+    /// Whether this ownership model produces routed edge paths.
+    pub fn routes_edges(&self) -> bool {
+        matches!(
+            self,
+            RouteOwnership::Native | RouteOwnership::EngineProvided
+        )
+    }
+}
+
+/// Capabilities for a combined engine+algorithm pair.
+#[derive(Debug, Clone)]
+pub struct EngineAlgorithmCapabilities {
+    pub route_ownership: RouteOwnership,
+    pub supports_subgraphs: bool,
+}
+
+impl EngineAlgorithmId {
+    /// Static capability matrix for this engine+algorithm combination.
+    pub fn capabilities(&self) -> EngineAlgorithmCapabilities {
+        match (self.engine, self.algorithm) {
+            (EngineId::Flux, AlgorithmId::Layered) => EngineAlgorithmCapabilities {
+                route_ownership: RouteOwnership::Native,
+                supports_subgraphs: true,
+            },
+            (EngineId::Mermaid, AlgorithmId::Layered) => EngineAlgorithmCapabilities {
+                route_ownership: RouteOwnership::HintDriven,
+                supports_subgraphs: true,
+            },
+            (EngineId::Elk, AlgorithmId::Layered) => EngineAlgorithmCapabilities {
+                route_ownership: RouteOwnership::EngineProvided,
+                supports_subgraphs: true,
+            },
+            (EngineId::Elk, AlgorithmId::MrTree) => EngineAlgorithmCapabilities {
+                route_ownership: RouteOwnership::EngineProvided,
+                supports_subgraphs: false,
+            },
+            _ => EngineAlgorithmCapabilities {
+                route_ownership: RouteOwnership::HintDriven,
+                supports_subgraphs: false,
+            },
+        }
+    }
+}
+
 /// Engine-specific configuration envelope.
 ///
 /// Wraps engine-specific layout parameters. Phase 2 supports Dagre only;

@@ -1,8 +1,8 @@
 //! Engine registry tests: typed engine IDs, parsing, availability, and registry lookup.
 
 use mmdflux::diagram::{
-    AlgorithmId, EdgeRouting, EngineAlgorithmId, EngineCapabilities, EngineId, LayoutEngineId,
-    OutputFormat, RenderConfig, RenderError,
+    AlgorithmId, EdgeRouting, EngineAlgorithmCapabilities, EngineAlgorithmId, EngineCapabilities,
+    EngineId, LayoutEngineId, OutputFormat, RenderConfig, RenderError, RouteOwnership,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::engines::graph::GraphEngineRegistry;
@@ -406,3 +406,49 @@ fn engine_algorithm_id_display_roundtrips() {
         assert_eq!(id.to_string(), input);
     }
 }
+
+// =============================================================================
+// RouteOwnership and EngineAlgorithmCapabilities (plan-0081 Phase 1.2)
+// =============================================================================
+
+#[test]
+fn flux_layered_capabilities() {
+    let id = EngineAlgorithmId::parse("flux-layered").unwrap();
+    let caps = id.capabilities();
+    assert_eq!(caps.route_ownership, RouteOwnership::Native);
+    assert!(caps.supports_subgraphs);
+}
+
+#[test]
+fn mermaid_layered_capabilities() {
+    let id = EngineAlgorithmId::parse("mermaid-layered").unwrap();
+    let caps = id.capabilities();
+    assert_eq!(caps.route_ownership, RouteOwnership::HintDriven);
+    assert!(caps.supports_subgraphs);
+}
+
+#[test]
+fn elk_layered_capabilities() {
+    let id = EngineAlgorithmId::parse("elk-layered").unwrap();
+    let caps = id.capabilities();
+    assert_eq!(caps.route_ownership, RouteOwnership::EngineProvided);
+    assert!(caps.supports_subgraphs);
+}
+
+#[test]
+fn elk_mrtree_capabilities() {
+    let id = EngineAlgorithmId::parse("elk-mrtree").unwrap();
+    let caps = id.capabilities();
+    assert_eq!(caps.route_ownership, RouteOwnership::EngineProvided);
+    assert!(!caps.supports_subgraphs);
+}
+
+#[test]
+fn route_ownership_native_routes_edges() {
+    assert!(RouteOwnership::Native.routes_edges());
+    assert!(!RouteOwnership::HintDriven.routes_edges());
+    assert!(RouteOwnership::EngineProvided.routes_edges());
+}
+
+// Suppress unused import warning for EngineAlgorithmCapabilities (used in type hints)
+fn _uses_engine_algorithm_capabilities(_: EngineAlgorithmCapabilities) {}
