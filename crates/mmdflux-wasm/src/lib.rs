@@ -1,5 +1,7 @@
 use mmdflux::dagre::Ranker;
-use mmdflux::diagram::{EdgeStyle, LayoutEngineId, OutputFormat, RenderConfig, RenderError};
+use mmdflux::diagram::{
+    EdgeRouting, EdgeStyle, LayoutEngineId, OutputFormat, RenderConfig, RenderError,
+};
 use mmdflux::registry::default_registry;
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
@@ -26,6 +28,8 @@ struct WasmRenderConfig {
     svg_node_padding_y: Option<f64>,
     #[serde(alias = "showIds")]
     show_ids: Option<bool>,
+    #[serde(alias = "edgeRouting")]
+    edge_routing: Option<String>,
     #[serde(alias = "geometryLevel")]
     geometry_level: Option<String>,
     #[serde(alias = "pathDetail")]
@@ -49,7 +53,7 @@ struct WasmLayoutConfig {
 #[wasm_bindgen]
 pub fn render(input: &str, format: &str, config_json: &str) -> Result<String, JsError> {
     let format = parse_output_format(format)?;
-    let config = parse_render_config(config_json)?;
+    let config = parse_render_config(format, config_json)?;
     let registry = default_registry();
 
     let diagram_id = registry
@@ -84,14 +88,18 @@ pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-fn parse_render_config(config_json: &str) -> Result<RenderConfig, JsError> {
+fn parse_render_config(format: OutputFormat, config_json: &str) -> Result<RenderConfig, JsError> {
     if config_json.trim().is_empty() {
-        return Ok(RenderConfig::default());
+        let mut config = RenderConfig::default();
+        apply_wasm_format_defaults(format, &mut config);
+        return Ok(config);
     }
 
     let wasm_config: WasmRenderConfig = serde_json::from_str(config_json)
         .map_err(|error| js_error(format!("invalid config_json: {error}")))?;
-    wasm_config.into_render_config()
+    let mut config = wasm_config.into_render_config()?;
+    apply_wasm_format_defaults(format, &mut config);
+    Ok(config)
 }
 
 impl WasmRenderConfig {
@@ -117,6 +125,9 @@ impl WasmRenderConfig {
         if let Some(edge_style) = self.edge_style {
             config.edge_style = Some(parse_edge_style(&edge_style)?);
         }
+        if let Some(edge_routing) = self.edge_routing {
+            config.edge_routing = Some(parse_edge_routing(&edge_routing)?);
+        }
         if let Some(layout) = self.layout {
             if let Some(node_sep) = layout.node_sep {
                 config.layout.node_sep = node_sep;
@@ -141,6 +152,17 @@ impl WasmRenderConfig {
 
 fn parse_output_format(value: &str) -> Result<OutputFormat, JsError> {
     parse_via_render_error(value)
+}
+
+fn parse_edge_routing(value: &str) -> Result<EdgeRouting, JsError> {
+    match normalized(value).as_str() {
+        "full-compute" | "fullcompute" => Ok(EdgeRouting::FullCompute),
+        "pass-through-clip" | "passthroughclip" => Ok(EdgeRouting::PassThroughClip),
+        "unified-preview" | "unifiedpreview" => Ok(EdgeRouting::UnifiedPreview),
+        _ => Err(js_error(format!(
+            "unknown edge routing: {value:?} (expected one of: full-compute, pass-through-clip, unified-preview)"
+        ))),
+    }
 }
 
 fn parse_edge_style(value: &str) -> Result<EdgeStyle, JsError> {
@@ -172,6 +194,15 @@ fn js_error(message: impl Into<String>) -> JsError {
     JsError::new(&message.into())
 }
 
+fn apply_wasm_format_defaults(format: OutputFormat, config: &mut RenderConfig) {
+    if matches!(format, OutputFormat::Svg)
+        && config.edge_routing.is_none()
+        && config.layout_engine.is_none()
+    {
+        config.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -193,5 +224,33 @@ mod tests {
     #[test]
     fn detect_returns_flowchart_for_graph_input() {
         assert_eq!(detect("graph TD\nA-->B"), Some("flowchart".to_string()));
+    }
+
+    #[test]
+    fn parse_render_config_defaults_svg_to_unified_preview() {
+        let config = parse_render_config(OutputFormat::Svg, "{}")
+            .expect("svg config parsing should succeed");
+        assert_eq!(config.edge_routing, Some(EdgeRouting::UnifiedPreview));
+    }
+
+    #[test]
+    fn parse_render_config_keeps_non_svg_without_edge_routing_default() {
+        let config = parse_render_config(OutputFormat::Text, "{}")
+            .expect("text config parsing should succeed");
+        assert_eq!(config.edge_routing, None);
+    }
+
+    #[test]
+    fn parse_render_config_respects_explicit_edge_routing() {
+        let config = parse_render_config(OutputFormat::Svg, r#"{"edgeRouting":"full-compute"}"#)
+            .expect("explicit edge routing should parse");
+        assert_eq!(config.edge_routing, Some(EdgeRouting::FullCompute));
+    }
+
+    #[test]
+    fn parse_render_config_does_not_force_default_with_layout_engine_override() {
+        let config = parse_render_config(OutputFormat::Svg, r#"{"layoutEngine":"dagre"}"#)
+            .expect("layout engine config should parse");
+        assert_eq!(config.edge_routing, None);
     }
 }

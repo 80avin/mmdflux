@@ -21,6 +21,17 @@ fn renders_flowchart_svg() {
 }
 
 #[wasm_bindgen_test]
+fn accepts_edge_routing_config_key() {
+    let output = render(
+        "graph TD\nA-->B",
+        "svg",
+        r#"{"edgeRouting":"unified-preview"}"#,
+    )
+    .expect("svg render with edgeRouting should succeed");
+    assert!(output.contains("<svg"));
+}
+
+#[wasm_bindgen_test]
 fn detect_returns_flowchart_id() {
     assert_eq!(detect("graph TD\nA-->B"), Some("flowchart".to_string()));
 }
@@ -46,6 +57,13 @@ fn rejects_unknown_diagram_type() {
 fn rejects_invalid_config_json() {
     let error = render("graph TD\nA-->B", "text", "{").expect_err("invalid config must fail");
     assert!(error_debug(error).contains("invalid config_json"));
+}
+
+#[wasm_bindgen_test]
+fn rejects_unknown_edge_routing_value() {
+    let error = render("graph TD\nA-->B", "svg", r#"{"edgeRouting":"nope"}"#)
+        .expect_err("unknown edge routing must fail");
+    assert!(error_debug(error).contains("unknown edge routing"));
 }
 
 #[wasm_bindgen_test]
