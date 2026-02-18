@@ -761,6 +761,26 @@ fn cli_mermaid_format_errors_for_non_mmds_input() {
         .stderr(predicate::str::contains("do not support mermaid"));
 }
 
+// --- Task 5.3: Lineage naming policy ---
+
+#[test]
+fn cli_help_spacing_flags_do_not_say_dagre() {
+    mmdflux()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Dagre").not());
+}
+
+#[test]
+fn cli_help_layout_engine_does_not_suggest_bare_dagre() {
+    mmdflux()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--layout-engine dagre").not());
+}
+
 // --- Task 4.5: MMDS engine metadata ---
 
 #[test]

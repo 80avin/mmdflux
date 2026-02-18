@@ -33,19 +33,19 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = RankerArg::NetworkSimplex)]
     ranker: RankerArg,
 
-    /// Dagre nodesep (node spacing)
+    /// Layout nodesep (node spacing)
     #[arg(long)]
     node_spacing: Option<f64>,
 
-    /// Dagre ranksep (rank spacing)
+    /// Layout ranksep (rank spacing)
     #[arg(long)]
     rank_spacing: Option<f64>,
 
-    /// Dagre edgesep (edge segment spacing)
+    /// Layout edgesep (edge segment spacing)
     #[arg(long)]
     edge_spacing: Option<f64>,
 
-    /// Dagre margin (translateGraph margin)
+    /// Layout margin (translateGraph margin)
     #[arg(long)]
     margin: Option<f64>,
 
