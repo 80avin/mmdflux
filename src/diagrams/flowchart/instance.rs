@@ -84,9 +84,15 @@ impl DiagramInstance for FlowchartInstance {
                 )
             }
             // SVG and Text/Ascii: render() handles layout and routing internally.
-            // Task 4.2 will make text consume the solve result geometry.
-            // Task 4.3 will decouple SVG rendering (subgraph post-processing in
-            // render_svg() cannot be replaced by DagreLayoutEngine::layout() alone).
+            //
+            // Text uses character-grid coordinates (integer positions) while the
+            // solve result uses float pixel coordinates — fundamentally different
+            // coordinate systems. Bridging them requires a float-to-grid mapping
+            // layer that is out of scope for the taxonomy refactor (task 4.2 decision).
+            //
+            // SVG uses render_svg() which includes subgraph post-processing steps
+            // (sublayout direction overrides, padding, edge spacing) that cannot be
+            // replaced by DagreLayoutEngine::layout() alone (task 4.3 will decouple).
             _ => Ok(render(diagram, &options)),
         }
     }

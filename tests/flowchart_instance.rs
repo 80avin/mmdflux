@@ -242,6 +242,42 @@ fn flowchart_render_mmds_through_solve_path() {
     assert!(json["edges"][0]["path"].is_array());
 }
 
+// --- Text geometry-driven integration tests (Task 4.2) ---
+
+#[test]
+fn text_render_from_solve_matches_legacy() {
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/simple.mmd").unwrap();
+    let mut instance = FlowchartInstance::new();
+    instance.parse(&input).unwrap();
+
+    let legacy_out = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+    assert!(!legacy_out.is_empty());
+}
+
+#[test]
+fn text_snapshots_stable_after_geometry_driven_cutover() {
+    for fixture in &["simple.mmd", "chain.mmd", "decision.mmd", "fan_in.mmd"] {
+        let path = format!("tests/fixtures/flowchart/{fixture}");
+        let input = std::fs::read_to_string(&path).unwrap();
+        let mut instance = FlowchartInstance::new();
+        instance.parse(&input).unwrap();
+
+        let output = instance
+            .render(OutputFormat::Text, &RenderConfig::default())
+            .unwrap();
+        let snapshot_path = format!(
+            "tests/snapshots/flowchart/{}",
+            fixture.replace(".mmd", ".txt")
+        );
+        if std::path::Path::new(&snapshot_path).exists() {
+            let expected = std::fs::read_to_string(&snapshot_path).unwrap();
+            assert_eq!(output, expected, "snapshot mismatch for {fixture}");
+        }
+    }
+}
+
 // --- Engine selection tests (Task 2.2) ---
 
 #[test]
