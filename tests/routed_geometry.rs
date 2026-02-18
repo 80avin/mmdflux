@@ -385,6 +385,28 @@ fn td_bt_middle_horizontal_lane(path: &[FPoint]) -> Option<f64> {
     (first_vertical && middle_horizontal && terminal_vertical).then_some(path[1].y)
 }
 
+fn td_bt_primary_horizontal_lane(path: &[FPoint]) -> Option<f64> {
+    const EPS: f64 = 0.5;
+    let mut best: Option<(f64, f64)> = None;
+    for seg in path.windows(2) {
+        let a = seg[0];
+        let b = seg[1];
+        let is_horizontal = (a.y - b.y).abs() <= EPS && (a.x - b.x).abs() > EPS;
+        if !is_horizontal {
+            continue;
+        }
+        let len = (a.x - b.x).abs();
+        let replace = match best {
+            Some((_, best_len)) => len > best_len,
+            None => true,
+        };
+        if replace {
+            best = Some((a.y, len));
+        }
+    }
+    best.map(|(y, _)| y)
+}
+
 fn path_has_source_turnback_spike(path: &[FPoint]) -> bool {
     if path.len() < 4 {
         return false;
@@ -1070,25 +1092,29 @@ fn unified_route_contracts_keep_primary_axis_departure_stem_for_off_center_td_so
         let center_x = source_rect.x + source_rect.width / 2.0;
         let source_offset = (start.x - center_x).abs();
 
-        // Diamond shapes exit through the bottom vertex which is at center-x,
-        // so the off-center assertion only applies to non-diamond shapes.
-        let is_diamond = matches!(
+        let is_angular = matches!(
             source_node.shape,
             mmdflux::graph::Shape::Diamond | mmdflux::graph::Shape::Hexagon
         );
-        if !is_diamond {
+        if !is_angular {
             let min_off_center = 1.0;
             assert!(
                 source_offset >= min_off_center,
                 "fixture expectation invalid: {from} -> {to} source should be off-center, got offset={source_offset}, min={min_off_center}, path={:?}",
                 edge.path
             );
+            assert!(
+                (next.x - start.x).abs() <= ROUTE_EPS && (next.y - start.y).abs() > ROUTE_EPS,
+                "off-center TD source should keep a primary-axis departure stem before sweeping for {from} -> {to}: start={start:?}, next={next:?}, path={:?}",
+                edge.path
+            );
+        } else {
+            assert!(
+                (next.y - start.y).abs() <= ROUTE_EPS && (next.x - start.x).abs() > ROUTE_EPS,
+                "angular TD source should depart laterally before bending toward target for {from} -> {to}: start={start:?}, next={next:?}, path={:?}",
+                edge.path
+            );
         }
-        assert!(
-            (next.x - start.x).abs() <= ROUTE_EPS && (next.y - start.y).abs() > ROUTE_EPS,
-            "off-center TD source should keep a primary-axis departure stem before sweeping for {from} -> {to}: start={start:?}, next={next:?}, path={:?}",
-            edge.path
-        );
     }
 }
 
@@ -3075,6 +3101,111 @@ fn five_fan_out_primary_face_channels_are_staggered_without_overlap() {
     assert!(
         (b_lane - f_lane).abs() <= 0.5,
         "five_fan_out mirrored outer pair should share a symmetric lane depth: B={b_lane}, F={f_lane}"
+    );
+}
+
+#[test]
+fn five_fan_out_diamond_primary_face_channels_are_staggered_without_overlap() {
+    let (diagram, geom) = layout_fixture_svg("five_fan_out_diamond.mmd");
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        RoutingMode::UnifiedPreview,
+        RoutingPolicyToggles::all_enabled(),
+    );
+
+    let outbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        outbound.len(),
+        5,
+        "five_fan_out_diamond should produce five outbound forward edges from A"
+    );
+
+    let mut source_xs: Vec<f64> = outbound
+        .iter()
+        .map(|edge| {
+            edge.path
+                .first()
+                .copied()
+                .expect("edge should have start")
+                .x
+        })
+        .collect();
+    source_xs.sort_by(|a, b| a.total_cmp(b));
+    let mut unique_source_count = 0usize;
+    let mut last_source: Option<f64> = None;
+    for value in &source_xs {
+        let is_new = match last_source {
+            Some(prev) => (*value - prev).abs() > 0.5,
+            None => true,
+        };
+        if is_new {
+            unique_source_count += 1;
+            last_source = Some(*value);
+        }
+    }
+    assert_eq!(
+        unique_source_count, 5,
+        "five_fan_out_diamond source ports should occupy distinct attachment anchors: source_xs={source_xs:?}"
+    );
+
+    for i in 0..outbound.len() {
+        for j in (i + 1)..outbound.len() {
+            assert!(
+                !has_coincident_horizontal_overlap(&outbound[i].path, &outbound[j].path),
+                "five_fan_out_diamond should avoid coincident horizontal channel overlap between A -> {} and A -> {}: left={:?} right={:?}",
+                outbound[i].to,
+                outbound[j].to,
+                outbound[i].path,
+                outbound[j].path
+            );
+        }
+    }
+
+    let mut lanes_by_target: HashMap<String, f64> = HashMap::new();
+    for edge in &outbound {
+        if let Some(y) = td_bt_primary_horizontal_lane(&edge.path) {
+            lanes_by_target.insert(edge.to.clone(), y);
+        }
+    }
+    for target in ["B", "C", "E", "F"] {
+        assert!(
+            lanes_by_target.contains_key(target),
+            "five_fan_out_diamond should route A -> {target} with a horizontal fan-out channel segment (H-V or V-H-V)"
+        );
+    }
+
+    let b_lane = *lanes_by_target
+        .get("B")
+        .expect("lane for A -> B should be present");
+    let c_lane = *lanes_by_target
+        .get("C")
+        .expect("lane for A -> C should be present");
+    let e_lane = *lanes_by_target
+        .get("E")
+        .expect("lane for A -> E should be present");
+    let f_lane = *lanes_by_target
+        .get("F")
+        .expect("lane for A -> F should be present");
+    assert!(
+        b_lane + 0.5 < c_lane,
+        "five_fan_out_diamond should place outer-left A -> B shallower than inner-left A -> C for source-centric fan-out opening: B={b_lane}, C={c_lane}"
+    );
+    assert!(
+        f_lane + 0.5 < e_lane,
+        "five_fan_out_diamond should place outer-right A -> F shallower than inner-right A -> E for source-centric fan-out opening: F={f_lane}, E={e_lane}"
+    );
+    assert!(
+        (c_lane - e_lane).abs() <= 0.5,
+        "five_fan_out_diamond mirrored inner pair should share a symmetric lane depth: C={c_lane}, E={e_lane}"
+    );
+    assert!(
+        (b_lane - f_lane).abs() <= 0.5,
+        "five_fan_out_diamond mirrored outer pair should share a symmetric lane depth: B={b_lane}, F={f_lane}"
     );
 }
 

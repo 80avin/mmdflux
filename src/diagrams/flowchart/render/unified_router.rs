@@ -352,6 +352,20 @@ fn build_unified_path(
         is_backward,
     );
     ensure_endpoint_segments_axis_aligned(&mut path);
+    ensure_primary_stem_for_flat_off_center_fanout_sources(
+        &mut path,
+        edge,
+        geometry,
+        direction,
+        is_backward,
+    );
+    ensure_primary_stem_for_td_bt_angular_fanout_source(
+        &mut path,
+        edge,
+        geometry,
+        direction,
+        is_backward,
+    );
     collapse_source_turnback_spikes(&mut path);
     if !is_backward {
         enforce_primary_axis_terminal_direction(
@@ -991,13 +1005,10 @@ fn prefer_lateral_departure_for_td_bt_angular_sources(
     let source_center_x = source_rect.x + source_rect.width / 2.0;
     let start_offset = p0.x - source_center_x;
     let target_offset = p3.x - source_center_x;
-    if start_offset.abs() < OFF_CENTER_MIN || target_offset.abs() < OFF_CENTER_MIN {
-        return;
-    }
-    if start_offset.signum() != target_offset.signum() {
-        return;
-    }
-    if target_offset.abs() + EPS < start_offset.abs() {
+    let allow_centered_diamond_departure = matches!(source_shape, Shape::Diamond);
+    if (!allow_centered_diamond_departure && start_offset.abs() < OFF_CENTER_MIN)
+        || target_offset.abs() < OFF_CENTER_MIN
+    {
         return;
     }
     if (p3.x - p0.x).abs() < MIN_HORIZONTAL_DEPARTURE {
@@ -1037,7 +1048,7 @@ fn prefer_lateral_departure_for_td_bt_angular_sources(
     }
 
     let first_dx = elbow.x - start.x;
-    if first_dx.abs() < MIN_HORIZONTAL_DEPARTURE || first_dx.signum() != target_offset.signum() {
+    if first_dx.abs() < MIN_HORIZONTAL_DEPARTURE {
         return;
     }
     if (p3.y - start.y) * flow_sign <= EPS {
@@ -1725,7 +1736,7 @@ fn ensure_primary_stem_for_flat_off_center_fanout_sources(
         .iter()
         .filter(|candidate| candidate.from == edge.from)
         .collect();
-    if fanout_outbound.len() != 3 {
+    if fanout_outbound.len() < 2 {
         return;
     }
     if fanout_outbound
@@ -1735,7 +1746,7 @@ fn ensure_primary_stem_for_flat_off_center_fanout_sources(
         return;
     }
 
-    let Some((source_rect, _)) =
+    let Some((source_rect, source_shape)) =
         endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
     else {
         return;
@@ -1745,7 +1756,8 @@ fn ensure_primary_stem_for_flat_off_center_fanout_sources(
     let first = path[1];
     let second = path[2];
     let source_offset = start.x - center_x;
-    if source_offset.abs() < MIN_OFF_CENTER_ABS {
+    let angular_source = matches!(source_shape, Shape::Diamond | Shape::Hexagon);
+    if source_offset.abs() < MIN_OFF_CENTER_ABS && !angular_source {
         return;
     }
 
@@ -1767,7 +1779,11 @@ fn ensure_primary_stem_for_flat_off_center_fanout_sources(
     }
 
     let lateral_delta = first.x - start.x;
-    if lateral_delta.abs() <= SEG_EPS || lateral_delta.signum() != source_offset.signum() {
+    if lateral_delta.abs() <= SEG_EPS {
+        return;
+    }
+    if source_offset.abs() >= MIN_OFF_CENTER_ABS && lateral_delta.signum() != source_offset.signum()
+    {
         return;
     }
 
@@ -1812,6 +1828,67 @@ fn ensure_primary_stem_for_flat_off_center_fanout_sources(
 
     path[1] = stem;
     path.insert(2, sweep);
+}
+
+fn ensure_primary_stem_for_td_bt_angular_fanout_source(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+    is_backward: bool,
+) {
+    const SEG_EPS: f64 = 0.000_001;
+    const MIN_PRIMARY_STEM: f64 = 8.0;
+    const TERMINAL_CLEARANCE: f64 = 1.0;
+
+    if is_backward
+        || path.len() < 3
+        || !matches!(direction, Direction::TopDown | Direction::BottomTop)
+    {
+        return;
+    }
+
+    let Some((_, source_shape)) =
+        endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+    else {
+        return;
+    };
+    if !matches!(source_shape, Shape::Diamond | Shape::Hexagon) {
+        return;
+    }
+
+    let p0 = path[0];
+    let p1 = path[1];
+    let p2 = path[2];
+    let first_is_horizontal = (p0.y - p1.y).abs() <= SEG_EPS && (p0.x - p1.x).abs() > SEG_EPS;
+    let second_is_vertical = (p1.x - p2.x).abs() <= SEG_EPS && (p1.y - p2.y).abs() > SEG_EPS;
+    if !first_is_horizontal || !second_is_vertical {
+        return;
+    }
+
+    let flow_sign = match direction {
+        Direction::TopDown => 1.0,
+        Direction::BottomTop => -1.0,
+        _ => 0.0,
+    };
+    if (p2.y - p0.y) * flow_sign <= SEG_EPS {
+        return;
+    }
+
+    let desired_stem_y = p0.y + flow_sign * MIN_PRIMARY_STEM;
+    let max_stem_y = p2.y - flow_sign * TERMINAL_CLEARANCE;
+    let stem_y = if flow_sign > 0.0 {
+        desired_stem_y.min(max_stem_y)
+    } else {
+        desired_stem_y.max(max_stem_y)
+    };
+
+    if (stem_y - p0.y).abs() <= SEG_EPS || (p2.y - stem_y) * flow_sign <= SEG_EPS {
+        return;
+    }
+
+    path[1].y = stem_y;
+    path.insert(1, FPoint::new(p0.x, stem_y));
 }
 
 fn collapse_source_turnback_spikes(path: &mut Vec<FPoint>) {
@@ -3335,9 +3412,11 @@ fn anchor_path_endpoints_to_endpoint_faces(
                     (start.y - next.y).abs() <= POINT_EPS && (start.x - next.x).abs() > POINT_EPS
                 }
             };
-            let clipped = if !is_backward
+            let source_fraction_override_active = !is_backward
                 && source_segment_on_flow_axis
-                && let Some(fraction) = source_primary_face_fraction
+                && source_primary_face_fraction.is_some();
+            let clipped = if let Some(fraction) = source_primary_face_fraction
+                && source_fraction_override_active
             {
                 clip_point_to_rect_face_fraction_with_inset(
                     from_rect,
@@ -3359,7 +3438,19 @@ fn anchor_path_endpoints_to_endpoint_faces(
                     false,
                 )
             };
-            path[0] = project_endpoint_to_shape(clipped, next, from_rect, from_shape);
+            // For non-rect sources, projecting via `next` can collapse multiple
+            // slotted ports to the same apex (e.g. diamond fan-out). When source
+            // slotting is active, use the slotted rect point as projection ray.
+            let projection_approach = if source_fraction_override_active
+                && matches!(direction, Direction::TopDown | Direction::BottomTop)
+                && matches!(from_shape, Shape::Diamond | Shape::Hexagon)
+            {
+                clipped
+            } else {
+                next
+            };
+            path[0] =
+                project_endpoint_to_shape(clipped, projection_approach, from_rect, from_shape);
         }
     }
 
