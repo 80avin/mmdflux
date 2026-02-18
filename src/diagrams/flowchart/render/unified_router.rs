@@ -1029,13 +1029,14 @@ fn prefer_lateral_departure_for_td_bt_angular_sources(
     } else {
         RectFace::Right
     };
+    let preferred_lane_y = p1.y;
     let rect_face_anchor = clip_point_to_rect_face_with_inset(
-        p0,
+        FPoint::new(p0.x, preferred_lane_y),
         source_rect,
         departure_face,
         MIN_PORT_CORNER_INSET_FORWARD,
     );
-    let provisional_elbow = FPoint::new(p3.x, rect_face_anchor.y);
+    let provisional_elbow = FPoint::new(p3.x, preferred_lane_y);
     let start = project_endpoint_to_shape(
         rect_face_anchor,
         provisional_elbow,
@@ -1417,12 +1418,25 @@ fn fan_out_source_stagger_context(
             })
             .collect();
         ordered_for_fraction.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+        let angular_source = forward_edges
+            .first()
+            .and_then(|edge| {
+                endpoint_rect_and_shape(geometry, &source_id, edge.from_subgraph.as_deref())
+            })
+            .is_some_and(|(_, shape)| matches!(shape, Shape::Diamond | Shape::Hexagon));
         let count = ordered_for_fraction.len();
         for (idx, (edge_index, _)) in ordered_for_fraction.iter().enumerate() {
-            let fraction = if count <= 1 {
+            let base_fraction = if count <= 1 {
                 0.5
             } else {
                 idx as f64 / (count - 1) as f64
+            };
+            let fraction = if angular_source
+                && matches!(direction, Direction::TopDown | Direction::BottomTop)
+            {
+                remap_angular_fan_out_source_fraction(base_fraction, count)
+            } else {
+                base_fraction
             };
             source_fraction_for_edge.insert(*edge_index, fraction);
         }
@@ -1507,6 +1521,20 @@ fn symmetric_side_band_depth(band_index: usize, band_count: usize) -> f64 {
     } else {
         band_index as f64 / (band_count - 1) as f64
     }
+}
+
+fn remap_angular_fan_out_source_fraction(base_fraction: f64, edge_count: usize) -> f64 {
+    if edge_count <= 3 {
+        return base_fraction.clamp(0.0, 1.0);
+    }
+
+    // Pull interior slots toward center while preserving extremes.
+    // This increases vertical separation between outer/inner lateral branches
+    // on angular sources (diamond/hexagon) in TD/BT fan-out.
+    let exponent = (1.0 + (edge_count as f64 - 3.0)).clamp(1.0, 4.0);
+    let centered = (base_fraction.clamp(0.0, 1.0) * 2.0 - 1.0).clamp(-1.0, 1.0);
+    let remapped = centered.signum() * centered.abs().powf(exponent);
+    ((remapped + 1.0) * 0.5).clamp(0.0, 1.0)
 }
 
 fn fan_in_source_cross_axis(
