@@ -940,6 +940,7 @@ fn render_edges(
             matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
                 || preserve_orthogonal_endpoint_contract,
             !matches!(edge_path_style, SvgEdgePathStyle::Basis),
+            matches!(edge_path_style, SvgEdgePathStyle::Basis),
         );
         // Collapse tiny near-collinear jogs introduced by SVG marker offset
         // smoothing on unified-preview paths.
@@ -2966,6 +2967,7 @@ fn apply_marker_offsets(
     enforce_primary_axis_no_backtrack: bool,
     preserve_orthogonal: bool,
     collapse_terminal_elbows: bool,
+    is_basis_style: bool,
 ) -> Vec<Point> {
     if points.len() < 2 {
         return points.to_vec();
@@ -2985,6 +2987,18 @@ fn apply_marker_offsets(
     };
 
     let mut points = points.to_vec();
+    if preserve_orthogonal {
+        // When endpoint support is still diagonal at this stage, orthogonal
+        // post-processing may shorten the visible terminal stem significantly
+        // after marker pullback. In that case, skip endpoint pullback so the
+        // final arrow keeps a clear supporting segment.
+        if segment_axis(points[0], points[1]).is_none() {
+            start_offset = 0.0;
+        }
+        if segment_axis(points[points.len() - 2], points[points.len() - 1]).is_none() {
+            end_offset = 0.0;
+        }
+    }
     if !preserve_orthogonal && collapse_terminal_elbows {
         // Non-orth styles (linear/rounded/basis) can look visually cramped when
         // an orthogonal route ends with a short final elbow immediately before
@@ -3011,18 +3025,24 @@ fn apply_marker_offsets(
         // Keep endpoint support visibly longer than marker pullback so the
         // terminal stem remains readable in orthogonal mode.
         const MIN_ENDPOINT_SUPPORT: f64 = 12.0;
+        const MIN_BACKWARD_BASIS_ENDPOINT_SUPPORT: f64 = 20.0;
+        let min_endpoint_support = if is_backward && is_basis_style {
+            MIN_BACKWARD_BASIS_ENDPOINT_SUPPORT
+        } else {
+            MIN_ENDPOINT_SUPPORT
+        };
         points = enforce_min_orthogonal_endpoint_support(
             &points,
-            start_offset + MIN_ENDPOINT_SUPPORT,
-            end_offset + MIN_ENDPOINT_SUPPORT,
+            start_offset + min_endpoint_support,
+            end_offset + min_endpoint_support,
         );
 
         // Keep a visible endpoint stem in orthogonal mode so marker pullback
         // cannot invert the terminal segment direction.
         let start_support = segment_manhattan_len(points[0], points[1]);
         let end_support = segment_manhattan_len(points[points.len() - 2], points[points.len() - 1]);
-        start_offset = start_offset.min((start_support - MIN_ENDPOINT_SUPPORT).max(0.0));
-        end_offset = end_offset.min((end_support - MIN_ENDPOINT_SUPPORT).max(0.0));
+        start_offset = start_offset.min((start_support - min_endpoint_support).max(0.0));
+        end_offset = end_offset.min((end_support - min_endpoint_support).max(0.0));
     }
 
     let mut out = Vec::with_capacity(points.len());

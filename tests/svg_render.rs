@@ -2140,6 +2140,32 @@ fn svg_basis_unified_preview_five_fan_in_keeps_mirrored_pairs_visually_symmetric
 }
 
 #[test]
+fn svg_basis_unified_preview_git_workflow_backward_edge_keeps_terminal_support_into_working_dir() {
+    let diagram = load_flowchart_fixture_diagram("git_workflow.mmd");
+    let backward_edge = edge_index(&diagram, "Remote", "Working");
+
+    let mut options = RenderOptions::default_svg();
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.svg.edge_path_style = SvgEdgePathStyle::Basis;
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    let points = edge_path_for_svg_order(&diagram, &svg, backward_edge);
+    assert!(
+        points.len() >= 2,
+        "git_workflow backward basis edge should include a terminal segment: {points:?}"
+    );
+
+    let prev = points[points.len() - 2];
+    let end = points[points.len() - 1];
+    let terminal_support = (prev.0 - end.0).abs() + (prev.1 - end.1).abs();
+    assert!(
+        terminal_support >= 3.0,
+        "git_workflow backward basis edge should keep at least ~3px terminal support into Working Dir: support={terminal_support}, prev={prev:?}, end={end:?}, points={points:?}"
+    );
+}
+
+#[test]
 fn style_segment_monitor_reports_actionable_summary_for_svg() {
     let report =
         style_segment_monitor_report_for_svg(&["edge_styles.mmd", "inline_edge_labels.mmd"], 12.0);
