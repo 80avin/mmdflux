@@ -376,6 +376,30 @@ pub struct EngineAlgorithmCapabilities {
 }
 
 impl EngineAlgorithmId {
+    /// Check whether this engine+algorithm is available at runtime.
+    ///
+    /// Returns `Ok(())` if available, or an actionable error naming the required feature flag.
+    pub fn check_available(&self) -> Result<(), RenderError> {
+        match self.engine {
+            EngineId::Flux | EngineId::Mermaid => Ok(()),
+            EngineId::Elk => {
+                #[cfg(feature = "engine-elk")]
+                {
+                    Ok(())
+                }
+                #[cfg(not(feature = "engine-elk"))]
+                {
+                    Err(RenderError {
+                        message: format!(
+                            "{} is not available; rebuild with the `engine-elk` feature flag enabled",
+                            self
+                        ),
+                    })
+                }
+            }
+        }
+    }
+
     /// Static capability matrix for this engine+algorithm combination.
     pub fn capabilities(&self) -> EngineAlgorithmCapabilities {
         match (self.engine, self.algorithm) {

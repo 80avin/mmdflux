@@ -452,3 +452,43 @@ fn route_ownership_native_routes_edges() {
 
 // Suppress unused import warning for EngineAlgorithmCapabilities (used in type hints)
 fn _uses_engine_algorithm_capabilities(_: EngineAlgorithmCapabilities) {}
+
+// =============================================================================
+// EngineAlgorithmId availability gating (plan-0081 Phase 1.3)
+// =============================================================================
+
+#[test]
+fn flux_layered_is_always_available() {
+    let id = EngineAlgorithmId::parse("flux-layered").unwrap();
+    assert!(id.check_available().is_ok());
+}
+
+#[test]
+fn mermaid_layered_is_always_available() {
+    let id = EngineAlgorithmId::parse("mermaid-layered").unwrap();
+    assert!(id.check_available().is_ok());
+}
+
+#[cfg(not(feature = "engine-elk"))]
+#[test]
+fn elk_layered_unavailable_without_feature() {
+    let id = EngineAlgorithmId::parse("elk-layered").unwrap();
+    let err = id.check_available().unwrap_err();
+    assert!(
+        err.message.contains("engine-elk"),
+        "should name feature flag: {}",
+        err
+    );
+}
+
+#[cfg(not(feature = "engine-elk"))]
+#[test]
+fn elk_mrtree_unavailable_without_feature() {
+    let id = EngineAlgorithmId::parse("elk-mrtree").unwrap();
+    let err = id.check_available().unwrap_err();
+    assert!(
+        err.message.contains("engine-elk"),
+        "should name feature flag: {}",
+        err
+    );
+}
