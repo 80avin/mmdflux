@@ -570,6 +570,40 @@ When routing constraints conflict:
 6. Balance layout                    (symmetry)
 ```
 
+## Appendix D: Edge Path Style Selection Guide
+
+The four edge path styles serve different audiences and contexts. The routing strategy (where waypoints go) and corner treatment (how bends render) are independent axes:
+
+```
+                 │ Sharp corners    │ Rounded corners  │ Smooth curves
+─────────────────┼──────────────────┼──────────────────┼─────────────────
+Orthogonal paths │ orthogonal       │ rounded          │ (n/a)
+Diagonal paths   │ linear           │ (rare)           │ (n/a)
+Spline paths     │ (n/a)            │ (n/a)            │ basis
+```
+
+### Style characteristics
+
+**Orthogonal** (axis-aligned, sharp 90° bends). Every direction change is explicit and unambiguous. Edge crossings are always at right angles, which Purchase found perform nearly as well as planar drawings. The grid-aligned structure makes diagrams scannable — the eye can follow horizontal or vertical channels without tracking arbitrary angles. The tradeoff is visual rigidity: orthogonal diagrams read as precise and authoritative, which is a feature in engineering contexts but can feel clinical for general audiences. This is also the only option for text/ASCII output, where the character grid enforces axis alignment.
+
+**Rounded** (axis-aligned paths, arc radii at bends). Identical routing to orthogonal — same waypoints, same bend count, same crossing behavior — with corner arcs as a purely visual treatment. The rounded corners improve edge tracing at bends because the eye follows a curve more naturally than a sharp angle (Bar & Neta 2006 curved-preference finding), while retaining the grid-aligned structure that makes orthogonal scannable. This is the draw.io default and the most popular style in general-purpose diagramming tools.
+
+**Linear** (straight diagonal segments, unconstrained angles). Zero-bend straight lines are the most readable edge style per Xu et al. (2012) — maximum continuity, minimum cognitive load. But linear degrades in dense graphs: diagonal crossings occur at arbitrary angles (harder to read than 90° orthogonal crossings), and fan-in/fan-out groups produce visual tangles where multiple diagonals converge. Linear works best for sparse graphs with low edge density where the spatial simplicity of straight lines outweighs the loss of grid structure.
+
+**Basis/curved** (smooth B-spline interpolation through waypoints). Users consistently rate curved edges as the most visually pleasing (Bar & Neta 2006), and smooth splines make diagrams feel organic and approachable. Mermaid.js uses curved edges by default, making this the expected style for users migrating from Mermaid. The tradeoff is measurable: Xu et al. (2012) found more reading errors and slower task completion with heavy curvature compared to straight or low-curvature edges. For diagrams where the audience is scanning an overview rather than tracing individual paths, the aesthetic benefit can outweigh the readability cost.
+
+### Selection guidance
+
+| Context | Recommended style | Rationale |
+|---------|-------------------|----------|
+| Engineering reference documentation | Orthogonal | Precision and traceability; every direction change explicit |
+| General-purpose flowcharts | Rounded | Approachable feel with structured routing; best all-around compromise |
+| Sparse hierarchies and trees (<15 nodes, low edge density) | Linear | Minimal visual noise; straight lines maximize readability |
+| Presentations and stakeholder overviews | Basis/curved | Aesthetic appeal for audiences scanning rather than tracing |
+| Dense graphs with many crossings | Orthogonal or rounded | 90° crossings are significantly more readable than arbitrary-angle crossings |
+| Text/terminal output | Orthogonal (inherent) | Character grid constraint; not a choice but a given |
+| Mermaid.js visual compatibility | Basis/curved | Matches Mermaid.js default rendering conventions |
+
 ---
 
 *This document is versioned in the mmdflux repository at `docs/EDGE_ROUTING_PRD.md` and updated as research and implementation progress.*
