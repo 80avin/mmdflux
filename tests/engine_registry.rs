@@ -1,11 +1,12 @@
 //! Engine registry tests: typed engine IDs, parsing, availability, and registry lookup.
 
 use mmdflux::diagram::{
-    AlgorithmId, EdgeRouting, EdgeStyle, EngineAlgorithmId, EngineCapabilities, EngineId,
-    GeometryLevel, GraphSolveRequest, LayoutEngineId, OutputFormat, PathDetail, RenderConfig,
-    RenderError, RouteOwnership,
+    AlgorithmId, EdgeRouting, EdgeStyle, EngineAlgorithmId, EngineCapabilities, EngineConfig,
+    EngineId, GeometryLevel, GraphEngine, GraphSolveRequest, LayoutEngineId, OutputFormat,
+    PathDetail, RenderConfig, RenderError, RouteOwnership,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
+use mmdflux::diagrams::flowchart::engine::FluxLayeredEngine;
 use mmdflux::engines::graph::GraphEngineRegistry;
 use mmdflux::registry::DiagramInstance;
 
@@ -566,4 +567,70 @@ fn solve_request_from_config_derives_fields() {
     let req = GraphSolveRequest::from_config(&config, OutputFormat::Svg);
     assert_eq!(req.output_format, OutputFormat::Svg);
     assert_eq!(req.geometry_level, GeometryLevel::Routed);
+}
+
+// =============================================================================
+// FluxLayeredEngine (plan-0081 Phase 3.2)
+// =============================================================================
+
+fn build_simple_diagram() -> mmdflux::Diagram {
+    let flowchart = mmdflux::parse_flowchart("graph TD\nA-->B").unwrap();
+    mmdflux::build_diagram(&flowchart)
+}
+
+#[test]
+fn flux_layered_engine_id() {
+    let engine = FluxLayeredEngine::text();
+    assert_eq!(
+        engine.id(),
+        EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered)
+    );
+}
+
+#[test]
+fn flux_layered_capabilities_are_native() {
+    let engine = FluxLayeredEngine::text();
+    let caps = engine.capabilities();
+    assert_eq!(caps.route_ownership, RouteOwnership::Native);
+    assert!(caps.supports_subgraphs);
+}
+
+#[test]
+fn flux_layered_solve_layout_level_has_no_routed_geometry() {
+    let diagram = build_simple_diagram();
+    let engine = FluxLayeredEngine::text();
+    let request = GraphSolveRequest {
+        output_format: OutputFormat::Text,
+        geometry_level: GeometryLevel::Layout,
+        path_detail: PathDetail::Full,
+    };
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let result = engine.solve(&diagram, &config, &request).unwrap();
+
+    assert_eq!(result.engine_id.engine(), EngineId::Flux);
+    assert!(!result.geometry.nodes.is_empty());
+    assert!(
+        result.routed.is_none(),
+        "layout level should not include routed geometry"
+    );
+}
+
+#[test]
+fn flux_layered_solve_routed_level_has_routed_geometry() {
+    let diagram = build_simple_diagram();
+    let engine = FluxLayeredEngine::text();
+    let request = GraphSolveRequest {
+        output_format: OutputFormat::Text,
+        geometry_level: GeometryLevel::Routed,
+        path_detail: PathDetail::Full,
+    };
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let result = engine.solve(&diagram, &config, &request).unwrap();
+
+    assert!(
+        result.routed.is_some(),
+        "routed level should produce routed geometry"
+    );
+    let routed = result.routed.unwrap();
+    assert!(!routed.edges.is_empty());
 }

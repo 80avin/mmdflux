@@ -8,9 +8,11 @@ use super::render::layout::build_dagre_layout;
 use super::render::svg::svg_node_dimensions;
 use super::render::svg_metrics::SvgTextMetrics;
 use crate::diagram::{
-    EngineCapabilities, EngineConfig, EngineId, GraphLayoutEngine, LayoutEngineId, OutputFormat,
-    RenderConfig, RenderError,
+    AlgorithmId, EngineAlgorithmCapabilities, EngineAlgorithmId, EngineCapabilities, EngineConfig,
+    EngineId, GeometryLevel, GraphEngine, GraphLayoutEngine, GraphSolveRequest, GraphSolveResult,
+    LayoutEngineId, OutputFormat, RenderConfig, RenderError, RouteOwnership,
 };
+use crate::diagrams::flowchart::geometry::RoutedGraphGeometry;
 use crate::graph::Diagram;
 use crate::render::SvgOptions;
 
@@ -129,6 +131,72 @@ impl GraphLayoutEngine for DagreLayoutEngine {
         };
 
         Ok(geometry::from_dagre_layout(&result, diagram))
+    }
+}
+
+/// Flux-layered engine: dagre layout + unified routing natively.
+///
+/// Implements `GraphEngine::solve()` with `RouteOwnership::Native` —
+/// layout and routing are performed together inside `solve()`.
+pub struct FluxLayeredEngine {
+    mode: MeasurementMode,
+}
+
+impl FluxLayeredEngine {
+    /// Create with text-grid measurement mode.
+    pub fn text() -> Self {
+        Self {
+            mode: MeasurementMode::Text,
+        }
+    }
+
+    /// Create with the specified measurement mode.
+    pub fn with_mode(mode: MeasurementMode) -> Self {
+        Self { mode }
+    }
+}
+
+impl GraphEngine for FluxLayeredEngine {
+    fn id(&self) -> EngineAlgorithmId {
+        EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered)
+    }
+
+    fn capabilities(&self) -> EngineAlgorithmCapabilities {
+        EngineAlgorithmCapabilities {
+            route_ownership: RouteOwnership::Native,
+            supports_subgraphs: true,
+        }
+    }
+
+    fn solve(
+        &self,
+        diagram: &Diagram,
+        config: &EngineConfig,
+        request: &GraphSolveRequest,
+    ) -> Result<GraphSolveResult, RenderError> {
+        use crate::diagram::EdgeRouting;
+
+        // Step 1: Run dagre layout.
+        let dagre = DagreLayoutEngine::with_mode(self.mode.clone());
+        let geometry = dagre.layout(diagram, config)?;
+
+        // Step 2: Route when routed geometry is requested (Native ownership).
+        let routed: Option<RoutedGraphGeometry> =
+            if matches!(request.geometry_level, GeometryLevel::Routed) {
+                Some(super::routing::route_graph_geometry(
+                    diagram,
+                    &geometry,
+                    EdgeRouting::UnifiedPreview,
+                ))
+            } else {
+                None
+            };
+
+        Ok(GraphSolveResult {
+            engine_id: self.id(),
+            geometry,
+            routed,
+        })
     }
 }
 
