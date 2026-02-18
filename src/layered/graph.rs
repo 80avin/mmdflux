@@ -598,7 +598,7 @@ mod tests {
 
     #[test]
     fn test_layout_graph_dummy_tracking() {
-        use crate::dagre::normalize::{DummyNode, LabelPos};
+        use crate::layered::normalize::{DummyNode, LabelPos};
 
         let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
         graph.add_node("A", (100.0, 50.0));
@@ -787,7 +787,7 @@ mod tests {
 
     #[test]
     fn test_layout_graph_is_dummy_index() {
-        use crate::dagre::normalize::DummyNode;
+        use crate::layered::normalize::DummyNode;
 
         let mut graph: DiGraph<(f64, f64)> = DiGraph::new();
         graph.add_node("A", (100.0, 50.0));

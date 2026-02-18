@@ -189,9 +189,9 @@ pub trait DiagramRenderer: Send + Sync {
 
 /// Configuration for layout computation.
 ///
-/// This is a re-export of `dagre::types::LayoutConfig` to provide a single
+/// This is a re-export of `layered::types::LayoutConfig` to provide a single
 /// canonical layout configuration type across the crate.
-pub type LayoutConfig = crate::dagre::types::LayoutConfig;
+pub type LayoutConfig = crate::layered::types::LayoutConfig;
 
 /// Engine family identifier used in the combined engine+algorithm taxonomy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -373,18 +373,18 @@ impl EngineAlgorithmId {
 
 /// Engine-specific configuration envelope.
 ///
-/// Wraps engine-specific layout parameters. Phase 2 supports Dagre only;
-/// future engines (ELK, COSE) will add variants here.
+/// Wraps engine-specific layout parameters. Currently supports Layered
+/// (Sugiyama/dagre) only; future engines (ELK, COSE) will add variants here.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum EngineConfig {
-    /// Dagre (Sugiyama) layout engine configuration.
-    Dagre(crate::dagre::types::LayoutConfig),
+    /// Layered (Sugiyama) layout engine configuration.
+    Layered(crate::layered::types::LayoutConfig),
 }
 
 impl From<LayoutConfig> for EngineConfig {
     fn from(config: LayoutConfig) -> Self {
-        EngineConfig::Dagre(config)
+        EngineConfig::Layered(config)
     }
 }
 

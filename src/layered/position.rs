@@ -168,8 +168,8 @@ fn reverse_positions(graph: &mut LayoutGraph, config: &LayoutConfig) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::graph::DiGraph;
-    use crate::dagre::{acyclic, order};
+    use crate::layered::graph::DiGraph;
+    use crate::layered::{acyclic, order};
 
     fn run_full_layout(
         nodes: &[(&str, f64, f64)],

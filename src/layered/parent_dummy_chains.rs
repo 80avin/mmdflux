@@ -225,8 +225,8 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::dagre::graph::DiGraph;
-    use crate::dagre::{self, LayoutConfig, normalize, rank};
+    use crate::layered::graph::DiGraph;
+    use crate::layered::{self, LayoutConfig, normalize, rank};
 
     /// Build a LayoutGraph matching the external_node_subgraph fixture and run
     /// the pipeline up through parent_dummy_chains.
@@ -285,17 +285,17 @@ mod tests {
         let mut lg = LayoutGraph::from_digraph(&g, |_, dims| (dims.0 as f64, dims.1 as f64));
 
         // Run pipeline up through parent_dummy_chains (matching layout_with_labels)
-        dagre::extract_self_edges(&mut lg);
-        crate::dagre::acyclic::run(&mut lg);
-        dagre::make_space_for_edge_labels(&mut lg);
-        crate::dagre::nesting::run(&mut lg);
+        crate::layered::extract_self_edges(&mut lg);
+        crate::layered::acyclic::run(&mut lg);
+        crate::layered::make_space_for_edge_labels(&mut lg);
+        crate::layered::nesting::run(&mut lg);
         rank::run(&mut lg, &LayoutConfig::default());
         rank::remove_empty_ranks(&mut lg);
-        crate::dagre::nesting::cleanup(&mut lg);
+        crate::layered::nesting::cleanup(&mut lg);
         rank::normalize(&mut lg);
-        crate::dagre::nesting::insert_title_nodes(&mut lg);
+        crate::layered::nesting::insert_title_nodes(&mut lg);
         rank::normalize(&mut lg);
-        crate::dagre::nesting::assign_rank_minmax(&mut lg);
+        crate::layered::nesting::assign_rank_minmax(&mut lg);
         normalize::run(&mut lg, &HashMap::new());
         run(&mut lg);
 
@@ -411,23 +411,23 @@ mod tests {
         g.add_edge("B", "C");
 
         let config = LayoutConfig {
-            direction: crate::dagre::Direction::LeftRight,
+            direction: crate::layered::Direction::LeftRight,
             ..Default::default()
         };
 
         let mut lg = LayoutGraph::from_digraph(&g, |_, dims| (dims.0 as f64, dims.1 as f64));
 
-        dagre::extract_self_edges(&mut lg);
-        crate::dagre::acyclic::run(&mut lg);
-        dagre::make_space_for_edge_labels(&mut lg);
-        crate::dagre::nesting::run(&mut lg);
+        crate::layered::extract_self_edges(&mut lg);
+        crate::layered::acyclic::run(&mut lg);
+        crate::layered::make_space_for_edge_labels(&mut lg);
+        crate::layered::nesting::run(&mut lg);
         rank::run(&mut lg, &config);
         rank::remove_empty_ranks(&mut lg);
-        crate::dagre::nesting::cleanup(&mut lg);
+        crate::layered::nesting::cleanup(&mut lg);
         rank::normalize(&mut lg);
-        crate::dagre::nesting::insert_title_nodes(&mut lg);
+        crate::layered::nesting::insert_title_nodes(&mut lg);
         rank::normalize(&mut lg);
-        crate::dagre::nesting::assign_rank_minmax(&mut lg);
+        crate::layered::nesting::assign_rank_minmax(&mut lg);
         normalize::run(&mut lg, &HashMap::new());
         run(&mut lg);
 

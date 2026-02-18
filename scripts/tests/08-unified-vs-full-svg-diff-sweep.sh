@@ -10,8 +10,8 @@ SWEEP_RUN_ID="${RUN_ID}-unified-vs-full-sweep"
 OUT_DIR="$REPO_ROOT/scripts/tests/out/$SWEEP_RUN_ID"
 mkdir -p "$OUT_DIR"
 
-FLOW_STYLES_DEFAULT=("curved" "straight" "rounded" "orthogonal")
-CLASS_STYLES_DEFAULT=("curved")
+FLOW_STYLES_DEFAULT=("smooth" "sharp" "rounded")
+CLASS_STYLES_DEFAULT=("smooth")
 UNIFIED_FEEDBACK_BASELINE_HEADER=$'fixture\tstyle\tstatus\tdiff_lines\tfull_viewbox_width\tfull_viewbox_height\tunified_viewbox_width\tunified_viewbox_height\tviewbox_width_delta\tviewbox_height_delta\tfull_route_envelope_width\tfull_route_envelope_height\tunified_route_envelope_width\tunified_route_envelope_height\troute_envelope_width_delta\troute_envelope_height_delta\tfull_edge_label_count\tunified_edge_label_count\tedge_label_count_delta\tlabel_position_max_drift\tlabel_position_mean_drift'
 
 ROUTE_ENVELOPE_ABS_DELTA_WARN_PX="${ROUTE_ENVELOPE_ABS_DELTA_WARN_PX:-24}"
@@ -79,7 +79,7 @@ render_svg() {
   "$MMDFLUX_BIN" \
     --format svg \
     --geometry-level routed \
-    --edge-routing "$mode" \
+    --layout-engine "$mode" \
     --edge-style "$style" \
     "$fixture_path" >"$out_file"
 }
@@ -272,8 +272,8 @@ render_family_style() {
     local label_position_max_drift="0.00"
     local label_position_mean_drift="0.00"
 
-    render_svg "full-compute" "$style" "$fixture_path" "$full_svg"
-    render_svg "unified-preview" "$style" "$fixture_path" "$unified_svg"
+    render_svg "mermaid-layered" "$style" "$fixture_path" "$full_svg"
+    render_svg "flux-layered" "$style" "$fixture_path" "$unified_svg"
     read -r full_viewbox_width full_viewbox_height <<<"$(extract_viewbox_dimensions "$full_svg")"
     read -r unified_viewbox_width unified_viewbox_height <<<"$(extract_viewbox_dimensions "$unified_svg")"
     viewbox_width_delta="$(format_delta "$full_viewbox_width" "$unified_viewbox_width")"
@@ -391,11 +391,10 @@ summarize_non_viewbox_metrics() {
 
 style_badge_class() {
   case "$1" in
-    curved) printf 'style-curved' ;;
-    straight) printf 'style-straight' ;;
+    smooth) printf 'style-smooth' ;;
+    sharp) printf 'style-sharp' ;;
     rounded) printf 'style-rounded' ;;
-    orthogonal) printf 'style-orthogonal' ;;
-    *) printf 'style-curved' ;;
+    *) printf 'style-smooth' ;;
   esac
 }
 
@@ -439,10 +438,9 @@ generate_gallery() {
     .family-flowchart { border-color:#0ea5e9; color:#bae6fd; background:#0c4a6e55; }
     .family-class { border-color:#f97316; color:#fed7aa; background:#7c2d1255; }
     .style-badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; border-radius:999px; padding:2px 7px; }
-    .style-curved { background:#1e3a8a55; color:#bfdbfe; border:1px solid #1e40af; }
-    .style-straight { background:#36531455; color:#d9f99d; border:1px solid #4d7c0f; }
+    .style-smooth { background:#1e3a8a55; color:#bfdbfe; border:1px solid #1e40af; }
+    .style-sharp { background:#36531455; color:#d9f99d; border:1px solid #4d7c0f; }
     .style-rounded { background:#78350f55; color:#fde68a; border:1px solid #a16207; }
-    .style-orthogonal { background:#4c1d9555; color:#ddd6fe; border:1px solid #6d28d9; }
     details.fixture { margin:8px 0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
     details.fixture > summary { list-style:none; cursor:pointer; display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:#10172a; padding:8px 10px; }
     details.fixture > summary::-webkit-details-marker { display:none; }
@@ -469,13 +467,12 @@ generate_gallery() {
       <button onclick="openShown(true)">Open shown</button>
       <button onclick="openShown(false)">Close shown</button>
       <label><input id="hideSame" type="checkbox" checked onchange="applyFilters()"> Hide same</label>
-      <label><input id="curvedOnly" type="checkbox" onchange="applyFilters()"> Curved only</label>
+      <label><input id="smoothOnly" type="checkbox" onchange="applyFilters()"> Smooth only</label>
       <label><input id="familyFlowchart" type="checkbox" checked onchange="applyFilters()"> flowchart</label>
       <label><input id="familyClass" type="checkbox" checked onchange="applyFilters()"> class</label>
-      <label><input id="styleCurved" type="checkbox" checked onchange="applyFilters()"> curved</label>
-      <label><input id="styleStraight" type="checkbox" checked onchange="applyFilters()"> straight</label>
+      <label><input id="styleSmooth" type="checkbox" checked onchange="applyFilters()"> smooth</label>
+      <label><input id="styleSharp" type="checkbox" checked onchange="applyFilters()"> sharp</label>
       <label><input id="styleRounded" type="checkbox" checked onchange="applyFilters()"> rounded</label>
-      <label><input id="styleOrthogonal" type="checkbox" checked onchange="applyFilters()"> orthogonal</label>
       <input id="search" type="text" placeholder="Filter fixture name (e.g. multi_subgraph)" oninput="applyFilters()" />
     </div>
 HTML_HEADER
@@ -539,11 +536,11 @@ HTML_GROUP
     </summary>
     <div class="compare">
       <div class="pane">
-        <h3>full-compute</h3>
+        <h3>mermaid-layered</h3>
         <object data="${full_file}" type="image/svg+xml"></object>
       </div>
       <div class="pane">
-        <h3>unified-preview</h3>
+        <h3>flux-layered</h3>
         <object data="${unified_file}" type="image/svg+xml"></object>
       </div>
     </div>
@@ -566,7 +563,7 @@ HTML_FIXTURE
 
     function applyFilters() {
       const hideSame = document.getElementById('hideSame').checked;
-      const curvedOnly = document.getElementById('curvedOnly').checked;
+      const smoothOnly = document.getElementById('smoothOnly').checked;
       const search = document.getElementById('search').value.trim().toLowerCase();
 
       const allowedFamilies = new Set();
@@ -574,13 +571,12 @@ HTML_FIXTURE
       if (document.getElementById('familyClass').checked) allowedFamilies.add('class');
 
       const allowedStyles = new Set();
-      if (document.getElementById('styleCurved').checked) allowedStyles.add('curved');
-      if (document.getElementById('styleStraight').checked) allowedStyles.add('straight');
+      if (document.getElementById('styleSmooth').checked) allowedStyles.add('smooth');
+      if (document.getElementById('styleSharp').checked) allowedStyles.add('sharp');
       if (document.getElementById('styleRounded').checked) allowedStyles.add('rounded');
-      if (document.getElementById('styleOrthogonal').checked) allowedStyles.add('orthogonal');
-      if (curvedOnly) {
+      if (smoothOnly) {
         allowedStyles.clear();
-        allowedStyles.add('curved');
+        allowedStyles.add('smooth');
       }
 
       document.querySelectorAll('details.fixture').forEach(d => {

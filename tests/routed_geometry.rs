@@ -17,7 +17,7 @@ use mmdflux::{EngineConfig, OutputFormat, RenderConfig, build_diagram, parse_flo
 fn layout_test(input: &str) -> (mmdflux::Diagram, GraphGeometry) {
     let fc = parse_flowchart(input).unwrap();
     let diagram = build_diagram(&fc);
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom = run_dagre_layout(&MeasurementMode::Text, &diagram, &config).unwrap();
     (diagram, geom)
 }
@@ -37,7 +37,7 @@ fn layout_test_svg(input: &str) -> (mmdflux::Diagram, GraphGeometry) {
     let fc = parse_flowchart(input).unwrap();
     let diagram = build_diagram(&fc);
     let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom = run_dagre_layout(&mode, &diagram, &config).unwrap();
     (diagram, geom)
 }

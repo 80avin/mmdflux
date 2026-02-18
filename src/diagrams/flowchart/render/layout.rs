@@ -6,11 +6,11 @@
 use std::collections::{HashMap, HashSet};
 
 use super::shape::{NodeBounds, node_dimensions};
-#[cfg(test)]
-use crate::dagre::Point;
-use crate::dagre::normalize::WaypointWithRank;
-use crate::dagre::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Rect};
 use crate::graph::{Diagram, Direction, Edge, Node, Shape, Stroke};
+#[cfg(test)]
+use crate::layered::Point;
+use crate::layered::normalize::WaypointWithRank;
+use crate::layered::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Rect};
 
 /// Bounding box for a subgraph border in draw coordinates.
 #[derive(Debug, Clone)]
@@ -187,7 +187,7 @@ pub struct LayoutConfig {
     /// Extra right margin for edge labels on right branches.
     pub right_label_margin: usize,
     /// Ranking algorithm override.
-    pub ranker: Option<crate::dagre::types::Ranker>,
+    pub ranker: Option<crate::layered::types::Ranker>,
     /// Dagre nodesep (node spacing).
     pub dagre_node_sep: f64,
     /// Dagre edgesep (edge segment spacing).
@@ -231,7 +231,7 @@ fn to_dagre_direction(dir: Direction) -> DagreDirection {
 /// Pre-computed sub-layout result for a direction-override subgraph.
 pub(crate) struct SubLayoutResult {
     /// The dagre LayoutResult with node positions in the sub-layout coordinate system.
-    result: dagre::LayoutResult,
+    result: layered::LayoutResult,
     /// Map from sublayout edge index to original diagram edge index.
     edge_index_map: Vec<usize>,
 }
@@ -262,7 +262,7 @@ where
 
         let dagre_direction = to_dagre_direction(sub_dir);
 
-        let mut sub_graph: dagre::DiGraph<(f64, f64)> = dagre::DiGraph::new();
+        let mut sub_graph: layered::DiGraph<(f64, f64)> = layered::DiGraph::new();
 
         // Add leaf nodes (not child subgraphs)
         for node_id in &sg.nodes {
@@ -276,7 +276,7 @@ where
 
         // Add internal edges only (both endpoints inside this subgraph)
         let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
-        let mut edge_labels: HashMap<usize, dagre::normalize::EdgeLabelInfo> = HashMap::new();
+        let mut edge_labels: HashMap<usize, layered::normalize::EdgeLabelInfo> = HashMap::new();
         let mut edge_index_map = Vec::new();
         for (edge_idx, edge) in diagram.edges.iter().enumerate() {
             if sg_node_set.contains(edge.from.as_str()) && sg_node_set.contains(edge.to.as_str()) {
@@ -286,7 +286,7 @@ where
                 if let Some((label_width, label_height)) = edge_label_dims(edge) {
                     edge_labels.insert(
                         sub_edge_idx,
-                        dagre::normalize::EdgeLabelInfo::new(label_width, label_height),
+                        layered::normalize::EdgeLabelInfo::new(label_width, label_height),
                     );
                 }
             }
@@ -354,7 +354,7 @@ where
         };
 
         let result =
-            dagre::layout_with_labels(&sub_graph, &sub_config, |_, dims| *dims, &edge_labels);
+            layered::layout_with_labels(&sub_graph, &sub_config, |_, dims| *dims, &edge_labels);
 
         sublayouts.insert(
             sg_id.clone(),
@@ -977,7 +977,7 @@ pub(crate) fn dagre_config_for_layout(diagram: &Diagram, config: &LayoutConfig) 
 /// for subgraphs that override direction.
 pub(crate) fn reconcile_sublayouts_dagre(
     diagram: &Diagram,
-    layout: &mut dagre::LayoutResult,
+    layout: &mut layered::LayoutResult,
     sublayouts: &HashMap<String, SubLayoutResult>,
     title_pad_y: f64,
     content_pad_y: f64,
@@ -1084,18 +1084,18 @@ pub(crate) fn reconcile_sublayouts_dagre(
             height: final_h,
         };
         layout.subgraph_bounds.insert(sg_id.clone(), new_bounds);
-        if let Some(existing) = layout.nodes.get_mut(&dagre::NodeId(sg_id.clone())) {
+        if let Some(existing) = layout.nodes.get_mut(&layered::NodeId(sg_id.clone())) {
             *existing = new_bounds;
         }
 
         // Remap edge paths for internal edges.
-        let mut edge_points_by_orig_idx: HashMap<usize, Vec<dagre::Point>> = HashMap::new();
+        let mut edge_points_by_orig_idx: HashMap<usize, Vec<layered::Point>> = HashMap::new();
         for edge in &sublayout.result.edges {
             if let Some(orig_idx) = sublayout.edge_index_map.get(edge.index) {
-                let points: Vec<dagre::Point> = edge
+                let points: Vec<layered::Point> = edge
                     .points
                     .iter()
-                    .map(|p| dagre::Point {
+                    .map(|p| layered::Point {
                         x: p.x + offset_x,
                         y: p.y + offset_y,
                     })
@@ -1114,7 +1114,7 @@ pub(crate) fn reconcile_sublayouts_dagre(
         for (sub_idx, pos) in &sublayout.result.label_positions {
             if let Some(orig_idx) = sublayout.edge_index_map.get(*sub_idx) {
                 let mut updated = *pos;
-                updated.point = dagre::Point {
+                updated.point = layered::Point {
                     x: pos.point.x + offset_x,
                     y: pos.point.y + offset_y,
                 };
@@ -1123,13 +1123,13 @@ pub(crate) fn reconcile_sublayouts_dagre(
         }
 
         // Remap self-edge paths for internal edges.
-        let mut self_edge_points_by_idx: HashMap<usize, Vec<dagre::Point>> = HashMap::new();
+        let mut self_edge_points_by_idx: HashMap<usize, Vec<layered::Point>> = HashMap::new();
         for edge in &sublayout.result.self_edges {
             if let Some(orig_idx) = sublayout.edge_index_map.get(edge.edge_index) {
-                let points: Vec<dagre::Point> = edge
+                let points: Vec<layered::Point> = edge
                     .points
                     .iter()
-                    .map(|p| dagre::Point {
+                    .map(|p| layered::Point {
                         x: p.x + offset_x,
                         y: p.y + offset_y,
                     })
@@ -1162,7 +1162,7 @@ pub(crate) fn reconcile_sublayouts_dagre(
 ///
 /// Edge points connected to shifted nodes are interpolated: full shift at the
 /// shifted endpoint, tapering to zero at the unshifted endpoint.
-pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::LayoutResult) {
+pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut layered::LayoutResult) {
     // Cross-axis: x for TD/BT, y for LR/RL.
     let horizontal = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
 
@@ -1263,12 +1263,12 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
         if predecessors.len() > 1 {
             let min_rank = predecessors
                 .iter()
-                .filter_map(|id| layout.node_ranks.get(&dagre::NodeId(id.clone())).copied())
+                .filter_map(|id| layout.node_ranks.get(&layered::NodeId(id.clone())).copied())
                 .min();
 
             if let Some(min_rank) = min_rank {
                 predecessors.retain(|id| {
-                    layout.node_ranks.get(&dagre::NodeId(id.clone())).copied() == Some(min_rank)
+                    layout.node_ranks.get(&layered::NodeId(id.clone())).copied() == Some(min_rank)
                 });
             }
         }
@@ -1277,12 +1277,12 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
         if successors.len() > 1 {
             let max_rank = successors
                 .iter()
-                .filter_map(|id| layout.node_ranks.get(&dagre::NodeId(id.clone())).copied())
+                .filter_map(|id| layout.node_ranks.get(&layered::NodeId(id.clone())).copied())
                 .max();
 
             if let Some(max_rank) = max_rank {
                 successors.retain(|id| {
-                    layout.node_ranks.get(&dagre::NodeId(id.clone())).copied() == Some(max_rank)
+                    layout.node_ranks.get(&layered::NodeId(id.clone())).copied() == Some(max_rank)
                 });
             }
         }
@@ -1296,7 +1296,7 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
             let mut lo = f64::INFINITY;
             let mut hi = f64::NEG_INFINITY;
             for nid in &sg_node_set {
-                if let Some(r) = layout.nodes.get(&dagre::NodeId(nid.to_string())) {
+                if let Some(r) = layout.nodes.get(&layered::NodeId(nid.to_string())) {
                     if horizontal {
                         lo = lo.min(r.y);
                         hi = hi.max(r.y + r.height);
@@ -1322,7 +1322,7 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
         let mut eligible: Vec<(String, f64, f64)> = Vec::new(); // (id, cross_center, primary_pos)
         let mut eligible_pred_crosses: Vec<f64> = Vec::new();
         for node_id in predecessors.iter().chain(successors.iter()) {
-            if let Some(rect) = layout.nodes.get(&dagre::NodeId(node_id.clone())) {
+            if let Some(rect) = layout.nodes.get(&layered::NodeId(node_id.clone())) {
                 let node_cy = rect.y + rect.height / 2.0;
                 let node_cx = rect.x + rect.width / 2.0;
                 let inside_primary = if horizontal {
@@ -1444,7 +1444,7 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
 
     // Apply node position shifts.
     for (node_id, &(delta, _)) in &node_shifts {
-        if let Some(rect) = layout.nodes.get_mut(&dagre::NodeId(node_id.clone())) {
+        if let Some(rect) = layout.nodes.get_mut(&layered::NodeId(node_id.clone())) {
             if horizontal {
                 rect.x += delta;
             } else {
@@ -1564,7 +1564,7 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut dagre::L
 /// so the child border doesn't overlap the parent's title text.
 pub(crate) fn expand_parent_bounds_dagre(
     diagram: &Diagram,
-    layout: &mut dagre::LayoutResult,
+    layout: &mut layered::LayoutResult,
     child_margin: f64,
     title_margin: f64,
 ) {
@@ -1593,7 +1593,7 @@ pub(crate) fn expand_parent_bounds_dagre(
 
         // Check member nodes.
         for member_id in &sg.nodes {
-            if let Some(rect) = layout.nodes.get(&dagre::NodeId(member_id.clone())) {
+            if let Some(rect) = layout.nodes.get(&layered::NodeId(member_id.clone())) {
                 min_x = min_x.min(rect.x);
                 min_y = min_y.min(rect.y);
                 max_x = max_x.max(rect.x + rect.width);
@@ -1634,7 +1634,7 @@ pub(crate) fn expand_parent_bounds_dagre(
 /// down to maintain a minimum gap.
 pub(crate) fn resolve_sublayout_overlaps(
     diagram: &Diagram,
-    layout: &mut dagre::LayoutResult,
+    layout: &mut layered::LayoutResult,
     min_gap: f64,
 ) {
     for (sg_id, sg) in &diagram.subgraphs {
@@ -1716,12 +1716,12 @@ fn build_dagre_layout_with_config<FN, FE>(
     dagre_config: &DagreConfig,
     node_dims: FN,
     edge_label_dims: FE,
-) -> dagre::LayoutResult
+) -> layered::LayoutResult
 where
     FN: Fn(&Node) -> (f64, f64),
     FE: Fn(&Edge) -> Option<(f64, f64)>,
 {
-    let mut dgraph = dagre::DiGraph::new();
+    let mut dgraph = layered::DiGraph::new();
 
     let mut seen = std::collections::HashSet::new();
     let mut ordered_node_ids = Vec::new();
@@ -1805,7 +1805,7 @@ where
         set
     };
 
-    let mut edge_labels: HashMap<usize, dagre::normalize::EdgeLabelInfo> = HashMap::new();
+    let mut edge_labels: HashMap<usize, layered::normalize::EdgeLabelInfo> = HashMap::new();
     for (edge_idx, edge) in diagram.edges.iter().enumerate() {
         let weight = if edge.stroke == Stroke::Invisible {
             0.0
@@ -1821,12 +1821,12 @@ where
         if let Some((label_width, label_height)) = edge_label_dims(edge) {
             edge_labels.insert(
                 edge_idx,
-                dagre::normalize::EdgeLabelInfo::new(label_width, label_height),
+                layered::normalize::EdgeLabelInfo::new(label_width, label_height),
             );
         }
     }
 
-    let result = dagre::layout_with_labels(&dgraph, dagre_config, |_, dims| *dims, &edge_labels);
+    let result = layered::layout_with_labels(&dgraph, dagre_config, |_, dims| *dims, &edge_labels);
 
     if std::env::var("MMDFLUX_DEBUG_NODE_POS").is_ok_and(|v| v == "1") {
         for (id, rect) in &result.nodes {
@@ -1845,7 +1845,7 @@ pub(crate) fn build_dagre_layout<FN, FE>(
     config: &LayoutConfig,
     node_dims: FN,
     edge_label_dims: FE,
-) -> dagre::LayoutResult
+) -> layered::LayoutResult
 where
     FN: Fn(&Node) -> (f64, f64),
     FE: Fn(&Edge) -> Option<(f64, f64)>,
@@ -2278,7 +2278,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                 idx,
                 wps.iter()
                     .map(|(fp, rank)| WaypointWithRank {
-                        point: dagre::Point { x: fp.x, y: fp.y },
+                        point: layered::Point { x: fp.x, y: fp.y },
                         rank: *rank,
                     })
                     .collect(),
@@ -2292,7 +2292,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             (
                 idx,
                 WaypointWithRank {
-                    point: dagre::Point { x: fp.x, y: fp.y },
+                    point: layered::Point { x: fp.x, y: fp.y },
                     rank: *rank,
                 },
             )
@@ -5004,7 +5004,7 @@ mod tests {
 
     /// Helper: compute a sub-layout for a direction-override subgraph.
     /// Returns the dagre LayoutResult for just the subgraph's internal nodes/edges.
-    fn run_sublayout_for_sg(diagram: &Diagram, sg_id: &str) -> dagre::LayoutResult {
+    fn run_sublayout_for_sg(diagram: &Diagram, sg_id: &str) -> layered::LayoutResult {
         let sg = &diagram.subgraphs[sg_id];
         let sub_dir = sg.dir.expect("subgraph should have direction override");
 
@@ -5015,7 +5015,7 @@ mod tests {
             Direction::RightLeft => DagreDirection::RightLeft,
         };
 
-        let mut sub_graph: dagre::DiGraph<(f64, f64)> = dagre::DiGraph::new();
+        let mut sub_graph: layered::DiGraph<(f64, f64)> = layered::DiGraph::new();
 
         // Add leaf nodes (not child subgraphs)
         for node_id in &sg.nodes {
@@ -5040,7 +5040,7 @@ mod tests {
             ..DagreConfig::default()
         };
 
-        dagre::layout(&sub_graph, &sub_config, |_, dims| *dims)
+        layered::layout(&sub_graph, &sub_config, |_, dims| *dims)
     }
 
     #[test]
@@ -5055,9 +5055,9 @@ mod tests {
         let result = run_sublayout_for_sg(&diagram, "sg1");
 
         // In LR layout, nodes should be arranged horizontally (increasing x, similar y)
-        let a = &result.nodes[&dagre::NodeId::from("A")];
-        let b = &result.nodes[&dagre::NodeId::from("B")];
-        let c = &result.nodes[&dagre::NodeId::from("C")];
+        let a = &result.nodes[&layered::NodeId::from("A")];
+        let b = &result.nodes[&layered::NodeId::from("B")];
+        let c = &result.nodes[&layered::NodeId::from("C")];
 
         // Centers should have increasing x
         let a_cx = a.x + a.width / 2.0;
@@ -5118,8 +5118,8 @@ mod tests {
 
         let result = run_sublayout_for_sg(&diagram, "sg1");
 
-        let a = &result.nodes[&dagre::NodeId::from("A")];
-        let b = &result.nodes[&dagre::NodeId::from("B")];
+        let a = &result.nodes[&layered::NodeId::from("A")];
+        let b = &result.nodes[&layered::NodeId::from("B")];
 
         // BT: A should be below B (higher y means lower on screen)
         let a_cy = a.y + a.height / 2.0;
@@ -5422,9 +5422,9 @@ mod tests {
         let result = run_sublayout_for_sg(&diagram, "sg1");
 
         // Sub-layout should only have A and B, not Start or End
-        assert!(result.nodes.contains_key(&dagre::NodeId::from("A")));
-        assert!(result.nodes.contains_key(&dagre::NodeId::from("B")));
-        assert!(!result.nodes.contains_key(&dagre::NodeId::from("Start")));
-        assert!(!result.nodes.contains_key(&dagre::NodeId::from("End")));
+        assert!(result.nodes.contains_key(&layered::NodeId::from("A")));
+        assert!(result.nodes.contains_key(&layered::NodeId::from("B")));
+        assert!(!result.nodes.contains_key(&layered::NodeId::from("Start")));
+        assert!(!result.nodes.contains_key(&layered::NodeId::from("End")));
     }
 }

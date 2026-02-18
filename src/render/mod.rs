@@ -115,7 +115,7 @@ pub struct RenderOptions {
     /// SVG-specific options.
     pub svg: SvgOptions,
     /// Ranking algorithm override. None uses the default (NetworkSimplex).
-    pub ranker: Option<crate::dagre::types::Ranker>,
+    pub ranker: Option<crate::layered::types::Ranker>,
     /// Dagre nodesep override (node spacing).
     pub node_spacing: Option<f64>,
     /// Dagre ranksep override (rank spacing).

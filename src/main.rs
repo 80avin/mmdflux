@@ -3,11 +3,11 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
-use mmdflux::dagre::Ranker;
 use mmdflux::diagram::{
     EdgeStyle, EngineAlgorithmId, GeometryLevel, LayoutConfig, OutputFormat, PathDetail,
     RenderConfig,
 };
+use mmdflux::layered::Ranker;
 use mmdflux::registry::default_registry;
 
 #[derive(Parser)]

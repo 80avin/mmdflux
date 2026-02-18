@@ -72,7 +72,7 @@ impl DiagramInstance for FlowchartInstance {
                 })?;
                 let result = engine.solve(
                     diagram,
-                    &EngineConfig::Dagre(config.layout.clone()),
+                    &EngineConfig::Layered(config.layout.clone()),
                     &request,
                 )?;
                 to_mmds_json(

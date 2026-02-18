@@ -234,7 +234,7 @@ fn floats_eq(a: f64, b: f64) -> bool {
 /// Runs dagre layout on both diagrams and compares node positions/sizes,
 /// edge count, and overall bounds.
 fn check_layout(direct: &Diagram, roundtrip: &Diagram) -> TierResult {
-    let engine_config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let engine_config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
 
     let direct_geom = match run_dagre_layout(&MeasurementMode::Text, direct, &engine_config) {
         Ok(geom) => geom,

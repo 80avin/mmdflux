@@ -65,7 +65,7 @@ pub fn run_dagre_layout(
 ) -> Result<GraphGeometry, RenderError> {
     use crate::diagrams::flowchart::geometry;
 
-    let EngineConfig::Dagre(dagre_cfg) = config;
+    let EngineConfig::Layered(dagre_cfg) = config;
     let layout_config = layout_config_from_dagre(dagre_cfg, diagram);
     let direction = diagram.direction;
     let result = match mode {
@@ -268,7 +268,7 @@ impl GraphEngine for MermaidLayeredEngine {
 /// This bridges the engine's dagre config back to the flowchart render
 /// config that `build_dagre_layout` expects.
 fn layout_config_from_dagre(
-    dagre_cfg: &crate::dagre::types::LayoutConfig,
+    dagre_cfg: &crate::layered::types::LayoutConfig,
     diagram: &Diagram,
 ) -> crate::diagrams::flowchart::render::layout::LayoutConfig {
     use crate::diagrams::flowchart::render::layout::LayoutConfig as FlowchartLayoutConfig;
@@ -308,7 +308,7 @@ mod tests {
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
 
-        let config = EngineConfig::Dagre(crate::dagre::types::LayoutConfig::default());
+        let config = EngineConfig::Layered(crate::layered::types::LayoutConfig::default());
         let geom = run_dagre_layout(&MeasurementMode::Text, &diagram, &config).unwrap();
 
         assert_eq!(geom.nodes.len(), 2);
@@ -323,7 +323,7 @@ mod tests {
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
 
-        let config = EngineConfig::Dagre(crate::dagre::types::LayoutConfig::default());
+        let config = EngineConfig::Layered(crate::layered::types::LayoutConfig::default());
         let geom = run_dagre_layout(&MeasurementMode::Text, &diagram, &config).unwrap();
 
         assert!(geom.nodes.contains_key("A"));
@@ -338,7 +338,7 @@ mod tests {
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
 
-        let config = EngineConfig::Dagre(crate::dagre::types::LayoutConfig::default());
+        let config = EngineConfig::Layered(crate::layered::types::LayoutConfig::default());
         let text_geom = run_dagre_layout(&MeasurementMode::Text, &diagram, &config).unwrap();
         let svg_geom = run_dagre_layout(
             &MeasurementMode::Svg(SvgTextMetrics::new(16.0, 15.0, 15.0)),

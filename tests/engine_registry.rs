@@ -409,7 +409,7 @@ fn flux_layered_solve_layout_level_has_no_routed_geometry() {
         geometry_level: GeometryLevel::Layout,
         path_detail: PathDetail::Full,
     };
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let result = engine.solve(&diagram, &config, &request).unwrap();
 
     assert_eq!(result.engine_id.engine(), EngineId::Flux);
@@ -429,7 +429,7 @@ fn flux_layered_solve_routed_level_has_routed_geometry() {
         geometry_level: GeometryLevel::Routed,
         path_detail: PathDetail::Full,
     };
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let result = engine.solve(&diagram, &config, &request).unwrap();
 
     assert!(
@@ -470,7 +470,7 @@ fn mermaid_layered_solve_layout_level_has_no_routed_geometry() {
         geometry_level: GeometryLevel::Layout,
         path_detail: PathDetail::Full,
     };
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let result = engine.solve(&diagram, &config, &request).unwrap();
 
     assert!(
@@ -484,7 +484,7 @@ fn mermaid_layered_solve_layout_level_has_no_routed_geometry() {
 fn mermaid_layered_layout_matches_flux_layered_layout() {
     // Both engines share the dagre kernel — node positions should be identical
     let diagram = build_simple_diagram();
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let layout_req = GraphSolveRequest {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Layout,
@@ -521,7 +521,7 @@ fn mermaid_layered_solve_routed_level_has_routed_geometry() {
         geometry_level: GeometryLevel::Routed,
         path_detail: PathDetail::Full,
     };
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let result = engine.solve(&diagram, &config, &request).unwrap();
 
     assert!(

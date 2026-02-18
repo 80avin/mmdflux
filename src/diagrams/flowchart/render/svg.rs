@@ -15,9 +15,9 @@ use super::routing_core::{
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use super::unified_router::{UnifiedRoutingOptions, route_edges_unified};
-use crate::dagre::{LayoutResult, Point, Rect};
 use crate::diagram::{EdgeRouting, EdgeStyle, PathDetail};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
+use crate::layered::{LayoutResult, Point, Rect};
 use crate::render::{RenderOptions, layout_config_for_diagram};
 
 const STROKE_COLOR: &str = "#333";
@@ -288,17 +288,21 @@ fn apply_subgraph_svg_padding(
         rect.width = (rect.width + pad_x * 2.0).max(0.0);
         rect.height = (rect.height + pad_y * 2.0).max(0.0);
 
-        if let Some(node_rect) = layout.nodes.get_mut(&crate::dagre::NodeId(id.clone())) {
+        if let Some(node_rect) = layout.nodes.get_mut(&crate::layered::NodeId(id.clone())) {
             *node_rect = *rect;
         }
     }
 
     // Ensure all subgraph IDs exist in nodes map for bounds updates.
     for (id, rect) in layout.subgraph_bounds.iter() {
-        if !layout.nodes.contains_key(&crate::dagre::NodeId(id.clone()))
+        if !layout
+            .nodes
+            .contains_key(&crate::layered::NodeId(id.clone()))
             && diagram.subgraphs.contains_key(id)
         {
-            layout.nodes.insert(crate::dagre::NodeId(id.clone()), *rect);
+            layout
+                .nodes
+                .insert(crate::layered::NodeId(id.clone()), *rect);
         }
     }
 }
@@ -355,7 +359,7 @@ fn push_node_from_subgraph(
     min_gap: f64,
     node_is_upstream: bool,
 ) {
-    let node_key = crate::dagre::NodeId(node_id.to_string());
+    let node_key = crate::layered::NodeId(node_id.to_string());
     let sg_rect = match layout.subgraph_bounds.get(sg_id) {
         Some(r) => *r,
         None => return,
@@ -461,7 +465,7 @@ fn push_subgraph_from_subgraph(
 
     // Shift each member node.
     for node_id in &member_nodes {
-        let key = crate::dagre::NodeId(node_id.clone());
+        let key = crate::layered::NodeId(node_id.clone());
         if let Some(rect) = layout.nodes.get_mut(&key) {
             match direction {
                 Direction::TopDown => rect.y += shift,
@@ -492,7 +496,7 @@ fn push_subgraph_from_subgraph(
             }
         }
         // Also update the nodes map entry for the subgraph.
-        let key = crate::dagre::NodeId(sg_id.clone());
+        let key = crate::layered::NodeId(sg_id.clone());
         if let Some(rect) = layout.nodes.get_mut(&key) {
             match direction {
                 Direction::TopDown => rect.y += shift,

@@ -6,8 +6,8 @@
 
 use std::collections::HashMap;
 
-use crate::dagre;
 use crate::graph::{Diagram, Direction, Shape};
+use crate::layered;
 
 // ---------------------------------------------------------------------------
 // Float coordinate primitives
@@ -166,21 +166,21 @@ pub struct DagreHints {
 // Conversions between geometry IR and dagre types
 // ---------------------------------------------------------------------------
 
-impl From<FPoint> for dagre::Point {
+impl From<FPoint> for layered::Point {
     fn from(p: FPoint) -> Self {
-        dagre::Point { x: p.x, y: p.y }
+        layered::Point { x: p.x, y: p.y }
     }
 }
 
-impl From<dagre::Point> for FPoint {
-    fn from(p: dagre::Point) -> Self {
+impl From<layered::Point> for FPoint {
+    fn from(p: layered::Point) -> Self {
         FPoint::new(p.x, p.y)
     }
 }
 
-impl From<FRect> for dagre::Rect {
+impl From<FRect> for layered::Rect {
     fn from(r: FRect) -> Self {
-        dagre::Rect {
+        layered::Rect {
             x: r.x,
             y: r.y,
             width: r.width,
@@ -189,8 +189,8 @@ impl From<FRect> for dagre::Rect {
     }
 }
 
-impl From<dagre::Rect> for FRect {
-    fn from(r: dagre::Rect) -> Self {
+impl From<layered::Rect> for FRect {
+    fn from(r: layered::Rect) -> Self {
         FRect::new(r.x, r.y, r.width, r.height)
     }
 }
@@ -203,7 +203,7 @@ impl From<dagre::Rect> for FRect {
 ///
 /// Maps all dagre output fields into the geometry IR, preserving dagre-specific
 /// rank metadata in `DagreHints` for the text pipeline's grid-snap transformation.
-pub fn from_dagre_layout(result: &dagre::LayoutResult, diagram: &Diagram) -> GraphGeometry {
+pub fn from_dagre_layout(result: &layered::LayoutResult, diagram: &Diagram) -> GraphGeometry {
     // 1. Map nodes (skip compound/subgraph entries)
     let nodes: HashMap<String, PositionedNode> = result
         .nodes
@@ -409,12 +409,12 @@ pub struct RoutedSelfEdge {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::normalize::WaypointWithRank;
-    use crate::dagre::types::{EdgeLayout, NodeId, Point, Rect, SelfEdgeLayout};
     use crate::graph::{Edge, Node};
+    use crate::layered::normalize::WaypointWithRank;
+    use crate::layered::types::{EdgeLayout, NodeId, Point, Rect, SelfEdgeLayout};
 
     /// Build a simple dagre LayoutResult with two nodes and one edge.
-    fn sample_dagre_result() -> dagre::LayoutResult {
+    fn sample_dagre_result() -> layered::LayoutResult {
         let mut nodes = HashMap::new();
         nodes.insert(
             NodeId::from("A"),
@@ -450,7 +450,7 @@ mod tests {
         rank_to_position.insert(0, (15.0, 35.0));
         rank_to_position.insert(2, (65.0, 85.0));
 
-        dagre::LayoutResult {
+        layered::LayoutResult {
             nodes,
             edges,
             reversed_edges: vec![],

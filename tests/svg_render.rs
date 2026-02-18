@@ -750,7 +750,7 @@ fn edge_index(diagram: &mmdflux::Diagram, from: &str, to: &str) -> usize {
 }
 
 fn node_center_for_id(diagram: &mmdflux::Diagram, node_id: &str) -> (f64, f64) {
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom = run_dagre_layout(&MeasurementMode::Text, diagram, &config)
         .expect("layout should succeed for center lookup");
     let node = geom
@@ -1125,7 +1125,7 @@ fn svg_orthogonal_unified_preview_does_not_add_short_staircase_jogs_after_adjust
         .expect("fixture should contain edge Bmid -> F")
         .index;
 
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom =
         run_dagre_layout(&MeasurementMode::Text, &diagram, &config).expect("layout should succeed");
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
@@ -1275,7 +1275,7 @@ fn svg_orthogonal_unified_preview_hexagon_outbound_departure_insets_from_bottom_
     ];
 
     let measurement_mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom = run_dagre_layout(&measurement_mode, &diagram, &config)
         .expect("layout should succeed for hexagon_flow fixture");
     let source_rect = geom
@@ -2088,7 +2088,7 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_preserves_routed_termin
     let edge_idx = edge_index(&diagram, "D", "A");
 
     let measurement_mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom = run_dagre_layout(&measurement_mode, &diagram, &config)
         .expect("layout should succeed for decision fixture");
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
@@ -2405,7 +2405,7 @@ fn unified_preview_diamond_boundary_clipping_matches_shape_boundary() {
     options.path_detail = PathDetail::Full;
 
     let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom = run_dagre_layout(&mode, &diagram, &config).unwrap();
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
@@ -2777,7 +2777,7 @@ fn assert_mmds_svg_endpoint_convergence(
 ) {
     // MMDS path (no SVG post-adjustment)
     let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom = run_dagre_layout(&mode, diagram, &config).unwrap();
     let routed = route_graph_geometry(diagram, &geom, EdgeRouting::UnifiedPreview);
     let mmds_edge = routed

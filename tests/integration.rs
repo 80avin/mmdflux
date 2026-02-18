@@ -2615,7 +2615,7 @@ fn test_route_policy_effective_edge_direction_with_nested_override_fixture() {
 #[test]
 fn test_unified_preview_routed_geometry_is_axis_aligned_for_forward_edges() {
     let diagram = parse_and_build("simple.mmd");
-    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom =
         run_dagre_layout(&MeasurementMode::Text, &diagram, &config).expect("layout should succeed");
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
@@ -3331,7 +3331,7 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
         let flowchart = parse_flowchart(&input).expect("fixture should parse");
         let diagram = build_diagram(&flowchart);
         let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
-        let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+        let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
         let geom = run_dagre_layout(&mode, &diagram, &config).expect("layout should succeed");
 
         let source_rect = geom
@@ -3481,7 +3481,7 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
         let flowchart = parse_flowchart(&input).expect("fixture should parse");
         let diagram = build_diagram(&flowchart);
         let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
-        let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+        let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
         let geom = run_dagre_layout(&mode, &diagram, &config).expect("layout should succeed");
         assert_eq!(
             geom.direction,
@@ -3568,7 +3568,7 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
         let input = load_fixture(fixture);
         let flowchart = parse_flowchart(&input).expect("fixture should parse");
         let diagram = build_diagram(&flowchart);
-        let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+        let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
         let geom = run_dagre_layout(&MeasurementMode::Text, &diagram, &config)
             .expect("layout should succeed");
 

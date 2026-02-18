@@ -64,7 +64,7 @@ impl DiagramInstance for ClassInstance {
                 })?;
                 let result = engine.solve(
                     diagram,
-                    &EngineConfig::Dagre(config.layout.clone()),
+                    &EngineConfig::Layered(config.layout.clone()),
                     &request,
                 )?;
                 to_mmds_json_typed(
@@ -89,7 +89,7 @@ impl DiagramInstance for ClassInstance {
                 })?;
                 let result = engine.solve(
                     diagram,
-                    &EngineConfig::Dagre(config.layout.clone()),
+                    &EngineConfig::Layered(config.layout.clone()),
                     &request,
                 )?;
                 let edge_routing = match engine_id.capabilities().route_ownership {

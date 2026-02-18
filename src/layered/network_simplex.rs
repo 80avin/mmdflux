@@ -574,7 +574,7 @@ fn update_ranks(tree: &SpanningTree, graph: &mut LayoutGraph) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::graph::{DiGraph, LayoutGraph};
+    use crate::layered::graph::{DiGraph, LayoutGraph};
 
     fn make_chain_graph() -> LayoutGraph {
         let mut g: DiGraph<()> = DiGraph::new();

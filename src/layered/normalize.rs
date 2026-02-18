@@ -402,8 +402,8 @@ pub(crate) fn get_label_position(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::graph::{DiGraph, LayoutGraph};
-    use crate::dagre::{LayoutConfig, acyclic, rank};
+    use crate::layered::graph::{DiGraph, LayoutGraph};
+    use crate::layered::{LayoutConfig, acyclic, rank};
 
     /// Helper to create a layout graph for testing.
     fn create_test_graph(nodes: &[&str], edges: &[(&str, &str)]) -> LayoutGraph {

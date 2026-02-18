@@ -597,7 +597,7 @@ mod tests {
 
         let fc = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&fc);
-        let config = EngineConfig::Dagre(crate::dagre::types::LayoutConfig::default());
+        let config = EngineConfig::Layered(crate::layered::types::LayoutConfig::default());
         let geom = run_dagre_layout(&MeasurementMode::Text, &diagram, &config).unwrap();
         (diagram, geom)
     }
