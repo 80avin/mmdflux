@@ -544,6 +544,7 @@ fn avoid_forward_td_bt_primary_lane_node_intrusion(
     }
 
     stagger_forward_td_bt_terminal_horizontal_support(path, target_primary_channel_depth);
+    collapse_tiny_forward_td_bt_lateral_jog(path, edge, geometry, direction);
 }
 
 fn axis_aligned_segment_crosses_rect_interior(
@@ -855,6 +856,72 @@ fn stagger_forward_td_bt_terminal_horizontal_support(
 
     path[n - 3].y = clamped;
     path[n - 2].y = clamped;
+}
+
+fn collapse_tiny_forward_td_bt_lateral_jog(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+) {
+    const EPS: f64 = 0.000_001;
+    const MAX_TINY_JOG: f64 = 3.0;
+    const INTRUSION_MARGIN: f64 = 1.0;
+
+    if !matches!(direction, Direction::TopDown | Direction::BottomTop) || path.len() != 4 {
+        return;
+    }
+
+    let p0 = path[0];
+    let p1 = path[1];
+    let p2 = path[2];
+    let p3 = path[3];
+    let first_vertical = (p0.x - p1.x).abs() <= EPS && (p0.y - p1.y).abs() > EPS;
+    let middle_horizontal = (p1.y - p2.y).abs() <= EPS && (p1.x - p2.x).abs() > EPS;
+    let terminal_vertical = (p2.x - p3.x).abs() <= EPS && (p2.y - p3.y).abs() > EPS;
+    if !(first_vertical && middle_horizontal && terminal_vertical) {
+        return;
+    }
+
+    let jog = (p2.x - p1.x).abs();
+    if jog <= EPS || jog > MAX_TINY_JOG {
+        return;
+    }
+
+    let Some((target_rect, _)) =
+        endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+    else {
+        return;
+    };
+    let Some(target_face) = boundary_face_excluding_corners(p3, target_rect, 0.5)
+        .or_else(|| boundary_face_including_corners(p3, target_rect, 0.5))
+    else {
+        return;
+    };
+    if !matches!(target_face, RectFace::Top | RectFace::Bottom) {
+        return;
+    }
+
+    let aligned_x = clamp_face_coordinate_with_corner_inset(
+        p0.x,
+        target_rect.x,
+        target_rect.x + target_rect.width,
+        MIN_PORT_CORNER_INSET_FORWARD,
+    );
+    let aligned_terminal = FPoint::new(aligned_x, p3.y);
+    if segment_crosses_any_other_node_interior(
+        edge,
+        geometry,
+        p1,
+        aligned_terminal,
+        INTRUSION_MARGIN,
+    ) {
+        return;
+    }
+
+    path[2].x = aligned_x;
+    path[3].x = aligned_x;
+    collapse_collinear_interior_points(path);
 }
 
 fn segment_crosses_any_other_node_interior(

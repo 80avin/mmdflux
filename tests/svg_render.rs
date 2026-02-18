@@ -1211,6 +1211,40 @@ fn svg_orthogonal_unified_preview_multiple_cycles_avoids_tiny_terminal_staircase
 }
 
 #[test]
+fn svg_orthogonal_unified_preview_double_skip_avoids_tiny_leading_lateral_jog() {
+    let diagram = load_flowchart_fixture_diagram("double_skip.mmd");
+    let edge_idx = edge_index(&diagram, "A", "C");
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+    let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+    assert!(
+        points.len() >= 2,
+        "double_skip A -> C should render with at least one segment: {points:?}"
+    );
+
+    if points.len() >= 4 {
+        let p0 = points[0];
+        let p1 = points[1];
+        let p2 = points[2];
+        let p3 = points[3];
+        let first_vertical = segment_axis(p0, p1) == Some('V');
+        let middle_horizontal = segment_axis(p1, p2) == Some('H');
+        let terminal_vertical = segment_axis(p2, p3) == Some('V');
+        if first_vertical && middle_horizontal && terminal_vertical {
+            let jog = manhattan_segment_len(p1, p2);
+            assert!(
+                jog >= 3.0,
+                "double_skip A -> C should not keep a tiny leading lateral shim in unified orthogonal mode; jog={jog}, points={points:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn svg_orthogonal_unified_preview_nested_subgraph_edge_avoids_large_lateral_detour() {
     let diagram = load_flowchart_fixture_diagram("nested_subgraph_edge.mmd");
     let edges = [
