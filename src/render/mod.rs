@@ -91,7 +91,7 @@ impl Default for SvgOptions {
             font_size,
             node_padding_x: 15.0,
             node_padding_y: 15.0,
-            edge_style: EdgeStyle::Curved,
+            edge_style: EdgeStyle::Smooth,
             edge_radius: 5.0,
             diagram_padding: 8.0,
         }

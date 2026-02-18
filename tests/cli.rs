@@ -69,30 +69,57 @@ fn cli_svg_format_renders_flowchart() {
 }
 
 #[test]
-fn cli_accepts_edge_style_orthogonal() {
+fn cli_accepts_edge_style_sharp() {
     mmdflux()
-        .args(["--format", "svg", "--edge-style", "orthogonal"])
+        .args(["--format", "svg", "--edge-style", "sharp"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success();
 }
 
 #[test]
-fn cli_accepts_edge_style_curved() {
+fn cli_accepts_edge_style_smooth() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-style", "smooth"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_edge_style_rounded() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-style", "rounded"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_rejects_edge_style_curved() {
     mmdflux()
         .args(["--format", "svg", "--edge-style", "curved"])
         .write_stdin("graph TD\nA-->B")
         .assert()
-        .success();
+        .failure();
 }
 
 #[test]
-fn cli_accepts_edge_style_straight() {
+fn cli_rejects_edge_style_straight() {
     mmdflux()
         .args(["--format", "svg", "--edge-style", "straight"])
         .write_stdin("graph TD\nA-->B")
         .assert()
-        .success();
+        .failure();
+}
+
+#[test]
+fn cli_rejects_edge_style_orthogonal() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-style", "orthogonal"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure();
 }
 
 #[test]
@@ -110,7 +137,7 @@ fn cli_svg_defaults_to_unified_preview_edge_routing() {
     let input = "graph TD\nA[Start] --> B{Check}\nB --> C[Yes]\nB --> D[No]\nD --> A\n";
 
     let default = mmdflux()
-        .args(["--format", "svg", "--edge-style", "straight"])
+        .args(["--format", "svg", "--edge-style", "sharp"])
         .write_stdin(input)
         .output()
         .expect("default render should execute");
@@ -125,7 +152,7 @@ fn cli_svg_defaults_to_unified_preview_edge_routing() {
             "--format",
             "svg",
             "--edge-style",
-            "straight",
+            "sharp",
             "--edge-routing",
             "unified-preview",
         ])
@@ -153,7 +180,7 @@ fn cli_rejects_legacy_edge_style_basis() {
         .failure()
         .stderr(predicate::str::contains("invalid value 'basis'"))
         .stderr(predicate::str::contains(
-            "possible values: curved, straight, rounded, orthogonal",
+            "possible values: sharp, smooth, rounded",
         ));
 }
 
@@ -166,7 +193,7 @@ fn cli_rejects_legacy_edge_style_linear() {
         .failure()
         .stderr(predicate::str::contains("invalid value 'linear'"))
         .stderr(predicate::str::contains(
-            "possible values: curved, straight, rounded, orthogonal",
+            "possible values: sharp, smooth, rounded",
         ));
 }
 

@@ -37,13 +37,18 @@ pub enum OutputFormat {
     Mermaid,
 }
 
-/// SVG edge style.
+/// SVG edge interpolation style.
+///
+/// Controls how path segments between waypoints are drawn.
+/// Routing topology (orthogonal vs. free-form) is engine-owned, not style-controlled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdgeStyle {
-    Curved,
-    Straight,
+    /// Polyline with hard corners (was `straight`).
+    Sharp,
+    /// Cubic Bézier curves (was `curved`).
+    Smooth,
+    /// Straight segments with rounded arc corners, using orthogonal path geometry.
     Rounded,
-    Orthogonal,
 }
 
 impl std::fmt::Display for OutputFormat {
@@ -87,25 +92,37 @@ impl FromStr for OutputFormat {
 impl std::fmt::Display for EdgeStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EdgeStyle::Curved => write!(f, "curved"),
-            EdgeStyle::Straight => write!(f, "straight"),
+            EdgeStyle::Sharp => write!(f, "sharp"),
+            EdgeStyle::Smooth => write!(f, "smooth"),
             EdgeStyle::Rounded => write!(f, "rounded"),
-            EdgeStyle::Orthogonal => write!(f, "orthogonal"),
         }
     }
 }
 
 impl EdgeStyle {
     /// Parse SVG edge style from user-provided text.
+    ///
+    /// Accepts: `sharp`, `smooth`, `rounded`.
+    /// Legacy tokens produce actionable migration errors.
     pub fn parse(s: &str) -> Result<Self, RenderError> {
         match normalize_enum_token(s).as_str() {
-            "curved" => Ok(EdgeStyle::Curved),
-            "straight" => Ok(EdgeStyle::Straight),
+            "sharp" => Ok(EdgeStyle::Sharp),
+            "smooth" => Ok(EdgeStyle::Smooth),
             "rounded" => Ok(EdgeStyle::Rounded),
-            "orthogonal" => Ok(EdgeStyle::Orthogonal),
+            "curved" => Err(RenderError {
+                message: "\"curved\" is now \"smooth\". Use --edge-style smooth.".into(),
+            }),
+            "straight" => Err(RenderError {
+                message: "\"straight\" is now \"sharp\". Use --edge-style sharp.".into(),
+            }),
+            "orthogonal" => Err(RenderError {
+                message: "\"orthogonal\" is no longer a style option. Orthogonal routing is \
+                          engine-owned. Use --edge-style sharp for straight-line edges."
+                    .into(),
+            }),
             _ => Err(RenderError {
                 message: format!(
-                    "unknown svg edge style: {s:?} (expected one of: curved, straight, rounded, orthogonal)"
+                    "unknown svg edge style: {s:?} (expected one of: sharp, smooth, rounded)"
                 ),
             }),
         }

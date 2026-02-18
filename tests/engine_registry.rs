@@ -1,8 +1,8 @@
 //! Engine registry tests: typed engine IDs, parsing, availability, and registry lookup.
 
 use mmdflux::diagram::{
-    AlgorithmId, EdgeRouting, EngineAlgorithmId, EngineCapabilities, EngineId, LayoutEngineId,
-    OutputFormat, RenderConfig, RenderError, RouteOwnership,
+    AlgorithmId, EdgeRouting, EdgeStyle, EngineAlgorithmId, EngineCapabilities, EngineId,
+    LayoutEngineId, OutputFormat, RenderConfig, RenderError, RouteOwnership,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::engines::graph::GraphEngineRegistry;
@@ -486,6 +486,55 @@ fn elk_mrtree_unavailable_without_feature() {
     assert!(
         err.message.contains("engine-elk"),
         "should name feature flag: {}",
+        err
+    );
+}
+
+// =============================================================================
+// EdgeStyle taxonomy (plan-0081 Phase 1.4)
+// =============================================================================
+
+#[test]
+fn edge_style_parses_sharp() {
+    assert_eq!(EdgeStyle::parse("sharp").unwrap(), EdgeStyle::Sharp);
+}
+
+#[test]
+fn edge_style_parses_smooth() {
+    assert_eq!(EdgeStyle::parse("smooth").unwrap(), EdgeStyle::Smooth);
+}
+
+#[test]
+fn edge_style_parses_rounded() {
+    assert_eq!(EdgeStyle::parse("rounded").unwrap(), EdgeStyle::Rounded);
+}
+
+#[test]
+fn edge_style_rejects_curved_with_migration() {
+    let err = EdgeStyle::parse("curved").unwrap_err();
+    assert!(
+        err.message.contains("smooth"),
+        "should suggest replacement: {}",
+        err
+    );
+}
+
+#[test]
+fn edge_style_rejects_straight_with_migration() {
+    let err = EdgeStyle::parse("straight").unwrap_err();
+    assert!(
+        err.message.contains("sharp"),
+        "should suggest replacement: {}",
+        err
+    );
+}
+
+#[test]
+fn edge_style_rejects_orthogonal_with_migration() {
+    let err = EdgeStyle::parse("orthogonal").unwrap_err();
+    assert!(
+        err.message.contains("sharp") || err.message.contains("no longer"),
+        "should explain removal: {}",
         err
     );
 }

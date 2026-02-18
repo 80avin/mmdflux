@@ -855,7 +855,7 @@ fn render_edges(
                 (
                     EdgeRouting::UnifiedPreview,
                     true,
-                    EdgeStyle::Curved | EdgeStyle::Straight | EdgeStyle::Rounded
+                    EdgeStyle::Smooth | EdgeStyle::Sharp | EdgeStyle::Rounded
                 )
             );
         // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
@@ -902,12 +902,12 @@ fn render_edges(
         };
         // Only densify corners for straight edges; curved and rounded
         // handle smoothing natively from sparse waypoints.
-        if matches!(edge_style, EdgeStyle::Straight) && !preserve_orthogonal_endpoint_contract {
+        if matches!(edge_style, EdgeStyle::Sharp) && !preserve_orthogonal_endpoint_contract {
             points = fix_corner_points(&points);
         }
         if matches!(
             (edge_routing, edge_style),
-            (EdgeRouting::UnifiedPreview, EdgeStyle::Curved)
+            (EdgeRouting::UnifiedPreview, EdgeStyle::Smooth)
         ) && !is_backward
             && edge.from != edge.to
         {
@@ -919,9 +919,9 @@ fn render_edges(
                 0.5,
             );
         }
-        let allow_interior_nudges = !matches!(edge_style, EdgeStyle::Straight);
+        let allow_interior_nudges = !matches!(edge_style, EdgeStyle::Sharp);
         let enforce_primary_axis_no_backtrack = matches!(edge_routing, EdgeRouting::UnifiedPreview)
-            && !matches!(edge_style, EdgeStyle::Orthogonal | EdgeStyle::Rounded)
+            && !matches!(edge_style, EdgeStyle::Rounded)
             && !is_backward
             && edge.from != edge.to;
         points = apply_marker_offsets(
@@ -932,24 +932,23 @@ fn render_edges(
                 is_backward,
                 allow_interior_nudges,
                 enforce_primary_axis_no_backtrack,
-                preserve_orthogonal: matches!(edge_style, EdgeStyle::Orthogonal)
-                    || preserve_orthogonal_endpoint_contract,
-                collapse_terminal_elbows: !matches!(edge_style, EdgeStyle::Curved),
-                is_curved_style: matches!(edge_style, EdgeStyle::Curved),
+                preserve_orthogonal: preserve_orthogonal_endpoint_contract,
+                collapse_terminal_elbows: !matches!(edge_style, EdgeStyle::Smooth),
+                is_curved_style: matches!(edge_style, EdgeStyle::Smooth),
             },
         );
         // Collapse tiny near-collinear jogs introduced by SVG marker offset
         // smoothing on unified-preview paths.
         if matches!(edge_routing, EdgeRouting::UnifiedPreview)
-            && !matches!(edge_style, EdgeStyle::Orthogonal | EdgeStyle::Rounded)
-            && !matches!(edge_style, EdgeStyle::Curved)
+            && !matches!(edge_style, EdgeStyle::Rounded)
+            && !matches!(edge_style, EdgeStyle::Smooth)
             && !preserve_orthogonal_endpoint_contract
             && edge.from != edge.to
         {
             points = collapse_tiny_straight_smoothing_jogs(&points, 30.0);
         }
         let point_prep_style = if preserve_orthogonal_endpoint_contract {
-            EdgeStyle::Orthogonal
+            EdgeStyle::Rounded
         } else {
             edge_style
         };
@@ -2305,7 +2304,7 @@ fn points_for_svg_path(
     if points.is_empty() {
         return Vec::new();
     }
-    let orthogonalized_curve = matches!(curve, EdgeStyle::Orthogonal | EdgeStyle::Rounded);
+    let orthogonalized_curve = matches!(curve, EdgeStyle::Rounded);
     let points: Vec<Point> = if orthogonalized_curve && !points_are_axis_aligned(points) {
         let start: geometry::FPoint = points[0].into();
         let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
@@ -2355,10 +2354,9 @@ fn path_from_prepared_points(
         .map(|point| (point.x * scale, point.y * scale))
         .collect();
     match curve {
-        EdgeStyle::Curved => path_from_points_curved(&scaled),
+        EdgeStyle::Smooth => path_from_points_curved(&scaled),
         EdgeStyle::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
-        EdgeStyle::Straight => path_from_points_straight(&scaled),
-        EdgeStyle::Orthogonal => path_from_points_straight(&scaled),
+        EdgeStyle::Sharp => path_from_points_straight(&scaled),
     }
 }
 

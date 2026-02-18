@@ -152,19 +152,17 @@ impl From<RankerArg> for Ranker {
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
 enum EdgeStyleArg {
-    Curved,
-    Straight,
+    Sharp,
+    Smooth,
     Rounded,
-    Orthogonal,
 }
 
 impl From<EdgeStyleArg> for EdgeStyle {
     fn from(arg: EdgeStyleArg) -> Self {
         match arg {
-            EdgeStyleArg::Curved => EdgeStyle::Curved,
-            EdgeStyleArg::Straight => EdgeStyle::Straight,
+            EdgeStyleArg::Sharp => EdgeStyle::Sharp,
+            EdgeStyleArg::Smooth => EdgeStyle::Smooth,
             EdgeStyleArg::Rounded => EdgeStyle::Rounded,
-            EdgeStyleArg::Orthogonal => EdgeStyle::Orthogonal,
         }
     }
 }

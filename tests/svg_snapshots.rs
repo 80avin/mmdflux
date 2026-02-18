@@ -134,7 +134,7 @@ fn render_svg_fixture_with_edge_routing_and_policies(
     let mut instance = FlowchartInstance::new();
     instance.parse(&input).expect("Failed to parse fixture");
     let config = RenderConfig {
-        edge_style: Some(EdgeStyle::Straight),
+        edge_style: Some(EdgeStyle::Sharp),
         path_detail: PathDetail::Full,
         edge_routing: Some(mode),
         edge_routing_policies: policies,
@@ -283,7 +283,7 @@ fn assert_snapshot(fixture: &str) {
 
 fn assert_orthogonal_snapshot(fixture: &str) {
     let stem = fixture.trim_end_matches(".mmd");
-    let output = render_svg_fixture_with_curve(fixture, EdgeStyle::Orthogonal);
+    let output = render_svg_fixture_with_curve(fixture, EdgeStyle::Rounded);
     let path = orthogonal_snapshot_path(stem);
 
     if std::env::var("GENERATE_SVG_SNAPSHOTS").is_ok() {
