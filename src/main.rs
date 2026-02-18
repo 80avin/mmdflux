@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use clap::{Parser, ValueEnum};
 use mmdflux::dagre::Ranker;
 use mmdflux::diagram::{
-    EdgeRouting, EdgeRoutingPolicyToggles, EdgeStyle, GeometryLevel, LayoutConfig, LayoutEngineId,
-    OutputFormat, PathDetail, RenderConfig,
+    EdgeRouting, EdgeRoutingPolicyToggles, EdgeStyle, EngineAlgorithmId, EngineId, GeometryLevel,
+    LayoutConfig, LayoutEngineId, OutputFormat, PathDetail, RenderConfig,
 };
 use mmdflux::registry::default_registry;
 
@@ -90,7 +90,7 @@ struct Cli {
     #[arg(long)]
     svg_diagram_padding: Option<f64>,
 
-    /// Layout engine (dagre, elk)
+    /// Layout engine (flux-layered, mermaid-layered, elk-layered, elk-mrtree)
     #[arg(long)]
     layout_engine: Option<String>,
 
@@ -103,9 +103,9 @@ struct Cli {
     #[arg(long, value_enum)]
     path_detail: Option<PathDetailArg>,
 
-    /// Edge routing override for routed-geometry preview.
-    #[arg(long, value_enum)]
-    edge_routing: Option<EdgeRoutingArg>,
+    /// [REMOVED] Edge routing is now engine-owned. Use --layout-engine instead.
+    #[arg(long, hide = true)]
+    edge_routing: Option<String>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -207,23 +207,6 @@ impl From<PathDetailArg> for PathDetail {
     }
 }
 
-#[derive(Clone, Copy, ValueEnum, Debug)]
-enum EdgeRoutingArg {
-    FullCompute,
-    PassThroughClip,
-    UnifiedPreview,
-}
-
-impl From<EdgeRoutingArg> for EdgeRouting {
-    fn from(arg: EdgeRoutingArg) -> Self {
-        match arg {
-            EdgeRoutingArg::FullCompute => EdgeRouting::FullCompute,
-            EdgeRoutingArg::PassThroughClip => EdgeRouting::PassThroughClip,
-            EdgeRoutingArg::UnifiedPreview => EdgeRouting::UnifiedPreview,
-        }
-    }
-}
-
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
 
@@ -256,14 +239,31 @@ fn main() -> io::Result<()> {
         std::process::exit(result.exit_code());
     }
 
+    // --edge-routing has been removed; reject it with a helpful message.
+    if cli.edge_routing.is_some() {
+        eprintln!(
+            "Error: --edge-routing has been removed. \
+             Edge routing is now determined by the layout engine. \
+             Use --layout-engine flux-layered for unified routing \
+             or --layout-engine mermaid-layered for legacy compute."
+        );
+        std::process::exit(1);
+    }
+
     // Build render config from CLI options
-    let layout_engine = match cli
+    let engine_algo: Option<EngineAlgorithmId> = match cli
         .layout_engine
         .as_deref()
         .filter(|s| !s.trim().is_empty())
     {
-        Some(raw) => match LayoutEngineId::parse(raw) {
-            Ok(id) => Some(id),
+        Some(raw) => match EngineAlgorithmId::parse(raw) {
+            Ok(id) => {
+                if let Err(err) = id.check_available() {
+                    eprintln!("Error: {}", err);
+                    std::process::exit(1);
+                }
+                Some(id)
+            }
             Err(err) => {
                 eprintln!("Error: {}", err);
                 std::process::exit(1);
@@ -272,14 +272,21 @@ fn main() -> io::Result<()> {
         None => None,
     };
 
-    let default_edge_routing = if cli.edge_routing.is_none()
-        && matches!(
-            layout_engine.unwrap_or(LayoutEngineId::Dagre),
-            LayoutEngineId::Dagre
-        ) {
-        Some(EdgeRouting::UnifiedPreview)
-    } else {
-        None
+    // Temporary bridge: map EngineAlgorithmId → LayoutEngineId + EdgeRouting
+    // until RenderConfig is migrated in task 2.2.
+    // layout_engine stays None when no --layout-engine flag was given (preserves
+    // existing behavior for diagram types that reject explicit engine selection).
+    let layout_engine = engine_algo.map(|id| match id.engine() {
+        EngineId::Flux | EngineId::Mermaid => LayoutEngineId::Dagre,
+        EngineId::Elk => LayoutEngineId::Elk,
+    });
+    let default_edge_routing = match engine_algo {
+        None => Some(EdgeRouting::UnifiedPreview), // default is flux-layered behavior
+        Some(id) => match id.engine() {
+            EngineId::Flux => Some(EdgeRouting::UnifiedPreview),
+            EngineId::Mermaid => Some(EdgeRouting::FullCompute),
+            EngineId::Elk => None,
+        },
     };
 
     let config = RenderConfig {
@@ -304,7 +311,7 @@ fn main() -> io::Result<()> {
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
         path_detail: cli.path_detail.map(Into::into).unwrap_or_default(),
-        edge_routing: cli.edge_routing.map(Into::into).or(default_edge_routing),
+        edge_routing: default_edge_routing,
     };
 
     // Use registry for detection and rendering

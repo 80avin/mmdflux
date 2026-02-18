@@ -123,17 +123,17 @@ fn cli_rejects_edge_style_orthogonal() {
 }
 
 #[test]
-fn cli_accepts_full_compute_rollback_flag() {
+fn cli_rejects_removed_edge_routing_flag() {
     mmdflux()
         .args(["--format", "svg", "--edge-routing", "full-compute"])
         .write_stdin("graph TD\nA-->B")
         .assert()
-        .success()
-        .stdout(predicate::str::starts_with("<svg"));
+        .failure()
+        .stderr(predicate::str::contains("removed").or(predicate::str::contains("no longer")));
 }
 
 #[test]
-fn cli_svg_defaults_to_unified_preview_edge_routing() {
+fn cli_svg_defaults_to_flux_layered_behavior() {
     let input = "graph TD\nA[Start] --> B{Check}\nB --> C[Yes]\nB --> D[No]\nD --> A\n";
 
     let default = mmdflux()
@@ -147,27 +147,27 @@ fn cli_svg_defaults_to_unified_preview_edge_routing() {
         String::from_utf8_lossy(&default.stderr)
     );
 
-    let unified = mmdflux()
+    let explicit = mmdflux()
         .args([
             "--format",
             "svg",
             "--edge-style",
             "sharp",
-            "--edge-routing",
-            "unified-preview",
+            "--layout-engine",
+            "flux-layered",
         ])
         .write_stdin(input)
         .output()
-        .expect("unified-preview render should execute");
+        .expect("flux-layered render should execute");
     assert!(
-        unified.status.success(),
-        "unified-preview render failed: stderr={}",
-        String::from_utf8_lossy(&unified.stderr)
+        explicit.status.success(),
+        "flux-layered render failed: stderr={}",
+        String::from_utf8_lossy(&explicit.stderr)
     );
 
     assert_eq!(
-        default.stdout, unified.stdout,
-        "default svg render should match explicit unified-preview edge routing"
+        default.stdout, explicit.stdout,
+        "default svg render should match explicit flux-layered"
     );
 }
 
@@ -360,18 +360,100 @@ fn cli_packet_renders_with_header() {
 // =============================================================================
 
 #[test]
-fn cli_layout_engine_dagre_matches_default() {
+fn cli_accepts_flux_layered_engine() {
+    mmdflux()
+        .args([
+            "--layout-engine",
+            "flux-layered",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_mermaid_layered_engine() {
+    mmdflux()
+        .args([
+            "--layout-engine",
+            "mermaid-layered",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_rejects_legacy_dagre_with_migration() {
+    let output = mmdflux()
+        .args([
+            "--layout-engine",
+            "dagre",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .output()
+        .expect("command should run");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("flux-layered"),
+        "error should suggest flux-layered: {stderr}"
+    );
+}
+
+#[test]
+fn cli_rejects_edge_routing_flag() {
+    let output = mmdflux()
+        .args([
+            "--edge-routing",
+            "unified-preview",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .output()
+        .expect("command should run");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("removed") || stderr.contains("no longer"),
+        "error should explain flag removal: {stderr}"
+    );
+}
+
+#[test]
+fn cli_default_engine_is_flux_layered() {
+    let default_out = mmdflux()
+        .arg("tests/fixtures/flowchart/simple.mmd")
+        .output()
+        .expect("default render should execute");
+    let explicit_out = mmdflux()
+        .args([
+            "--layout-engine",
+            "flux-layered",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .output()
+        .expect("flux-layered render should execute");
+    assert!(default_out.status.success(), "default render failed");
+    assert!(explicit_out.status.success(), "flux-layered render failed");
+    assert_eq!(
+        default_out.stdout, explicit_out.stdout,
+        "default should match explicit flux-layered"
+    );
+}
+
+#[test]
+fn cli_layout_engine_flux_layered_matches_default() {
     let default_assert = mmdflux().write_stdin("graph TD\nA-->B").assert().success();
     let default_out = String::from_utf8_lossy(&default_assert.get_output().stdout).to_string();
 
-    let dagre_assert = mmdflux()
-        .args(["--layout-engine", "dagre"])
+    let explicit_assert = mmdflux()
+        .args(["--layout-engine", "flux-layered"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success();
-    let dagre_out = String::from_utf8_lossy(&dagre_assert.get_output().stdout).to_string();
+    let explicit_out = String::from_utf8_lossy(&explicit_assert.get_output().stdout).to_string();
 
-    assert_eq!(default_out, dagre_out);
+    assert_eq!(default_out, explicit_out);
 }
 
 #[test]
@@ -381,7 +463,7 @@ fn cli_layout_engine_unknown_fails_cleanly() {
         .write_stdin("graph TD\nA-->B")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("unknown layout engine"));
+        .stderr(predicate::str::contains("unknown engine"));
 }
 
 #[test]
@@ -391,13 +473,13 @@ fn cli_layout_engine_unknown_fails_for_class() {
         .write_stdin("classDiagram\nA --> B")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("unknown layout engine"));
+        .stderr(predicate::str::contains("unknown engine"));
 }
 
 #[test]
 fn cli_layout_engine_rejected_for_sequence() {
     mmdflux()
-        .args(["--layout-engine", "dagre"])
+        .args(["--layout-engine", "flux-layered"])
         .write_stdin("sequenceDiagram\nA->>B: hello")
         .assert()
         .failure()
@@ -411,7 +493,7 @@ fn cli_layout_engine_unavailable_fails_cleanly() {
     // Without engine-elk feature compiled, this should fail with actionable error
     #[cfg(not(feature = "engine-elk"))]
     mmdflux()
-        .args(["--layout-engine", "elk"])
+        .args(["--layout-engine", "elk-layered"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .failure()
@@ -419,13 +501,13 @@ fn cli_layout_engine_unavailable_fails_cleanly() {
 }
 
 #[test]
-fn cli_layout_engine_cose_not_implemented() {
+fn cli_rejects_legacy_cose_with_migration() {
     mmdflux()
         .args(["--layout-engine", "cose"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not yet implemented"));
+        .stderr(predicate::str::contains("flux-layered"));
 }
 
 // =============================================================================
