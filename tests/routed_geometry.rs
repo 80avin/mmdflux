@@ -371,6 +371,35 @@ fn has_coincident_horizontal_overlap(path_a: &[FPoint], path_b: &[FPoint]) -> bo
     false
 }
 
+fn has_coincident_vertical_overlap(path_a: &[FPoint], path_b: &[FPoint]) -> bool {
+    const EPS: f64 = 0.5;
+    for seg_a in path_a.windows(2) {
+        let a0 = seg_a[0];
+        let a1 = seg_a[1];
+        let a_is_vertical = (a0.x - a1.x).abs() <= EPS && (a0.y - a1.y).abs() > EPS;
+        if !a_is_vertical {
+            continue;
+        }
+        let a_min_y = a0.y.min(a1.y);
+        let a_max_y = a0.y.max(a1.y);
+        for seg_b in path_b.windows(2) {
+            let b0 = seg_b[0];
+            let b1 = seg_b[1];
+            let b_is_vertical = (b0.x - b1.x).abs() <= EPS && (b0.y - b1.y).abs() > EPS;
+            if !b_is_vertical || (a0.x - b0.x).abs() > EPS {
+                continue;
+            }
+            let b_min_y = b0.y.min(b1.y);
+            let b_max_y = b0.y.max(b1.y);
+            let overlap = a_max_y.min(b_max_y) - a_min_y.max(b_min_y);
+            if overlap > EPS {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn td_bt_middle_horizontal_lane(path: &[FPoint]) -> Option<f64> {
     const EPS: f64 = 0.5;
     if path.len() != 4 {
@@ -383,6 +412,20 @@ fn td_bt_middle_horizontal_lane(path: &[FPoint]) -> Option<f64> {
     let terminal_vertical =
         (path[2].x - path[3].x).abs() <= EPS && (path[2].y - path[3].y).abs() > EPS;
     (first_vertical && middle_horizontal && terminal_vertical).then_some(path[1].y)
+}
+
+fn lr_rl_middle_vertical_lane(path: &[FPoint]) -> Option<f64> {
+    const EPS: f64 = 0.5;
+    if path.len() != 4 {
+        return None;
+    }
+    let first_horizontal =
+        (path[0].y - path[1].y).abs() <= EPS && (path[0].x - path[1].x).abs() > EPS;
+    let middle_vertical =
+        (path[1].x - path[2].x).abs() <= EPS && (path[1].y - path[2].y).abs() > EPS;
+    let terminal_horizontal =
+        (path[2].y - path[3].y).abs() <= EPS && (path[2].x - path[3].x).abs() > EPS;
+    (first_horizontal && middle_vertical && terminal_horizontal).then_some(path[1].x)
 }
 
 fn td_bt_primary_horizontal_lane(path: &[FPoint]) -> Option<f64> {
@@ -3151,6 +3194,357 @@ fn five_fan_out_primary_face_channels_are_staggered_without_overlap() {
     assert!(
         (b_lane - f_lane).abs() <= 0.5,
         "five_fan_out mirrored outer pair should share a symmetric lane depth: B={b_lane}, F={f_lane}"
+    );
+}
+
+#[test]
+fn five_fan_out_lr_primary_face_channels_are_staggered_without_overlap() {
+    let (diagram, geom) = layout_fixture_svg("five_fan_out_lr.mmd");
+    assert_eq!(geom.direction, mmdflux::Direction::LeftRight);
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
+    );
+
+    let outbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        outbound.len(),
+        5,
+        "five_fan_out_lr should produce five outbound forward edges from A"
+    );
+
+    let mut source_ys: Vec<f64> = outbound
+        .iter()
+        .map(|edge| {
+            edge.path
+                .first()
+                .copied()
+                .expect("edge should have start")
+                .y
+        })
+        .collect();
+    source_ys.sort_by(|a, b| a.total_cmp(b));
+    let mut unique_source_count = 0usize;
+    let mut last_source: Option<f64> = None;
+    for value in &source_ys {
+        let is_new = match last_source {
+            Some(prev) => (*value - prev).abs() > 0.5,
+            None => true,
+        };
+        if is_new {
+            unique_source_count += 1;
+            last_source = Some(*value);
+        }
+    }
+    assert_eq!(
+        unique_source_count, 5,
+        "five_fan_out_lr source ports should occupy distinct attachment anchors: source_ys={source_ys:?}"
+    );
+
+    for i in 0..outbound.len() {
+        for j in (i + 1)..outbound.len() {
+            assert!(
+                !has_coincident_vertical_overlap(&outbound[i].path, &outbound[j].path),
+                "five_fan_out_lr should avoid coincident vertical channel overlap between A -> {} and A -> {}: left={:?} right={:?}",
+                outbound[i].to,
+                outbound[j].to,
+                outbound[i].path,
+                outbound[j].path
+            );
+        }
+    }
+
+    let source_rect = geom
+        .nodes
+        .get("A")
+        .expect("five_fan_out_lr should contain source A")
+        .rect;
+    let source_center_y = source_rect.y + source_rect.height / 2.0;
+    for edge in &outbound {
+        if !matches!(edge.to.as_str(), "B" | "C" | "E" | "F") {
+            continue;
+        }
+        assert!(
+            edge.path.len() >= 4,
+            "five_fan_out_lr edge A -> {} should route with H-V-H fan-out channel path: {:?}",
+            edge.to,
+            edge.path
+        );
+        let start = edge.path[0];
+        let next = edge.path[1];
+        let third = edge.path[2];
+        let source_offset = start.y - source_center_y;
+        assert!(
+            source_offset.abs() >= 1.0,
+            "fixture expectation invalid: A -> {} source should be off-center, offset={source_offset}, path={:?}",
+            edge.to,
+            edge.path
+        );
+        assert!(
+            (next.y - start.y).abs() <= ROUTE_EPS && (next.x - start.x).abs() > ROUTE_EPS,
+            "five_fan_out_lr edge A -> {} should keep a short primary-axis source stem before sweeping: start={start:?}, next={next:?}, path={:?}",
+            edge.to,
+            edge.path
+        );
+        assert!(
+            (third.x - next.x).abs() <= ROUTE_EPS && (third.y - next.y).abs() > ROUTE_EPS,
+            "five_fan_out_lr edge A -> {} should sweep vertically after the source stem: next={next:?}, third={third:?}, path={:?}",
+            edge.to,
+            edge.path
+        );
+        assert!(
+            (third.y - next.y).signum() == source_offset.signum(),
+            "five_fan_out_lr edge A -> {} should sweep outward from source center: source_offset={source_offset}, second_dy={}, path={:?}",
+            edge.to,
+            third.y - next.y,
+            edge.path
+        );
+    }
+
+    let mut lanes_by_target: HashMap<String, f64> = HashMap::new();
+    for edge in &outbound {
+        if let Some(x) = lr_rl_middle_vertical_lane(&edge.path) {
+            lanes_by_target.insert(edge.to.clone(), x);
+        }
+    }
+    for target in ["B", "C", "E", "F"] {
+        assert!(
+            lanes_by_target.contains_key(target),
+            "five_fan_out_lr should route A -> {target} with a H-V-H fan-out channel path"
+        );
+    }
+
+    let b_lane = *lanes_by_target
+        .get("B")
+        .expect("lane for A -> B should be present");
+    let c_lane = *lanes_by_target
+        .get("C")
+        .expect("lane for A -> C should be present");
+    let e_lane = *lanes_by_target
+        .get("E")
+        .expect("lane for A -> E should be present");
+    let f_lane = *lanes_by_target
+        .get("F")
+        .expect("lane for A -> F should be present");
+    assert!(
+        b_lane + 0.5 < c_lane,
+        "five_fan_out_lr should place upper-outer A -> B shallower than upper-inner A -> C for source-centric fan-out opening: B={b_lane}, C={c_lane}"
+    );
+    assert!(
+        f_lane + 0.5 < e_lane,
+        "five_fan_out_lr should place lower-outer A -> F shallower than lower-inner A -> E for source-centric fan-out opening: F={f_lane}, E={e_lane}"
+    );
+    assert!(
+        (c_lane - e_lane).abs() <= 0.5,
+        "five_fan_out_lr mirrored inner pair should share a symmetric lane depth: C={c_lane}, E={e_lane}"
+    );
+    assert!(
+        (b_lane - f_lane).abs() <= 0.5,
+        "five_fan_out_lr mirrored outer pair should share a symmetric lane depth: B={b_lane}, F={f_lane}"
+    );
+}
+
+#[test]
+fn five_fan_out_rl_primary_face_channels_are_staggered_without_overlap() {
+    let input = r#"
+graph RL
+      A[Source] --> B[Target A]
+      A --> C[Target B]
+      A --> D[Target C]
+      A --> E[Target D]
+      A --> F[Target E]
+"#;
+    let (diagram, geom) = layout_test_svg(input);
+    assert_eq!(geom.direction, mmdflux::Direction::RightLeft);
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
+    );
+
+    let outbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        outbound.len(),
+        5,
+        "five_fan_out_rl should produce five outbound forward edges from A"
+    );
+
+    for i in 0..outbound.len() {
+        for j in (i + 1)..outbound.len() {
+            assert!(
+                !has_coincident_vertical_overlap(&outbound[i].path, &outbound[j].path),
+                "five_fan_out_rl should avoid coincident vertical channel overlap between A -> {} and A -> {}: left={:?} right={:?}",
+                outbound[i].to,
+                outbound[j].to,
+                outbound[i].path,
+                outbound[j].path
+            );
+        }
+    }
+
+    let source_rect = geom
+        .nodes
+        .get("A")
+        .expect("five_fan_out_rl should contain source A")
+        .rect;
+    let source_center_y = source_rect.y + source_rect.height / 2.0;
+    for edge in &outbound {
+        if !matches!(edge.to.as_str(), "B" | "C" | "E" | "F") {
+            continue;
+        }
+        assert!(
+            edge.path.len() >= 4,
+            "five_fan_out_rl edge A -> {} should route with H-V-H fan-out channel path: {:?}",
+            edge.to,
+            edge.path
+        );
+        let start = edge.path[0];
+        let next = edge.path[1];
+        let third = edge.path[2];
+        let source_offset = start.y - source_center_y;
+        assert!(
+            source_offset.abs() >= 1.0,
+            "fixture expectation invalid: A -> {} source should be off-center, offset={source_offset}, path={:?}",
+            edge.to,
+            edge.path
+        );
+        assert!(
+            (next.y - start.y).abs() <= ROUTE_EPS && (next.x - start.x).abs() > ROUTE_EPS,
+            "five_fan_out_rl edge A -> {} should keep a short primary-axis source stem before sweeping: start={start:?}, next={next:?}, path={:?}",
+            edge.to,
+            edge.path
+        );
+        assert!(
+            next.x < start.x - ROUTE_EPS,
+            "five_fan_out_rl edge A -> {} primary-axis stem should move toward RL target side: start={start:?}, next={next:?}, path={:?}",
+            edge.to,
+            edge.path
+        );
+        assert!(
+            (third.x - next.x).abs() <= ROUTE_EPS && (third.y - next.y).abs() > ROUTE_EPS,
+            "five_fan_out_rl edge A -> {} should sweep vertically after the source stem: next={next:?}, third={third:?}, path={:?}",
+            edge.to,
+            edge.path
+        );
+        assert!(
+            (third.y - next.y).signum() == source_offset.signum(),
+            "five_fan_out_rl edge A -> {} should sweep outward from source center: source_offset={source_offset}, second_dy={}, path={:?}",
+            edge.to,
+            third.y - next.y,
+            edge.path
+        );
+    }
+
+    let mut lanes_by_target: HashMap<String, f64> = HashMap::new();
+    for edge in &outbound {
+        if let Some(x) = lr_rl_middle_vertical_lane(&edge.path) {
+            lanes_by_target.insert(edge.to.clone(), x);
+        }
+    }
+    for target in ["B", "C", "E", "F"] {
+        assert!(
+            lanes_by_target.contains_key(target),
+            "five_fan_out_rl should route A -> {target} with a H-V-H fan-out channel path"
+        );
+    }
+
+    let b_lane = *lanes_by_target
+        .get("B")
+        .expect("lane for A -> B should be present");
+    let c_lane = *lanes_by_target
+        .get("C")
+        .expect("lane for A -> C should be present");
+    let e_lane = *lanes_by_target
+        .get("E")
+        .expect("lane for A -> E should be present");
+    let f_lane = *lanes_by_target
+        .get("F")
+        .expect("lane for A -> F should be present");
+    assert!(
+        c_lane + 0.5 < b_lane,
+        "five_fan_out_rl should place upper-outer A -> B shallower than upper-inner A -> C for source-centric fan-out opening: B={b_lane}, C={c_lane}"
+    );
+    assert!(
+        e_lane + 0.5 < f_lane,
+        "five_fan_out_rl should place lower-outer A -> F shallower than lower-inner A -> E for source-centric fan-out opening: F={f_lane}, E={e_lane}"
+    );
+    assert!(
+        (c_lane - e_lane).abs() <= 0.5,
+        "five_fan_out_rl mirrored inner pair should share a symmetric lane depth: C={c_lane}, E={e_lane}"
+    );
+    assert!(
+        (b_lane - f_lane).abs() <= 0.5,
+        "five_fan_out_rl mirrored outer pair should share a symmetric lane depth: B={b_lane}, F={f_lane}"
+    );
+}
+
+#[test]
+fn five_fan_out_lr_diamond_source_ports_use_distinct_primary_slots() {
+    let input = r#"
+graph LR
+      A{Source} --> B[Target A]
+      A --> C[Target B]
+      A --> D[Target C]
+      A --> E[Target D]
+      A --> F[Target E]
+"#;
+    let (diagram, geom) = layout_test_svg(input);
+    assert_eq!(geom.direction, mmdflux::Direction::LeftRight);
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
+    );
+
+    let outbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        outbound.len(),
+        5,
+        "five_fan_out_lr_diamond should produce five outbound forward edges from A"
+    );
+
+    let mut source_ys: Vec<f64> = outbound
+        .iter()
+        .map(|edge| {
+            edge.path
+                .first()
+                .copied()
+                .expect("edge should have start")
+                .y
+        })
+        .collect();
+    source_ys.sort_by(|a, b| a.total_cmp(b));
+    let mut unique_source_count = 0usize;
+    let mut last_source: Option<f64> = None;
+    for value in &source_ys {
+        let is_new = match last_source {
+            Some(prev) => (*value - prev).abs() > 0.5,
+            None => true,
+        };
+        if is_new {
+            unique_source_count += 1;
+            last_source = Some(*value);
+        }
+    }
+    assert_eq!(
+        unique_source_count, 5,
+        "five_fan_out_lr_diamond source ports should occupy five distinct primary-face slots instead of collapsing: source_ys={source_ys:?}"
     );
 }
 

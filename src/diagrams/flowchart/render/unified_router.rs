@@ -1778,10 +1778,7 @@ fn ensure_primary_stem_for_flat_off_center_fanout_sources(
     const FANOUT_LANE_EPS: f64 = 1.0;
     const SEG_EPS: f64 = 0.000_001;
 
-    if is_backward
-        || path.len() < 3
-        || !matches!(direction, Direction::TopDown | Direction::BottomTop)
-    {
+    if is_backward || path.len() < 3 {
         return;
     }
 
@@ -1805,34 +1802,55 @@ fn ensure_primary_stem_for_flat_off_center_fanout_sources(
     else {
         return;
     };
-    let center_x = source_rect.x + source_rect.width / 2.0;
+    let primary_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
+    let source_cross_center = if primary_vertical {
+        source_rect.x + source_rect.width / 2.0
+    } else {
+        source_rect.y + source_rect.height / 2.0
+    };
     let start = path[0];
     let first = path[1];
     let second = path[2];
-    let source_offset = start.x - center_x;
+    let source_offset = if primary_vertical {
+        start.x - source_cross_center
+    } else {
+        start.y - source_cross_center
+    };
     let angular_source = matches!(source_shape, Shape::Diamond | Shape::Hexagon);
     if source_offset.abs() < MIN_OFF_CENTER_ABS && !angular_source {
         return;
     }
 
-    let first_is_horizontal =
-        (start.y - first.y).abs() <= SEG_EPS && (start.x - first.x).abs() > SEG_EPS;
-    let second_is_vertical =
-        (first.x - second.x).abs() <= SEG_EPS && (first.y - second.y).abs() > SEG_EPS;
-    if !first_is_horizontal || !second_is_vertical {
+    let (first_is_lateral, second_is_primary) = if primary_vertical {
+        (
+            (start.y - first.y).abs() <= SEG_EPS && (start.x - first.x).abs() > SEG_EPS,
+            (first.x - second.x).abs() <= SEG_EPS && (first.y - second.y).abs() > SEG_EPS,
+        )
+    } else {
+        (
+            (start.x - first.x).abs() <= SEG_EPS && (start.y - first.y).abs() > SEG_EPS,
+            (first.y - second.y).abs() <= SEG_EPS && (first.x - second.x).abs() > SEG_EPS,
+        )
+    };
+    if !first_is_lateral || !second_is_primary {
         return;
     }
 
     let progresses_along_primary = match direction {
         Direction::TopDown => second.y > start.y + SEG_EPS,
         Direction::BottomTop => second.y < start.y - SEG_EPS,
-        _ => false,
+        Direction::LeftRight => second.x > start.x + SEG_EPS,
+        Direction::RightLeft => second.x < start.x - SEG_EPS,
     };
     if !progresses_along_primary {
         return;
     }
 
-    let lateral_delta = first.x - start.x;
+    let lateral_delta = if primary_vertical {
+        first.x - start.x
+    } else {
+        first.y - start.y
+    };
     if lateral_delta.abs() <= SEG_EPS {
         return;
     }
@@ -1848,7 +1866,11 @@ fn ensure_primary_stem_for_flat_off_center_fanout_sources(
         else {
             return;
         };
-        outbound_target_primary_axis.push(target_rect.y);
+        outbound_target_primary_axis.push(if primary_vertical {
+            target_rect.y
+        } else {
+            target_rect.x
+        });
     }
     let baseline_primary = outbound_target_primary_axis[0];
     if outbound_target_primary_axis
@@ -1858,23 +1880,43 @@ fn ensure_primary_stem_for_flat_off_center_fanout_sources(
         return;
     }
 
-    let stem_y = match direction {
-        Direction::TopDown => start.y + MIN_PRIMARY_STEM,
-        Direction::BottomTop => start.y - MIN_PRIMARY_STEM,
-        _ => start.y,
+    let (stem, sweep) = match direction {
+        Direction::TopDown => {
+            let stem_y = start.y + MIN_PRIMARY_STEM;
+            (FPoint::new(start.x, stem_y), FPoint::new(first.x, stem_y))
+        }
+        Direction::BottomTop => {
+            let stem_y = start.y - MIN_PRIMARY_STEM;
+            (FPoint::new(start.x, stem_y), FPoint::new(first.x, stem_y))
+        }
+        Direction::LeftRight => {
+            let stem_x = start.x + MIN_PRIMARY_STEM;
+            (FPoint::new(stem_x, start.y), FPoint::new(stem_x, first.y))
+        }
+        Direction::RightLeft => {
+            let stem_x = start.x - MIN_PRIMARY_STEM;
+            (FPoint::new(stem_x, start.y), FPoint::new(stem_x, first.y))
+        }
     };
-    let stem = FPoint::new(start.x, stem_y);
-    let sweep = FPoint::new(first.x, stem_y);
-    if (stem.y - start.y).abs() <= SEG_EPS
-        || (sweep.x - stem.x).abs() <= SEG_EPS
-        || (second.y - sweep.y).abs() <= SEG_EPS
+    if primary_vertical {
+        if (stem.y - start.y).abs() <= SEG_EPS
+            || (sweep.x - stem.x).abs() <= SEG_EPS
+            || (second.y - sweep.y).abs() <= SEG_EPS
+        {
+            return;
+        }
+    } else if (stem.x - start.x).abs() <= SEG_EPS
+        || (sweep.y - stem.y).abs() <= SEG_EPS
+        || (second.x - sweep.x).abs() <= SEG_EPS
     {
         return;
     }
+
     let stem_stays_before_terminal_drop = match direction {
         Direction::TopDown => stem.y < second.y - SEG_EPS,
         Direction::BottomTop => stem.y > second.y + SEG_EPS,
-        _ => false,
+        Direction::LeftRight => stem.x < second.x - SEG_EPS,
+        Direction::RightLeft => stem.x > second.x + SEG_EPS,
     };
     if !stem_stays_before_terminal_drop {
         return;
@@ -3493,12 +3535,23 @@ fn anchor_path_endpoints_to_endpoint_faces(
                 )
             };
             // For non-rect sources, projecting via `next` can collapse multiple
-            // slotted ports to the same apex (e.g. diamond fan-out). When source
-            // slotting is active, use the slotted rect point as projection ray.
-            let projection_approach = if source_fraction_override_active
-                && matches!(direction, Direction::TopDown | Direction::BottomTop)
+            // slotted ports to the same apex (e.g. fan-out from diamond/hexagon
+            // sources). Preserve the slotted rect ray for TD/BT, and for LR/RL
+            // only when there is a true fan-out group (3+ forward outbound
+            // edges) so two-edge diamonds can still prefer smooth lane entry.
+            let source_forward_outbound_count = geometry
+                .edges
+                .iter()
+                .filter(|candidate| {
+                    candidate.from == edge.from
+                        && !geometry.reversed_edges.contains(&candidate.index)
+                })
+                .count();
+            let source_slot_projection_preserves_ports = source_fraction_override_active
                 && matches!(from_shape, Shape::Diamond | Shape::Hexagon)
-            {
+                && (matches!(direction, Direction::TopDown | Direction::BottomTop)
+                    || source_forward_outbound_count >= 3);
+            let projection_approach = if source_slot_projection_preserves_ports {
                 clipped
             } else {
                 next
@@ -3529,10 +3582,9 @@ fn anchor_path_endpoints_to_endpoint_faces(
             );
             // For non-rect targets, projecting via `prev` can collapse distinct
             // fan-in slot fractions to the same boundary point. When a policy
-            // fraction is active on forward TD/BT routing, preserve that slot.
-            let target_fraction_override_active = !is_backward
-                && overflow_policy_target_fraction.is_some()
-                && matches!(direction, Direction::TopDown | Direction::BottomTop);
+            // fraction is active on forward routing, preserve that slot.
+            let target_fraction_override_active =
+                !is_backward && overflow_policy_target_fraction.is_some();
             let projection_approach = if target_fraction_override_active
                 && matches!(to_shape, Shape::Diamond | Shape::Hexagon)
             {
