@@ -1,8 +1,8 @@
 //! Engine registry tests: typed engine IDs, parsing, availability, and registry lookup.
 
 use mmdflux::diagram::{
-    AlgorithmId, EdgeRouting, EngineAlgorithmCapabilities, EngineAlgorithmId, EngineCapabilities,
-    EngineId, LayoutEngineId, OutputFormat, RenderConfig, RenderError, RouteOwnership,
+    AlgorithmId, EdgeRouting, EngineAlgorithmId, EngineCapabilities, EngineId, LayoutEngineId,
+    OutputFormat, RenderConfig, RenderError, RouteOwnership,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::engines::graph::GraphEngineRegistry;
@@ -449,9 +449,6 @@ fn route_ownership_native_routes_edges() {
     assert!(!RouteOwnership::HintDriven.routes_edges());
     assert!(RouteOwnership::EngineProvided.routes_edges());
 }
-
-// Suppress unused import warning for EngineAlgorithmCapabilities (used in type hints)
-fn _uses_engine_algorithm_capabilities(_: EngineAlgorithmCapabilities) {}
 
 // =============================================================================
 // EngineAlgorithmId availability gating (plan-0081 Phase 1.3)
