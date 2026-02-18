@@ -1,8 +1,5 @@
 use mmdflux::dagre::Ranker;
-use mmdflux::diagram::{
-    GeometryLevel, LayoutEngineId, OutputFormat, PathDetail, RenderConfig, RenderError,
-    SvgEdgePathStyle,
-};
+use mmdflux::diagram::{EdgeStyle, LayoutEngineId, OutputFormat, RenderConfig, RenderError};
 use mmdflux::registry::default_registry;
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
@@ -17,10 +14,10 @@ struct WasmRenderConfig {
     padding: Option<usize>,
     #[serde(alias = "svgScale")]
     svg_scale: Option<f64>,
-    #[serde(alias = "svgEdgePathStyle")]
-    svg_edge_path_style: Option<String>,
-    #[serde(alias = "svgEdgePathRadius")]
-    svg_edge_path_radius: Option<f64>,
+    #[serde(alias = "edgeStyle")]
+    edge_style: Option<String>,
+    #[serde(alias = "svgEdgeRadius")]
+    edge_radius: Option<f64>,
     #[serde(alias = "svgDiagramPadding")]
     svg_diagram_padding: Option<f64>,
     #[serde(alias = "svgNodePaddingX")]
@@ -99,15 +96,16 @@ fn parse_render_config(config_json: &str) -> Result<RenderConfig, JsError> {
 
 impl WasmRenderConfig {
     fn into_render_config(self) -> Result<RenderConfig, JsError> {
-        let mut config = RenderConfig::default();
-
-        config.cluster_ranksep = self.cluster_ranksep;
-        config.padding = self.padding;
-        config.svg_scale = self.svg_scale;
-        config.svg_edge_path_radius = self.svg_edge_path_radius;
-        config.svg_diagram_padding = self.svg_diagram_padding;
-        config.svg_node_padding_x = self.svg_node_padding_x;
-        config.svg_node_padding_y = self.svg_node_padding_y;
+        let mut config = RenderConfig {
+            cluster_ranksep: self.cluster_ranksep,
+            padding: self.padding,
+            svg_scale: self.svg_scale,
+            edge_radius: self.edge_radius,
+            svg_diagram_padding: self.svg_diagram_padding,
+            svg_node_padding_x: self.svg_node_padding_x,
+            svg_node_padding_y: self.svg_node_padding_y,
+            ..RenderConfig::default()
+        };
 
         if let Some(layout_engine) = self.layout_engine {
             config.layout_engine =
@@ -116,14 +114,8 @@ impl WasmRenderConfig {
         if let Some(show_ids) = self.show_ids {
             config.show_ids = show_ids;
         }
-        if let Some(svg_edge_path_style) = self.svg_edge_path_style {
-            config.svg_edge_path_style = Some(parse_svg_edge_path_style(&svg_edge_path_style)?);
-        }
-        if let Some(geometry_level) = self.geometry_level {
-            config.geometry_level = parse_geometry_level(&geometry_level)?;
-        }
-        if let Some(path_detail) = self.path_detail {
-            config.path_detail = parse_path_detail(&path_detail)?;
+        if let Some(edge_style) = self.edge_style {
+            config.edge_style = Some(parse_edge_style(&edge_style)?);
         }
         if let Some(layout) = self.layout {
             if let Some(node_sep) = layout.node_sep {
@@ -151,16 +143,8 @@ fn parse_output_format(value: &str) -> Result<OutputFormat, JsError> {
     parse_via_render_error(value)
 }
 
-fn parse_svg_edge_path_style(value: &str) -> Result<SvgEdgePathStyle, JsError> {
-    parse_via_render_error(value)
-}
-
-fn parse_geometry_level(value: &str) -> Result<GeometryLevel, JsError> {
-    parse_via_render_error(value)
-}
-
-fn parse_path_detail(value: &str) -> Result<PathDetail, JsError> {
-    parse_via_render_error(value)
+fn parse_edge_style(value: &str) -> Result<EdgeStyle, JsError> {
+    EdgeStyle::parse(value).map_err(|err| js_error(err.message))
 }
 
 fn parse_ranker(value: &str) -> Result<Ranker, JsError> {
