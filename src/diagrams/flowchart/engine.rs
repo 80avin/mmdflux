@@ -188,8 +188,27 @@ impl GraphEngine for FluxLayeredEngine {
         request: &GraphSolveRequest,
     ) -> Result<GraphSolveResult, RenderError> {
         use crate::diagram::EdgeRouting;
+        use crate::render::SvgOptions;
 
-        let geometry = run_dagre_layout(&self.mode, diagram, config)?;
+        // For SVG/MMDS output, pixel-accurate SVG measurement mode is required.
+        // Use self.mode if already SVG (explicit override), else derive from format.
+        let mode = match request.output_format {
+            OutputFormat::Svg | OutputFormat::Mmds => match &self.mode {
+                MeasurementMode::Svg(_) => self.mode.clone(),
+                MeasurementMode::Text => {
+                    let defaults = SvgOptions::default();
+                    let metrics = super::render::svg_metrics::SvgTextMetrics::new(
+                        defaults.font_size,
+                        defaults.node_padding_x,
+                        defaults.node_padding_y,
+                    );
+                    MeasurementMode::Svg(metrics)
+                }
+            },
+            _ => self.mode.clone(),
+        };
+
+        let geometry = run_dagre_layout(&mode, diagram, config)?;
 
         // Route when routed geometry is requested (Native ownership).
         let routed: Option<RoutedGraphGeometry> =
@@ -253,8 +272,27 @@ impl GraphEngine for MermaidLayeredEngine {
         request: &GraphSolveRequest,
     ) -> Result<GraphSolveResult, RenderError> {
         use crate::diagram::EdgeRouting;
+        use crate::render::SvgOptions;
 
-        let geometry = run_dagre_layout(&self.mode, diagram, config)?;
+        // For SVG/MMDS output, pixel-accurate SVG measurement mode is required.
+        // Use self.mode if already SVG (explicit override), else derive from format.
+        let mode = match request.output_format {
+            OutputFormat::Svg | OutputFormat::Mmds => match &self.mode {
+                MeasurementMode::Svg(_) => self.mode.clone(),
+                MeasurementMode::Text => {
+                    let defaults = SvgOptions::default();
+                    let metrics = super::render::svg_metrics::SvgTextMetrics::new(
+                        defaults.font_size,
+                        defaults.node_padding_x,
+                        defaults.node_padding_y,
+                    );
+                    MeasurementMode::Svg(metrics)
+                }
+            },
+            _ => self.mode.clone(),
+        };
+
+        let geometry = run_dagre_layout(&mode, diagram, config)?;
 
         // HintDriven: route via legacy FullCompute path if routed level requested.
         let routed: Option<RoutedGraphGeometry> =

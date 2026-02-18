@@ -1,4 +1,4 @@
-use mmdflux::diagram::{EngineAlgorithmId, OutputFormat, RenderConfig};
+use mmdflux::diagram::{EngineAlgorithmId, GeometryLevel, OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::registry::DiagramInstance;
 
@@ -196,6 +196,50 @@ fn test_json_without_show_ids() {
     let nodes = parsed["nodes"].as_array().unwrap();
     let node_a = nodes.iter().find(|n| n["id"] == "A").unwrap();
     assert_eq!(node_a["label"], "Start");
+}
+
+// --- Solve-path integration tests (Task 4.1) ---
+
+#[test]
+fn flowchart_render_text_through_solve_path() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(output.contains('A'));
+    assert!(output.contains('B'));
+}
+
+#[test]
+fn flowchart_render_svg_through_solve_path() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Svg, &config).unwrap();
+    assert!(output.contains("<svg"));
+}
+
+#[test]
+fn flowchart_render_mmds_through_solve_path() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        geometry_level: GeometryLevel::Routed,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert!(json["edges"][0]["path"].is_array());
 }
 
 // --- Engine selection tests (Task 2.2) ---

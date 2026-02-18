@@ -1,15 +1,15 @@
 //! Flowchart diagram instance implementation.
 
-use super::routing;
 use crate::diagram::{
-    EdgeRoutingPolicyToggles, GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig,
-    RenderError,
+    AlgorithmId, EngineAlgorithmId, EngineConfig, EngineId, GraphSolveRequest, OutputFormat,
+    RenderConfig, RenderError,
 };
+use crate::engines::graph::GraphEngineRegistry;
 use crate::graph::{Diagram, build_diagram};
 use crate::mmds::to_mmds_json;
 use crate::parser::parse_flowchart;
 use crate::registry::DiagramInstance;
-use crate::render::{RenderOptions, render, render_svg_from_geometry};
+use crate::render::{RenderOptions, render};
 
 /// Flowchart diagram instance.
 ///
@@ -53,61 +53,42 @@ impl DiagramInstance for FlowchartInstance {
             diagram
         };
 
-        // Route runtime selection through the engine abstraction.
-        let engine_result = super::engine::layout_with_selected_engine(diagram, config, format)?;
+        // Resolve engine (default: flux-layered).
+        let engine_id = config
+            .layout_engine
+            .unwrap_or_else(|| EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered));
+        engine_id.check_available()?;
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;
 
-        if matches!(format, OutputFormat::Mmds) {
-            let edge_routing = engine_result.edge_routing;
-            let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
-                Some(routing::route_graph_geometry_with_policies(
+        match format {
+            OutputFormat::Mmds => {
+                // MMDS: use solve() to obtain geometry and optionally routed paths.
+                let request = GraphSolveRequest::from_config(config, format);
+                let registry = GraphEngineRegistry::default();
+                let engine = registry.get_solver(engine_id).ok_or_else(|| RenderError {
+                    message: format!("no engine registered for: {engine_id}"),
+                })?;
+                let result = engine.solve(
                     diagram,
-                    &engine_result.geometry,
-                    edge_routing,
-                    EdgeRoutingPolicyToggles,
-                ))
-            } else {
-                None
-            };
-            return to_mmds_json(
-                diagram,
-                &engine_result.geometry,
-                routed.as_ref(),
-                config.geometry_level,
-                config.path_detail,
-            );
+                    &EngineConfig::Dagre(config.layout.clone()),
+                    &request,
+                )?;
+                to_mmds_json(
+                    diagram,
+                    &result.geometry,
+                    result.routed.as_ref(),
+                    config.geometry_level,
+                    config.path_detail,
+                )
+            }
+            // SVG and Text/Ascii: render() handles layout and routing internally.
+            // Task 4.2 will make text consume the solve result geometry.
+            // Task 4.3 will decouple SVG rendering (subgraph post-processing in
+            // render_svg() cannot be replaced by DagreLayoutEngine::layout() alone).
+            _ => Ok(render(diagram, &options)),
         }
-
-        if matches!(format, OutputFormat::Svg) && engine_result.engine_id != LayoutEngineId::Dagre {
-            let edge_routing = engine_result.edge_routing;
-            let routed = routing::route_graph_geometry_with_policies(
-                diagram,
-                &engine_result.geometry,
-                edge_routing,
-                EdgeRoutingPolicyToggles,
-            );
-            // Non-dagre SVG: inject routed paths into geometry for rendering.
-            let geom = inject_routed_paths(&engine_result.geometry, &routed);
-            return Ok(render_svg_from_geometry(
-                diagram,
-                &options,
-                &geom,
-                edge_routing,
-            ));
-        }
-
-        if engine_result.engine_id != LayoutEngineId::Dagre {
-            return Err(RenderError {
-                message: format!(
-                    "{} engine is currently supported only for svg output",
-                    engine_result.engine_id
-                ),
-            });
-        }
-
-        Ok(render(diagram, &options))
     }
 
     fn supports_format(&self, format: OutputFormat) -> bool {
@@ -116,27 +97,6 @@ impl DiagramInstance for FlowchartInstance {
             OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Mmds
         )
     }
-}
-
-/// Inject routed edge paths from `RoutedGraphGeometry` into `GraphGeometry`.
-///
-/// Ensures the rendering pipeline uses paths produced by the routing stage.
-fn inject_routed_paths(
-    geom: &super::geometry::GraphGeometry,
-    routed: &super::geometry::RoutedGraphGeometry,
-) -> super::geometry::GraphGeometry {
-    let mut result = geom.clone();
-    for routed_edge in &routed.edges {
-        if let Some(layout_edge) = result
-            .edges
-            .iter_mut()
-            .find(|e| e.index == routed_edge.index)
-        {
-            layout_edge.layout_path_hint = Some(routed_edge.path.clone());
-            layout_edge.label_position = routed_edge.label_position;
-        }
-    }
-    result
 }
 
 /// Create a copy of the diagram with node labels annotated as "ID: Label".
