@@ -626,23 +626,63 @@ fn fan_in_target_overflow_context(
                 target_fraction_for_edge.insert(*edge_index, fraction);
             }
             if face == primary_face && count > 1 {
-                let center = (count.saturating_sub(1) as f64) / 2.0;
-                let mut depth_order: Vec<(usize, f64, f64)> = face_edges
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, (edge_index, source_cross))| {
-                        let distance_from_center = (idx as f64 - center).abs();
-                        (*edge_index, distance_from_center, *source_cross)
-                    })
-                    .collect();
-                depth_order.sort_by(|a, b| {
-                    a.1.total_cmp(&b.1)
-                        .then_with(|| a.2.total_cmp(&b.2))
+                let target_cross = target_rect
+                    .map(|rect| face_cross_axis(rect, direction))
+                    .unwrap_or_else(|| {
+                        if count % 2 == 1 {
+                            face_edges[count / 2].1
+                        } else {
+                            (face_edges[count / 2 - 1].1 + face_edges[count / 2].1) / 2.0
+                        }
+                    });
+
+                let mut left_edges: Vec<(usize, f64)> = Vec::new();
+                let mut right_edges: Vec<(usize, f64)> = Vec::new();
+                let mut center_edges: Vec<(usize, f64)> = Vec::new();
+                for (edge_index, source_cross) in &face_edges {
+                    if *source_cross < target_cross - CENTER_EPS {
+                        left_edges.push((*edge_index, *source_cross));
+                    } else if *source_cross > target_cross + CENTER_EPS {
+                        right_edges.push((*edge_index, *source_cross));
+                    } else {
+                        center_edges.push((*edge_index, *source_cross));
+                    }
+                }
+
+                left_edges.sort_by(|a, b| {
+                    (target_cross - a.1)
+                        .total_cmp(&(target_cross - b.1))
                         .then_with(|| a.0.cmp(&b.0))
                 });
-                let denom = (count - 1) as f64;
-                for (rank, (edge_index, _, _)) in depth_order.into_iter().enumerate() {
-                    target_primary_channel_depth_for_edge.insert(edge_index, rank as f64 / denom);
+                right_edges.sort_by(|a, b| {
+                    (a.1 - target_cross)
+                        .total_cmp(&(b.1 - target_cross))
+                        .then_with(|| a.0.cmp(&b.0))
+                });
+                center_edges.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+
+                let band_count = left_edges.len().max(right_edges.len());
+                for (band_index, (edge_index, _)) in left_edges.into_iter().enumerate() {
+                    target_primary_channel_depth_for_edge.insert(
+                        edge_index,
+                        symmetric_side_band_depth(band_index, band_count),
+                    );
+                }
+                for (band_index, (edge_index, _)) in right_edges.into_iter().enumerate() {
+                    target_primary_channel_depth_for_edge.insert(
+                        edge_index,
+                        symmetric_side_band_depth(band_index, band_count),
+                    );
+                }
+
+                if center_edges.len() == 1 {
+                    target_primary_channel_depth_for_edge.insert(center_edges[0].0, 0.5);
+                } else if center_edges.len() > 1 {
+                    let denom = center_edges.len() as f64 + 1.0;
+                    for (idx, (edge_index, _)) in center_edges.into_iter().enumerate() {
+                        target_primary_channel_depth_for_edge
+                            .insert(edge_index, (idx as f64 + 1.0) / denom);
+                    }
                 }
             }
         }
@@ -682,6 +722,14 @@ fn adaptive_fan_in_primary_face_capacity(direction: Direction, target_rect: &FRe
         (usable_span / MIN_FAN_IN_PRIMARY_SLOT_SPACING).floor() as usize + 1
     };
     dynamic_capacity.max(baseline_capacity).max(1)
+}
+
+fn symmetric_side_band_depth(band_index: usize, band_count: usize) -> f64 {
+    if band_count <= 1 {
+        0.0
+    } else {
+        band_index as f64 / (band_count - 1) as f64
+    }
 }
 
 fn fan_in_source_cross_axis(

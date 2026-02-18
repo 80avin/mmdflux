@@ -2950,6 +2950,14 @@ fn five_fan_in_primary_face_channels_are_staggered_without_overlap() {
         d_lane + 0.5 < e_lane,
         "five_fan_in should place inner-right D -> F shallower than outer-right E -> F to reduce crossing pressure: E={e_lane}, D={d_lane}"
     );
+    assert!(
+        (b_lane - d_lane).abs() <= 0.5,
+        "five_fan_in mirrored inner pair should share a symmetric lane depth: B={b_lane}, D={d_lane}"
+    );
+    assert!(
+        (a_lane - e_lane).abs() <= 0.5,
+        "five_fan_in mirrored outer pair should share a symmetric lane depth: A={a_lane}, E={e_lane}"
+    );
 }
 
 #[test]
@@ -3018,8 +3026,16 @@ fn very_narrow_fan_in_channels_are_staggered_without_overlap() {
         "very_narrow_fan_in should place inner-right C -> E shallower than outer-right D -> E: D={d_lane}, C={c_lane}"
     );
     assert!(
-        (b_lane - c_lane).abs() > 0.5,
-        "very_narrow_fan_in inner lanes should remain distinct to avoid coincident overlap: B={b_lane}, C={c_lane}"
+        (b_lane - c_lane).abs() <= 0.5,
+        "very_narrow_fan_in mirrored inner pair should share a symmetric lane depth: B={b_lane}, C={c_lane}"
+    );
+    assert!(
+        (a_lane - d_lane).abs() <= 0.5,
+        "very_narrow_fan_in mirrored outer pair should share a symmetric lane depth: A={a_lane}, D={d_lane}"
+    );
+    assert!(
+        (a_lane - b_lane).abs() > 0.5,
+        "very_narrow_fan_in inner and outer bands should stay visibly distinct: outer={a_lane}, inner={b_lane}"
     );
 }
 
