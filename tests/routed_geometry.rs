@@ -1185,6 +1185,11 @@ fn unified_route_contracts_keep_directional_source_exits_for_selected_fixtures()
             let next = edge.path[1];
             let center_x = source_rect.x + source_rect.width / 2.0;
             let source_offset = start.x - center_x;
+            let source_shape = geom
+                .nodes
+                .get(*from)
+                .unwrap_or_else(|| panic!("fixture {fixture} missing source node {from}"))
+                .shape;
             assert!(
                 source_offset.abs() >= *min_offset,
                 "fixture expectation invalid: {from} -> {to} should start noticeably off-center (offset={source_offset}, min_offset={min_offset}) in {fixture}, path={:?}",
@@ -1193,15 +1198,23 @@ fn unified_route_contracts_keep_directional_source_exits_for_selected_fixtures()
 
             let first_dx = next.x - start.x;
             let first_dy = next.y - start.y;
+            let first_is_primary = first_dx.abs() <= ROUTE_EPS && first_dy.abs() > ROUTE_EPS;
+            let first_is_lateral_outward = first_dy.abs() <= ROUTE_EPS
+                && first_dx.abs() > ROUTE_EPS
+                && first_dx.signum() == source_offset.signum();
+            let angular_source = matches!(
+                source_shape,
+                mmdflux::Shape::Diamond | mmdflux::Shape::Hexagon
+            );
             if edge.path.len() >= 3 {
                 assert!(
-                    first_dx.abs() <= ROUTE_EPS && first_dy.abs() > ROUTE_EPS,
-                    "fixture {fixture} edge {from} -> {to} should leave source on TD primary axis first when a bend is present: start={start:?}, next={next:?}, path={:?}",
+                    first_is_primary || (angular_source && first_is_lateral_outward),
+                    "fixture {fixture} edge {from} -> {to} should leave source on TD primary axis first when a bend is present (except angular sources which may depart laterally outward): start={start:?}, next={next:?}, shape={source_shape:?}, path={:?}",
                     edge.path
                 );
             } else {
                 assert!(
-                    first_dx.abs() <= ROUTE_EPS && first_dy.abs() > ROUTE_EPS,
+                    first_is_primary,
                     "fixture {fixture} edge {from} -> {to} compact direct path should remain a primary-axis source support segment in TD: start={start:?}, next={next:?}, path={:?}",
                     edge.path
                 );
@@ -3168,14 +3181,16 @@ fn hexagon_flow_target_lands_on_flat_top_edge() {
 }
 
 #[test]
-fn hexagon_flow_sources_on_flat_bottom_edge() {
+fn hexagon_flow_sources_use_inset_side_departure_for_lateral_branches() {
     let (diagram, geom) = layout_fixture_svg("hexagon_flow.mmd");
     let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
     let a_rect = geom.nodes.get("A").unwrap().rect;
-    let indent = a_rect.width * 0.2;
+    let center_x = a_rect.x + a_rect.width / 2.0;
+    let center_y = a_rect.y + a_rect.height / 2.0;
     let bottom_y = a_rect.y + a_rect.height;
 
-    // A->B and A->D: source endpoints on hexagon's flat bottom edge
+    // A->B and A->D: lateral branches should depart from inset side attachment,
+    // not run along the flat bottom border.
     let mut source_xs = Vec::new();
     for to in ["B", "D"] {
         let edge = routed
@@ -3183,20 +3198,35 @@ fn hexagon_flow_sources_on_flat_bottom_edge() {
             .iter()
             .find(|e| e.from == "A" && e.to == to)
             .unwrap_or_else(|| panic!("missing edge A->{to}"));
+        assert!(
+            edge.path.len() >= 3,
+            "A->{to} should retain an H-V branch shape from hexagon source: {:?}",
+            edge.path
+        );
         let start = edge.path[0];
+        let next = edge.path[1];
 
         assert!(
-            (start.y - bottom_y).abs() < 1.0,
-            "A->{to} source should land on flat bottom edge, got y={}, expected y={}",
+            start.y <= bottom_y - 2.0,
+            "A->{to} source should be inset above flat bottom border, got y={}, bottom_y={}",
             start.y,
             bottom_y
         );
         assert!(
-            start.x >= a_rect.x + indent - 1.0 && start.x <= a_rect.x + a_rect.width - indent + 1.0,
-            "A->{to} source x should be within flat bottom edge [{}, {}], got x={}",
-            a_rect.x + indent,
-            a_rect.x + a_rect.width - indent,
-            start.x
+            start.y >= center_y + 2.0,
+            "A->{to} source should stay in lower half of hexagon when exiting laterally, got start={start:?}, center_y={center_y}"
+        );
+        assert!(
+            (next.y - start.y).abs() < 1.0 && (next.x - start.x).abs() > 1.0,
+            "A->{to} first segment should depart laterally (horizontal) from inset side source: start={start:?}, next={next:?}, path={:?}",
+            edge.path
+        );
+        let source_offset = start.x - center_x;
+        let expected_sign = if to == "B" { -1.0 } else { 1.0 };
+        assert!(
+            source_offset.signum() == expected_sign,
+            "A->{to} source should be on the expected side of hexagon center: center_x={center_x}, start={start:?}, source_offset={source_offset}, path={:?}",
+            edge.path
         );
         source_xs.push((to.to_string(), start.x));
     }

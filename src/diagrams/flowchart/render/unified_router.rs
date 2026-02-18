@@ -383,6 +383,12 @@ fn build_unified_path(
             direction,
             target_primary_channel_depth,
         );
+        prefer_lateral_departure_for_td_bt_angular_sources(
+            &mut finalized,
+            edge,
+            geometry,
+            direction,
+        );
     }
     if is_backward {
         enforce_backward_source_tangent_direction(
@@ -921,6 +927,110 @@ fn collapse_tiny_forward_td_bt_lateral_jog(
 
     path[2].x = aligned_x;
     path[3].x = aligned_x;
+    collapse_collinear_interior_points(path);
+}
+
+fn prefer_lateral_departure_for_td_bt_angular_sources(
+    path: &mut Vec<FPoint>,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: Direction,
+) {
+    const EPS: f64 = 0.000_001;
+    const OFF_CENTER_MIN: f64 = 2.0;
+    const MIN_HORIZONTAL_DEPARTURE: f64 = 2.0;
+    const INTRUSION_MARGIN: f64 = 1.0;
+
+    if !matches!(direction, Direction::TopDown | Direction::BottomTop) || path.len() != 4 {
+        return;
+    }
+
+    let Some((source_rect, source_shape)) =
+        endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+    else {
+        return;
+    };
+    if !matches!(source_shape, Shape::Diamond | Shape::Hexagon) {
+        return;
+    }
+
+    let p0 = path[0];
+    let p1 = path[1];
+    let p2 = path[2];
+    let p3 = path[3];
+    let first_vertical = (p0.x - p1.x).abs() <= EPS && (p0.y - p1.y).abs() > EPS;
+    let middle_horizontal = (p1.y - p2.y).abs() <= EPS && (p1.x - p2.x).abs() > EPS;
+    let terminal_vertical = (p2.x - p3.x).abs() <= EPS && (p2.y - p3.y).abs() > EPS;
+    if !(first_vertical && middle_horizontal && terminal_vertical) {
+        return;
+    }
+
+    let source_center_x = source_rect.x + source_rect.width / 2.0;
+    let start_offset = p0.x - source_center_x;
+    let target_offset = p3.x - source_center_x;
+    if start_offset.abs() < OFF_CENTER_MIN || target_offset.abs() < OFF_CENTER_MIN {
+        return;
+    }
+    if start_offset.signum() != target_offset.signum() {
+        return;
+    }
+    if target_offset.abs() + EPS < start_offset.abs() {
+        return;
+    }
+    if (p3.x - p0.x).abs() < MIN_HORIZONTAL_DEPARTURE {
+        return;
+    }
+
+    let flow_sign = match direction {
+        Direction::TopDown => 1.0,
+        Direction::BottomTop => -1.0,
+        _ => 0.0,
+    };
+    if (p3.y - p0.y) * flow_sign <= EPS {
+        return;
+    }
+
+    let departure_face = if target_offset < 0.0 {
+        RectFace::Left
+    } else {
+        RectFace::Right
+    };
+    let rect_face_anchor = clip_point_to_rect_face_with_inset(
+        p0,
+        source_rect,
+        departure_face,
+        MIN_PORT_CORNER_INSET_FORWARD,
+    );
+    let provisional_elbow = FPoint::new(p3.x, rect_face_anchor.y);
+    let start = project_endpoint_to_shape(
+        rect_face_anchor,
+        provisional_elbow,
+        source_rect,
+        source_shape,
+    );
+    let elbow = FPoint::new(p3.x, start.y);
+    if points_match(elbow, start) || points_match(elbow, p3) {
+        return;
+    }
+
+    let first_dx = elbow.x - start.x;
+    if first_dx.abs() < MIN_HORIZONTAL_DEPARTURE || first_dx.signum() != target_offset.signum() {
+        return;
+    }
+    if (p3.y - start.y) * flow_sign <= EPS {
+        return;
+    }
+
+    if segment_crosses_any_other_node_interior(edge, geometry, start, elbow, INTRUSION_MARGIN)
+        || segment_crosses_any_other_node_interior(edge, geometry, elbow, p3, INTRUSION_MARGIN)
+    {
+        return;
+    }
+
+    path.clear();
+    path.push(start);
+    path.push(elbow);
+    path.push(p3);
     collapse_collinear_interior_points(path);
 }
 

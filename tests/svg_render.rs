@@ -1245,6 +1245,94 @@ fn svg_orthogonal_unified_preview_double_skip_avoids_tiny_leading_lateral_jog() 
 }
 
 #[test]
+fn svg_orthogonal_unified_preview_decision_diamond_outbound_prefers_horizontal_departure() {
+    let diagram = load_flowchart_fixture_diagram("decision.mmd");
+    let edges = [
+        edge_index(&diagram, "B", "C"),
+        edge_index(&diagram, "B", "D"),
+    ];
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    for edge_idx in edges {
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        assert!(
+            points.len() >= 3,
+            "decision branch should keep at least one bend after horizontal departure preference: {points:?}"
+        );
+        assert_eq!(
+            segment_axis(points[0], points[1]),
+            Some('H'),
+            "decision branch should depart diamond horizontally in TD orthogonal unified mode: {points:?}"
+        );
+        assert_eq!(
+            segment_axis(points[points.len() - 2], points[points.len() - 1]),
+            Some('V'),
+            "decision branch should arrive at target with vertical support in TD orthogonal unified mode: {points:?}"
+        );
+    }
+}
+
+#[test]
+fn svg_orthogonal_unified_preview_hexagon_outbound_departure_insets_from_bottom_border() {
+    let diagram = load_flowchart_fixture_diagram("hexagon_flow.mmd");
+    let edges = [
+        edge_index(&diagram, "A", "B"),
+        edge_index(&diagram, "A", "D"),
+    ];
+
+    let measurement_mode = mmdflux::diagrams::flowchart::engine::MeasurementMode::for_format(
+        OutputFormat::Svg,
+        &RenderConfig::default(),
+    );
+    let engine = DagreLayoutEngine::with_mode(measurement_mode);
+    let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
+    let geom = engine
+        .layout(&diagram, &config)
+        .expect("layout should succeed for hexagon_flow fixture");
+    let source_rect = geom
+        .nodes
+        .get("A")
+        .expect("hexagon_flow fixture should contain source node A")
+        .rect;
+    let source_bottom = source_rect.y + source_rect.height;
+
+    let mut options = RenderOptions::default_svg();
+    options.svg.edge_path_style = SvgEdgePathStyle::Orthogonal;
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    for edge_idx in edges {
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
+        assert!(
+            points.len() >= 3,
+            "hexagon outbound edge should keep at least one bend: {points:?}"
+        );
+        assert_eq!(
+            segment_axis(points[0], points[1]),
+            Some('H'),
+            "hexagon outbound edge should depart laterally first in TD orthogonal unified mode: {points:?}"
+        );
+        assert!(
+            points[0].1 <= source_bottom - 2.0,
+            "hexagon outbound edge start should be inset above the bottom border to avoid border-aligned stems: start={:?}, source_bottom={}, points={points:?}",
+            points[0],
+            source_bottom
+        );
+        assert_eq!(
+            segment_axis(points[points.len() - 2], points[points.len() - 1]),
+            Some('V'),
+            "hexagon outbound edge should arrive with a vertical terminal support: {points:?}"
+        );
+    }
+}
+
+#[test]
 fn svg_orthogonal_unified_preview_nested_subgraph_edge_avoids_large_lateral_detour() {
     let diagram = load_flowchart_fixture_diagram("nested_subgraph_edge.mmd");
     let edges = [
