@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use clap::{Parser, ValueEnum};
 use mmdflux::dagre::Ranker;
 use mmdflux::diagram::{
-    EdgeRouting, EdgeRoutingPolicyToggles, EdgeStyle, EngineAlgorithmId, EngineId, GeometryLevel,
-    LayoutConfig, LayoutEngineId, OutputFormat, PathDetail, RenderConfig,
+    EdgeStyle, EngineAlgorithmId, GeometryLevel, LayoutConfig, OutputFormat, PathDetail,
+    RenderConfig,
 };
 use mmdflux::registry::default_registry;
 
@@ -272,25 +272,7 @@ fn main() -> io::Result<()> {
         None => None,
     };
 
-    // Temporary bridge: map EngineAlgorithmId → LayoutEngineId + EdgeRouting
-    // until RenderConfig is migrated in task 2.2.
-    // layout_engine stays None when no --layout-engine flag was given (preserves
-    // existing behavior for diagram types that reject explicit engine selection).
-    let layout_engine = engine_algo.map(|id| match id.engine() {
-        EngineId::Flux | EngineId::Mermaid => LayoutEngineId::Dagre,
-        EngineId::Elk => LayoutEngineId::Elk,
-    });
-    let default_edge_routing = match engine_algo {
-        None => Some(EdgeRouting::UnifiedPreview), // default is flux-layered behavior
-        Some(id) => match id.engine() {
-            EngineId::Flux => Some(EdgeRouting::UnifiedPreview),
-            EngineId::Mermaid => Some(EdgeRouting::FullCompute),
-            EngineId::Elk => None,
-        },
-    };
-
     let config = RenderConfig {
-        edge_routing_policies: EdgeRoutingPolicyToggles,
         layout: LayoutConfig {
             node_sep: cli.node_spacing.unwrap_or(50.0),
             edge_sep: cli.edge_spacing.unwrap_or(20.0),
@@ -299,7 +281,7 @@ fn main() -> io::Result<()> {
             ranker: cli.ranker.into(),
             ..LayoutConfig::default()
         },
-        layout_engine,
+        layout_engine: engine_algo,
         cluster_ranksep: cli.cluster_ranksep,
         padding: cli.padding,
         svg_scale: cli.svg_scale,
@@ -311,7 +293,6 @@ fn main() -> io::Result<()> {
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
         path_detail: cli.path_detail.map(Into::into).unwrap_or_default(),
-        edge_routing: default_edge_routing,
     };
 
     // Use registry for detection and rendering

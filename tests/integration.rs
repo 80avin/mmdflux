@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::{EdgeRoutingPolicyToggles, EdgeStyle, OutputFormat, RenderConfig};
+use mmdflux::diagram::{EdgeStyle, EngineAlgorithmId, OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::engine::{DagreLayoutEngine, MeasurementMode};
 use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::diagrams::mmds::from_mmds_str;
@@ -2649,11 +2649,11 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
             OutputFormat::Svg,
             &RenderConfig {
                 edge_style: Some(EdgeStyle::Sharp),
-                edge_routing: Some(EdgeRouting::FullCompute),
+                layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
                 ..RenderConfig::default()
             },
         )
-        .expect("legacy render should succeed");
+        .expect("mermaid-layered render should succeed");
 
     let mut unified = registry
         .create("flowchart")
@@ -2664,11 +2664,11 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
             OutputFormat::Svg,
             &RenderConfig {
                 edge_style: Some(EdgeStyle::Sharp),
-                edge_routing: Some(EdgeRouting::UnifiedPreview),
+                layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
                 ..RenderConfig::default()
             },
         )
-        .expect("unified render should succeed");
+        .expect("flux-layered render should succeed");
 
     assert_ne!(
         legacy_output, unified_output,
@@ -3113,9 +3113,8 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_
             .render(
                 format,
                 &RenderConfig {
-                    edge_routing: Some(EdgeRouting::UnifiedPreview),
+                    layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
                     edge_style: Some(EdgeStyle::Sharp),
-                    edge_routing_policies: EdgeRoutingPolicyToggles::all_enabled(),
                     ..RenderConfig::default()
                 },
             )
@@ -3300,7 +3299,7 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
         }
     }
 
-    let render_text_with_mode = |input: &str, mode: EdgeRouting| {
+    let render_text_with_engine = |input: &str, engine: &str| {
         let registry = default_registry();
         let mut instance = registry
             .create("flowchart")
@@ -3310,7 +3309,7 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             .render(
                 OutputFormat::Text,
                 &RenderConfig {
-                    edge_routing: Some(mode),
+                    layout_engine: EngineAlgorithmId::parse(engine).ok(),
                     ..RenderConfig::default()
                 },
             )
@@ -3418,8 +3417,8 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
 
         // Text output should still match between edge routings (backward edge
         // face differences only affect SVG path geometry, not text grid).
-        let full_text = render_text_with_mode(&input, EdgeRouting::FullCompute);
-        let unified_text = render_text_with_mode(&input, EdgeRouting::UnifiedPreview);
+        let full_text = render_text_with_engine(&input, "mermaid-layered");
+        let unified_text = render_text_with_engine(&input, "flux-layered");
         assert_eq!(
             unified_text, full_text,
             "fixture {fixture} unified-preview text should match full-compute text"
@@ -3464,7 +3463,7 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
         }
     }
 
-    let render_text_with_mode = |input: &str, mode: EdgeRouting| {
+    let render_text_with_engine = |input: &str, engine: &str| {
         let registry = default_registry();
         let mut instance = registry
             .create("flowchart")
@@ -3474,7 +3473,7 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .render(
                 OutputFormat::Text,
                 &RenderConfig {
-                    edge_routing: Some(mode),
+                    layout_engine: EngineAlgorithmId::parse(engine).ok(),
                     ..RenderConfig::default()
                 },
             )
@@ -3564,8 +3563,8 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             unified_edge.path
         );
 
-        let full_text = render_text_with_mode(&input, EdgeRouting::FullCompute);
-        let unified_text = render_text_with_mode(&input, EdgeRouting::UnifiedPreview);
+        let full_text = render_text_with_engine(&input, "mermaid-layered");
+        let unified_text = render_text_with_engine(&input, "flux-layered");
         assert_eq!(
             unified_text, full_text,
             "fixture {fixture} unified-preview text should match full-compute text once LR backward channel spacing parity is satisfied"
@@ -3651,8 +3650,8 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             unified_edge.path
         );
 
-        let full_text = render_text_with_mode(&input, EdgeRouting::FullCompute);
-        let unified_text = render_text_with_mode(&input, EdgeRouting::UnifiedPreview);
+        let full_text = render_text_with_engine(&input, "mermaid-layered");
+        let unified_text = render_text_with_engine(&input, "flux-layered");
         assert_eq!(
             unified_text, full_text,
             "fixture {fixture} unified-preview text should match full-compute text once right-side backward clearance parity is satisfied"
@@ -3674,9 +3673,8 @@ fn full_compute_rollback_is_stable_for_text_and_svg() {
             .render(
                 format,
                 &RenderConfig {
-                    edge_routing: Some(EdgeRouting::FullCompute),
+                    layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
                     edge_style: Some(EdgeStyle::Sharp),
-                    edge_routing_policies: EdgeRoutingPolicyToggles::all_enabled(),
                     ..RenderConfig::default()
                 },
             )
@@ -3702,7 +3700,7 @@ fn full_compute_rollback_is_stable_for_text_and_svg() {
 fn text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes() {
     let fixtures = ["labeled_edges.mmd", "inline_label_flowchart.mmd"];
 
-    let render_with_mode = |input: &str, mode: EdgeRouting| {
+    let render_with_engine = |input: &str, engine: &str| {
         let registry = default_registry();
         let mut instance = registry
             .create("flowchart")
@@ -3712,8 +3710,7 @@ fn text_label_revalidation_fixtures_match_between_unified_preview_and_full_compu
             .render(
                 OutputFormat::Text,
                 &RenderConfig {
-                    edge_routing: Some(mode),
-                    edge_routing_policies: EdgeRoutingPolicyToggles::all_enabled(),
+                    layout_engine: EngineAlgorithmId::parse(engine).ok(),
                     ..RenderConfig::default()
                 },
             )
@@ -3722,11 +3719,11 @@ fn text_label_revalidation_fixtures_match_between_unified_preview_and_full_compu
 
     for fixture in fixtures {
         let input = load_fixture(fixture);
-        let full = render_with_mode(&input, EdgeRouting::FullCompute);
-        let unified = render_with_mode(&input, EdgeRouting::UnifiedPreview);
+        let mermaid_layered = render_with_engine(&input, "mermaid-layered");
+        let flux_layered = render_with_engine(&input, "flux-layered");
         assert_eq!(
-            unified, full,
-            "Label revalidation text parity guard failed for fixture {fixture}: unified-preview text output diverged from full-compute"
+            flux_layered, mermaid_layered,
+            "Label revalidation text parity guard failed for fixture {fixture}: flux-layered text output diverged from mermaid-layered"
         );
     }
 }

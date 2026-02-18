@@ -1,4 +1,4 @@
-use mmdflux::diagram::{OutputFormat, RenderConfig, RenderError};
+use mmdflux::diagram::{EngineAlgorithmId, OutputFormat, RenderConfig, RenderError};
 
 #[test]
 fn render_config_default() {
@@ -31,4 +31,19 @@ fn render_config_to_render_options_conversion() {
 #[test]
 fn diagram_layout_config_accessible_from_diagram_module() {
     let _ = mmdflux::diagram::LayoutConfig::default();
+}
+
+#[test]
+fn render_config_with_engine_algorithm() {
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        ..Default::default()
+    };
+    assert_eq!(config.layout_engine.unwrap().to_string(), "flux-layered");
+}
+
+#[test]
+fn render_config_default_layout_engine_is_none() {
+    let config = RenderConfig::default();
+    assert!(config.layout_engine.is_none());
 }

@@ -1,7 +1,10 @@
 //! Flowchart diagram instance implementation.
 
 use super::routing;
-use crate::diagram::{GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig, RenderError};
+use crate::diagram::{
+    EdgeRoutingPolicyToggles, GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig,
+    RenderError,
+};
 use crate::graph::{Diagram, build_diagram};
 use crate::mmds::to_mmds_json;
 use crate::parser::parse_flowchart;
@@ -57,13 +60,13 @@ impl DiagramInstance for FlowchartInstance {
         options.output_format = format;
 
         if matches!(format, OutputFormat::Mmds) {
-            let edge_routing = config.edge_routing.unwrap_or(engine_result.edge_routing);
+            let edge_routing = engine_result.edge_routing;
             let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
                 Some(routing::route_graph_geometry_with_policies(
                     diagram,
                     &engine_result.geometry,
                     edge_routing,
-                    config.edge_routing_policies,
+                    EdgeRoutingPolicyToggles,
                 ))
             } else {
                 None
@@ -78,12 +81,12 @@ impl DiagramInstance for FlowchartInstance {
         }
 
         if matches!(format, OutputFormat::Svg) && engine_result.engine_id != LayoutEngineId::Dagre {
-            let edge_routing = config.edge_routing.unwrap_or(engine_result.edge_routing);
+            let edge_routing = engine_result.edge_routing;
             let routed = routing::route_graph_geometry_with_policies(
                 diagram,
                 &engine_result.geometry,
                 edge_routing,
-                config.edge_routing_policies,
+                EdgeRoutingPolicyToggles,
             );
             // Non-dagre SVG: inject routed paths into geometry for rendering.
             let geom = inject_routed_paths(&engine_result.geometry, &routed);

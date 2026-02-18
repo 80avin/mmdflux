@@ -726,11 +726,14 @@ impl FromStr for GeometryLevel {
 pub struct RenderConfig {
     /// Layout configuration.
     pub layout: LayoutConfig,
-    /// Layout engine selection.
+    /// Layout engine+algorithm selection.
     ///
-    /// - `None` => default (dagre)
-    /// - `Some(LayoutEngineId::Dagre)` => explicit dagre
-    pub layout_engine: Option<LayoutEngineId>,
+    /// - `None` => default (`flux-layered`)
+    /// - `Some(EngineAlgorithmId::...)` => explicit engine+algorithm pair
+    ///
+    /// Edge routing is derived from the engine's capabilities; it cannot
+    /// be overridden independently.
+    pub layout_engine: Option<EngineAlgorithmId>,
     /// Cluster (subgraph) rank separation override.
     pub cluster_ranksep: Option<f64>,
     /// Padding around content.
@@ -753,10 +756,6 @@ pub struct RenderConfig {
     pub geometry_level: GeometryLevel,
     /// Path detail level for edge waypoints (MMDS and SVG).
     pub path_detail: PathDetail,
-    /// Optional edge routing override for routed-geometry preview/testing.
-    pub edge_routing: Option<EdgeRouting>,
-    /// Policy toggles for staged unified-routing rollout.
-    pub edge_routing_policies: EdgeRoutingPolicyToggles,
 }
 
 /// Error type for rendering failures.

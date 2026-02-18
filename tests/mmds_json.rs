@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use mmdflux::diagram::{EdgeRouting, GeometryLevel, OutputFormat, PathDetail, RenderConfig};
+use mmdflux::diagram::{EngineAlgorithmId, GeometryLevel, OutputFormat, PathDetail, RenderConfig};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::mmds::MmdsOutput;
 use mmdflux::registry::DiagramInstance;
@@ -40,7 +40,7 @@ fn render_json_with_level(input: &str, level: GeometryLevel) -> String {
     instance.render(OutputFormat::Mmds, &config).unwrap()
 }
 
-fn render_routed_mmds_with_mode(input: &str, mode: EdgeRouting) -> String {
+fn render_routed_mmds_with_engine(input: &str, engine: &str) -> String {
     let mut instance = FlowchartInstance::new();
     instance.parse(input).unwrap();
     instance
@@ -48,7 +48,7 @@ fn render_routed_mmds_with_mode(input: &str, mode: EdgeRouting) -> String {
             OutputFormat::Mmds,
             &RenderConfig {
                 geometry_level: GeometryLevel::Routed,
-                edge_routing: Some(mode),
+                layout_engine: EngineAlgorithmId::parse(engine).ok(),
                 ..RenderConfig::default()
             },
         )
@@ -186,7 +186,7 @@ fn mmds_compact_path_detail_sits_between_full_and_simplified() {
                 &RenderConfig {
                     geometry_level: GeometryLevel::Routed,
                     path_detail,
-                    edge_routing: Some(EdgeRouting::UnifiedPreview),
+                    layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
                     ..RenderConfig::default()
                 },
             )
@@ -242,7 +242,7 @@ fn routed_mmds_defaults_to_full_path_detail() {
         instance.parse(&input).unwrap();
         let mut config = RenderConfig {
             geometry_level: GeometryLevel::Routed,
-            edge_routing: Some(EdgeRouting::UnifiedPreview),
+            layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
             ..RenderConfig::default()
         };
         if let Some(path_detail) = path_detail {
@@ -296,7 +296,7 @@ fn path_detail_monotonicity_holds_full_compact_simplified() {
                 &RenderConfig {
                     geometry_level: GeometryLevel::Routed,
                     path_detail,
-                    edge_routing: Some(EdgeRouting::UnifiedPreview),
+                    layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
                     ..RenderConfig::default()
                 },
             )
@@ -333,8 +333,8 @@ fn unified_preview_mmds_routed_output_is_deterministic_for_fixture_subset() {
         "multi_subgraph_direction_override.mmd",
     ] {
         let input = flowchart_fixture(fixture);
-        let first = render_routed_mmds_with_mode(&input, EdgeRouting::UnifiedPreview);
-        let second = render_routed_mmds_with_mode(&input, EdgeRouting::UnifiedPreview);
+        let first = render_routed_mmds_with_engine(&input, "flux-layered");
+        let second = render_routed_mmds_with_engine(&input, "flux-layered");
         assert_eq!(
             second, first,
             "unified-preview MMDS routed output is nondeterministic for fixture {fixture}"

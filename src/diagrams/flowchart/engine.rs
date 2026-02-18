@@ -8,7 +8,7 @@ use super::render::layout::build_dagre_layout;
 use super::render::svg::svg_node_dimensions;
 use super::render::svg_metrics::SvgTextMetrics;
 use crate::diagram::{
-    EngineCapabilities, EngineConfig, GraphLayoutEngine, LayoutEngineId, OutputFormat,
+    EngineCapabilities, EngineConfig, EngineId, GraphLayoutEngine, LayoutEngineId, OutputFormat,
     RenderConfig, RenderError,
 };
 use crate::graph::Diagram;
@@ -153,17 +153,38 @@ pub fn layout_with_selected_engine(
     config: &RenderConfig,
     format: OutputFormat,
 ) -> Result<EngineLayoutResult, RenderError> {
-    use crate::diagram::EdgeRouting;
+    use crate::diagram::{EdgeRouting, RouteOwnership};
 
-    let engine_id = config.layout_engine.unwrap_or(LayoutEngineId::Dagre);
+    // Temporary bridge: map EngineAlgorithmId → LayoutEngineId until Phase 3.
+    let engine_id = config
+        .layout_engine
+        .map(|id| match id.engine() {
+            EngineId::Flux | EngineId::Mermaid => LayoutEngineId::Dagre,
+            EngineId::Elk => LayoutEngineId::Elk,
+        })
+        .unwrap_or(LayoutEngineId::Dagre);
 
-    engine_id.check_available()?;
+    if let Some(algo_id) = config.layout_engine {
+        algo_id.check_available()?;
+    } else {
+        engine_id.check_available()?;
+    }
+
+    // Derive routing from EngineAlgorithmId capabilities, not the underlying adapter.
+    // Default (None) behaves as flux-layered (Native → UnifiedPreview).
+    let edge_routing = config
+        .layout_engine
+        .map(|id| match id.capabilities().route_ownership {
+            RouteOwnership::Native => EdgeRouting::UnifiedPreview,
+            RouteOwnership::HintDriven => EdgeRouting::FullCompute,
+            RouteOwnership::EngineProvided => EdgeRouting::PassThroughClip,
+        })
+        .unwrap_or(EdgeRouting::UnifiedPreview);
 
     match engine_id {
         LayoutEngineId::Dagre => {
             let mode = MeasurementMode::for_format(format, config);
             let engine = DagreLayoutEngine::with_mode(mode);
-            let edge_routing = EdgeRouting::for_capabilities(&engine.capabilities());
             let engine_config = EngineConfig::Dagre(config.layout.clone());
             let geometry = engine.layout(diagram, &engine_config)?;
             Ok(EngineLayoutResult {
@@ -178,7 +199,6 @@ pub fn layout_with_selected_engine(
             let engine = registry.get(engine_id).ok_or_else(|| RenderError {
                 message: format!("no adapter registered for engine: {engine_id}"),
             })?;
-            let edge_routing = EdgeRouting::for_capabilities(&engine.capabilities());
             let engine_config = EngineConfig::Dagre(config.layout.clone());
             let geometry = engine.layout(diagram, &engine_config)?;
             Ok(EngineLayoutResult {
@@ -227,7 +247,7 @@ fn layout_config_from_dagre(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagram::{GraphLayoutEngine, LayoutEngineId, RenderConfig};
+    use crate::diagram::{EngineAlgorithmId, GraphLayoutEngine, RenderConfig};
 
     #[test]
     fn dagre_engine_name() {
@@ -310,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn selected_engine_defaults_to_dagre() {
+    fn selected_engine_defaults_to_flux_layered_routing() {
         let input = "graph TD\nA-->B";
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
@@ -319,19 +339,38 @@ mod tests {
             layout_with_selected_engine(&diagram, &RenderConfig::default(), OutputFormat::Text)
                 .unwrap();
         assert_eq!(result.geometry.nodes.len(), 2);
+        // Default (None) behaves as flux-layered → UnifiedPreview
         assert_eq!(
             result.edge_routing,
-            crate::diagram::EdgeRouting::FullCompute
+            crate::diagram::EdgeRouting::UnifiedPreview
         );
     }
 
     #[test]
-    fn selected_engine_accepts_explicit_dagre() {
+    fn selected_engine_flux_layered_uses_unified_preview() {
         let input = "graph TD\nA-->B";
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
         let config = RenderConfig {
-            layout_engine: Some(LayoutEngineId::Dagre),
+            layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+            ..RenderConfig::default()
+        };
+
+        let result = layout_with_selected_engine(&diagram, &config, OutputFormat::Text).unwrap();
+        assert_eq!(result.geometry.edges.len(), 1);
+        assert_eq!(
+            result.edge_routing,
+            crate::diagram::EdgeRouting::UnifiedPreview
+        );
+    }
+
+    #[test]
+    fn selected_engine_mermaid_layered_uses_full_compute() {
+        let input = "graph TD\nA-->B";
+        let flowchart = crate::parser::parse_flowchart(input).unwrap();
+        let diagram = crate::graph::build_diagram(&flowchart);
+        let config = RenderConfig {
+            layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
             ..RenderConfig::default()
         };
 
@@ -350,7 +389,7 @@ mod tests {
         let flowchart = crate::parser::parse_flowchart(input).unwrap();
         let diagram = crate::graph::build_diagram(&flowchart);
         let config = RenderConfig {
-            layout_engine: Some(LayoutEngineId::Elk),
+            layout_engine: Some(EngineAlgorithmId::parse("elk-layered").unwrap()),
             ..RenderConfig::default()
         };
 
@@ -364,9 +403,9 @@ mod tests {
 
     #[test]
     fn selected_engine_rejects_unknown_engine_at_parse_boundary() {
-        let err = crate::diagram::LayoutEngineId::parse("nonexistent").unwrap_err();
+        let err = EngineAlgorithmId::parse("nonexistent").unwrap_err();
         assert!(
-            err.message.contains("unknown layout engine"),
+            err.message.contains("unknown engine"),
             "error should mention unknown: {}",
             err.message
         );

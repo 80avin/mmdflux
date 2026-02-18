@@ -157,13 +157,13 @@ fn cose_engine_not_yet_implemented() {
 // Engine selection through render path
 // =============================================================================
 
-/// Helper: parse + render with a specific engine name.
+/// Helper: parse + render with a specific engine algorithm ID string.
 fn render_with_engine(input: &str, engine: &str) -> Result<String, RenderError> {
     let mut instance = FlowchartInstance::new();
     instance
         .parse(input)
         .expect("parse should succeed in test helper");
-    let engine = LayoutEngineId::parse(engine)?;
+    let engine = EngineAlgorithmId::parse(engine)?;
     let config = RenderConfig {
         layout_engine: Some(engine),
         ..Default::default()
@@ -175,7 +175,7 @@ fn render_with_engine(input: &str, engine: &str) -> Result<String, RenderError> 
 fn unavailable_engine_returns_actionable_error() {
     #[cfg(not(feature = "engine-elk"))]
     {
-        let err = render_with_engine("graph TD\nA-->B", "elk").unwrap_err();
+        let err = render_with_engine("graph TD\nA-->B", "elk-layered").unwrap_err();
         assert!(
             err.message.contains("engine-elk"),
             "error should reference feature flag: {}",
@@ -188,7 +188,7 @@ fn unavailable_engine_returns_actionable_error() {
 fn unknown_engine_returns_error() {
     let err = render_with_engine("graph TD\nA-->B", "nonexistent").unwrap_err();
     assert!(
-        err.message.contains("unknown layout engine"),
+        err.message.contains("unknown engine"),
         "error should mention unknown engine: {}",
         err.message
     );
@@ -233,21 +233,22 @@ fn dagre_edge_routing_is_full_compute() {
 }
 
 #[test]
-fn cose_render_path_returns_not_implemented() {
-    let err = render_with_engine("graph TD\nA-->B", "cose").unwrap_err();
+fn cose_rejected_at_parse_boundary() {
+    // COSE is not in the new engine+algorithm taxonomy; rejected at parse time.
+    let err = EngineAlgorithmId::parse("cose").unwrap_err();
     assert!(
-        err.message.contains("not yet implemented"),
-        "COSE should return not-implemented error: {}",
+        !err.message.is_empty(),
+        "cose should be rejected at parse boundary: {}",
         err.message
     );
 }
 
 #[test]
-fn cose_bilkent_alias_also_returns_not_implemented() {
-    let err = render_with_engine("graph TD\nA-->B", "cose-bilkent").unwrap_err();
+fn cose_bilkent_rejected_at_parse_boundary() {
+    let err = EngineAlgorithmId::parse("cose-bilkent").unwrap_err();
     assert!(
-        err.message.contains("not yet implemented"),
-        "COSE-Bilkent should return not-implemented error: {}",
+        !err.message.is_empty(),
+        "cose-bilkent should be rejected at parse boundary: {}",
         err.message
     );
 }
@@ -274,11 +275,11 @@ fn flux_vs_mermaid_text_output_identical_for_simple() {
     instance.parse(&input).unwrap();
 
     let flux_config = RenderConfig {
-        edge_routing: Some(EdgeRouting::UnifiedPreview),
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
         ..RenderConfig::default()
     };
     let mermaid_config = RenderConfig {
-        edge_routing: Some(EdgeRouting::FullCompute),
+        layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
         ..RenderConfig::default()
     };
 
@@ -302,7 +303,7 @@ fn flux_vs_mermaid_svg_output_may_diverge_for_cycle() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                edge_routing: Some(EdgeRouting::UnifiedPreview),
+                layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
                 ..RenderConfig::default()
             },
         )
@@ -311,7 +312,7 @@ fn flux_vs_mermaid_svg_output_may_diverge_for_cycle() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                edge_routing: Some(EdgeRouting::FullCompute),
+                layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
                 ..RenderConfig::default()
             },
         )

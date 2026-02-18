@@ -1,9 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use mmdflux::diagram::{
-    EdgeRouting, EdgeRoutingPolicyToggles, EdgeStyle, OutputFormat, PathDetail, RenderConfig,
-};
+use mmdflux::diagram::{EdgeStyle, EngineAlgorithmId, OutputFormat, PathDetail, RenderConfig};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::registry::DiagramInstance;
@@ -117,27 +115,14 @@ fn render_svg_fixture_with_curve(name: &str, curve: EdgeStyle) -> String {
     render_svg(&diagram, &options)
 }
 
-fn render_svg_fixture_with_edge_routing(name: &str, mode: EdgeRouting) -> String {
-    render_svg_fixture_with_edge_routing_and_policies(
-        name,
-        mode,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    )
-}
-
-fn render_svg_fixture_with_edge_routing_and_policies(
-    name: &str,
-    mode: EdgeRouting,
-    policies: EdgeRoutingPolicyToggles,
-) -> String {
+fn render_svg_fixture_with_engine(name: &str, engine: &str) -> String {
     let input = load_fixture(name);
     let mut instance = FlowchartInstance::new();
     instance.parse(&input).expect("Failed to parse fixture");
     let config = RenderConfig {
         edge_style: Some(EdgeStyle::Sharp),
         path_detail: PathDetail::Full,
-        edge_routing: Some(mode),
-        edge_routing_policies: policies,
+        layout_engine: Some(EngineAlgorithmId::parse(engine).unwrap()),
         ..RenderConfig::default()
     };
     instance
@@ -147,8 +132,8 @@ fn render_svg_fixture_with_edge_routing_and_policies(
 
 fn render_svg_fixture_full_vs_unified(name: &str) -> (String, String) {
     (
-        render_svg_fixture_with_edge_routing(name, EdgeRouting::FullCompute),
-        render_svg_fixture_with_edge_routing(name, EdgeRouting::UnifiedPreview),
+        render_svg_fixture_with_engine(name, "mermaid-layered"),
+        render_svg_fixture_with_engine(name, "flux-layered"),
     )
 }
 
@@ -420,8 +405,8 @@ fn svg_unified_preview_parity_fixture_subset_matches_expected_classification() {
 #[test]
 fn unified_preview_svg_output_is_deterministic_for_fixture_subset() {
     for fixture in UNIFIED_PARITY_FIXTURE_SUBSET {
-        let first = render_svg_fixture_with_edge_routing(fixture, EdgeRouting::UnifiedPreview);
-        let second = render_svg_fixture_with_edge_routing(fixture, EdgeRouting::UnifiedPreview);
+        let first = render_svg_fixture_with_engine(fixture, "flux-layered");
+        let second = render_svg_fixture_with_engine(fixture, "flux-layered");
         assert_eq!(
             second, first,
             "unified-preview SVG output is nondeterministic for fixture {fixture}"
@@ -432,16 +417,8 @@ fn unified_preview_svg_output_is_deterministic_for_fixture_subset() {
 #[test]
 fn svg_full_compute_rollback_is_stable_across_repeated_renders() {
     for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
-        let baseline = render_svg_fixture_with_edge_routing_and_policies(
-            fixture,
-            EdgeRouting::FullCompute,
-            EdgeRoutingPolicyToggles::all_enabled(),
-        );
-        let output = render_svg_fixture_with_edge_routing_and_policies(
-            fixture,
-            EdgeRouting::FullCompute,
-            EdgeRoutingPolicyToggles::all_enabled(),
-        );
+        let baseline = render_svg_fixture_with_engine(fixture, "mermaid-layered");
+        let output = render_svg_fixture_with_engine(fixture, "mermaid-layered");
         assert_eq!(
             output, baseline,
             "full-compute rollback should be stable for fixture {fixture}"
@@ -451,14 +428,10 @@ fn svg_full_compute_rollback_is_stable_across_repeated_renders() {
 
 #[test]
 fn svg_unified_preview_preserves_subgraph_vertical_order_on_multi_override_fixture() {
-    let legacy = render_svg_fixture_with_edge_routing(
-        "multi_subgraph_direction_override.mmd",
-        EdgeRouting::FullCompute,
-    );
-    let unified = render_svg_fixture_with_edge_routing(
-        "multi_subgraph_direction_override.mmd",
-        EdgeRouting::UnifiedPreview,
-    );
+    let legacy =
+        render_svg_fixture_with_engine("multi_subgraph_direction_override.mmd", "mermaid-layered");
+    let unified =
+        render_svg_fixture_with_engine("multi_subgraph_direction_override.mmd", "flux-layered");
 
     let legacy_ys = subgraph_rect_ys(&legacy);
     let unified_ys = subgraph_rect_ys(&unified);

@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::{EdgeRouting, GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig};
+use mmdflux::diagram::{EngineAlgorithmId, GeometryLevel, OutputFormat, RenderConfig};
 use mmdflux::diagrams::class::ClassInstance;
 use mmdflux::registry::DiagramInstance;
 
@@ -157,10 +157,11 @@ fn class_instance_via_registry() {
 
 #[test]
 fn class_instance_unknown_engine_rejected_at_parse_boundary() {
-    let err = LayoutEngineId::parse("nonexistent").unwrap_err();
-    assert!(err.message.contains("unknown layout engine"));
+    let err = EngineAlgorithmId::parse("nonexistent").unwrap_err();
+    assert!(err.message.contains("unknown engine"));
 }
 
+#[cfg(not(feature = "engine-elk"))]
 #[test]
 fn class_instance_known_non_dagre_engine_errors_cleanly() {
     let mut instance = ClassInstance::new();
@@ -168,13 +169,17 @@ fn class_instance_known_non_dagre_engine_errors_cleanly() {
     let result = instance.render(
         OutputFormat::Text,
         &RenderConfig {
-            layout_engine: Some(LayoutEngineId::Cose),
+            layout_engine: Some(EngineAlgorithmId::parse("elk-layered").unwrap()),
             ..RenderConfig::default()
         },
     );
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err.message.contains("not yet implemented"));
+    assert!(
+        err.message.contains("engine-elk") || err.message.contains("not available"),
+        "error should be actionable: {}",
+        err.message
+    );
 }
 
 #[test]
@@ -194,25 +199,25 @@ fn class_routed_mmds_honors_edge_routing_override() {
             OutputFormat::Mmds,
             &RenderConfig {
                 geometry_level: GeometryLevel::Routed,
-                edge_routing: Some(EdgeRouting::FullCompute),
+                layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
                 ..RenderConfig::default()
             },
         )
-        .expect("full-compute mmds should render");
+        .expect("mermaid-layered mmds should render");
     let unified = instance
         .render(
             OutputFormat::Mmds,
             &RenderConfig {
                 geometry_level: GeometryLevel::Routed,
-                edge_routing: Some(EdgeRouting::UnifiedPreview),
+                layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
                 ..RenderConfig::default()
             },
         )
-        .expect("unified-preview mmds should render");
+        .expect("flux-layered mmds should render");
 
     assert_ne!(
         full, unified,
-        "class routed MMDS should reflect edge-routing override semantics"
+        "class routed MMDS should differ between mermaid-layered and flux-layered engines"
     );
 }
 
@@ -227,25 +232,25 @@ fn class_routed_mmds_honors_edge_routing_override_on_cycle() {
             OutputFormat::Mmds,
             &RenderConfig {
                 geometry_level: GeometryLevel::Routed,
-                edge_routing: Some(EdgeRouting::FullCompute),
+                layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
                 ..RenderConfig::default()
             },
         )
-        .expect("full-compute mmds should render");
+        .expect("mermaid-layered mmds should render");
     let unified = instance
         .render(
             OutputFormat::Mmds,
             &RenderConfig {
                 geometry_level: GeometryLevel::Routed,
-                edge_routing: Some(EdgeRouting::UnifiedPreview),
+                layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
                 ..RenderConfig::default()
             },
         )
-        .expect("unified-preview mmds should render");
+        .expect("flux-layered mmds should render");
 
     assert_ne!(
         full, unified,
-        "class routed MMDS cycle output should change under unified-preview override"
+        "class routed MMDS cycle output should differ between mermaid-layered and flux-layered"
     );
 }
 
@@ -259,25 +264,25 @@ fn class_svg_honors_edge_routing_override_on_cycle() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                edge_routing: Some(EdgeRouting::FullCompute),
+                layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
                 ..RenderConfig::default()
             },
         )
-        .expect("full-compute svg should render");
+        .expect("mermaid-layered svg should render");
     let unified = instance
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                edge_routing: Some(EdgeRouting::UnifiedPreview),
+                layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
                 ..RenderConfig::default()
             },
         )
-        .expect("unified-preview svg should render");
+        .expect("flux-layered svg should render");
 
     assert!(full.starts_with("<svg"));
     assert!(unified.starts_with("<svg"));
     assert_ne!(
         full, unified,
-        "class SVG cycle output should change under unified-preview override"
+        "class SVG cycle output should differ between mermaid-layered and flux-layered engines"
     );
 }

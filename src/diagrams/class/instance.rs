@@ -2,7 +2,10 @@
 
 use super::compiler;
 use super::parser::parse_class_diagram;
-use crate::diagram::{GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig, RenderError};
+use crate::diagram::{
+    EdgeRoutingPolicyToggles, EngineId, GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig,
+    RenderError,
+};
 use crate::diagrams::flowchart::engine::layout_with_selected_engine;
 use crate::diagrams::flowchart::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::diagrams::flowchart::routing;
@@ -44,21 +47,30 @@ impl DiagramInstance for ClassInstance {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
 
-        let selected_engine = config.layout_engine.unwrap_or(LayoutEngineId::Dagre);
-        selected_engine.check_available()?;
+        // Temporary bridge: map EngineAlgorithmId → LayoutEngineId until Phase 3.
+        if let Some(algo_id) = config.layout_engine {
+            algo_id.check_available()?;
+        }
+        let selected_engine = config
+            .layout_engine
+            .map(|id| match id.engine() {
+                EngineId::Flux | EngineId::Mermaid => LayoutEngineId::Dagre,
+                EngineId::Elk => LayoutEngineId::Elk,
+            })
+            .unwrap_or(LayoutEngineId::Dagre);
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;
 
         if matches!(format, OutputFormat::Mmds) {
             let engine_result = layout_with_selected_engine(diagram, config, format)?;
-            let edge_routing = config.edge_routing.unwrap_or(engine_result.edge_routing);
+            let edge_routing = engine_result.edge_routing;
             let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
                 Some(routing::route_graph_geometry_with_policies(
                     diagram,
                     &engine_result.geometry,
                     edge_routing,
-                    config.edge_routing_policies,
+                    EdgeRoutingPolicyToggles,
                 ))
             } else {
                 None
@@ -75,12 +87,12 @@ impl DiagramInstance for ClassInstance {
 
         if matches!(format, OutputFormat::Svg) && selected_engine != LayoutEngineId::Dagre {
             let engine_result = layout_with_selected_engine(diagram, config, format)?;
-            let edge_routing = config.edge_routing.unwrap_or(engine_result.edge_routing);
+            let edge_routing = engine_result.edge_routing;
             let routed = routing::route_graph_geometry_with_policies(
                 diagram,
                 &engine_result.geometry,
                 edge_routing,
-                config.edge_routing_policies,
+                EdgeRoutingPolicyToggles,
             );
             let geom = inject_routed_paths(&engine_result.geometry, &routed);
             return Ok(render_svg_from_geometry(

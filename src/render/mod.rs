@@ -14,6 +14,7 @@ pub use chars::CharSet;
 
 use crate::diagram::{
     EdgeRouting, EdgeRoutingPolicyToggles, EdgeStyle, OutputFormat, PathDetail, RenderConfig,
+    RouteOwnership,
 };
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
@@ -52,6 +53,16 @@ impl From<&RenderConfig> for RenderOptions {
             svg.diagram_padding = padding;
         }
 
+        // Derive routing from engine capabilities. Default (None) is flux-layered behavior.
+        let edge_routing = config
+            .layout_engine
+            .map(|id| match id.capabilities().route_ownership {
+                RouteOwnership::Native => EdgeRouting::UnifiedPreview,
+                RouteOwnership::HintDriven => EdgeRouting::FullCompute,
+                RouteOwnership::EngineProvided => EdgeRouting::PassThroughClip,
+            })
+            .or(Some(EdgeRouting::UnifiedPreview)); // default: flux-layered
+
         RenderOptions {
             output_format: OutputFormat::Text,
             svg,
@@ -63,8 +74,8 @@ impl From<&RenderConfig> for RenderOptions {
             cluster_ranksep: config.cluster_ranksep,
             padding: config.padding,
             path_detail: config.path_detail,
-            edge_routing: config.edge_routing,
-            edge_routing_policies: config.edge_routing_policies,
+            edge_routing,
+            edge_routing_policies: EdgeRoutingPolicyToggles,
         }
     }
 }
