@@ -3,12 +3,11 @@
 use super::compiler;
 use super::parser::parse_class_diagram;
 use crate::diagram::{
-    EdgeRoutingPolicyToggles, EngineId, GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig,
-    RenderError,
+    AlgorithmId, EdgeRouting, EngineAlgorithmId, EngineConfig, EngineId, GeometryLevel,
+    GraphSolveRequest, OutputFormat, RenderConfig, RenderError, RouteOwnership,
 };
-use crate::diagrams::flowchart::engine::layout_with_selected_engine;
 use crate::diagrams::flowchart::geometry::{GraphGeometry, RoutedGraphGeometry};
-use crate::diagrams::flowchart::routing;
+use crate::engines::graph::GraphEngineRegistry;
 use crate::graph::Diagram;
 use crate::mmds::to_mmds_json_typed;
 use crate::registry::DiagramInstance;
@@ -47,72 +46,74 @@ impl DiagramInstance for ClassInstance {
             message: "No diagram parsed. Call parse() first.".to_string(),
         })?;
 
-        // Temporary bridge: map EngineAlgorithmId → LayoutEngineId until Phase 3.
-        if let Some(algo_id) = config.layout_engine {
-            algo_id.check_available()?;
-        }
-        let selected_engine = config
+        // Resolve engine (default: flux-layered, same as flowchart).
+        let engine_id = config
             .layout_engine
-            .map(|id| match id.engine() {
-                EngineId::Flux | EngineId::Mermaid => LayoutEngineId::Dagre,
-                EngineId::Elk => LayoutEngineId::Elk,
-            })
-            .unwrap_or(LayoutEngineId::Dagre);
+            .unwrap_or_else(|| EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered));
+        engine_id.check_available()?;
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;
 
-        if matches!(format, OutputFormat::Mmds) {
-            let engine_result = layout_with_selected_engine(diagram, config, format)?;
-            let edge_routing = engine_result.edge_routing;
-            let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
-                Some(routing::route_graph_geometry_with_policies(
+        match format {
+            OutputFormat::Mmds => {
+                let request = GraphSolveRequest::from_config(config, format);
+                let registry = GraphEngineRegistry::default();
+                let engine = registry.get_solver(engine_id).ok_or_else(|| RenderError {
+                    message: format!("no engine registered for: {engine_id}"),
+                })?;
+                let result = engine.solve(
                     diagram,
-                    &engine_result.geometry,
+                    &EngineConfig::Dagre(config.layout.clone()),
+                    &request,
+                )?;
+                to_mmds_json_typed(
+                    "class",
+                    diagram,
+                    &result.geometry,
+                    result.routed.as_ref(),
+                    config.geometry_level,
+                    config.path_detail,
+                )
+            }
+            OutputFormat::Svg => {
+                // SVG always needs routed paths for render_svg_from_geometry.
+                let request = GraphSolveRequest {
+                    geometry_level: GeometryLevel::Routed,
+                    ..GraphSolveRequest::from_config(config, format)
+                };
+                let registry = GraphEngineRegistry::default();
+                let engine = registry.get_solver(engine_id).ok_or_else(|| RenderError {
+                    message: format!("no engine registered for: {engine_id}"),
+                })?;
+                let result = engine.solve(
+                    diagram,
+                    &EngineConfig::Dagre(config.layout.clone()),
+                    &request,
+                )?;
+                let edge_routing = match engine_id.capabilities().route_ownership {
+                    RouteOwnership::Native => EdgeRouting::UnifiedPreview,
+                    RouteOwnership::HintDriven => EdgeRouting::FullCompute,
+                    RouteOwnership::EngineProvided => EdgeRouting::PassThroughClip,
+                };
+                let geom = if let Some(ref routed) = result.routed {
+                    inject_routed_paths(&result.geometry, routed)
+                } else {
+                    result.geometry.clone()
+                };
+                Ok(render_svg_from_geometry(
+                    diagram,
+                    &options,
+                    &geom,
                     edge_routing,
-                    EdgeRoutingPolicyToggles,
                 ))
-            } else {
-                None
-            };
-            return to_mmds_json_typed(
-                "class",
-                diagram,
-                &engine_result.geometry,
-                routed.as_ref(),
-                config.geometry_level,
-                config.path_detail,
-            );
+            }
+            // Text/Ascii: use character-grid layout pipeline.
+            OutputFormat::Text | OutputFormat::Ascii => Ok(render(diagram, &options)),
+            _ => Err(RenderError {
+                message: format!("{format} output is not supported for class diagrams"),
+            }),
         }
-
-        if matches!(format, OutputFormat::Svg) && selected_engine != LayoutEngineId::Dagre {
-            let engine_result = layout_with_selected_engine(diagram, config, format)?;
-            let edge_routing = engine_result.edge_routing;
-            let routed = routing::route_graph_geometry_with_policies(
-                diagram,
-                &engine_result.geometry,
-                edge_routing,
-                EdgeRoutingPolicyToggles,
-            );
-            let geom = inject_routed_paths(&engine_result.geometry, &routed);
-            return Ok(render_svg_from_geometry(
-                diagram,
-                &options,
-                &geom,
-                edge_routing,
-            ));
-        }
-
-        if selected_engine != LayoutEngineId::Dagre {
-            return Err(RenderError {
-                message: format!(
-                    "{} engine is currently supported only for svg and json output",
-                    selected_engine
-                ),
-            });
-        }
-
-        Ok(render(diagram, &options))
     }
 
     fn supports_format(&self, format: OutputFormat) -> bool {

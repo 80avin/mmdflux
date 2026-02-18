@@ -286,3 +286,67 @@ fn class_svg_honors_edge_routing_override_on_cycle() {
         "class SVG cycle output should differ between mermaid-layered and flux-layered engines"
     );
 }
+
+// --- Task 4.4: Class diagram solve-path enablement ---
+
+#[test]
+fn class_render_text_through_solve_path() {
+    let mut instance = ClassInstance::new();
+    instance.parse("classDiagram\nAnimal <|-- Dog").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(output.contains("Animal"));
+    assert!(output.contains("Dog"));
+}
+
+#[test]
+fn class_render_mmds_through_solve_path() {
+    let mut instance = ClassInstance::new();
+    instance.parse("classDiagram\nAnimal <|-- Dog").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        geometry_level: GeometryLevel::Routed,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert!(json["edges"].is_array());
+}
+
+#[test]
+fn class_default_engine_is_flux_layered() {
+    let mut instance = ClassInstance::new();
+    instance.parse("classDiagram\nA <|-- B").unwrap();
+
+    let default_out = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+
+    let explicit_config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        ..Default::default()
+    };
+    let explicit_out = instance
+        .render(OutputFormat::Text, &explicit_config)
+        .unwrap();
+
+    assert_eq!(default_out, explicit_out);
+}
+
+#[test]
+fn class_mermaid_layered_compatibility() {
+    let mut instance = ClassInstance::new();
+    instance.parse("classDiagram\nA <|-- B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(output.contains('A'));
+}
