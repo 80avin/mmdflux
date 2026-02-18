@@ -226,7 +226,7 @@ mod tests {
 
     use super::*;
     use crate::layered::graph::DiGraph;
-    use crate::layered::{self, LayoutConfig, normalize, rank};
+    use crate::layered::{LayoutConfig, normalize, rank};
 
     /// Build a LayoutGraph matching the external_node_subgraph fixture and run
     /// the pipeline up through parent_dummy_chains.
