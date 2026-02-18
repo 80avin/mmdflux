@@ -71,6 +71,10 @@ pub(crate) fn route_edges_unified(
                 .target_fraction_for_edge
                 .get(&edge.index)
                 .copied();
+            let target_primary_channel_depth = fan_in_target_conflict
+                .target_primary_channel_depth_for_edge
+                .get(&edge.index)
+                .copied();
             let target_overflowed = fan_in_target_conflict.overflow_targeted.contains(&edge.to);
             let target_has_backward_conflict = fan_in_target_conflict
                 .targets_with_backward_inbound
@@ -83,6 +87,7 @@ pub(crate) fn route_edges_unified(
                 is_backward,
                 overflow_policy_target_face,
                 overflow_policy_target_fraction,
+                target_primary_channel_depth,
                 target_overflowed,
                 target_has_backward_conflict,
                 rank_span,
@@ -297,6 +302,7 @@ fn build_unified_path(
     is_backward: bool,
     overflow_policy_target_face: Option<Face>,
     overflow_policy_target_fraction: Option<f64>,
+    target_primary_channel_depth: Option<f64>,
     target_overflowed: bool,
     target_has_backward_conflict: bool,
     rank_span: usize,
@@ -347,6 +353,15 @@ fn build_unified_path(
     collapse_source_turnback_spikes(&mut normalized);
     let base_finalized = normalize_orthogonal_route_contracts(&normalized, direction);
     let mut finalized = base_finalized.clone();
+    if !is_backward {
+        stagger_primary_face_shared_axis_segment(
+            &mut finalized,
+            direction,
+            overflow_policy_target_face,
+            target_primary_channel_depth,
+        );
+        finalized = normalize_orthogonal_route_contracts(&finalized, direction);
+    }
     if !is_backward
         && let Some(policy_face) = overflow_policy_target_face
         && policy_face != flow_target_face_for_direction(direction)
@@ -490,6 +505,7 @@ fn backward_td_bt_face_overrides(
 struct FanInTargetOverflowContext {
     target_face_for_edge: HashMap<usize, Face>,
     target_fraction_for_edge: HashMap<usize, f64>,
+    target_primary_channel_depth_for_edge: HashMap<usize, f64>,
     overflow_targeted: HashSet<String>,
     targets_with_backward_inbound: HashSet<String>,
 }
@@ -517,6 +533,7 @@ fn fan_in_target_overflow_context(
     let primary_face = fan_in_primary_target_face(direction);
     let mut target_face_for_edge: HashMap<usize, Face> = HashMap::new();
     let mut target_fraction_for_edge: HashMap<usize, f64> = HashMap::new();
+    let mut target_primary_channel_depth_for_edge: HashMap<usize, f64> = HashMap::new();
     let mut overflow_targeted: HashSet<String> = HashSet::new();
     let mut targets_with_backward_inbound: HashSet<String> = HashSet::new();
     const CENTER_EPS: f64 = 0.5;
@@ -597,16 +614,36 @@ fn fan_in_target_overflow_context(
                 .push((edge.index, source_cross));
         }
 
-        for (_face, mut face_edges) in edges_by_face {
+        for (face, mut face_edges) in edges_by_face {
             face_edges.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
             let count = face_edges.len();
-            for (idx, (edge_index, _)) in face_edges.into_iter().enumerate() {
+            for (idx, (edge_index, _)) in face_edges.iter().enumerate() {
                 let fraction = if count <= 1 {
                     0.5
                 } else {
                     idx as f64 / (count - 1) as f64
                 };
-                target_fraction_for_edge.insert(edge_index, fraction);
+                target_fraction_for_edge.insert(*edge_index, fraction);
+            }
+            if face == primary_face && count > 1 {
+                let center = (count.saturating_sub(1) as f64) / 2.0;
+                let mut depth_order: Vec<(usize, f64, f64)> = face_edges
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, (edge_index, source_cross))| {
+                        let distance_from_center = (idx as f64 - center).abs();
+                        (*edge_index, distance_from_center, *source_cross)
+                    })
+                    .collect();
+                depth_order.sort_by(|a, b| {
+                    a.1.total_cmp(&b.1)
+                        .then_with(|| a.2.total_cmp(&b.2))
+                        .then_with(|| a.0.cmp(&b.0))
+                });
+                let denom = (count - 1) as f64;
+                for (rank, (edge_index, _, _)) in depth_order.into_iter().enumerate() {
+                    target_primary_channel_depth_for_edge.insert(edge_index, rank as f64 / denom);
+                }
             }
         }
 
@@ -626,12 +663,14 @@ fn fan_in_target_overflow_context(
     FanInTargetOverflowContext {
         target_face_for_edge,
         target_fraction_for_edge,
+        target_primary_channel_depth_for_edge,
         overflow_targeted,
         targets_with_backward_inbound,
     }
 }
 
 fn adaptive_fan_in_primary_face_capacity(direction: Direction, target_rect: &FRect) -> usize {
+    let baseline_capacity = fan_in_primary_face_capacity(direction);
     let face_span = match direction {
         Direction::TopDown | Direction::BottomTop => target_rect.width.abs(),
         Direction::LeftRight | Direction::RightLeft => target_rect.height.abs(),
@@ -642,7 +681,7 @@ fn adaptive_fan_in_primary_face_capacity(direction: Direction, target_rect: &FRe
     } else {
         (usable_span / MIN_FAN_IN_PRIMARY_SLOT_SPACING).floor() as usize + 1
     };
-    dynamic_capacity.max(1)
+    dynamic_capacity.max(baseline_capacity).max(1)
 }
 
 fn fan_in_source_cross_axis(
@@ -734,6 +773,97 @@ fn face_cross_axis(rect: &FRect, direction: Direction) -> f64 {
         Direction::TopDown | Direction::BottomTop => rect.x + rect.width / 2.0,
         Direction::LeftRight | Direction::RightLeft => rect.y + rect.height / 2.0,
     }
+}
+
+fn stagger_primary_face_shared_axis_segment(
+    path: &mut [FPoint],
+    direction: Direction,
+    overflow_policy_target_face: Option<Face>,
+    target_primary_channel_depth: Option<f64>,
+) {
+    const EPS: f64 = 0.000_001;
+    const MIN_SOURCE_STEM: f64 = 8.0;
+    const MIN_TARGET_STEM: f64 = 8.0;
+
+    let Some(depth) = target_primary_channel_depth else {
+        return;
+    };
+    if path.len() != 4 {
+        return;
+    }
+    if overflow_policy_target_face != Some(flow_target_face_for_direction(direction)) {
+        return;
+    }
+
+    let depth = depth.clamp(0.0, 1.0);
+    match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            let first_vertical =
+                (path[0].x - path[1].x).abs() <= EPS && (path[0].y - path[1].y).abs() > EPS;
+            let middle_horizontal =
+                (path[1].y - path[2].y).abs() <= EPS && (path[1].x - path[2].x).abs() > EPS;
+            let terminal_vertical =
+                (path[2].x - path[3].x).abs() <= EPS && (path[2].y - path[3].y).abs() > EPS;
+            if !(first_vertical && middle_horizontal && terminal_vertical) {
+                return;
+            }
+
+            if let Some(y) = stagger_axis_value(
+                path[0].y,
+                path[3].y,
+                depth,
+                MIN_SOURCE_STEM,
+                MIN_TARGET_STEM,
+            ) {
+                path[1].y = y;
+                path[2].y = y;
+            }
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            let first_horizontal =
+                (path[0].y - path[1].y).abs() <= EPS && (path[0].x - path[1].x).abs() > EPS;
+            let middle_vertical =
+                (path[1].x - path[2].x).abs() <= EPS && (path[1].y - path[2].y).abs() > EPS;
+            let terminal_horizontal =
+                (path[2].y - path[3].y).abs() <= EPS && (path[2].x - path[3].x).abs() > EPS;
+            if !(first_horizontal && middle_vertical && terminal_horizontal) {
+                return;
+            }
+
+            if let Some(x) = stagger_axis_value(
+                path[0].x,
+                path[3].x,
+                depth,
+                MIN_SOURCE_STEM,
+                MIN_TARGET_STEM,
+            ) {
+                path[1].x = x;
+                path[2].x = x;
+            }
+        }
+    }
+}
+
+fn stagger_axis_value(
+    start: f64,
+    end: f64,
+    depth: f64,
+    min_source_stem: f64,
+    min_target_stem: f64,
+) -> Option<f64> {
+    const EPS: f64 = 0.000_001;
+    let delta = end - start;
+    if delta.abs() <= min_source_stem + min_target_stem + EPS {
+        return None;
+    }
+
+    let sign = delta.signum();
+    let shallow = start + sign * min_source_stem;
+    let deep = end - sign * min_target_stem;
+    if (deep - shallow).abs() <= EPS {
+        return None;
+    }
+    Some(shallow + (deep - shallow) * depth.clamp(0.0, 1.0))
 }
 
 fn edge_rank_span(

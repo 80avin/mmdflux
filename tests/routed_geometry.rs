@@ -3,6 +3,7 @@
 //! Verifies that `route_graph_geometry` produces correct `RoutedGraphGeometry`
 //! from engine-produced `GraphGeometry`.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -339,6 +340,49 @@ fn source_support_is_normal_to_attached_rect_face(
     let horizontal_segment = (start.y - next.y).abs() <= eps && (start.x - next.x).abs() > eps;
 
     (on_top || on_bottom) && vertical_segment || (on_left || on_right) && horizontal_segment
+}
+
+fn has_coincident_horizontal_overlap(path_a: &[FPoint], path_b: &[FPoint]) -> bool {
+    const EPS: f64 = 0.5;
+    for seg_a in path_a.windows(2) {
+        let a0 = seg_a[0];
+        let a1 = seg_a[1];
+        let a_is_horizontal = (a0.y - a1.y).abs() <= EPS && (a0.x - a1.x).abs() > EPS;
+        if !a_is_horizontal {
+            continue;
+        }
+        let a_min_x = a0.x.min(a1.x);
+        let a_max_x = a0.x.max(a1.x);
+        for seg_b in path_b.windows(2) {
+            let b0 = seg_b[0];
+            let b1 = seg_b[1];
+            let b_is_horizontal = (b0.y - b1.y).abs() <= EPS && (b0.x - b1.x).abs() > EPS;
+            if !b_is_horizontal || (a0.y - b0.y).abs() > EPS {
+                continue;
+            }
+            let b_min_x = b0.x.min(b1.x);
+            let b_max_x = b0.x.max(b1.x);
+            let overlap = a_max_x.min(b_max_x) - a_min_x.max(b_min_x);
+            if overlap > EPS {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn td_bt_middle_horizontal_lane(path: &[FPoint]) -> Option<f64> {
+    const EPS: f64 = 0.5;
+    if path.len() != 4 {
+        return None;
+    }
+    let first_vertical =
+        (path[0].x - path[1].x).abs() <= EPS && (path[0].y - path[1].y).abs() > EPS;
+    let middle_horizontal =
+        (path[1].y - path[2].y).abs() <= EPS && (path[1].x - path[2].x).abs() > EPS;
+    let terminal_vertical =
+        (path[2].x - path[3].x).abs() <= EPS && (path[2].y - path[3].y).abs() > EPS;
+    (first_vertical && middle_horizontal && terminal_vertical).then_some(path[1].y)
 }
 
 fn path_has_source_turnback_spike(path: &[FPoint]) -> bool {
@@ -2816,6 +2860,166 @@ fn very_narrow_fan_in_primary_face_ports_do_not_collapse_to_single_anchor() {
     assert_eq!(
         unique_count, 4,
         "very_narrow_fan_in top-face target ports should occupy distinct anchors instead of collapsing: top_xs={top_xs:?}"
+    );
+}
+
+#[test]
+fn five_fan_in_primary_face_channels_are_staggered_without_overlap() {
+    let (diagram, geom) = layout_fixture_svg("five_fan_in.mmd");
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        RoutingMode::UnifiedPreview,
+        RoutingPolicyToggles::all_enabled(),
+    );
+    let target_rect = geom
+        .nodes
+        .get("F")
+        .expect("five_fan_in should contain target F")
+        .rect;
+
+    let inbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.to == "F" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        inbound.len(),
+        5,
+        "five_fan_in should produce five inbound forward edges to F"
+    );
+
+    for edge in &inbound {
+        let end = edge
+            .path
+            .last()
+            .copied()
+            .expect("inbound edge should have endpoint");
+        assert_eq!(
+            point_on_target_face(target_rect, end),
+            "top",
+            "five_fan_in should keep all inbound endpoints on F's top face under adaptive capacity: {} -> F path={:?}",
+            edge.from,
+            edge.path
+        );
+    }
+
+    for i in 0..inbound.len() {
+        for j in (i + 1)..inbound.len() {
+            assert!(
+                !has_coincident_horizontal_overlap(&inbound[i].path, &inbound[j].path),
+                "five_fan_in should avoid coincident horizontal channel overlap between {} -> F and {} -> F: left={:?} right={:?}",
+                inbound[i].from,
+                inbound[j].from,
+                inbound[i].path,
+                inbound[j].path
+            );
+        }
+    }
+
+    let mut lanes_by_source: HashMap<String, f64> = HashMap::new();
+    for edge in &inbound {
+        if let Some(y) = td_bt_middle_horizontal_lane(&edge.path) {
+            lanes_by_source.insert(edge.from.clone(), y);
+        }
+    }
+    for source in ["A", "B", "D", "E"] {
+        assert!(
+            lanes_by_source.contains_key(source),
+            "five_fan_in should route {source} -> F with a V-H-V fan-in channel path"
+        );
+    }
+
+    let a_lane = *lanes_by_source
+        .get("A")
+        .expect("lane for A -> F should be present");
+    let b_lane = *lanes_by_source
+        .get("B")
+        .expect("lane for B -> F should be present");
+    let d_lane = *lanes_by_source
+        .get("D")
+        .expect("lane for D -> F should be present");
+    let e_lane = *lanes_by_source
+        .get("E")
+        .expect("lane for E -> F should be present");
+    assert!(
+        b_lane + 0.5 < a_lane,
+        "five_fan_in should place inner-left B -> F shallower than outer-left A -> F to reduce crossing pressure: A={a_lane}, B={b_lane}"
+    );
+    assert!(
+        d_lane + 0.5 < e_lane,
+        "five_fan_in should place inner-right D -> F shallower than outer-right E -> F to reduce crossing pressure: E={e_lane}, D={d_lane}"
+    );
+}
+
+#[test]
+fn very_narrow_fan_in_channels_are_staggered_without_overlap() {
+    let (diagram, geom) = layout_fixture_svg("very_narrow_fan_in.mmd");
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        RoutingMode::UnifiedPreview,
+        RoutingPolicyToggles::all_enabled(),
+    );
+
+    let inbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.to == "E" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        inbound.len(),
+        4,
+        "very_narrow_fan_in should produce four inbound forward edges to E"
+    );
+
+    for i in 0..inbound.len() {
+        for j in (i + 1)..inbound.len() {
+            assert!(
+                !has_coincident_horizontal_overlap(&inbound[i].path, &inbound[j].path),
+                "very_narrow_fan_in should avoid coincident horizontal overlap between {} -> E and {} -> E: left={:?} right={:?}",
+                inbound[i].from,
+                inbound[j].from,
+                inbound[i].path,
+                inbound[j].path
+            );
+        }
+    }
+
+    let mut lanes_by_source: HashMap<String, f64> = HashMap::new();
+    for edge in &inbound {
+        let lane = td_bt_middle_horizontal_lane(&edge.path).unwrap_or_else(|| {
+            panic!(
+                "very_narrow_fan_in {} -> E should route as compact V-H-V to expose staggered channel depth: path={:?}",
+                edge.from, edge.path
+            )
+        });
+        lanes_by_source.insert(edge.from.clone(), lane);
+    }
+
+    let a_lane = *lanes_by_source
+        .get("A")
+        .expect("lane for A -> E should be present");
+    let b_lane = *lanes_by_source
+        .get("B")
+        .expect("lane for B -> E should be present");
+    let c_lane = *lanes_by_source
+        .get("C")
+        .expect("lane for C -> E should be present");
+    let d_lane = *lanes_by_source
+        .get("D")
+        .expect("lane for D -> E should be present");
+    assert!(
+        b_lane + 0.5 < a_lane,
+        "very_narrow_fan_in should place inner-left B -> E shallower than outer-left A -> E: A={a_lane}, B={b_lane}"
+    );
+    assert!(
+        c_lane + 0.5 < d_lane,
+        "very_narrow_fan_in should place inner-right C -> E shallower than outer-right D -> E: D={d_lane}, C={c_lane}"
+    );
+    assert!(
+        (b_lane - c_lane).abs() > 0.5,
+        "very_narrow_fan_in inner lanes should remain distinct to avoid coincident overlap: B={b_lane}, C={c_lane}"
     );
 }
 

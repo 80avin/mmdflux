@@ -3125,7 +3125,7 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_
     let fan_in_cases = [
         ("stacked_fan_in.mmd", "C", "Bot", 0usize),
         ("fan_in.mmd", "D", "Target", 0usize),
-        ("five_fan_in.mmd", "F", "Target", 1usize),
+        ("five_fan_in.mmd", "F", "Target", 0usize),
     ];
     for (fixture_name, target_id, target_label, min_side_faces) in fan_in_cases {
         let diagram = parse_and_build(fixture_name);

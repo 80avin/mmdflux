@@ -434,6 +434,28 @@ fn trailing_segment_run_len(points: &[(f64, f64)], segment_count: usize) -> f64 
         .sum()
 }
 
+fn terminal_collinear_run_len(points: &[(f64, f64)]) -> f64 {
+    if points.len() < 2 {
+        return 0.0;
+    }
+    let mut segments = points.windows(2).rev();
+    let Some(last) = segments.next() else {
+        return 0.0;
+    };
+    let Some(axis) = segment_axis(last[0], last[1]) else {
+        return manhattan_segment_len(last[0], last[1]);
+    };
+
+    let mut run = manhattan_segment_len(last[0], last[1]);
+    for segment in segments {
+        if segment_axis(segment[0], segment[1]) != Some(axis) {
+            break;
+        }
+        run += manhattan_segment_len(segment[0], segment[1]);
+    }
+    run
+}
+
 fn has_immediate_axis_backtrack(points: &[(f64, f64)]) -> bool {
     points.windows(3).any(|triple| {
         let a = triple[0];
@@ -1099,10 +1121,10 @@ fn svg_basis_unified_preview_ampersand_avoids_tiny_terminal_hook_before_arrow() 
             points.len() >= 2,
             "ampersand edge should contain at least two path points: {points:?}"
         );
-        let terminal = manhattan_segment_len(points[points.len() - 2], points[points.len() - 1]);
+        let terminal = terminal_collinear_run_len(&points);
         assert!(
             terminal >= 3.5,
-            "basis unified terminal segment should avoid tiny hook before marker; terminal={terminal}, points={points:?}"
+            "basis unified terminal approach should avoid tiny hook before marker; collinear_terminal_run={terminal}, points={points:?}"
         );
     }
 }
@@ -1917,7 +1939,7 @@ fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documen
     let fan_in_cases = [
         ("stacked_fan_in.mmd", "C", "Bot", 0usize),
         ("fan_in.mmd", "D", "Target", 0usize),
-        ("five_fan_in.mmd", "F", "Target", 1usize),
+        ("five_fan_in.mmd", "F", "Target", 0usize),
     ];
 
     for (fixture_name, target_id, target_label, min_side_faces) in fan_in_cases {
