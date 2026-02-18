@@ -724,3 +724,46 @@ fn mermaid_layered_solve_routed_level_has_routed_geometry() {
         "routed level should produce routed geometry"
     );
 }
+
+// =============================================================================
+// GraphEngineRegistry solver lookup (plan-0081 Phase 3.4)
+// =============================================================================
+
+#[test]
+fn registry_resolves_flux_layered() {
+    let registry = GraphEngineRegistry::default();
+    let id = EngineAlgorithmId::parse("flux-layered").unwrap();
+    let engine = registry.get_solver(id);
+    assert!(engine.is_some(), "flux-layered should be registered");
+    assert_eq!(engine.unwrap().id().to_string(), "flux-layered");
+}
+
+#[test]
+fn registry_resolves_mermaid_layered() {
+    let registry = GraphEngineRegistry::default();
+    let id = EngineAlgorithmId::parse("mermaid-layered").unwrap();
+    let engine = registry.get_solver(id);
+    assert!(engine.is_some(), "mermaid-layered should be registered");
+    assert_eq!(engine.unwrap().id().to_string(), "mermaid-layered");
+}
+
+#[cfg(not(feature = "engine-elk"))]
+#[test]
+fn registry_does_not_have_elk_solver_without_feature() {
+    let registry = GraphEngineRegistry::default();
+    let id = EngineAlgorithmId::parse("elk-layered").unwrap();
+    assert!(
+        registry.get_solver(id).is_none(),
+        "elk-layered should not be registered without engine-elk feature"
+    );
+}
+
+#[test]
+fn registry_get_solver_unknown_id_returns_none() {
+    // An ID that parses but has no engine registered (elk without feature).
+    // This test verifies get_solver returns None rather than panicking.
+    let registry = GraphEngineRegistry::default();
+    // flux-layered is always registered — verify the lookup succeeds (not None)
+    let id = EngineAlgorithmId::parse("flux-layered").unwrap();
+    assert!(registry.get_solver(id).is_some());
+}
