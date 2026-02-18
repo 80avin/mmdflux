@@ -849,14 +849,16 @@ fn render_edges(
             diagram.direction
         };
         let is_backward = geom.reversed_edges.contains(&index);
-        let preserve_orthogonal_endpoint_contract = matches!(
-            (routing_mode, is_backward, edge_path_style),
-            (
-                RoutingMode::UnifiedPreview,
-                true,
-                SvgEdgePathStyle::Basis | SvgEdgePathStyle::Linear | SvgEdgePathStyle::Rounded
-            )
-        );
+        let rounded_uses_orthogonal_geometry = matches!(edge_path_style, SvgEdgePathStyle::Rounded);
+        let preserve_orthogonal_endpoint_contract = rounded_uses_orthogonal_geometry
+            || matches!(
+                (routing_mode, is_backward, edge_path_style),
+                (
+                    RoutingMode::UnifiedPreview,
+                    true,
+                    SvgEdgePathStyle::Basis | SvgEdgePathStyle::Linear | SvgEdgePathStyle::Rounded
+                )
+            );
         // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
         // edges whose endpoints already land on the subgraph border).
         if !rerouted_edges.contains(&index) {
@@ -908,7 +910,10 @@ fn render_edges(
         }
         let allow_interior_nudges = !matches!(edge_path_style, SvgEdgePathStyle::Linear);
         let enforce_primary_axis_no_backtrack = matches!(routing_mode, RoutingMode::UnifiedPreview)
-            && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
+            && !matches!(
+                edge_path_style,
+                SvgEdgePathStyle::Orthogonal | SvgEdgePathStyle::Rounded
+            )
             && !is_backward
             && edge.from != edge.to;
         points = apply_marker_offsets(
@@ -924,7 +929,10 @@ fn render_edges(
         // Collapse tiny near-collinear jogs introduced by SVG marker offset
         // smoothing on unified-preview paths.
         if matches!(routing_mode, RoutingMode::UnifiedPreview)
-            && !matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
+            && !matches!(
+                edge_path_style,
+                SvgEdgePathStyle::Orthogonal | SvgEdgePathStyle::Rounded
+            )
             && !preserve_orthogonal_endpoint_contract
             && edge.from != edge.to
         {
@@ -2174,25 +2182,28 @@ fn points_for_svg_path(
     if points.is_empty() {
         return Vec::new();
     }
-    let points: Vec<Point> =
-        if matches!(curve, SvgEdgePathStyle::Orthogonal) && !points_are_axis_aligned(points) {
-            let start: geometry::FPoint = points[0].into();
-            let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
-            let waypoints: Vec<geometry::FPoint> = points
-                .iter()
-                .copied()
-                .skip(1)
-                .take(points.len().saturating_sub(2))
-                .map(Into::into)
-                .collect();
-            build_orthogonal_path_float(start, end, direction, &waypoints)
-                .into_iter()
-                .map(Into::into)
-                .collect()
-        } else {
-            points.to_vec()
-        };
-    let points = if matches!(curve, SvgEdgePathStyle::Orthogonal) {
+    let orthogonalized_curve = matches!(
+        curve,
+        SvgEdgePathStyle::Orthogonal | SvgEdgePathStyle::Rounded
+    );
+    let points: Vec<Point> = if orthogonalized_curve && !points_are_axis_aligned(points) {
+        let start: geometry::FPoint = points[0].into();
+        let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
+        let waypoints: Vec<geometry::FPoint> = points
+            .iter()
+            .copied()
+            .skip(1)
+            .take(points.len().saturating_sub(2))
+            .map(Into::into)
+            .collect();
+        build_orthogonal_path_float(start, end, direction, &waypoints)
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    } else {
+        points.to_vec()
+    };
+    let points = if orthogonalized_curve {
         collapse_immediate_axis_turnbacks(&points)
     } else {
         points
@@ -2203,7 +2214,7 @@ fn points_for_svg_path(
             let compacted = compact_visual_staircases(&points, 12.0);
             PathDetail::Compact.simplify_with_coords(&compacted, |point| (point.x, point.y))
         }
-        PathDetail::Simplified if matches!(curve, SvgEdgePathStyle::Orthogonal) => {
+        PathDetail::Simplified if orthogonalized_curve => {
             simplify_orthogonal_points(&points, direction)
         }
         _ => path_detail.simplify_with_coords(&points, |point| (point.x, point.y)),
