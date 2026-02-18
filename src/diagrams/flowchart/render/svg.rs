@@ -939,6 +939,7 @@ fn render_edges(
             enforce_primary_axis_no_backtrack,
             matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
                 || preserve_orthogonal_endpoint_contract,
+            !matches!(edge_path_style, SvgEdgePathStyle::Basis),
         );
         // Collapse tiny near-collinear jogs introduced by SVG marker offset
         // smoothing on unified-preview paths.
@@ -947,6 +948,7 @@ fn render_edges(
                 edge_path_style,
                 SvgEdgePathStyle::Orthogonal | SvgEdgePathStyle::Rounded
             )
+            && !matches!(edge_path_style, SvgEdgePathStyle::Basis)
             && !preserve_orthogonal_endpoint_contract
             && edge.from != edge.to
         {
@@ -1015,6 +1017,10 @@ fn collapse_primary_face_fan_channel_for_basis(
     const MARKER_PULLBACK_TOLERANCE: f64 = 6.0;
     const MIN_STEM_FOR_COLLAPSE: f64 = 8.0;
     const MAX_STEM_FOR_COLLAPSE: f64 = 18.0;
+    const MIN_TERMINAL_STEM_FOR_COLLAPSE: f64 = 10.0;
+    const MAX_TERMINAL_STEM_FOR_COLLAPSE: f64 = 22.0;
+    const TERMINAL_STEM_BIAS: f64 = 3.0;
+    const MIN_CHANNEL_SPAN: f64 = 4.0;
 
     if points.len() != 4 {
         return points.to_vec();
@@ -1047,12 +1053,24 @@ fn collapse_primary_face_fan_channel_for_basis(
             };
             if has_lateral_offset && target_is_primary_face {
                 let delta = out[3].y - out[0].y;
-                if delta.abs() > 2.0 * MIN_STEM_FOR_COLLAPSE {
-                    let stem = (delta.abs() * 0.28)
+                if delta.abs()
+                    > MIN_STEM_FOR_COLLAPSE + MIN_TERMINAL_STEM_FOR_COLLAPSE + MIN_CHANNEL_SPAN
+                {
+                    let source_stem = (delta.abs() * 0.28)
                         .clamp(MIN_STEM_FOR_COLLAPSE, MAX_STEM_FOR_COLLAPSE);
+                    let max_terminal_stem = delta.abs() - source_stem - MIN_CHANNEL_SPAN;
+                    if max_terminal_stem < MIN_TERMINAL_STEM_FOR_COLLAPSE {
+                        return points.to_vec();
+                    }
+                    let terminal_stem = (delta.abs() * 0.28 + TERMINAL_STEM_BIAS)
+                        .clamp(
+                            MIN_TERMINAL_STEM_FOR_COLLAPSE,
+                            MAX_TERMINAL_STEM_FOR_COLLAPSE,
+                        )
+                        .min(max_terminal_stem);
                     let dir = if delta >= 0.0 { 1.0 } else { -1.0 };
-                    out[1].y = out[0].y + (dir * stem);
-                    out[2].y = out[3].y - (dir * stem);
+                    out[1].y = out[0].y + (dir * source_stem);
+                    out[2].y = out[3].y - (dir * terminal_stem);
                 }
             }
         }
@@ -1077,12 +1095,24 @@ fn collapse_primary_face_fan_channel_for_basis(
             };
             if has_lateral_offset && target_is_primary_face {
                 let delta = out[3].x - out[0].x;
-                if delta.abs() > 2.0 * MIN_STEM_FOR_COLLAPSE {
-                    let stem = (delta.abs() * 0.28)
+                if delta.abs()
+                    > MIN_STEM_FOR_COLLAPSE + MIN_TERMINAL_STEM_FOR_COLLAPSE + MIN_CHANNEL_SPAN
+                {
+                    let source_stem = (delta.abs() * 0.28)
                         .clamp(MIN_STEM_FOR_COLLAPSE, MAX_STEM_FOR_COLLAPSE);
+                    let max_terminal_stem = delta.abs() - source_stem - MIN_CHANNEL_SPAN;
+                    if max_terminal_stem < MIN_TERMINAL_STEM_FOR_COLLAPSE {
+                        return points.to_vec();
+                    }
+                    let terminal_stem = (delta.abs() * 0.28 + TERMINAL_STEM_BIAS)
+                        .clamp(
+                            MIN_TERMINAL_STEM_FOR_COLLAPSE,
+                            MAX_TERMINAL_STEM_FOR_COLLAPSE,
+                        )
+                        .min(max_terminal_stem);
                     let dir = if delta >= 0.0 { 1.0 } else { -1.0 };
-                    out[1].x = out[0].x + (dir * stem);
-                    out[2].x = out[3].x - (dir * stem);
+                    out[1].x = out[0].x + (dir * source_stem);
+                    out[2].x = out[3].x - (dir * terminal_stem);
                 }
             }
         }
@@ -2935,6 +2965,7 @@ fn apply_marker_offsets(
     allow_interior_nudges: bool,
     enforce_primary_axis_no_backtrack: bool,
     preserve_orthogonal: bool,
+    collapse_terminal_elbows: bool,
 ) -> Vec<Point> {
     if points.len() < 2 {
         return points.to_vec();
@@ -2954,7 +2985,7 @@ fn apply_marker_offsets(
     };
 
     let mut points = points.to_vec();
-    if !preserve_orthogonal {
+    if !preserve_orthogonal && collapse_terminal_elbows {
         // Non-orth styles (linear/rounded/basis) can look visually cramped when
         // an orthogonal route ends with a short final elbow immediately before
         // the marker. Collapse that elbow into a direct terminal approach.
