@@ -193,79 +193,6 @@ pub trait DiagramRenderer: Send + Sync {
 /// canonical layout configuration type across the crate.
 pub type LayoutConfig = crate::dagre::types::LayoutConfig;
 
-/// Typed layout engine identifier.
-///
-/// Strongly typed engine IDs replace raw strings for engine selection.
-/// Parsing is case-insensitive: "dagre", "DAGRE", "Dagre" all resolve to `Dagre`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum LayoutEngineId {
-    /// Dagre (Sugiyama) hierarchical layout.
-    Dagre,
-    /// ELK (Eclipse Layout Kernel) — requires `engine-elk` feature.
-    Elk,
-    /// COSE (Compound Spring Embedder) — not yet available.
-    Cose,
-}
-
-impl LayoutEngineId {
-    /// Parse a string into a typed engine ID (case-insensitive).
-    ///
-    /// Returns an error for unrecognized engine names.
-    pub fn parse(s: &str) -> Result<Self, RenderError> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "dagre" => Ok(LayoutEngineId::Dagre),
-            "elk" => Ok(LayoutEngineId::Elk),
-            "cose" | "cose-bilkent" => Ok(LayoutEngineId::Cose),
-            _ => Err(RenderError {
-                message: format!("unknown layout engine: {s:?}"),
-            }),
-        }
-    }
-
-    /// Check whether this engine is available at runtime.
-    ///
-    /// Returns `Ok(())` if available, or an actionable error explaining
-    /// how to enable the engine (e.g., feature flag).
-    pub fn check_available(&self) -> Result<(), RenderError> {
-        match self {
-            LayoutEngineId::Dagre => Ok(()),
-            LayoutEngineId::Elk => {
-                #[cfg(feature = "engine-elk")]
-                {
-                    Ok(())
-                }
-                #[cfg(not(feature = "engine-elk"))]
-                {
-                    Err(RenderError {
-                        message: "ELK engine is not available; rebuild with the `engine-elk` feature flag enabled".to_string(),
-                    })
-                }
-            }
-            LayoutEngineId::Cose => Err(RenderError {
-                message: "COSE engine is not yet implemented".to_string(),
-            }),
-        }
-    }
-}
-
-impl FromStr for LayoutEngineId {
-    type Err = RenderError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        LayoutEngineId::parse(s)
-    }
-}
-
-impl std::fmt::Display for LayoutEngineId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LayoutEngineId::Dagre => write!(f, "dagre"),
-            LayoutEngineId::Elk => write!(f, "elk"),
-            LayoutEngineId::Cose => write!(f, "cose"),
-        }
-    }
-}
-
 /// Engine family identifier used in the combined engine+algorithm taxonomy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EngineId {
@@ -461,20 +388,6 @@ impl From<LayoutConfig> for EngineConfig {
     }
 }
 
-/// Capabilities advertised by a layout engine.
-///
-/// The runtime uses these to decide what post-processing is needed
-/// after layout (e.g., whether edge routing is already done).
-#[derive(Debug, Clone, Default)]
-pub struct EngineCapabilities {
-    /// Whether the engine handles edge routing (vs. leaving it to the renderer).
-    pub routes_edges: bool,
-    /// Whether the engine supports subgraph (cluster) layout.
-    pub supports_subgraphs: bool,
-    /// Whether the engine supports direction overrides per subgraph.
-    pub supports_direction_overrides: bool,
-}
-
 /// Edge routing determined by engine capabilities.
 ///
 /// Controls how the rendering pipeline processes edge paths after layout.
@@ -486,55 +399,6 @@ pub enum EdgeRouting {
     PassThroughClip,
     /// Preview float-first unified routing with guarded fallback behavior.
     UnifiedPreview,
-}
-
-impl EdgeRouting {
-    /// Determine edge routing from engine capabilities.
-    pub fn for_capabilities(caps: &EngineCapabilities) -> Self {
-        if caps.routes_edges {
-            EdgeRouting::PassThroughClip
-        } else {
-            EdgeRouting::FullCompute
-        }
-    }
-}
-
-/// Routing policy toggles placeholder.
-///
-/// All unified-routing policies are currently fixed; this type remains as a
-/// compatibility envelope for render config and test helpers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct EdgeRoutingPolicyToggles;
-
-impl EdgeRoutingPolicyToggles {
-    pub const fn all_enabled() -> Self {
-        Self
-    }
-}
-
-/// Synchronous graph layout engine trait.
-///
-/// Layout engines position nodes and edges in a graph. Each engine
-/// can advertise its capabilities so the runtime knows what
-/// post-processing is needed.
-pub trait GraphLayoutEngine: Send + Sync {
-    /// Input graph type for this engine.
-    type Input;
-    /// Positioned output type.
-    type Output;
-
-    /// Engine name (e.g., "dagre", "elk").
-    fn name(&self) -> &str;
-
-    /// Capabilities this engine provides.
-    fn capabilities(&self) -> EngineCapabilities;
-
-    /// Compute layout positions for the input graph.
-    fn layout(
-        &self,
-        input: &Self::Input,
-        config: &EngineConfig,
-    ) -> Result<Self::Output, RenderError>;
 }
 
 /// Request parameters for a `GraphEngine::solve()` call.
@@ -577,7 +441,6 @@ pub struct GraphSolveResult {
 
 /// Unified graph engine trait combining layout and optional routing.
 ///
-/// Replaces `GraphLayoutEngine` for the `EngineAlgorithmId`-aware pipeline.
 /// Engines compute layout and optionally route edges in a single `solve()` call.
 /// The routing strategy is engine-owned, determined by `capabilities().route_ownership`.
 pub trait GraphEngine: Send + Sync {

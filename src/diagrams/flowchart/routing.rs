@@ -9,7 +9,7 @@ use super::geometry::*;
 use super::render::unified_router::{
     UnifiedRoutingOptions, build_path_from_hints, route_edges_unified, snap_path_to_grid,
 };
-use crate::diagram::{EdgeRouting, EdgeRoutingPolicyToggles};
+use crate::diagram::EdgeRouting;
 use crate::graph::Diagram;
 
 /// Route graph geometry to produce fully-routed edge paths.
@@ -20,16 +20,6 @@ pub fn route_graph_geometry(
     diagram: &Diagram,
     geometry: &GraphGeometry,
     edge_routing: EdgeRouting,
-) -> RoutedGraphGeometry {
-    route_graph_geometry_with_policies(diagram, geometry, edge_routing, EdgeRoutingPolicyToggles)
-}
-
-/// Route graph geometry with explicit policy toggles.
-pub fn route_graph_geometry_with_policies(
-    diagram: &Diagram,
-    geometry: &GraphGeometry,
-    edge_routing: EdgeRouting,
-    _edge_routing_policies: EdgeRoutingPolicyToggles,
 ) -> RoutedGraphGeometry {
     let edges: Vec<RoutedEdgeGeometry> = match edge_routing {
         EdgeRouting::UnifiedPreview => {

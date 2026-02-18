@@ -13,8 +13,7 @@ use canvas::{Cell, Connections};
 pub use chars::CharSet;
 
 use crate::diagram::{
-    EdgeRouting, EdgeRoutingPolicyToggles, EdgeStyle, OutputFormat, PathDetail, RenderConfig,
-    RouteOwnership,
+    EdgeRouting, EdgeStyle, OutputFormat, PathDetail, RenderConfig, RouteOwnership,
 };
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
@@ -75,7 +74,6 @@ impl From<&RenderConfig> for RenderOptions {
             padding: config.padding,
             path_detail: config.path_detail,
             edge_routing,
-            edge_routing_policies: EdgeRoutingPolicyToggles,
         }
     }
 }
@@ -134,8 +132,6 @@ pub struct RenderOptions {
     pub path_detail: PathDetail,
     /// Optional edge routing override for graph-family renderers.
     pub edge_routing: Option<EdgeRouting>,
-    /// Policy toggles for staged unified-routing rollout.
-    pub edge_routing_policies: EdgeRoutingPolicyToggles,
 }
 
 impl Default for RenderOptions {
@@ -152,7 +148,6 @@ impl Default for RenderOptions {
             padding: None,
             path_detail: PathDetail::default(),
             edge_routing: None,
-            edge_routing_policies: EdgeRoutingPolicyToggles,
         }
     }
 }

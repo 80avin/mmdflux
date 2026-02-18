@@ -592,14 +592,13 @@ mod tests {
     use crate::parser::parse_flowchart;
 
     fn layout_geometry(input: &str) -> (Diagram, GraphGeometry) {
-        use crate::diagram::{EngineConfig, GraphLayoutEngine};
-        use crate::diagrams::flowchart::engine::DagreLayoutEngine;
+        use crate::diagram::EngineConfig;
+        use crate::diagrams::flowchart::engine::{MeasurementMode, run_dagre_layout};
 
         let fc = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&fc);
-        let engine = DagreLayoutEngine::text();
         let config = EngineConfig::Dagre(crate::dagre::types::LayoutConfig::default());
-        let geom = engine.layout(&diagram, &config).unwrap();
+        let geom = run_dagre_layout(&MeasurementMode::Text, &diagram, &config).unwrap();
         (diagram, geom)
     }
 

@@ -3,12 +3,12 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::diagram::{EdgeRouting, EdgeStyle, OutputFormat, PathDetail, RenderConfig};
-use mmdflux::diagrams::flowchart::engine::DagreLayoutEngine;
+use mmdflux::diagrams::flowchart::engine::{MeasurementMode, run_dagre_layout};
 use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::graph::Stroke;
 use mmdflux::registry::DiagramInstance;
 use mmdflux::render::{RenderOptions, render_svg};
-use mmdflux::{EngineConfig, GraphLayoutEngine, build_diagram, parse_flowchart};
+use mmdflux::{EngineConfig, build_diagram, parse_flowchart};
 
 /// Extract SVG node center x-coordinates by label text.
 ///
@@ -522,7 +522,6 @@ fn style_segment_monitor_report_for_svg(
         options.svg.edge_style = EdgeStyle::Sharp;
         options.edge_routing = Some(EdgeRouting::UnifiedPreview);
         options.path_detail = PathDetail::Full;
-        options.edge_routing_policies = mmdflux::diagram::EdgeRoutingPolicyToggles::all_enabled();
         let svg = render_svg(&diagram, &options);
 
         for line in svg.lines().map(str::trim) {
@@ -751,10 +750,8 @@ fn edge_index(diagram: &mmdflux::Diagram, from: &str, to: &str) -> usize {
 }
 
 fn node_center_for_id(diagram: &mmdflux::Diagram, node_id: &str) -> (f64, f64) {
-    let engine = DagreLayoutEngine::text();
     let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
-    let geom = engine
-        .layout(diagram, &config)
+    let geom = run_dagre_layout(&MeasurementMode::Text, diagram, &config)
         .expect("layout should succeed for center lookup");
     let node = geom
         .nodes
@@ -1128,11 +1125,9 @@ fn svg_orthogonal_unified_preview_does_not_add_short_staircase_jogs_after_adjust
         .expect("fixture should contain edge Bmid -> F")
         .index;
 
-    let engine = DagreLayoutEngine::text();
     let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
-    let geom = engine
-        .layout(&diagram, &config)
-        .expect("layout should succeed");
+    let geom =
+        run_dagre_layout(&MeasurementMode::Text, &diagram, &config).expect("layout should succeed");
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let routed_edge = routed
         .edges
@@ -1279,14 +1274,9 @@ fn svg_orthogonal_unified_preview_hexagon_outbound_departure_insets_from_bottom_
         edge_index(&diagram, "A", "D"),
     ];
 
-    let measurement_mode = mmdflux::diagrams::flowchart::engine::MeasurementMode::for_format(
-        OutputFormat::Svg,
-        &RenderConfig::default(),
-    );
-    let engine = DagreLayoutEngine::with_mode(measurement_mode);
+    let measurement_mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
     let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
-    let geom = engine
-        .layout(&diagram, &config)
+    let geom = run_dagre_layout(&measurement_mode, &diagram, &config)
         .expect("layout should succeed for hexagon_flow fixture");
     let source_rect = geom
         .nodes
@@ -2097,14 +2087,9 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_preserves_routed_termin
     let diagram = load_flowchart_fixture_diagram("decision.mmd");
     let edge_idx = edge_index(&diagram, "D", "A");
 
-    let measurement_mode = mmdflux::diagrams::flowchart::engine::MeasurementMode::for_format(
-        OutputFormat::Svg,
-        &RenderConfig::default(),
-    );
-    let engine = DagreLayoutEngine::with_mode(measurement_mode);
+    let measurement_mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
     let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
-    let geom = engine
-        .layout(&diagram, &config)
+    let geom = run_dagre_layout(&measurement_mode, &diagram, &config)
         .expect("layout should succeed for decision fixture");
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let routed_edge = routed
@@ -2153,8 +2138,6 @@ fn svg_straight_fan_in_backward_channel_interaction_fixture_matrix_matches_docum
         options.svg.edge_style = EdgeStyle::Sharp;
         options.edge_routing = Some(EdgeRouting::UnifiedPreview);
         options.path_detail = PathDetail::Full;
-        options.edge_routing_policies = mmdflux::diagram::EdgeRoutingPolicyToggles::all_enabled();
-
         let svg = render_svg(&diagram, &options);
         let rect = node_rect_for_label(&svg, target_label)
             .unwrap_or_else(|| panic!("missing target rect for {target_label} in {fixture_name}"));
@@ -2262,8 +2245,6 @@ fn svg_straight_fan_in_backward_channel_interaction_fixture_matrix_matches_docum
         options.svg.edge_style = EdgeStyle::Sharp;
         options.edge_routing = Some(EdgeRouting::UnifiedPreview);
         options.path_detail = PathDetail::Full;
-        options.edge_routing_policies = mmdflux::diagram::EdgeRoutingPolicyToggles::all_enabled();
-
         let svg = render_svg(&diagram, &options);
         let source_rect = node_rect_for_label(&svg, source_label)
             .unwrap_or_else(|| panic!("missing source rect for {source_label} in {fixture_name}"));
@@ -2423,13 +2404,9 @@ fn unified_preview_diamond_boundary_clipping_matches_shape_boundary() {
     options.edge_routing = Some(EdgeRouting::UnifiedPreview);
     options.path_detail = PathDetail::Full;
 
-    let mode = mmdflux::diagrams::flowchart::engine::MeasurementMode::for_format(
-        OutputFormat::Svg,
-        &RenderConfig::default(),
-    );
-    let engine = DagreLayoutEngine::with_mode(mode);
+    let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
     let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
-    let geom = engine.layout(&diagram, &config).unwrap();
+    let geom = run_dagre_layout(&mode, &diagram, &config).unwrap();
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     // B is a diamond; B->D is a forward edge — verify source endpoint is on diamond boundary
@@ -2799,13 +2776,9 @@ fn assert_mmds_svg_endpoint_convergence(
     tolerance: f64,
 ) {
     // MMDS path (no SVG post-adjustment)
-    let mode = mmdflux::diagrams::flowchart::engine::MeasurementMode::for_format(
-        OutputFormat::Svg,
-        &RenderConfig::default(),
-    );
-    let engine = DagreLayoutEngine::with_mode(mode);
+    let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
     let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
-    let geom = engine.layout(diagram, &config).unwrap();
+    let geom = run_dagre_layout(&mode, diagram, &config).unwrap();
     let routed = route_graph_geometry(diagram, &geom, EdgeRouting::UnifiedPreview);
     let mmds_edge = routed
         .edges

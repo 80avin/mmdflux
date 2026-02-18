@@ -7,24 +7,18 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::EdgeRoutingPolicyToggles;
-use mmdflux::diagrams::flowchart::engine::{DagreLayoutEngine, MeasurementMode};
+use mmdflux::diagram::EdgeRouting;
+use mmdflux::diagrams::flowchart::engine::{MeasurementMode, run_dagre_layout};
 use mmdflux::diagrams::flowchart::geometry::*;
-use mmdflux::diagrams::flowchart::routing::{
-    route_graph_geometry, route_graph_geometry_with_policies, snap_path_to_grid_preview,
-};
-use mmdflux::{
-    EdgeRouting, EngineConfig, GraphLayoutEngine, OutputFormat, RenderConfig, build_diagram,
-    parse_flowchart,
-};
+use mmdflux::diagrams::flowchart::routing::{route_graph_geometry, snap_path_to_grid_preview};
+use mmdflux::{EngineConfig, OutputFormat, RenderConfig, build_diagram, parse_flowchart};
 
 /// Parse input and produce (Diagram, GraphGeometry) via the dagre engine.
 fn layout_test(input: &str) -> (mmdflux::Diagram, GraphGeometry) {
     let fc = parse_flowchart(input).unwrap();
     let diagram = build_diagram(&fc);
-    let engine = DagreLayoutEngine::text();
     let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
-    let geom = engine.layout(&diagram, &config).unwrap();
+    let geom = run_dagre_layout(&MeasurementMode::Text, &diagram, &config).unwrap();
     (diagram, geom)
 }
 
@@ -43,9 +37,8 @@ fn layout_test_svg(input: &str) -> (mmdflux::Diagram, GraphGeometry) {
     let fc = parse_flowchart(input).unwrap();
     let diagram = build_diagram(&fc);
     let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
-    let engine = DagreLayoutEngine::with_mode(mode);
     let config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
-    let geom = engine.layout(&diagram, &config).unwrap();
+    let geom = run_dagre_layout(&mode, &diagram, &config).unwrap();
     (diagram, geom)
 }
 
@@ -136,12 +129,7 @@ fn style_segment_monitor_report_for_routed_geometry(
 
     for fixture in fixtures {
         let (diagram, geom) = layout_fixture_svg(fixture);
-        let routed = route_graph_geometry_with_policies(
-            &diagram,
-            &geom,
-            EdgeRouting::UnifiedPreview,
-            EdgeRoutingPolicyToggles::all_enabled(),
-        );
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
         for edge in diagram
             .edges
@@ -619,12 +607,7 @@ fn stale_label_anchor_is_replaced_with_valid_route_anchor() {
         stale_anchor
     };
 
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &stale_geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles,
-    );
+    let routed = route_graph_geometry(&diagram, &stale_geom, EdgeRouting::UnifiedPreview);
     let routed_edge = routed
         .edges
         .iter()
@@ -2642,12 +2625,7 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
 
     for (fixture, target, min_side_faces) in fan_in_cases {
         let (diagram, geom) = layout_fixture_svg(fixture);
-        let routed = route_graph_geometry_with_policies(
-            &diagram,
-            &geom,
-            EdgeRouting::UnifiedPreview,
-            EdgeRoutingPolicyToggles::all_enabled(),
-        );
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
         let target_rect = geom
             .nodes
             .get(target)
@@ -2737,12 +2715,7 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
             .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {to}"))
             .rect;
 
-        let routed = route_graph_geometry_with_policies(
-            &diagram,
-            &geom,
-            EdgeRouting::UnifiedPreview,
-            EdgeRoutingPolicyToggles::all_enabled(),
-        );
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
         let edge = routed
             .edges
@@ -2778,12 +2751,7 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
 fn five_fan_in_lr_overflow_spills_to_cross_faces_and_spreads_target_ports() {
     let (diagram, geom) = layout_fixture_svg("five_fan_in_lr.mmd");
     assert_eq!(geom.direction, mmdflux::Direction::LeftRight);
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let target_rect = geom
         .nodes
@@ -2891,12 +2859,7 @@ graph RL
 "#;
     let (diagram, geom) = layout_test_svg(input);
     assert_eq!(geom.direction, mmdflux::Direction::RightLeft);
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let target_rect = geom
         .nodes
@@ -3006,12 +2969,7 @@ graph TD
     H --> T
 "#;
     let (diagram, geom) = layout_test_svg(input);
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let target_rect = geom
         .nodes
         .get("T")
@@ -3115,12 +3073,7 @@ graph TD
 #[test]
 fn very_narrow_fan_in_primary_face_ports_do_not_collapse_to_single_anchor() {
     let (diagram, geom) = layout_fixture_svg("very_narrow_fan_in.mmd");
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let target_rect = geom
         .nodes
         .get("E")
@@ -3186,12 +3139,7 @@ fn very_narrow_fan_in_primary_face_ports_do_not_collapse_to_single_anchor() {
 #[test]
 fn five_fan_in_primary_face_channels_are_staggered_without_overlap() {
     let (diagram, geom) = layout_fixture_svg("five_fan_in.mmd");
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let target_rect = geom
         .nodes
         .get("F")
@@ -3283,12 +3231,7 @@ fn five_fan_in_primary_face_channels_are_staggered_without_overlap() {
 #[test]
 fn five_fan_in_diamond_target_ports_use_distinct_primary_slots() {
     let (diagram, geom) = layout_fixture_svg("five_fan_in_diamond.mmd");
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let inbound: Vec<_> = routed
         .edges
@@ -3333,12 +3276,7 @@ fn five_fan_in_diamond_target_ports_use_distinct_primary_slots() {
 #[test]
 fn five_fan_out_primary_face_channels_are_staggered_without_overlap() {
     let (diagram, geom) = layout_fixture_svg("five_fan_out.mmd");
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let outbound: Vec<_> = routed
         .edges
@@ -3439,12 +3377,7 @@ fn five_fan_out_primary_face_channels_are_staggered_without_overlap() {
 fn five_fan_out_lr_primary_face_channels_are_staggered_without_overlap() {
     let (diagram, geom) = layout_fixture_svg("five_fan_out_lr.mmd");
     assert_eq!(geom.direction, mmdflux::Direction::LeftRight);
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let outbound: Vec<_> = routed
         .edges
@@ -3600,12 +3533,7 @@ graph RL
 "#;
     let (diagram, geom) = layout_test_svg(input);
     assert_eq!(geom.direction, mmdflux::Direction::RightLeft);
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let outbound: Vec<_> = routed
         .edges
@@ -3739,12 +3667,7 @@ graph LR
 "#;
     let (diagram, geom) = layout_test_svg(input);
     assert_eq!(geom.direction, mmdflux::Direction::LeftRight);
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let outbound: Vec<_> = routed
         .edges
@@ -3789,12 +3712,7 @@ graph LR
 #[test]
 fn five_fan_out_diamond_primary_face_channels_are_staggered_without_overlap() {
     let (diagram, geom) = layout_fixture_svg("five_fan_out_diamond.mmd");
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let outbound: Vec<_> = routed
         .edges
@@ -3894,12 +3812,7 @@ fn five_fan_out_diamond_primary_face_channels_are_staggered_without_overlap() {
 #[test]
 fn very_narrow_fan_in_channels_are_staggered_without_overlap() {
     let (diagram, geom) = layout_fixture_svg("very_narrow_fan_in.mmd");
-    let routed = route_graph_geometry_with_policies(
-        &diagram,
-        &geom,
-        EdgeRouting::UnifiedPreview,
-        EdgeRoutingPolicyToggles::all_enabled(),
-    );
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let inbound: Vec<_> = routed
         .edges

@@ -13,9 +13,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::{OutputFormat, RenderConfig};
+use mmdflux::diagram::{EngineConfig, OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
-use mmdflux::diagrams::flowchart::engine::layout_with_selected_engine;
+use mmdflux::diagrams::flowchart::engine::{MeasurementMode, run_dagre_layout};
 use mmdflux::diagrams::flowchart::geometry::{GraphGeometry, LayoutEdge};
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::graph::{Diagram, Subgraph};
@@ -234,30 +234,27 @@ fn floats_eq(a: f64, b: f64) -> bool {
 /// Runs dagre layout on both diagrams and compares node positions/sizes,
 /// edge count, and overall bounds.
 fn check_layout(direct: &Diagram, roundtrip: &Diagram) -> TierResult {
-    let config = RenderConfig::default();
+    let engine_config = EngineConfig::Dagre(mmdflux::dagre::types::LayoutConfig::default());
 
-    let direct_geom =
-        match layout_with_selected_engine(direct, &config, mmdflux::diagram::OutputFormat::Text) {
-            Ok(result) => result.geometry,
-            Err(e) => {
-                return TierResult {
-                    tier: "layout",
-                    status: TierStatus::Fail(format!("direct layout failed: {e}")),
-                };
-            }
-        };
+    let direct_geom = match run_dagre_layout(&MeasurementMode::Text, direct, &engine_config) {
+        Ok(geom) => geom,
+        Err(e) => {
+            return TierResult {
+                tier: "layout",
+                status: TierStatus::Fail(format!("direct layout failed: {e}")),
+            };
+        }
+    };
 
-    let roundtrip_geom =
-        match layout_with_selected_engine(roundtrip, &config, mmdflux::diagram::OutputFormat::Text)
-        {
-            Ok(result) => result.geometry,
-            Err(e) => {
-                return TierResult {
-                    tier: "layout",
-                    status: TierStatus::Fail(format!("roundtrip layout failed: {e}")),
-                };
-            }
-        };
+    let roundtrip_geom = match run_dagre_layout(&MeasurementMode::Text, roundtrip, &engine_config) {
+        Ok(geom) => geom,
+        Err(e) => {
+            return TierResult {
+                tier: "layout",
+                status: TierStatus::Fail(format!("roundtrip layout failed: {e}")),
+            };
+        }
+    };
 
     let mismatches = compare_geometry(&direct_geom, &roundtrip_geom);
 
