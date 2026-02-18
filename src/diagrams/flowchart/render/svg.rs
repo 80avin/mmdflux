@@ -167,7 +167,7 @@ pub fn render_svg_from_geometry(
     geom: &GraphGeometry,
     edge_routing: EdgeRouting,
 ) -> String {
-    let rerouted_edges = rerouted_edge_indexes_for_mode(geom, edge_routing, options.svg.edge_style);
+    let rerouted_edges = rerouted_edge_indexes_for_mode(geom, edge_routing);
     let override_nodes = svg_router::build_override_node_map(diagram);
     render_svg_with_geometry_context(
         diagram,
@@ -182,7 +182,6 @@ pub fn render_svg_from_geometry(
 fn rerouted_edge_indexes_for_mode(
     geom: &GraphGeometry,
     edge_routing: EdgeRouting,
-    edge_style: EdgeStyle,
 ) -> HashSet<usize> {
     match edge_routing {
         // Pass-through paths are already positioned by the layout engine
@@ -190,10 +189,7 @@ fn rerouted_edge_indexes_for_mode(
         EdgeRouting::PassThroughClip => geom.edges.iter().map(|e| e.index).collect(),
         // Unified preview routes already encode endpoint intent and should not
         // be shape-adjusted again in SVG (all path styles).
-        EdgeRouting::UnifiedPreview => {
-            let _ = edge_style;
-            geom.edges.iter().map(|e| e.index).collect()
-        }
+        EdgeRouting::UnifiedPreview => geom.edges.iter().map(|e| e.index).collect(),
         EdgeRouting::FullCompute => HashSet::new(),
     }
 }
@@ -848,16 +844,12 @@ fn render_edges(
             diagram.direction
         };
         let is_backward = geom.reversed_edges.contains(&index);
-        let rounded_uses_orthogonal_geometry = matches!(edge_style, EdgeStyle::Rounded);
-        let preserve_orthogonal_endpoint_contract = rounded_uses_orthogonal_geometry
-            || matches!(
-                (edge_routing, is_backward, edge_style),
-                (
-                    EdgeRouting::UnifiedPreview,
-                    true,
-                    EdgeStyle::Smooth | EdgeStyle::Sharp | EdgeStyle::Rounded
-                )
-            );
+        // Engine-owned routing topology determines endpoint contract; style does not.
+        // Backward UnifiedPreview edges use orthogonal approach to preserve path integrity.
+        let preserve_orthogonal_endpoint_contract = matches!(
+            (edge_routing, is_backward),
+            (EdgeRouting::UnifiedPreview, true)
+        );
         // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
         // edges whose endpoints already land on the subgraph border).
         if !rerouted_edges.contains(&index) {

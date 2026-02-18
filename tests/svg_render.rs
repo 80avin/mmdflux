@@ -2899,3 +2899,91 @@ fn mmds_svg_mixed_shape_chain_endpoint_convergence() {
     assert_mmds_svg_endpoint_convergence(&diagram, "B", "C", tolerance);
     assert_mmds_svg_endpoint_convergence(&diagram, "C", "D", tolerance);
 }
+
+// --- Task 4.3: SVG style/topology decoupling ---
+
+/// Extract (start, end) endpoint coordinates for each edge path in the SVG.
+fn extract_edge_endpoints(svg: &str) -> Vec<((f64, f64), (f64, f64))> {
+    edge_path_data(svg)
+        .iter()
+        .filter_map(|d| {
+            let pts = parse_svg_path_points(d);
+            if pts.len() >= 2 {
+                Some((pts[0], pts[pts.len() - 1]))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+#[test]
+fn svg_style_does_not_alter_edge_path_topology() {
+    // Style (Sharp vs Smooth) should not change which points edges connect —
+    // only how segments are drawn. Both use UnifiedPreview routing.
+    let diagram = load_flowchart_fixture_diagram("fan_in.mmd");
+
+    let sharp_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Sharp);
+    let smooth_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Smooth);
+
+    let sharp_endpoints = extract_edge_endpoints(&sharp_svg);
+    let smooth_endpoints = extract_edge_endpoints(&smooth_svg);
+
+    assert_eq!(
+        sharp_endpoints.len(),
+        smooth_endpoints.len(),
+        "same number of edge paths"
+    );
+    for (i, (se, sme)) in sharp_endpoints
+        .iter()
+        .zip(smooth_endpoints.iter())
+        .enumerate()
+    {
+        let (sharp_start, sharp_end) = se;
+        let (smooth_start, smooth_end) = sme;
+        assert!(
+            (sharp_start.0 - smooth_start.0).abs() <= 1.0
+                && (sharp_start.1 - smooth_start.1).abs() <= 1.0,
+            "edge {i} start should match: sharp={sharp_start:?} smooth={smooth_start:?}"
+        );
+        assert!(
+            (sharp_end.0 - smooth_end.0).abs() <= 1.0 && (sharp_end.1 - smooth_end.1).abs() <= 1.0,
+            "edge {i} end should match: sharp={sharp_end:?} smooth={smooth_end:?}"
+        );
+    }
+}
+
+#[test]
+fn svg_rounded_style_does_not_force_orthogonal_topology() {
+    // Rounded applies arc corners to existing engine-provided paths.
+    // It must not alter how endpoints connect to nodes.
+    let diagram = load_flowchart_fixture_diagram("fan_in.mmd");
+
+    let rounded_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Rounded);
+    let smooth_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Smooth);
+
+    let rounded_endpoints = extract_edge_endpoints(&rounded_svg);
+    let smooth_endpoints = extract_edge_endpoints(&smooth_svg);
+
+    assert_eq!(
+        rounded_endpoints.len(),
+        smooth_endpoints.len(),
+        "same number of edge paths"
+    );
+    for (i, (re, sme)) in rounded_endpoints
+        .iter()
+        .zip(smooth_endpoints.iter())
+        .enumerate()
+    {
+        let (r_start, r_end) = re;
+        let (s_start, s_end) = sme;
+        assert!(
+            (r_start.0 - s_start.0).abs() <= 1.0 && (r_start.1 - s_start.1).abs() <= 1.0,
+            "edge {i} start should match: rounded={r_start:?} smooth={s_start:?}"
+        );
+        assert!(
+            (r_end.0 - s_end.0).abs() <= 1.0 && (r_end.1 - s_end.1).abs() <= 1.0,
+            "edge {i} end should match: rounded={r_end:?} smooth={s_end:?}"
+        );
+    }
+}
