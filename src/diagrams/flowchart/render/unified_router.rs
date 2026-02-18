@@ -384,19 +384,7 @@ fn build_unified_path(
     let mut finalized = base_finalized.clone();
     if !is_backward {
         let stagger_depth = target_primary_channel_depth.or(source_primary_channel_depth);
-        let stagger_target_face_policy = if target_primary_channel_depth.is_some() {
-            overflow_policy_target_face
-        } else if source_primary_channel_depth.is_some() {
-            Some(flow_target_face_for_direction(direction))
-        } else {
-            None
-        };
-        stagger_primary_face_shared_axis_segment(
-            &mut finalized,
-            direction,
-            stagger_target_face_policy,
-            stagger_depth,
-        );
+        stagger_primary_face_shared_axis_segment(&mut finalized, direction, stagger_depth);
         finalized = normalize_orthogonal_route_contracts(&finalized, direction);
     }
     if !is_backward
@@ -1293,64 +1281,73 @@ fn fan_in_target_overflow_context(
                 };
                 target_fraction_for_edge.insert(*edge_index, fraction);
             }
-            if face == primary_face && count > 1 {
-                let target_cross = target_rect
-                    .as_ref()
-                    .map(|rect| face_cross_axis(rect, direction))
-                    .unwrap_or_else(|| {
-                        if count % 2 == 1 {
-                            face_edges[count / 2].1
+            if count > 1 {
+                if face == primary_face {
+                    let target_cross = target_rect
+                        .as_ref()
+                        .map(|rect| face_cross_axis(rect, direction))
+                        .unwrap_or_else(|| {
+                            if count % 2 == 1 {
+                                face_edges[count / 2].1
+                            } else {
+                                (face_edges[count / 2 - 1].1 + face_edges[count / 2].1) / 2.0
+                            }
+                        });
+
+                    let mut left_edges: Vec<(usize, f64)> = Vec::new();
+                    let mut right_edges: Vec<(usize, f64)> = Vec::new();
+                    let mut center_edges: Vec<(usize, f64)> = Vec::new();
+                    for (edge_index, source_cross) in &face_edges {
+                        if *source_cross < target_cross - CENTER_EPS {
+                            left_edges.push((*edge_index, *source_cross));
+                        } else if *source_cross > target_cross + CENTER_EPS {
+                            right_edges.push((*edge_index, *source_cross));
                         } else {
-                            (face_edges[count / 2 - 1].1 + face_edges[count / 2].1) / 2.0
+                            center_edges.push((*edge_index, *source_cross));
                         }
-                    });
-
-                let mut left_edges: Vec<(usize, f64)> = Vec::new();
-                let mut right_edges: Vec<(usize, f64)> = Vec::new();
-                let mut center_edges: Vec<(usize, f64)> = Vec::new();
-                for (edge_index, source_cross) in &face_edges {
-                    if *source_cross < target_cross - CENTER_EPS {
-                        left_edges.push((*edge_index, *source_cross));
-                    } else if *source_cross > target_cross + CENTER_EPS {
-                        right_edges.push((*edge_index, *source_cross));
-                    } else {
-                        center_edges.push((*edge_index, *source_cross));
                     }
-                }
 
-                left_edges.sort_by(|a, b| {
-                    (target_cross - a.1)
-                        .total_cmp(&(target_cross - b.1))
-                        .then_with(|| a.0.cmp(&b.0))
-                });
-                right_edges.sort_by(|a, b| {
-                    (a.1 - target_cross)
-                        .total_cmp(&(b.1 - target_cross))
-                        .then_with(|| a.0.cmp(&b.0))
-                });
-                center_edges.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+                    left_edges.sort_by(|a, b| {
+                        (target_cross - a.1)
+                            .total_cmp(&(target_cross - b.1))
+                            .then_with(|| a.0.cmp(&b.0))
+                    });
+                    right_edges.sort_by(|a, b| {
+                        (a.1 - target_cross)
+                            .total_cmp(&(b.1 - target_cross))
+                            .then_with(|| a.0.cmp(&b.0))
+                    });
+                    center_edges.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
 
-                let band_count = left_edges.len().max(right_edges.len());
-                for (band_index, (edge_index, _)) in left_edges.into_iter().enumerate() {
-                    target_primary_channel_depth_for_edge.insert(
-                        edge_index,
-                        symmetric_side_band_depth(band_index, band_count),
-                    );
-                }
-                for (band_index, (edge_index, _)) in right_edges.into_iter().enumerate() {
-                    target_primary_channel_depth_for_edge.insert(
-                        edge_index,
-                        symmetric_side_band_depth(band_index, band_count),
-                    );
-                }
+                    let band_count = left_edges.len().max(right_edges.len());
+                    for (band_index, (edge_index, _)) in left_edges.into_iter().enumerate() {
+                        target_primary_channel_depth_for_edge.insert(
+                            edge_index,
+                            symmetric_side_band_depth(band_index, band_count),
+                        );
+                    }
+                    for (band_index, (edge_index, _)) in right_edges.into_iter().enumerate() {
+                        target_primary_channel_depth_for_edge.insert(
+                            edge_index,
+                            symmetric_side_band_depth(band_index, band_count),
+                        );
+                    }
 
-                if center_edges.len() == 1 {
-                    target_primary_channel_depth_for_edge.insert(center_edges[0].0, 0.5);
-                } else if center_edges.len() > 1 {
-                    let denom = center_edges.len() as f64 + 1.0;
-                    for (idx, (edge_index, _)) in center_edges.into_iter().enumerate() {
-                        target_primary_channel_depth_for_edge
-                            .insert(edge_index, (idx as f64 + 1.0) / denom);
+                    if center_edges.len() == 1 {
+                        target_primary_channel_depth_for_edge.insert(center_edges[0].0, 0.5);
+                    } else if center_edges.len() > 1 {
+                        let denom = center_edges.len() as f64 + 1.0;
+                        for (idx, (edge_index, _)) in center_edges.into_iter().enumerate() {
+                            target_primary_channel_depth_for_edge
+                                .insert(edge_index, (idx as f64 + 1.0) / denom);
+                        }
+                    }
+                } else {
+                    // When overflow moves arrivals to cross-faces, spread their
+                    // shared-axis channel depth so lanes do not collapse.
+                    for (idx, (edge_index, _)) in face_edges.iter().enumerate() {
+                        let depth = idx as f64 / (count - 1) as f64;
+                        target_primary_channel_depth_for_edge.insert(*edge_index, depth);
                     }
                 }
             }
@@ -1624,6 +1621,20 @@ fn apply_near_aligned_primary_face_fraction_override(
 
     if let Some((edge_index, source_cross, _)) = best {
         let aligned_fraction = cross_axis_to_face_fraction(source_cross, target_rect, direction);
+        let aligned_slot_occupied = forward_edges.iter().any(|edge| {
+            if edge.index == edge_index {
+                return false;
+            }
+            if target_face_for_edge.get(&edge.index).copied() != Some(primary_face) {
+                return false;
+            }
+            target_fraction_for_edge
+                .get(&edge.index)
+                .is_some_and(|fraction| (*fraction - aligned_fraction).abs() <= f64::EPSILON)
+        });
+        if aligned_slot_occupied {
+            return;
+        }
         target_fraction_for_edge.insert(edge_index, aligned_fraction);
     }
 }
@@ -1668,7 +1679,6 @@ fn face_cross_axis(rect: &FRect, direction: Direction) -> f64 {
 fn stagger_primary_face_shared_axis_segment(
     path: &mut [FPoint],
     direction: Direction,
-    overflow_policy_target_face: Option<Face>,
     target_primary_channel_depth: Option<f64>,
 ) {
     const EPS: f64 = 0.000_001;
@@ -1681,10 +1691,6 @@ fn stagger_primary_face_shared_axis_segment(
     if path.len() != 4 {
         return;
     }
-    if overflow_policy_target_face != Some(flow_target_face_for_direction(direction)) {
-        return;
-    }
-
     let depth = depth.clamp(0.0, 1.0);
     match direction {
         Direction::TopDown | Direction::BottomTop => {
@@ -3819,9 +3825,10 @@ fn clip_point_to_axis_face(
             policy_face,
         );
 
-        if policy_face_is_compatible
-            || matches!(direction, Direction::TopDown | Direction::BottomTop)
-        {
+        // For forward fan-in overflow, honor the assigned policy face even if
+        // the incoming segment has not been reshaped yet. Endpoint axis-normal
+        // support is enforced later in the pipeline.
+        if policy_face_is_compatible || !preserve_existing_face {
             let resolved_rect_face = map_face_to_rect_face(resolved_face);
             return clip_point_to_rect_face_fraction_with_inset(
                 rect,

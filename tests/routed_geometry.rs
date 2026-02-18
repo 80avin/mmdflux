@@ -2775,6 +2775,224 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
 }
 
 #[test]
+fn five_fan_in_lr_overflow_spills_to_cross_faces_and_spreads_target_ports() {
+    let (diagram, geom) = layout_fixture_svg("five_fan_in_lr.mmd");
+    assert_eq!(geom.direction, mmdflux::Direction::LeftRight);
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
+    );
+
+    let target_rect = geom
+        .nodes
+        .get("F")
+        .expect("five_fan_in_lr should contain target F")
+        .rect;
+    let inbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.to == "F" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        inbound.len(),
+        5,
+        "five_fan_in_lr should produce five inbound forward edges to F"
+    );
+
+    let mut left_face_count = 0usize;
+    let mut right_face_count = 0usize;
+    let mut top_or_bottom_count = 0usize;
+    let mut overflow_paths: Vec<(String, Vec<FPoint>)> = Vec::new();
+    let mut unique_endpoints: Vec<FPoint> = Vec::new();
+    for edge in &inbound {
+        let end = edge
+            .path
+            .last()
+            .copied()
+            .expect("inbound edge should have endpoint");
+        let prev = edge
+            .path
+            .get(edge.path.len().saturating_sub(2))
+            .copied()
+            .expect("inbound edge should have terminal support point");
+
+        assert!(
+            !point_inside_rect(target_rect, end),
+            "five_fan_in_lr endpoint should stay on or outside target border: {} -> F end={end:?}, target_rect={target_rect:?}, path={:?}",
+            edge.from,
+            edge.path
+        );
+        assert!(
+            terminal_support_is_normal_to_attached_rect_face(target_rect, prev, end),
+            "five_fan_in_lr terminal segment should remain face-normal: {} -> F prev={prev:?}, end={end:?}, target_rect={target_rect:?}, path={:?}",
+            edge.from,
+            edge.path
+        );
+
+        match point_on_target_face(target_rect, end) {
+            "left" => left_face_count += 1,
+            "right" => right_face_count += 1,
+            "top" | "bottom" => {
+                top_or_bottom_count += 1;
+                overflow_paths.push((edge.from.clone(), edge.path.clone()));
+            }
+            _ => {}
+        }
+
+        if unique_endpoints
+            .iter()
+            .all(|point| (point.x - end.x).abs() > 0.5 || (point.y - end.y).abs() > 0.5)
+        {
+            unique_endpoints.push(end);
+        }
+    }
+
+    assert_eq!(
+        right_face_count, 0,
+        "five_fan_in_lr should not attach forward fan-in overflow to RL-facing face of target"
+    );
+    assert!(
+        left_face_count <= 3,
+        "five_fan_in_lr should cap primary left-face fan-in slots before spill: left_face_count={left_face_count}"
+    );
+    assert!(
+        top_or_bottom_count >= 1,
+        "five_fan_in_lr should spill at least one inbound edge to top/bottom faces when primary face is full"
+    );
+    assert!(
+        unique_endpoints.len() >= 4,
+        "five_fan_in_lr should spread target ports instead of collapsing to a small set: unique_endpoints={unique_endpoints:?}"
+    );
+    for i in 0..overflow_paths.len() {
+        for j in (i + 1)..overflow_paths.len() {
+            assert!(
+                !has_coincident_vertical_overlap(&overflow_paths[i].1, &overflow_paths[j].1),
+                "five_fan_in_lr should avoid coincident vertical overflow channel overlap between {} -> F and {} -> F when routing to cross-faces: left={:?} right={:?}",
+                overflow_paths[i].0,
+                overflow_paths[j].0,
+                overflow_paths[i].1,
+                overflow_paths[j].1
+            );
+        }
+    }
+}
+
+#[test]
+fn five_fan_in_rl_overflow_spills_to_cross_faces_and_spreads_target_ports() {
+    let input = r#"
+graph RL
+    A[A] --> F[Target]
+    B[B] --> F
+    C[C] --> F
+    D[D] --> F
+    E[E] --> F
+"#;
+    let (diagram, geom) = layout_test_svg(input);
+    assert_eq!(geom.direction, mmdflux::Direction::RightLeft);
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
+    );
+
+    let target_rect = geom
+        .nodes
+        .get("F")
+        .expect("five_fan_in_rl should contain target F")
+        .rect;
+    let inbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.to == "F" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        inbound.len(),
+        5,
+        "five_fan_in_rl should produce five inbound forward edges to F"
+    );
+
+    let mut right_face_count = 0usize;
+    let mut left_face_count = 0usize;
+    let mut top_or_bottom_count = 0usize;
+    let mut overflow_paths: Vec<(String, Vec<FPoint>)> = Vec::new();
+    let mut unique_endpoints: Vec<FPoint> = Vec::new();
+    for edge in &inbound {
+        let end = edge
+            .path
+            .last()
+            .copied()
+            .expect("inbound edge should have endpoint");
+        let prev = edge
+            .path
+            .get(edge.path.len().saturating_sub(2))
+            .copied()
+            .expect("inbound edge should have terminal support point");
+
+        assert!(
+            !point_inside_rect(target_rect, end),
+            "five_fan_in_rl endpoint should stay on or outside target border: {} -> F end={end:?}, target_rect={target_rect:?}, path={:?}",
+            edge.from,
+            edge.path
+        );
+        assert!(
+            terminal_support_is_normal_to_attached_rect_face(target_rect, prev, end),
+            "five_fan_in_rl terminal segment should remain face-normal: {} -> F prev={prev:?}, end={end:?}, target_rect={target_rect:?}, path={:?}",
+            edge.from,
+            edge.path
+        );
+
+        match point_on_target_face(target_rect, end) {
+            "right" => right_face_count += 1,
+            "left" => left_face_count += 1,
+            "top" | "bottom" => {
+                top_or_bottom_count += 1;
+                overflow_paths.push((edge.from.clone(), edge.path.clone()));
+            }
+            _ => {}
+        }
+
+        if unique_endpoints
+            .iter()
+            .all(|point| (point.x - end.x).abs() > 0.5 || (point.y - end.y).abs() > 0.5)
+        {
+            unique_endpoints.push(end);
+        }
+    }
+
+    assert_eq!(
+        left_face_count, 0,
+        "five_fan_in_rl should not attach forward fan-in overflow to LR-facing face of target"
+    );
+    assert!(
+        right_face_count <= 3,
+        "five_fan_in_rl should cap primary right-face fan-in slots before spill: right_face_count={right_face_count}"
+    );
+    assert!(
+        top_or_bottom_count >= 1,
+        "five_fan_in_rl should spill at least one inbound edge to top/bottom faces when primary face is full"
+    );
+    assert!(
+        unique_endpoints.len() >= 4,
+        "five_fan_in_rl should spread target ports instead of collapsing to a small set: unique_endpoints={unique_endpoints:?}"
+    );
+    for i in 0..overflow_paths.len() {
+        for j in (i + 1)..overflow_paths.len() {
+            assert!(
+                !has_coincident_vertical_overlap(&overflow_paths[i].1, &overflow_paths[j].1),
+                "five_fan_in_rl should avoid coincident vertical overflow channel overlap between {} -> F and {} -> F when routing to cross-faces: left={:?} right={:?}",
+                overflow_paths[i].0,
+                overflow_paths[j].0,
+                overflow_paths[i].1,
+                overflow_paths[j].1
+            );
+        }
+    }
+}
+
+#[test]
 fn fan_in_overflow_arrivals_on_same_side_face_are_spread_not_piled_up() {
     let input = r#"
 graph TD
@@ -2813,6 +3031,7 @@ graph TD
 
     let mut right_face_ys = Vec::new();
     let mut left_face_ys = Vec::new();
+    let mut side_face_paths: Vec<(String, Vec<FPoint>)> = Vec::new();
     for edge in &inbound {
         let end = edge
             .path
@@ -2831,8 +3050,14 @@ graph TD
             );
         }
         match face {
-            "right" => right_face_ys.push(end.y),
-            "left" => left_face_ys.push(end.y),
+            "right" => {
+                right_face_ys.push(end.y);
+                side_face_paths.push((edge.from.clone(), edge.path.clone()));
+            }
+            "left" => {
+                left_face_ys.push(end.y);
+                side_face_paths.push((edge.from.clone(), edge.path.clone()));
+            }
             _ => {}
         }
     }
@@ -2872,6 +3097,19 @@ graph TD
         observed_multi_slot_side,
         "expected at least one side face with multiple overflow arrivals to validate slot spreading"
     );
+
+    for i in 0..side_face_paths.len() {
+        for j in (i + 1)..side_face_paths.len() {
+            assert!(
+                !has_coincident_horizontal_overlap(&side_face_paths[i].1, &side_face_paths[j].1),
+                "overflow fan-in side-face channels should avoid coincident horizontal overlap between {} -> T and {} -> T: left={:?} right={:?}",
+                side_face_paths[i].0,
+                side_face_paths[j].0,
+                side_face_paths[i].1,
+                side_face_paths[j].1
+            );
+        }
+    }
 }
 
 #[test]
