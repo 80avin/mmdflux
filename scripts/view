@@ -7,7 +7,7 @@
 #
 # Examples:
 #   scripts/view tests/fixtures/flowchart/simple.mmd
-#   scripts/view tests/fixtures/flowchart/simple.mmd -- --edge-style basis
+#   scripts/view tests/fixtures/flowchart/simple.mmd -- --edge-style curved
 #   cat file.mmd | scripts/view
 
 set -euo pipefail

@@ -21,7 +21,7 @@ The routing system is the most complex subsystem in mmdflux's graph-family pipel
 ### In scope
 
 - Edge path construction for graph-family diagrams (flowchart, class)
-- Four edge styles: orthogonal, linear, rounded, basis (curved)
+- Four edge styles: orthogonal, straight, rounded, curved
 - Port attachment policy for directional layouts (TD, BT, LR, RL)
 - Bend minimization and crossing avoidance heuristics
 - Backward edge (cycle) routing conventions
@@ -60,9 +60,9 @@ The routing stage receives engine-agnostic node positions, edge topology, and la
 
 | Style | CLI flag | Description |
 |-------|----------|-------------|
-| `basis` | `--edge-style basis` | Smooth B-spline through waypoints (default) |
-| `linear` | `--edge-style linear` | Straight polyline segments |
-| `rounded` | `--edge-style rounded` | Polyline with rounded corners |
+| `curved` | `--edge-style curved` | Smooth B-spline through waypoints (default) |
+| `straight` | `--edge-style straight` | Straight polyline segments |
+| `rounded` | `--edge-style rounded` | Orthogonal routing with rounded corners |
 | `orthogonal` | `--edge-style orthogonal` | Axis-aligned path construction |
 
 Text rendering always uses orthogonal paths (inherent to the character grid).
@@ -95,7 +95,7 @@ Xu, Rooney, Passmore, Ham & Nguyen (2012, IEEE TVCG) conducted the most direct c
 
 Bar & Neta (2006) provide the psychological basis: humans have an innate preference for curved visual objects, but this preference conflicts with task performance in information-dense diagrams.
 
-**Implication for mmdflux:** The `basis` (curved) default for SVG is defensible as a visual-quality choice that matches Mermaid.js conventions, but `orthogonal` and `linear` should be treated as the performance-optimal options for information-dense diagrams. Low curvature in `basis` mode should be preferred over heavy curvature.
+**Implication for mmdflux:** The `curved` default for SVG is defensible as a visual-quality choice that matches Mermaid.js conventions, but `orthogonal` and `straight` should be treated as the performance-optimal options for information-dense diagrams. Low curvature in `curved` mode should be preferred over heavy curvature.
 
 ### 4.3 Bend minimization
 
@@ -167,28 +167,28 @@ Orthogonal edges use axis-aligned (horizontal + vertical) segments only.
 | R-ORTH-3 | Prefer L-shape (1 bend) over Z-shape (2 bends) when geometrically possible without violating flow-direction port attachment | P1 | Bend minimization within flow constraints |
 | R-ORTH-4 | Z-shape (2 bends) is the standard fallback when source and target are offset on both axes | P1 | Minimum-bend solution for offset nodes in hierarchical layout |
 | R-ORTH-5 | Never produce staircase artifacts (3+ unnecessary bends) in the routing stage | P0 | Staircase artifacts are the most common visual quality defect |
-| R-ORTH-6 | When multiple edges share a routing channel (same horizontal or vertical corridor), each edge must be assigned a distinct offset within that channel so that no two edges overlap (share identical pixel paths) for any segment | P0 | Coincident edges destroy edge continuity (Ware et al. 2002) — the eye cannot distinguish which edge is which along the shared segment. This is arguably worse than a crossing, because at a crossing the eye can follow trajectory through the intersection point; with overlap there is no trajectory information at all. The reader cannot determine how many edges exist or where each one goes without tracing from both endpoints. ELK's layered algorithm handles this explicitly by assigning each edge to a distinct routing slot within shared channels. Basis/curved styles naturally separate via divergent control points, but orthogonal (and rounded/linear) require explicit channel spreading. Observed in `five_fan_in.mmd` orthogonal rendering where all five edges from A–E to Target share identical horizontal segments, producing a single visible line that obscures the 5-edge fan-in structure. |
+| R-ORTH-6 | When multiple edges share a routing channel (same horizontal or vertical corridor), each edge must be assigned a distinct offset within that channel so that no two edges overlap (share identical pixel paths) for any segment | P0 | Coincident edges destroy edge continuity (Ware et al. 2002) — the eye cannot distinguish which edge is which along the shared segment. This is arguably worse than a crossing, because at a crossing the eye can follow trajectory through the intersection point; with overlap there is no trajectory information at all. The reader cannot determine how many edges exist or where each one goes without tracing from both endpoints. ELK's layered algorithm handles this explicitly by assigning each edge to a distinct routing slot within shared channels. curved styles naturally separate via divergent control points, but orthogonal (and orthogonal-rounded/straight) require explicit channel spreading. Observed in `five_fan_in.mmd` orthogonal rendering where all five edges from A–E to Target share identical horizontal segments, producing a single visible line that obscures the 5-edge fan-in structure. |
 | R-ORTH-10 | Fan-in and fan-out edge groups must stagger their shared-axis segments at distinct offsets proportional to the number of edges in the group | P0 | Fan-in (N sources → 1 target) and fan-out (1 source → N targets) are the most common triggers for edge overlap in hierarchical layouts. In a TD fan-in, all edges converge on the same target north face; without staggering, the horizontal jog segments collapse onto the same Y-coordinate. The stagger offset between adjacent edges should be consistent (uniform spacing) and the total stagger band should be centered in the inter-rank gap to maintain visual balance. The outermost edges get the shallowest (earliest) horizontal segments; inner edges get deeper ones closer to the target. This produces a visible "funnel" shape that communicates the fan-in/fan-out structure at a glance. Observed in `five_fan_in.mmd` orthogonal rendering where the fan-in structure is invisible due to all horizontal segments overlapping. |
 | R-ORTH-7 | Terminal approach segments (the last segment entering a node) must be long enough to support arrowhead rendering | P0 | Arrow direction readability |
 | R-ORTH-8 | Post-routing compaction must not collapse terminal approach segments | P0 | Prevents arrow direction ambiguity (plan 0076 finding) |
 | R-ORTH-9 | Departure segments (the first segment leaving a source node) must have a minimum length in the flow direction sufficient to establish visual trajectory before any lateral jog | P0 | Without a departure stem, the edge reads as a lateral relationship rather than a hierarchical one, disrupting flow-direction comprehension at the worst possible point — the origin where the eye hasn't yet established a tracking trajectory (Ware et al. 2002 continuity principle). Observed as a unified-preview regression in `label_spacing.mmd` where FULL-COMPUTE produces a visible departure stem but UNIFIED-PREVIEW does not. |
 
-#### R-LIN: Linear style
+#### R-STR: Straight style
 
-Linear edges use straight-line segments (polyline) without axis-alignment constraint. Linear style follows a two-phase pipeline: orthogonal routing for correctness, then diagonal simplification for visual identity (see DD-4).
+Straight edges use straight-line segments (polyline) without axis-alignment constraint. Straight style follows a two-phase pipeline: orthogonal routing for correctness, then diagonal simplification for visual identity (see DD-4).
 
 | ID | Requirement | Priority | Rationale |
 |----|-------------|----------|-----------|
-| R-LIN-1 | Prefer straight diagonal lines (0 bends) as the overwhelming default | P0 | Straight lines are optimal for readability (Xu et al. 2012) |
-| R-LIN-2 | Route orthogonally first, then simplify to diagonals as a post-processing step | P0 | Ensures correct flow-direction port attachment and collision avoidance before visual simplification (DD-4). Observed in `diamond_fan.mmd`: raw-waypoint diagonals produce poor flow encoding; unsimplified orthogonal produces no visual distinction from orthogonal style. |
-| R-LIN-3 | Reject diagonal simplification when the resulting line would cross a node body; fall back to the orthogonal path for that edge | P0 | Collision avoidance is the top-priority constraint (DD-1) |
-| R-LIN-4 | Reject diagonal simplification when the resulting departure angle is too shallow relative to the flow direction (e.g., near-horizontal exit in a TD layout) | P1 | A near-horizontal departure in a TD layout breaks flow-direction encoding even though it reduces bend count |
-| R-LIN-5 | Edge-to-node clipping must be precise for non-rectangular shapes | P1 | Diagonal lines must clip cleanly at shape boundaries |
-| R-LIN-6 | Label anchors must be revalidated after diagonal simplification | P1 | Simplification can remove the segment a label was anchored to (R-LABEL-2 applies) |
+| R-STR-1 | Prefer straight diagonal lines (0 bends) as the overwhelming default | P0 | Straight lines are optimal for readability (Xu et al. 2012) |
+| R-STR-2 | Route orthogonally first, then simplify to diagonals as a post-processing step | P0 | Ensures correct flow-direction port attachment and collision avoidance before visual simplification (DD-4). Observed in `diamond_fan.mmd`: raw-waypoint diagonals produce poor flow encoding; unsimplified orthogonal produces no visual distinction from orthogonal style. |
+| R-STR-3 | Reject diagonal simplification when the resulting line would cross a node body; fall back to the orthogonal path for that edge | P0 | Collision avoidance is the top-priority constraint (DD-1) |
+| R-STR-4 | Reject diagonal simplification when the resulting departure angle is too shallow relative to the flow direction (e.g., near-horizontal exit in a TD layout) | P1 | A near-horizontal departure in a TD layout breaks flow-direction encoding even though it reduces bend count |
+| R-STR-5 | Edge-to-node clipping must be precise for non-rectangular shapes | P1 | Diagonal lines must clip cleanly at shape boundaries |
+| R-STR-6 | Label anchors must be revalidated after diagonal simplification | P1 | Simplification can remove the segment a label was anchored to (R-LABEL-2 applies) |
 
-#### R-RND: Rounded style
+#### R-RND: Rounded (orthogonal-rounded) style
 
-Rounded edges behave like orthogonal with corner radii applied at bends.
+Rounded edges are orthogonal-routed paths with corner radii applied at bends.
 
 | ID | Requirement | Priority | Rationale |
 |----|-------------|----------|-----------|
@@ -197,15 +197,15 @@ Rounded edges behave like orthogonal with corner radii applied at bends.
 | R-RND-3 | Corner radius adapts to avoid distortion on short segments | P1 | Radius > segment length produces visual artifacts |
 | R-RND-4 | Corner radius is user-configurable via `--edge-radius` | P1 | Currently implemented |
 
-#### R-BAS: Basis (curved) style
+#### R-CRV: Curved style
 
-Basis edges use smooth B-spline interpolation through waypoints.
+Curved edges use smooth B-spline interpolation through waypoints.
 
 | ID | Requirement | Priority | Rationale |
 |----|-------------|----------|-----------|
-| R-BAS-1 | Curves should maintain low curvature (control points close to the straight-line path) | P1 | Heavy curvature degrades task performance (Xu et al. 2012) |
-| R-BAS-2 | Curve must pass through or near all waypoints | P0 | Waypoints encode layout structure |
-| R-BAS-3 | Curves must not cross node bodies | P1 | Collision avoidance |
+| R-CRV-1 | Curves should maintain low curvature (control points close to the straight-line path) | P1 | Heavy curvature degrades task performance (Xu et al. 2012) |
+| R-CRV-2 | Curve must pass through or near all waypoints | P0 | Waypoints encode layout structure |
+| R-CRV-3 | Curves must not cross node bodies | P1 | Collision avoidance |
 
 ### 5.2 Port attachment requirements
 
@@ -329,38 +329,38 @@ All edge styles share the same upstream routing logic through the orthogonal pat
 
 - **Orthogonal:** render axis-aligned segments directly
 - **Rounded:** apply corner radii at bends
-- **Linear:** orthogonal routing for correctness, then diagonal simplification as a post-processing step that collapses orthogonal waypoint sequences into straight segments where collision-safe (see DD-4); for text, not applicable (inherently orthogonal)
-- **Basis:** interpolate smooth curves through orthogonal waypoints
+- **Straight:** orthogonal routing for correctness, then diagonal simplification as a post-processing step that collapses orthogonal waypoint sequences into straight segments where collision-safe (see DD-4); for text, not applicable (inherently orthogonal)
+- **Curved:** interpolate smooth curves through orthogonal waypoints
 
 This means the orthogonal path builder is the critical path for quality — all styles inherit its bend count, crossing behavior, and port attachment decisions.
 
-### DD-3: The `basis` default for SVG is a Mermaid-compatibility choice, not a readability-optimal choice
+### DD-3: The `curved` default for SVG is a Mermaid-compatibility choice, not a readability-optimal choice
 
-The research clearly shows straight/low-curvature edges outperform curved edges for task performance. The `basis` default exists because:
+The research clearly shows straight/low-curvature edges outperform curved edges for task performance. The `curved` default exists because:
 
 - Mermaid.js renders curved edges by default
 - Users expect visual consistency when migrating from Mermaid.js
 - Aesthetic preference for curves is real even if task performance is lower
 
-For users who prioritize readability over visual similarity to Mermaid.js, `orthogonal` or `linear` should be recommended.
+For users who prioritize readability over visual similarity to Mermaid.js, `orthogonal` or `straight` should be recommended.
 
-### DD-4: Linear style uses orthogonal routing with diagonal simplification as a post-processing step
+### DD-4: Straight style uses orthogonal routing with diagonal simplification as a post-processing step
 
-The linear edge style has a two-phase pipeline:
+The straight edge style has a two-phase pipeline:
 
 1. **Route orthogonally** — use the same shared orthogonal path builder as all other styles. This guarantees correct flow-direction port attachment, departure stems, collision avoidance, and crossing behavior.
 2. **Simplify to diagonals** — as a downstream rendering step, collapse orthogonal waypoint sequences into straight diagonal segments where doing so does not cross node bodies or violate collision constraints.
 
-This means linear style is *not* "draw straight lines through raw dagre waypoints" (which produces poor flow-direction encoding) and is *not* "render orthogonal paths without corner rounding" (which produces no visual distinction from orthogonal style).
+This means straight style is *not* "draw straight lines through raw dagre waypoints" (which produces poor flow-direction encoding) and is *not* "render orthogonal paths without corner rounding" (which produces no visual distinction from orthogonal style).
 
-For a TD diamond fan (Start → Left, Start → Right, Left → End, Right → End), the ideal linear output is four single-segment diagonal lines — 0 bends each, maximum readability per Xu et al. (2012). The orthogonal routing phase ensures correctness; the diagonal simplification phase delivers the linear visual identity.
+For a TD diamond fan (Start → Left, Start → Right, Left → End, Right → End), the ideal straight output is four single-segment diagonal lines — 0 bends each, maximum readability per Xu et al. (2012). The orthogonal routing phase ensures correctness; the diagonal simplification phase delivers the straight visual identity.
 
 The simplification step must:
 - Preserve departure stems and terminal approach segments when the diagonal would produce too shallow an angle (near-horizontal exit in a TD layout still breaks flow-direction encoding)
 - Reject diagonals that would cross node bodies (fall back to the orthogonal path)
 - Maintain label anchor validity after simplification (R-LABEL-2 applies here too)
 
-Observed in `diamond_fan.mmd`: full-compute linear draws diagonals through raw waypoints with weak flow encoding; unified-preview linear renders identical to orthogonal with no visual distinction. Neither is correct. The two-phase pipeline resolves both problems.
+Observed in `diamond_fan.mmd`: full-compute straight draws diagonals through raw waypoints with weak flow encoding; unified-preview straight renders identical to orthogonal with no visual distinction. Neither is correct. The two-phase pipeline resolves both problems.
 
 ### DD-5: Text output is always orthogonal
 
@@ -380,7 +380,7 @@ The character grid imposes axis-aligned rendering. Text routing uses discrete gr
 | Departure stem length | ≥ minimum visible threshold before lateral jog | Measure first segment length in flow direction |
 | Axis alignment (orthogonal) | 100% of segments | Verify dx=0 or dy=0 for each segment |
 | Port corner inset | ≥ minimum visible margin from nearest corner | Measure distance from port x/y to nearest node corner coordinate |
-| Edge overlap count | 0 coincident segments for orthogonal/rounded/linear | Count segment pairs sharing identical pixel paths |
+| Edge overlap count | 0 coincident segments for orthogonal/rounded/straight | Count segment pairs sharing identical pixel paths |
 
 ### 7.2 Per-diagram metrics
 
@@ -448,11 +448,11 @@ These questions are not yet resolved and may require spikes or additional resear
 
 7. **Bounding box metric definition.** Current SVG sweep viewBox deltas are uniformly zero; a stronger metric is needed before gating quality changes. (Research 0048 non-viewBox metric findings.)
 
-8. **Basis curvature control from orthogonal waypoints.** Unified-preview basis curves appear better controlled (lower curvature) than full-compute basis because the orthogonal waypoints constrain the spline. Should the unified router's tighter waypoint structure be treated as a quality improvement for basis style, or does it over-constrain the curves? Observed in `diamond_fan.mmd`: full-compute produces excessively wide lateral curves; unified-preview produces more restrained curves closer to the low-curvature Lombardi profile that Xu et al. found performs comparably to straight edges.
+8. **Curved-style curvature control from orthogonal waypoints.** Unified-preview curved edges appear better controlled (lower curvature) than full-compute curved edges because the orthogonal waypoints constrain the spline. Should the unified router's tighter waypoint structure be treated as a quality improvement for curved style, or does it over-constrain the curves? Observed in `diamond_fan.mmd`: full-compute produces excessively wide lateral curves; unified-preview produces more restrained curves closer to the low-curvature Lombardi profile that Xu et al. found performs comparably to straight edges.
 
 10. **Shape-aware collision boundaries vs padded bounding boxes.** Shape-aware collision using actual geometry (or convex hull) is more correct but requires a collision polygon per shape. Padded bounding boxes are simpler but waste space — rectangles get unnecessary margin while diamonds need the most. The pragmatic approach may be shape-aware for the small set of Mermaid shapes that differ meaningfully from their bounding box (diamond, circle, stadium) with rectangular bbox as the fallback. Needs profiling to determine whether per-shape collision polygons have measurable cost at scale.
 
-11. **Diagonal simplification minimum angle threshold.** What departure angle (relative to flow direction) is too shallow for linear style? A 45° diagonal from Start to Left in a TD layout still reads as "downward"; a near-horizontal 10° diagonal would not. The threshold needs empirical testing or a heuristic (e.g., minimum 30° from the cross-axis).
+11. **Diagonal simplification minimum angle threshold.** What departure angle (relative to flow direction) is too shallow for straight style? A 45° diagonal from Start to Left in a TD layout still reads as "downward"; a near-horizontal 10° diagonal would not. The threshold needs empirical testing or a heuristic (e.g., minimum 30° from the cross-axis).
 
 ---
 
@@ -507,7 +507,7 @@ Orthogonal (axis-aligned segments):
       │           │
       └───────────┘
 
-Linear (straight diagonal segments):
+Straight (straight diagonal segments):
 
     ┌───┐       ┌───┐
     │ A │       │ B │
@@ -524,7 +524,7 @@ Rounded (orthogonal with corner radii):
       │           ▲
       ╰───────────╯
 
-Basis (smooth B-spline curve):
+Curved (smooth B-spline curve):
 
     ┌───┐       ┌───┐
     │ A │       │ B │
@@ -578,19 +578,19 @@ The four edge styles serve different audiences and contexts. The routing strateg
                  │ Sharp corners    │ Rounded corners  │ Smooth curves
 ─────────────────┼──────────────────┼──────────────────┼─────────────────
 Orthogonal paths │ orthogonal       │ rounded          │ (n/a)
-Diagonal paths   │ linear           │ (rare)           │ (n/a)
-Spline paths     │ (n/a)            │ (n/a)            │ basis
+Diagonal paths   │ straight         │ (rare)           │ (n/a)
+Spline paths     │ (n/a)            │ (n/a)            │ curved
 ```
 
 ### Style characteristics
 
 **Orthogonal** (axis-aligned, sharp 90° bends). Every direction change is explicit and unambiguous. Edge crossings are always at right angles, which Purchase found perform nearly as well as planar drawings. The grid-aligned structure makes diagrams scannable — the eye can follow horizontal or vertical channels without tracking arbitrary angles. The tradeoff is visual rigidity: orthogonal diagrams read as precise and authoritative, which is a feature in engineering contexts but can feel clinical for general audiences. This is also the only option for text/ASCII output, where the character grid enforces axis alignment.
 
-**Rounded** (axis-aligned paths, arc radii at bends). Identical routing to orthogonal — same waypoints, same bend count, same crossing behavior — with corner arcs as a purely visual treatment. The rounded corners improve edge tracing at bends because the eye follows a curve more naturally than a sharp angle (Bar & Neta 2006 curved-preference finding), while retaining the grid-aligned structure that makes orthogonal scannable. This is the draw.io default and the most popular style in general-purpose diagramming tools.
+**Rounded (orthogonal-rounded)** (axis-aligned paths, arc radii at bends). Identical routing to orthogonal — same waypoints, same bend count, same crossing behavior — with corner arcs as a purely visual treatment. The rounded corners improve edge tracing at bends because the eye follows a curve more naturally than a sharp angle (Bar & Neta 2006 curved-preference finding), while retaining the grid-aligned structure that makes orthogonal scannable. This is the draw.io default and the most popular style in general-purpose diagramming tools.
 
-**Linear** (straight diagonal segments, unconstrained angles). Zero-bend straight lines are the most readable edge style per Xu et al. (2012) — maximum continuity, minimum cognitive load. But linear degrades in dense graphs: diagonal crossings occur at arbitrary angles (harder to read than 90° orthogonal crossings), and fan-in/fan-out groups produce visual tangles where multiple diagonals converge. Linear works best for sparse graphs with low edge density where the spatial simplicity of straight lines outweighs the loss of grid structure.
+**Straight** (straight diagonal segments, unconstrained angles). Zero-bend straight lines are the most readable edge style per Xu et al. (2012) — maximum continuity, minimum cognitive load. But straight routing degrades in dense graphs: diagonal crossings occur at arbitrary angles (harder to read than 90° orthogonal crossings), and fan-in/fan-out groups produce visual tangles where multiple diagonals converge. Straight works best for sparse graphs with low edge density where the spatial simplicity of straight lines outweighs the loss of grid structure.
 
-**Basis/curved** (smooth B-spline interpolation through waypoints). Users consistently rate curved edges as the most visually pleasing (Bar & Neta 2006), and smooth splines make diagrams feel organic and approachable. Mermaid.js uses curved edges by default, making this the expected style for users migrating from Mermaid. The tradeoff is measurable: Xu et al. (2012) found more reading errors and slower task completion with heavy curvature compared to straight or low-curvature edges. For diagrams where the audience is scanning an overview rather than tracing individual paths, the aesthetic benefit can outweigh the readability cost.
+**Curved** (smooth B-spline interpolation through waypoints). Users consistently rate curved edges as the most visually pleasing (Bar & Neta 2006), and smooth splines make diagrams feel organic and approachable. Mermaid.js uses curved edges by default, making this the expected style for users migrating from Mermaid. The tradeoff is measurable: Xu et al. (2012) found more reading errors and slower task completion with heavy curvature compared to straight or low-curvature edges. For diagrams where the audience is scanning an overview rather than tracing individual paths, the aesthetic benefit can outweigh the readability cost.
 
 ### Selection guidance
 
@@ -598,11 +598,11 @@ Spline paths     │ (n/a)            │ (n/a)            │ basis
 |---------|-------------------|----------|
 | Engineering reference documentation | Orthogonal | Precision and traceability; every direction change explicit |
 | General-purpose flowcharts | Rounded | Approachable feel with structured routing; best all-around compromise |
-| Sparse hierarchies and trees (<15 nodes, low edge density) | Linear | Minimal visual noise; straight lines maximize readability |
-| Presentations and stakeholder overviews | Basis/curved | Aesthetic appeal for audiences scanning rather than tracing |
+| Sparse hierarchies and trees (<15 nodes, low edge density) | Straight | Minimal visual noise; straight lines maximize readability |
+| Presentations and stakeholder overviews | Curved | Aesthetic appeal for audiences scanning rather than tracing |
 | Dense graphs with many crossings | Orthogonal or rounded | 90° crossings are significantly more readable than arbitrary-angle crossings |
 | Text/terminal output | Orthogonal (inherent) | Character grid constraint; not a choice but a given |
-| Mermaid.js visual compatibility | Basis/curved | Matches Mermaid.js default rendering conventions |
+| Mermaid.js visual compatibility | Curved | Matches Mermaid.js default rendering conventions |
 
 ---
 

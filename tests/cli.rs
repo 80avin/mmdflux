@@ -78,6 +78,24 @@ fn cli_accepts_edge_style_orthogonal() {
 }
 
 #[test]
+fn cli_accepts_edge_style_curved() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-style", "curved"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_edge_style_straight() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-style", "straight"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
 fn cli_accepts_full_compute_rollback_flag() {
     mmdflux()
         .args(["--format", "svg", "--edge-routing", "full-compute"])
@@ -92,7 +110,7 @@ fn cli_svg_defaults_to_unified_preview_edge_routing() {
     let input = "graph TD\nA[Start] --> B{Check}\nB --> C[Yes]\nB --> D[No]\nD --> A\n";
 
     let default = mmdflux()
-        .args(["--format", "svg", "--edge-style", "linear"])
+        .args(["--format", "svg", "--edge-style", "straight"])
         .write_stdin(input)
         .output()
         .expect("default render should execute");
@@ -107,7 +125,7 @@ fn cli_svg_defaults_to_unified_preview_edge_routing() {
             "--format",
             "svg",
             "--edge-style",
-            "linear",
+            "straight",
             "--edge-routing",
             "unified-preview",
         ])
@@ -124,6 +142,32 @@ fn cli_svg_defaults_to_unified_preview_edge_routing() {
         default.stdout, unified.stdout,
         "default svg render should match explicit unified-preview edge routing"
     );
+}
+
+#[test]
+fn cli_rejects_legacy_edge_style_basis() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-style", "basis"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid value 'basis'"))
+        .stderr(predicate::str::contains(
+            "possible values: curved, straight, rounded, orthogonal",
+        ));
+}
+
+#[test]
+fn cli_rejects_legacy_edge_style_linear() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-style", "linear"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid value 'linear'"))
+        .stderr(predicate::str::contains(
+            "possible values: curved, straight, rounded, orthogonal",
+        ));
 }
 
 #[test]

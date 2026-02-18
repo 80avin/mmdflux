@@ -137,23 +137,23 @@ SVG and routed MMDS outputs:
 
 ```bash
 # Preview unified float-first routing (SVG)
-cargo run -- -f svg --edge-routing unified-preview --edge-style linear diagram.mmd
+cargo run -- -f svg --edge-routing unified-preview --edge-style straight diagram.mmd
 
 # Roll back to legacy routing behavior (default)
-cargo run -- -f svg --edge-style linear diagram.mmd
+cargo run -- -f svg --edge-style straight diagram.mmd
 ```
 
 Notes:
 - Default rendering remains legacy unless `--edge-routing unified-preview` is set.
 - `--edge-routing full-compute` is the explicit legacy override.
-- The parity harness currently tracks a known linear-SVG delta on
+- The parity harness currently tracks a known straight-SVG delta on
   `simple_cycle.mmd` for unified preview.
 
 ### Preview Parity Gates
 
 ```bash
 cargo test svg_unified_preview_parity_core_fixture_subset_has_expected_deltas --test svg_snapshots
-cargo test svg_full_compute_override_matches_legacy_linear_core_subset --test svg_snapshots
+cargo test svg_full_compute_override_matches_legacy_straight_core_subset --test svg_snapshots
 cargo test unified_preview_preserves_core_routed_geometry_contracts --test routed_geometry
 ```
 

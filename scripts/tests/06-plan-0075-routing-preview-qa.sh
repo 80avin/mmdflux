@@ -82,7 +82,7 @@ echo "Output dir: $OUT_DIR"
 
 print_section "Parity + rollback gates (plan 0075 targeted tests)"
 (
-  run_exact_test "svg_snapshots" "svg_full_compute_override_matches_legacy_linear_core_subset"
+  run_exact_test "svg_snapshots" "svg_full_compute_override_matches_legacy_straight_core_subset"
   run_exact_test "svg_snapshots" "svg_unified_preview_parity_fixture_subset_matches_expected_classification"
   run_exact_test "routed_geometry" "unified_preview_preserves_core_routed_geometry_contracts"
   run_exact_test "routed_geometry" "unified_router_produces_axis_aligned_forward_paths"
@@ -98,12 +98,12 @@ assert_diff "simple_cycle.mmd"
 print_section "Determinism checks"
 "$MMDFLUX_BIN" \
   --format svg \
-  --edge-style linear \
+  --edge-style straight \
   --edge-routing unified-preview \
   "$REPO_ROOT/tests/fixtures/flowchart/simple_cycle.mmd" >"$OUT_DIR/simple_cycle.unified-preview.run1.svg"
 "$MMDFLUX_BIN" \
   --format svg \
-  --edge-style linear \
+  --edge-style straight \
   --edge-routing unified-preview \
   "$REPO_ROOT/tests/fixtures/flowchart/simple_cycle.mmd" >"$OUT_DIR/simple_cycle.unified-preview.run2.svg"
 cmp -s "$OUT_DIR/simple_cycle.unified-preview.run1.svg" "$OUT_DIR/simple_cycle.unified-preview.run2.svg"

@@ -10,8 +10,8 @@ SWEEP_RUN_ID="${RUN_ID}-unified-vs-full-sweep"
 OUT_DIR="$REPO_ROOT/scripts/tests/out/$SWEEP_RUN_ID"
 mkdir -p "$OUT_DIR"
 
-FLOW_STYLES_DEFAULT=("basis" "linear" "rounded" "orthogonal")
-CLASS_STYLES_DEFAULT=("basis")
+FLOW_STYLES_DEFAULT=("curved" "straight" "rounded" "orthogonal")
+CLASS_STYLES_DEFAULT=("curved")
 UNIFIED_FEEDBACK_BASELINE_HEADER=$'fixture\tstyle\tstatus\tdiff_lines\tfull_viewbox_width\tfull_viewbox_height\tunified_viewbox_width\tunified_viewbox_height\tviewbox_width_delta\tviewbox_height_delta\tfull_route_envelope_width\tfull_route_envelope_height\tunified_route_envelope_width\tunified_route_envelope_height\troute_envelope_width_delta\troute_envelope_height_delta\tfull_edge_label_count\tunified_edge_label_count\tedge_label_count_delta\tlabel_position_max_drift\tlabel_position_mean_drift'
 
 ROUTE_ENVELOPE_ABS_DELTA_WARN_PX="${ROUTE_ENVELOPE_ABS_DELTA_WARN_PX:-24}"
@@ -391,11 +391,11 @@ summarize_non_viewbox_metrics() {
 
 style_badge_class() {
   case "$1" in
-    basis) printf 'style-basis' ;;
-    linear) printf 'style-linear' ;;
+    curved) printf 'style-curved' ;;
+    straight) printf 'style-straight' ;;
     rounded) printf 'style-rounded' ;;
     orthogonal) printf 'style-orthogonal' ;;
-    *) printf 'style-basis' ;;
+    *) printf 'style-curved' ;;
   esac
 }
 
@@ -439,8 +439,8 @@ generate_gallery() {
     .family-flowchart { border-color:#0ea5e9; color:#bae6fd; background:#0c4a6e55; }
     .family-class { border-color:#f97316; color:#fed7aa; background:#7c2d1255; }
     .style-badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; border-radius:999px; padding:2px 7px; }
-    .style-basis { background:#1e3a8a55; color:#bfdbfe; border:1px solid #1e40af; }
-    .style-linear { background:#36531455; color:#d9f99d; border:1px solid #4d7c0f; }
+    .style-curved { background:#1e3a8a55; color:#bfdbfe; border:1px solid #1e40af; }
+    .style-straight { background:#36531455; color:#d9f99d; border:1px solid #4d7c0f; }
     .style-rounded { background:#78350f55; color:#fde68a; border:1px solid #a16207; }
     .style-orthogonal { background:#4c1d9555; color:#ddd6fe; border:1px solid #6d28d9; }
     details.fixture { margin:8px 0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
@@ -469,11 +469,11 @@ generate_gallery() {
       <button onclick="openShown(true)">Open shown</button>
       <button onclick="openShown(false)">Close shown</button>
       <label><input id="hideSame" type="checkbox" checked onchange="applyFilters()"> Hide same</label>
-      <label><input id="basisOnly" type="checkbox" onchange="applyFilters()"> Basis only</label>
+      <label><input id="curvedOnly" type="checkbox" onchange="applyFilters()"> Curved only</label>
       <label><input id="familyFlowchart" type="checkbox" checked onchange="applyFilters()"> flowchart</label>
       <label><input id="familyClass" type="checkbox" checked onchange="applyFilters()"> class</label>
-      <label><input id="styleBasis" type="checkbox" checked onchange="applyFilters()"> basis</label>
-      <label><input id="styleLinear" type="checkbox" checked onchange="applyFilters()"> linear</label>
+      <label><input id="styleCurved" type="checkbox" checked onchange="applyFilters()"> curved</label>
+      <label><input id="styleStraight" type="checkbox" checked onchange="applyFilters()"> straight</label>
       <label><input id="styleRounded" type="checkbox" checked onchange="applyFilters()"> rounded</label>
       <label><input id="styleOrthogonal" type="checkbox" checked onchange="applyFilters()"> orthogonal</label>
       <input id="search" type="text" placeholder="Filter fixture name (e.g. multi_subgraph)" oninput="applyFilters()" />
@@ -566,7 +566,7 @@ HTML_FIXTURE
 
     function applyFilters() {
       const hideSame = document.getElementById('hideSame').checked;
-      const basisOnly = document.getElementById('basisOnly').checked;
+      const curvedOnly = document.getElementById('curvedOnly').checked;
       const search = document.getElementById('search').value.trim().toLowerCase();
 
       const allowedFamilies = new Set();
@@ -574,13 +574,13 @@ HTML_FIXTURE
       if (document.getElementById('familyClass').checked) allowedFamilies.add('class');
 
       const allowedStyles = new Set();
-      if (document.getElementById('styleBasis').checked) allowedStyles.add('basis');
-      if (document.getElementById('styleLinear').checked) allowedStyles.add('linear');
+      if (document.getElementById('styleCurved').checked) allowedStyles.add('curved');
+      if (document.getElementById('styleStraight').checked) allowedStyles.add('straight');
       if (document.getElementById('styleRounded').checked) allowedStyles.add('rounded');
       if (document.getElementById('styleOrthogonal').checked) allowedStyles.add('orthogonal');
-      if (basisOnly) {
+      if (curvedOnly) {
         allowedStyles.clear();
-        allowedStyles.add('basis');
+        allowedStyles.add('curved');
       }
 
       document.querySelectorAll('details.fixture').forEach(d => {

@@ -134,7 +134,7 @@ fn render_svg_fixture_with_edge_routing_and_policies(
     let mut instance = FlowchartInstance::new();
     instance.parse(&input).expect("Failed to parse fixture");
     let config = RenderConfig {
-        edge_style: Some(EdgeStyle::Linear),
+        edge_style: Some(EdgeStyle::Straight),
         path_detail: PathDetail::Full,
         edge_routing: Some(mode),
         edge_routing_policies: policies,
@@ -430,9 +430,9 @@ fn unified_preview_svg_output_is_deterministic_for_fixture_subset() {
 }
 
 #[test]
-fn svg_full_compute_override_matches_legacy_linear_core_subset() {
+fn svg_full_compute_override_matches_legacy_straight_core_subset() {
     for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
-        let legacy = render_svg_fixture_with_curve(fixture, EdgeStyle::Linear);
+        let legacy = render_svg_fixture_with_curve(fixture, EdgeStyle::Straight);
         let full_compute = render_svg_fixture_with_edge_routing(fixture, EdgeRouting::FullCompute);
         assert_eq!(
             full_compute, legacy,

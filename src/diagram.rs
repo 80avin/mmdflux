@@ -40,8 +40,8 @@ pub enum OutputFormat {
 /// SVG edge style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdgeStyle {
-    Basis,
-    Linear,
+    Curved,
+    Straight,
     Rounded,
     Orthogonal,
 }
@@ -87,8 +87,8 @@ impl FromStr for OutputFormat {
 impl std::fmt::Display for EdgeStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            EdgeStyle::Basis => write!(f, "basis"),
-            EdgeStyle::Linear => write!(f, "linear"),
+            EdgeStyle::Curved => write!(f, "curved"),
+            EdgeStyle::Straight => write!(f, "straight"),
             EdgeStyle::Rounded => write!(f, "rounded"),
             EdgeStyle::Orthogonal => write!(f, "orthogonal"),
         }
@@ -99,12 +99,14 @@ impl EdgeStyle {
     /// Parse SVG edge style from user-provided text.
     pub fn parse(s: &str) -> Result<Self, RenderError> {
         match normalize_enum_token(s).as_str() {
-            "basis" => Ok(EdgeStyle::Basis),
-            "linear" => Ok(EdgeStyle::Linear),
+            "curved" => Ok(EdgeStyle::Curved),
+            "straight" => Ok(EdgeStyle::Straight),
             "rounded" => Ok(EdgeStyle::Rounded),
             "orthogonal" => Ok(EdgeStyle::Orthogonal),
             _ => Err(RenderError {
-                message: format!("unknown svg edge style: {s:?}"),
+                message: format!(
+                    "unknown svg edge style: {s:?} (expected one of: curved, straight, rounded, orthogonal)"
+                ),
             }),
         }
     }

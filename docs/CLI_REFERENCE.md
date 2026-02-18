@@ -54,8 +54,8 @@ Note: SVG output is currently supported for flowcharts. For MMDS geometry-level 
 
 ```bash
 # Select SVG edge style
-mmdflux --format svg --edge-style basis diagram.mmd
-mmdflux --format svg --edge-style linear diagram.mmd
+mmdflux --format svg --edge-style curved diagram.mmd
+mmdflux --format svg --edge-style straight diagram.mmd
 mmdflux --format svg --edge-style rounded --edge-radius 6 diagram.mmd
 mmdflux --format svg --edge-style orthogonal diagram.mmd
 
@@ -69,9 +69,9 @@ mmdflux --format svg --edge-routing unified-preview diagram.mmd
 
 | Value | Description |
 | ----- | ----------- |
-| `basis` | Smooth spline path (default) |
-| `linear` | Straight polyline segments |
-| `rounded` | Polyline with rounded corners (radius via `--edge-radius`) |
+| `curved` | Smooth curved spline path (default) |
+| `straight` | Straight polyline segments |
+| `rounded` | Orthogonal routing with rounded corners (radius via `--edge-radius`) |
 | `orthogonal` | Axis-aligned path construction |
 
 `--edge-routing` values:

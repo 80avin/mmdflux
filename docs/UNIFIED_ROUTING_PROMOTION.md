@@ -78,7 +78,7 @@ These specs are documented and test-scaffolded before runtime behavior changes.
   - Keep fan-in overflow/backward-channel behavior **always enabled** for unified preview.
 - Evidence gates:
   - `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies` (`tests/routed_geometry.rs`)
-  - `svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces` (`tests/svg_render.rs`)
+  - `svg_straight_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces` (`tests/svg_render.rs`)
   - `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg` (`tests/integration.rs`)
 
 ### Non-ViewBox Metric Gate Spec (Task 0.4)
@@ -112,10 +112,10 @@ This is the decision record for known output differences when unified routing is
 
 | Area | Classification | Decision | Notes |
 | ---- | -------------- | -------- | ----- |
-| Flowchart SVG linear parity-classification subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`, `decision.mmd`, `fan_out.mmd`, `left_right.mmd`, `subgraph_direction_cross_boundary.mmd`, `multi_subgraph_direction_override.mmd`) | accepted-improvement | Accept for Release N | Unified-preview deltas are explicitly classified and test-enforced in `svg_unified_preview_parity_fixture_subset_matches_expected_classification`. |
+| Flowchart SVG straight parity-classification subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`, `decision.mmd`, `fan_out.mmd`, `left_right.mmd`, `subgraph_direction_cross_boundary.mmd`, `multi_subgraph_direction_override.mmd`) | accepted-improvement | Accept for Release N | Unified-preview deltas are explicitly classified and test-enforced in `svg_unified_preview_parity_fixture_subset_matches_expected_classification`. |
 | Flowchart text label-revalidation fixture parity (`labeled_edges.mmd`, `inline_label_flowchart.mmd`) | must-match | Must match | `text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes` enforces edge-routing parity for text output across label-revalidation fixtures. |
 | Flowchart backward-edge routing behavior | accepted-design | Accept for Release N | Keep route-hint fallback as intentional behavior (stability-first) instead of forcing full backward-edge unification in this release. |
-| Rollback parity guard (`--edge-routing full-compute`) for linear core subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`) | must-match-legacy | Must match | `svg_full_compute_override_matches_legacy_linear_core_subset` requires byte-identical legacy parity when rollback mode is selected. |
+| Rollback parity guard (`--edge-routing full-compute`) for straight core subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`) | must-match-legacy | Must match | `svg_full_compute_override_matches_legacy_straight_core_subset` requires byte-identical legacy parity when rollback mode is selected. |
 
 ### Delta Evidence Sources
 
@@ -124,7 +124,7 @@ This is the decision record for known output differences when unified routing is
 - `tests/svg_snapshots.rs`:
   - `svg_unified_preview_parity_fixture_subset_matches_expected_classification`
   - `unified_preview_svg_output_is_deterministic_for_fixture_subset`
-  - `svg_full_compute_override_matches_legacy_linear_core_subset`
+  - `svg_full_compute_override_matches_legacy_straight_core_subset`
 - `tests/mmds_json.rs`:
   - `unified_preview_mmds_routed_output_is_deterministic_for_fixture_subset`
   - `routed_mmds_defaults_to_full_path_detail`
@@ -174,7 +174,7 @@ just lint
 
 From archived plan 0075 findings:
 
-- [x] `simple_cycle.mmd` linear-SVG delta in unified preview is accepted (or fixed):
+- [x] `simple_cycle.mmd` straight-SVG delta in unified preview is accepted (or fixed):
   - `plans/archive/0075-orthogonal-routing-unification/findings/discovery-unified-preview-svg-linear-core-parity-delta-simple-cycle.md`
 - [x] Backward-edge fallback is accepted (or replaced with full unified behavior):
   - `plans/archive/0075-orthogonal-routing-unification/findings/note-unified-preview-backward-edge-fallback-uses-existing-hints.md`
@@ -192,10 +192,10 @@ Plan 0077.
 
 | Policy Area | Fixture Subset | Classification | Gate |
 | ---- | ---- | ---- | ---- |
-| Fan-in overflow/backward-channel behavior | `stacked_fan_in.mmd`, `fan_in.mmd`, `five_fan_in.mmd`, `multiple_cycles.mmd`, `http_request.mmd`, `git_workflow.mmd`, `fan_in_backward_channel_conflict.mmd` | Must preserve documented face policies with deterministic overflow lanes | `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies`, `svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces`, `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg` |
+| Fan-in overflow/backward-channel behavior | `stacked_fan_in.mmd`, `fan_in.mmd`, `five_fan_in.mmd`, `multiple_cycles.mmd`, `http_request.mmd`, `git_workflow.mmd`, `fan_in_backward_channel_conflict.mmd` | Must preserve documented face policies with deterministic overflow lanes | `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies`, `svg_straight_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces`, `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg` |
 | Style-segment monitor-only (styled segment minimum) | `edge_styles.mmd`, `inline_edge_labels.mmd` | monitor-only; escalate on violations | `style_segment_monitor_reports_actionable_summary_for_routed_geometry`, `style_segment_monitor_reports_actionable_summary_for_svg` |
 | Label-revalidation text parity | `labeled_edges.mmd`, `inline_label_flowchart.mmd` | `must-match` between `unified-preview` and `full-compute` text output | `text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes` |
-| Rollback parity (legacy linear core) | `simple.mmd`, `chain.mmd`, `simple_cycle.mmd` | `must-match-legacy` under rollback mode | `svg_full_compute_override_matches_legacy_linear_core_subset` |
+| Rollback parity (legacy straight core) | `simple.mmd`, `chain.mmd`, `simple_cycle.mmd` | `must-match-legacy` under rollback mode | `svg_full_compute_override_matches_legacy_straight_core_subset` |
 
 Operational context and escalation notes remain tracked in:
 - `docs/UNIFIED_ISSUES.md`
@@ -219,9 +219,9 @@ mmdflux --edge-routing full-compute <input.mmd>
 3. Re-run targeted gates and compare with baseline classifications:
 
   - `fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_policies`
-  - `svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces`
+  - `svg_straight_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces`
   - `style_segment_monitor_reports_actionable_summary_for_svg`
-  - `svg_full_compute_override_matches_legacy_linear_core_subset`
+  - `svg_full_compute_override_matches_legacy_straight_core_subset`
 
 4. Keep style-segment checks monitor-only (no runtime policy toggle) until
    explicit enforcement is approved.
@@ -234,7 +234,7 @@ mmdflux --edge-routing full-compute <input.mmd>
   - `--edge-routing full-compute`
   - `--edge-routing pass-through-clip`
 - [ ] Keep rollback tests green:
-  - `svg_full_compute_override_matches_legacy_linear_core_subset`
+  - `svg_full_compute_override_matches_legacy_straight_core_subset`
 - [ ] Update docs to reflect new default:
   - `docs/CLI_REFERENCE.md`
   - `docs/DEBUG.md`

@@ -855,7 +855,7 @@ fn render_edges(
                 (
                     EdgeRouting::UnifiedPreview,
                     true,
-                    EdgeStyle::Basis | EdgeStyle::Linear | EdgeStyle::Rounded
+                    EdgeStyle::Curved | EdgeStyle::Straight | EdgeStyle::Rounded
                 )
             );
         // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
@@ -900,18 +900,18 @@ fn render_edges(
         } else {
             points
         };
-        // Only densify corners for linear edges; basis and rounded
+        // Only densify corners for straight edges; curved and rounded
         // handle smoothing natively from sparse waypoints.
-        if matches!(edge_style, EdgeStyle::Linear) && !preserve_orthogonal_endpoint_contract {
+        if matches!(edge_style, EdgeStyle::Straight) && !preserve_orthogonal_endpoint_contract {
             points = fix_corner_points(&points);
         }
         if matches!(
             (edge_routing, edge_style),
-            (EdgeRouting::UnifiedPreview, EdgeStyle::Basis)
+            (EdgeRouting::UnifiedPreview, EdgeStyle::Curved)
         ) && !is_backward
             && edge.from != edge.to
         {
-            points = collapse_primary_face_fan_channel_for_basis(
+            points = collapse_primary_face_fan_channel_for_curved(
                 geom,
                 edge,
                 edge_direction,
@@ -919,7 +919,7 @@ fn render_edges(
                 0.5,
             );
         }
-        let allow_interior_nudges = !matches!(edge_style, EdgeStyle::Linear);
+        let allow_interior_nudges = !matches!(edge_style, EdgeStyle::Straight);
         let enforce_primary_axis_no_backtrack = matches!(edge_routing, EdgeRouting::UnifiedPreview)
             && !matches!(edge_style, EdgeStyle::Orthogonal | EdgeStyle::Rounded)
             && !is_backward
@@ -934,19 +934,19 @@ fn render_edges(
                 enforce_primary_axis_no_backtrack,
                 preserve_orthogonal: matches!(edge_style, EdgeStyle::Orthogonal)
                     || preserve_orthogonal_endpoint_contract,
-                collapse_terminal_elbows: !matches!(edge_style, EdgeStyle::Basis),
-                is_basis_style: matches!(edge_style, EdgeStyle::Basis),
+                collapse_terminal_elbows: !matches!(edge_style, EdgeStyle::Curved),
+                is_curved_style: matches!(edge_style, EdgeStyle::Curved),
             },
         );
         // Collapse tiny near-collinear jogs introduced by SVG marker offset
         // smoothing on unified-preview paths.
         if matches!(edge_routing, EdgeRouting::UnifiedPreview)
             && !matches!(edge_style, EdgeStyle::Orthogonal | EdgeStyle::Rounded)
-            && !matches!(edge_style, EdgeStyle::Basis)
+            && !matches!(edge_style, EdgeStyle::Curved)
             && !preserve_orthogonal_endpoint_contract
             && edge.from != edge.to
         {
-            points = collapse_tiny_linear_smoothing_jogs(&points, 30.0);
+            points = collapse_tiny_straight_smoothing_jogs(&points, 30.0);
         }
         let point_prep_style = if preserve_orthogonal_endpoint_contract {
             EdgeStyle::Orthogonal
@@ -1000,7 +1000,7 @@ fn segment_manhattan_len(start: Point, end: Point) -> f64 {
     (start.x - end.x).abs() + (start.y - end.y).abs()
 }
 
-fn collapse_primary_face_fan_channel_for_basis(
+fn collapse_primary_face_fan_channel_for_curved(
     geom: &GraphGeometry,
     edge: &Edge,
     direction: Direction,
@@ -2355,10 +2355,10 @@ fn path_from_prepared_points(
         .map(|point| (point.x * scale, point.y * scale))
         .collect();
     match curve {
-        EdgeStyle::Basis => path_from_points_basis(&scaled),
+        EdgeStyle::Curved => path_from_points_curved(&scaled),
         EdgeStyle::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
-        EdgeStyle::Linear => path_from_points_linear(&scaled),
-        EdgeStyle::Orthogonal => path_from_points_linear(&scaled),
+        EdgeStyle::Straight => path_from_points_straight(&scaled),
+        EdgeStyle::Orthogonal => path_from_points_straight(&scaled),
     }
 }
 
@@ -2832,7 +2832,7 @@ fn fix_corner_points(points: &[Point]) -> Vec<Point> {
     out
 }
 
-fn collapse_tiny_linear_smoothing_jogs(points: &[Point], short_tol: f64) -> Vec<Point> {
+fn collapse_tiny_straight_smoothing_jogs(points: &[Point], short_tol: f64) -> Vec<Point> {
     if points.len() < 4 || short_tol <= 0.0 {
         return points.to_vec();
     }
@@ -2954,7 +2954,7 @@ struct MarkerOffsetOptions {
     enforce_primary_axis_no_backtrack: bool,
     preserve_orthogonal: bool,
     collapse_terminal_elbows: bool,
-    is_basis_style: bool,
+    is_curved_style: bool,
 }
 
 fn apply_marker_offsets(
@@ -2973,7 +2973,7 @@ fn apply_marker_offsets(
         enforce_primary_axis_no_backtrack,
         preserve_orthogonal,
         collapse_terminal_elbows,
-        is_basis_style,
+        is_curved_style,
     } = options;
 
     let mut start_offset: f64 = match edge.arrow_start {
@@ -3003,7 +3003,7 @@ fn apply_marker_offsets(
         }
     }
     if !preserve_orthogonal && collapse_terminal_elbows {
-        // Non-orth styles (linear/rounded/basis) can look visually cramped when
+        // Non-orth styles (straight/rounded/curved) can look visually cramped when
         // an orthogonal route ends with a short final elbow immediately before
         // the marker. Collapse that elbow into a direct terminal approach.
         points = collapse_narrow_terminal_elbows_for_non_orth(&points, 14.0);
@@ -3028,9 +3028,9 @@ fn apply_marker_offsets(
         // Keep endpoint support visibly longer than marker pullback so the
         // terminal stem remains readable in orthogonal mode.
         const MIN_ENDPOINT_SUPPORT: f64 = 12.0;
-        const MIN_BACKWARD_BASIS_ENDPOINT_SUPPORT: f64 = 20.0;
-        let min_endpoint_support = if is_backward && is_basis_style {
-            MIN_BACKWARD_BASIS_ENDPOINT_SUPPORT
+        const MIN_BACKWARD_CURVED_ENDPOINT_SUPPORT: f64 = 20.0;
+        let min_endpoint_support = if is_backward && is_curved_style {
+            MIN_BACKWARD_CURVED_ENDPOINT_SUPPORT
         } else {
             MIN_ENDPOINT_SUPPORT
         };
@@ -3574,7 +3574,7 @@ fn intersect_svg_diamond(rect: &Rect, point: Point) -> Point {
     }
 }
 
-fn path_from_points_linear(points: &[(f64, f64)]) -> String {
+fn path_from_points_straight(points: &[(f64, f64)]) -> String {
     if points.is_empty() {
         return String::new();
     }
@@ -3589,7 +3589,7 @@ fn path_from_points_linear(points: &[(f64, f64)]) -> String {
     d
 }
 
-fn path_from_points_basis(points: &[(f64, f64)]) -> String {
+fn path_from_points_curved(points: &[(f64, f64)]) -> String {
     if points.is_empty() {
         return String::new();
     }
@@ -3619,10 +3619,10 @@ fn path_from_points_basis(points: &[(f64, f64)]) -> String {
                 let px = (5.0 * x0 + x1) / 6.0;
                 let py = (5.0 * y0 + y1) / 6.0;
                 let _ = write!(d, " L{},{}", fmt_f64(px), fmt_f64(py));
-                basis_bezier(&mut d, x0, y0, x1, y1, x, y);
+                curved_bezier(&mut d, x0, y0, x1, y1, x, y);
             }
             _ => {
-                basis_bezier(&mut d, x0, y0, x1, y1, x, y);
+                curved_bezier(&mut d, x0, y0, x1, y1, x, y);
             }
         }
         x0 = x1;
@@ -3633,7 +3633,7 @@ fn path_from_points_basis(points: &[(f64, f64)]) -> String {
 
     match point {
         3 => {
-            basis_bezier(&mut d, x0, y0, x1, y1, x1, y1);
+            curved_bezier(&mut d, x0, y0, x1, y1, x1, y1);
             let _ = write!(d, " L{},{}", fmt_f64(x1), fmt_f64(y1));
         }
         2 => {
@@ -3645,7 +3645,7 @@ fn path_from_points_basis(points: &[(f64, f64)]) -> String {
     d
 }
 
-fn basis_bezier(d: &mut String, x0: f64, y0: f64, x1: f64, y1: f64, x: f64, y: f64) {
+fn curved_bezier(d: &mut String, x0: f64, y0: f64, x1: f64, y1: f64, x: f64, y: f64) {
     let c1x = (2.0 * x0 + x1) / 3.0;
     let c1y = (2.0 * y0 + y1) / 3.0;
     let c2x = (x0 + 2.0 * x1) / 3.0;
@@ -3669,7 +3669,7 @@ fn path_from_points_rounded(points: &[(f64, f64)], radius: f64) -> String {
         return String::new();
     }
     if points.len() < 3 || radius <= 0.0 {
-        return path_from_points_linear(points);
+        return path_from_points_straight(points);
     }
 
     let mut d = String::new();

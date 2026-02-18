@@ -519,7 +519,7 @@ fn style_segment_monitor_report_for_svg(
     for fixture in fixtures {
         let diagram = load_flowchart_fixture_diagram(fixture);
         let mut options = RenderOptions::default_svg();
-        options.svg.edge_style = EdgeStyle::Linear;
+        options.svg.edge_style = EdgeStyle::Straight;
         options.edge_routing = Some(EdgeRouting::UnifiedPreview);
         options.path_detail = PathDetail::Full;
         options.edge_routing_policies = mmdflux::diagram::EdgeRoutingPolicyToggles::all_enabled();
@@ -1357,7 +1357,7 @@ fn svg_orthogonal_unified_preview_nested_subgraph_edge_avoids_large_lateral_deto
 }
 
 #[test]
-fn svg_basis_unified_preview_ampersand_avoids_tiny_terminal_hook_before_arrow() {
+fn svg_curved_unified_preview_ampersand_avoids_tiny_terminal_hook_before_arrow() {
     let diagram = load_flowchart_fixture_diagram("ampersand.mmd");
     let merge_in_edges = [
         edge_index(&diagram, "A", "C"),
@@ -1365,7 +1365,7 @@ fn svg_basis_unified_preview_ampersand_avoids_tiny_terminal_hook_before_arrow() 
     ];
 
     let mut options = RenderOptions::default_svg();
-    options.svg.edge_style = EdgeStyle::Basis;
+    options.svg.edge_style = EdgeStyle::Curved;
     options.edge_routing = Some(EdgeRouting::UnifiedPreview);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
@@ -1379,7 +1379,7 @@ fn svg_basis_unified_preview_ampersand_avoids_tiny_terminal_hook_before_arrow() 
         let terminal = terminal_collinear_run_len(&points);
         assert!(
             terminal >= 3.5,
-            "basis unified terminal approach should avoid tiny hook before marker; collinear_terminal_run={terminal}, points={points:?}"
+            "curved unified terminal approach should avoid tiny hook before marker; collinear_terminal_run={terminal}, points={points:?}"
         );
     }
 }
@@ -1392,7 +1392,7 @@ fn svg_non_orth_unified_preview_backward_edges_terminal_tangent_points_toward_ta
         ("http_request.mmd", "Response", "Client"),
         ("labeled_edges.mmd", "Error", "Setup"),
     ];
-    let styles = [EdgeStyle::Linear, EdgeStyle::Rounded, EdgeStyle::Basis];
+    let styles = [EdgeStyle::Straight, EdgeStyle::Rounded, EdgeStyle::Curved];
 
     for (fixture_name, from, to) in cases {
         let diagram = load_flowchart_fixture_diagram(fixture_name);
@@ -1424,7 +1424,7 @@ fn svg_non_orth_unified_preview_backward_edges_terminal_tangent_points_toward_ta
 }
 
 #[test]
-fn svg_linear_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
+fn svg_straight_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -1441,7 +1441,7 @@ fn svg_linear_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
         .index;
 
     let mut options = RenderOptions::default_svg();
-    options.svg.edge_style = EdgeStyle::Linear;
+    options.svg.edge_style = EdgeStyle::Straight;
     options.edge_routing = Some(EdgeRouting::UnifiedPreview);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
@@ -1449,12 +1449,12 @@ fn svg_linear_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
 
     assert!(
         !has_primary_axis_backtrack(&points, diagram.direction),
-        "Bmid -> F should not backtrack along TD primary axis in linear SVG: {points:?}"
+        "Bmid -> F should not backtrack along TD primary axis in straight SVG: {points:?}"
     );
 }
 
 #[test]
-fn svg_basis_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
+fn svg_curved_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -1471,7 +1471,7 @@ fn svg_basis_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
         .index;
 
     let mut options = RenderOptions::default_svg();
-    options.svg.edge_style = EdgeStyle::Basis;
+    options.svg.edge_style = EdgeStyle::Curved;
     options.edge_routing = Some(EdgeRouting::UnifiedPreview);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
@@ -1479,7 +1479,7 @@ fn svg_basis_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
 
     assert!(
         !has_primary_axis_backtrack(&points, diagram.direction),
-        "Bmid -> F should not backtrack along TD primary axis in basis SVG: {points:?}"
+        "Bmid -> F should not backtrack along TD primary axis in curved SVG: {points:?}"
     );
 }
 
@@ -1530,7 +1530,7 @@ fn svg_non_orth_unified_preview_keeps_endpoint_pulled_back_for_visible_arrow_tip
         .expect("fixture should contain edge Bmid -> F")
         .index;
 
-    let styles = [EdgeStyle::Linear, EdgeStyle::Rounded, EdgeStyle::Basis];
+    let styles = [EdgeStyle::Straight, EdgeStyle::Rounded, EdgeStyle::Curved];
 
     for style in styles {
         let mut options = RenderOptions::default_svg();
@@ -1569,7 +1569,7 @@ fn svg_non_orth_unified_preview_fan_in_lr_terminal_arrowheads_do_not_end_inside_
 
     let top_edge = edge_index(&diagram, "A", "D");
     let bottom_edge = edge_index(&diagram, "C", "D");
-    let styles = [EdgeStyle::Linear, EdgeStyle::Rounded, EdgeStyle::Basis];
+    let styles = [EdgeStyle::Straight, EdgeStyle::Rounded, EdgeStyle::Curved];
 
     for style in styles {
         let mut options = RenderOptions::default_svg();
@@ -1607,7 +1607,7 @@ fn svg_non_orth_unified_preview_backward_edges_keep_terminal_arrowheads_visible(
         ("http_request.mmd", "Response", "Client", "Client"),
         ("complex.mmd", "E", "A", "Input"),
     ];
-    let styles = [EdgeStyle::Linear, EdgeStyle::Rounded, EdgeStyle::Basis];
+    let styles = [EdgeStyle::Straight, EdgeStyle::Rounded, EdgeStyle::Curved];
 
     for (fixture_name, from, to, target_label) in cases {
         let diagram = load_flowchart_fixture_diagram(fixture_name);
@@ -1644,7 +1644,7 @@ fn svg_non_orth_unified_preview_backward_in_subgraph_avoids_tiny_terminal_tail_h
     const MIN_TERMINAL_SUPPORT: f64 = 3.5;
     let diagram = load_flowchart_fixture_diagram("backward_in_subgraph.mmd");
     let edge_idx = edge_index(&diagram, "B", "A");
-    let styles = [EdgeStyle::Linear, EdgeStyle::Rounded, EdgeStyle::Basis];
+    let styles = [EdgeStyle::Straight, EdgeStyle::Rounded, EdgeStyle::Curved];
 
     for style in styles {
         let mut options = RenderOptions::default_svg();
@@ -1667,8 +1667,8 @@ fn svg_non_orth_unified_preview_backward_in_subgraph_avoids_tiny_terminal_tail_h
 
         let terminal_support =
             manhattan_segment_len(points[points.len() - 2], points[points.len() - 1]);
-        let min_terminal_support = if matches!(style, EdgeStyle::Basis) {
-            // Basis rendering intentionally tapers the final linear cap segment.
+        let min_terminal_support = if matches!(style, EdgeStyle::Curved) {
+            // Curved rendering intentionally tapers the final straight cap segment.
             1.0
         } else {
             MIN_TERMINAL_SUPPORT
@@ -1754,23 +1754,23 @@ fn svg_unified_preview_complex_top_diamond_loop_avoids_single_edge_micro_jogs() 
     const MIN_SEGMENT_LEN: f64 = 6.0;
 
     let diagram = load_flowchart_fixture_diagram("complex.mmd");
-    let mut linear_options = RenderOptions::default_svg();
-    linear_options.svg.edge_style = EdgeStyle::Linear;
-    linear_options.edge_routing = Some(EdgeRouting::UnifiedPreview);
-    linear_options.path_detail = PathDetail::Full;
-    let linear_svg = render_svg(&diagram, &linear_options);
+    let mut straight_options = RenderOptions::default_svg();
+    straight_options.svg.edge_style = EdgeStyle::Straight;
+    straight_options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    straight_options.path_detail = PathDetail::Full;
+    let straight_svg = render_svg(&diagram, &straight_options);
 
     for (from, to) in [("C", "E"), ("E", "A")] {
         let edge_idx = edge_index(&diagram, from, to);
-        let points = edge_path_for_svg_order(&diagram, &linear_svg, edge_idx);
+        let points = edge_path_for_svg_order(&diagram, &straight_svg, edge_idx);
         assert!(
             points.len() >= 2,
-            "complex {from}->{to} should emit at least one segment in linear mode: {points:?}"
+            "complex {from}->{to} should emit at least one segment in straight mode: {points:?}"
         );
         let min_segment = min_svg_segment_len(&points);
         assert!(
             min_segment >= MIN_SEGMENT_LEN,
-            "complex {from}->{to} should avoid tiny elbow jog segments in unified linear mode (min {MIN_SEGMENT_LEN}): min_segment={min_segment}, points={points:?}"
+            "complex {from}->{to} should avoid tiny elbow jog segments in unified straight mode (min {MIN_SEGMENT_LEN}): min_segment={min_segment}, points={points:?}"
         );
     }
 
@@ -1793,7 +1793,7 @@ fn svg_non_orth_unified_preview_complex_backward_edge_avoids_center_biased_input
 
     let diagram = load_flowchart_fixture_diagram("complex.mmd");
     let edge_idx = edge_index(&diagram, "E", "A");
-    let styles = [EdgeStyle::Linear, EdgeStyle::Rounded, EdgeStyle::Basis];
+    let styles = [EdgeStyle::Straight, EdgeStyle::Rounded, EdgeStyle::Curved];
 
     for style in styles {
         let mut options = RenderOptions::default_svg();
@@ -1821,10 +1821,10 @@ fn svg_non_orth_unified_preview_complex_backward_edge_avoids_center_biased_input
 }
 
 #[test]
-fn svg_linear_unified_preview_ci_pipeline_diamond_exits_avoid_extra_elbow_jogs() {
+fn svg_straight_unified_preview_ci_pipeline_diamond_exits_avoid_extra_elbow_jogs() {
     let diagram = load_flowchart_fixture_diagram("ci_pipeline.mmd");
     let mut options = RenderOptions::default_svg();
-    options.svg.edge_style = EdgeStyle::Linear;
+    options.svg.edge_style = EdgeStyle::Straight;
     options.edge_routing = Some(EdgeRouting::UnifiedPreview);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
@@ -1846,7 +1846,7 @@ fn svg_linear_unified_preview_ci_pipeline_diamond_exits_avoid_extra_elbow_jogs()
             let third_axis = segment_axis(third, fourth);
             assert!(
                 !(first_axis.is_none() && second_axis.is_some() && third_axis.is_some()),
-                "ci_pipeline {from}->{to} should avoid extra elbow jogs right after Deploy? in unified linear mode (prefer direct diagonal-to-lane): points={points:?}"
+                "ci_pipeline {from}->{to} should avoid extra elbow jogs right after Deploy? in unified straight mode (prefer direct diagonal-to-lane): points={points:?}"
             );
         }
     }
@@ -1857,11 +1857,11 @@ fn svg_unified_preview_backward_edges_preserve_selected_non_orth_style() {
     let diagram = load_flowchart_fixture_diagram("simple_cycle.mmd");
     let edge_idx = edge_index(&diagram, "C", "A");
 
-    let basis_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Basis);
-    let basis_d = edge_path_d_for_svg_order(&diagram, &basis_svg, edge_idx);
+    let curved_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Curved);
+    let curved_d = edge_path_d_for_svg_order(&diagram, &curved_svg, edge_idx);
     assert!(
-        basis_d.contains('C'),
-        "simple_cycle C->A backward edge should use basis-style cubic segments in unified preview: d={basis_d}"
+        curved_d.contains('C'),
+        "simple_cycle C->A backward edge should use curved-style cubic segments in unified preview: d={curved_d}"
     );
 
     let rounded_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Rounded);
@@ -1884,24 +1884,25 @@ fn svg_unified_preview_backward_edges_preserve_selected_non_orth_style() {
         "simple_cycle C->A rounded backward terminal approach should stay axis-aligned (no diagonal terminal tail): prev={rounded_prev:?}, end={rounded_end:?}, d={rounded_d}"
     );
 
-    let linear_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Linear);
-    let linear_d = edge_path_d_for_svg_order(&diagram, &linear_svg, edge_idx);
+    let straight_svg =
+        render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Straight);
+    let straight_d = edge_path_d_for_svg_order(&diagram, &straight_svg, edge_idx);
     assert!(
-        !linear_d.contains('Q') && !linear_d.contains('C'),
-        "simple_cycle C->A backward edge should remain polyline in linear mode: d={linear_d}"
+        !straight_d.contains('Q') && !straight_d.contains('C'),
+        "simple_cycle C->A backward edge should remain polyline in straight mode: d={straight_d}"
     );
-    let linear_points = edge_path_for_svg_order(&diagram, &linear_svg, edge_idx);
+    let straight_points = edge_path_for_svg_order(&diagram, &straight_svg, edge_idx);
     assert!(
-        linear_points.len() >= 2,
-        "simple_cycle C->A backward edge should expose at least two linear points: {linear_points:?}"
+        straight_points.len() >= 2,
+        "simple_cycle C->A backward edge should expose at least two straight points: {straight_points:?}"
     );
-    let linear_prev = linear_points[linear_points.len() - 2];
-    let linear_end = linear_points[linear_points.len() - 1];
-    let linear_dx = (linear_end.0 - linear_prev.0).abs();
-    let linear_dy = (linear_end.1 - linear_prev.1).abs();
+    let straight_prev = straight_points[straight_points.len() - 2];
+    let straight_end = straight_points[straight_points.len() - 1];
+    let straight_dx = (straight_end.0 - straight_prev.0).abs();
+    let straight_dy = (straight_end.1 - straight_prev.1).abs();
     assert!(
-        linear_dx <= 0.5 || linear_dy <= 0.5,
-        "simple_cycle C->A linear backward terminal approach should stay axis-aligned (no diagonal terminal tail): prev={linear_prev:?}, end={linear_end:?}, d={linear_d}"
+        straight_dx <= 0.5 || straight_dy <= 0.5,
+        "simple_cycle C->A straight backward terminal approach should stay axis-aligned (no diagonal terminal tail): prev={straight_prev:?}, end={straight_end:?}, d={straight_d}"
     );
 }
 
@@ -1942,7 +1943,7 @@ fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_keeps_backward_
     let diagram = build_diagram(&flowchart);
     let edge_idx = edge_index(&diagram, "Loop", "B");
 
-    let styles = [EdgeStyle::Linear, EdgeStyle::Rounded, EdgeStyle::Basis];
+    let styles = [EdgeStyle::Straight, EdgeStyle::Rounded, EdgeStyle::Curved];
 
     let mut rect = None;
 
@@ -1978,13 +1979,13 @@ fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_keeps_backward_
 }
 
 #[test]
-fn svg_basis_unified_preview_fan_in_backward_channel_conflict_avoids_tiny_terminal_hook_before_arrow()
+fn svg_curved_unified_preview_fan_in_backward_channel_conflict_avoids_tiny_terminal_hook_before_arrow()
  {
     let diagram = load_flowchart_fixture_diagram("fan_in_backward_channel_conflict.mmd");
     let edge_idx = edge_index(&diagram, "Loop", "B");
 
     let mut options = RenderOptions::default_svg();
-    options.svg.edge_style = EdgeStyle::Basis;
+    options.svg.edge_style = EdgeStyle::Curved;
     options.edge_routing = Some(EdgeRouting::UnifiedPreview);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
@@ -1992,14 +1993,14 @@ fn svg_basis_unified_preview_fan_in_backward_channel_conflict_avoids_tiny_termin
 
     assert!(
         points.len() >= 3,
-        "fan_in_backward_channel_conflict backward edge should keep at least one terminal support segment in basis mode: points={points:?}"
+        "fan_in_backward_channel_conflict backward edge should keep at least one terminal support segment in curved mode: points={points:?}"
     );
 
     let terminal = manhattan_segment_len(points[points.len() - 2], points[points.len() - 1]);
     let trailing_run = trailing_segment_run_len(&points, 4);
     assert!(
         terminal >= 1.0 && trailing_run >= 6.0,
-        "basis unified backward terminal hook should avoid tiny elbow before marker; terminal={terminal}, trailing_run={trailing_run}, points={points:?}"
+        "curved unified backward terminal hook should avoid tiny elbow before marker; terminal={terminal}, trailing_run={trailing_run}, points={points:?}"
     );
 }
 
@@ -2007,7 +2008,7 @@ fn svg_basis_unified_preview_fan_in_backward_channel_conflict_avoids_tiny_termin
 fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_preserves_lower_terminal_lane() {
     let diagram = load_flowchart_fixture_diagram("fan_in_backward_channel_conflict.mmd");
     let edge_idx = edge_index(&diagram, "Loop", "B");
-    let styles = [EdgeStyle::Linear, EdgeStyle::Rounded, EdgeStyle::Basis];
+    let styles = [EdgeStyle::Straight, EdgeStyle::Rounded, EdgeStyle::Curved];
 
     let mut rect = None;
     for style in styles {
@@ -2146,7 +2147,7 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_preserves_routed_termin
 }
 
 #[test]
-fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces() {
+fn svg_straight_fan_in_backward_channel_interaction_fixture_matrix_matches_documented_faces() {
     let fan_in_cases = [
         ("stacked_fan_in.mmd", "C", "Bot", 0usize),
         ("fan_in.mmd", "D", "Target", 0usize),
@@ -2156,7 +2157,7 @@ fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documen
     for (fixture_name, target_id, target_label, min_side_faces) in fan_in_cases {
         let diagram = load_flowchart_fixture_diagram(fixture_name);
         let mut options = RenderOptions::default_svg();
-        options.svg.edge_style = EdgeStyle::Linear;
+        options.svg.edge_style = EdgeStyle::Straight;
         options.edge_routing = Some(EdgeRouting::UnifiedPreview);
         options.path_detail = PathDetail::Full;
         options.edge_routing_policies = mmdflux::diagram::EdgeRoutingPolicyToggles::all_enabled();
@@ -2265,7 +2266,7 @@ fn svg_linear_fan_in_backward_channel_interaction_fixture_matrix_matches_documen
     {
         let diagram = load_flowchart_fixture_diagram(fixture_name);
         let mut options = RenderOptions::default_svg();
-        options.svg.edge_style = EdgeStyle::Linear;
+        options.svg.edge_style = EdgeStyle::Straight;
         options.edge_routing = Some(EdgeRouting::UnifiedPreview);
         options.path_detail = PathDetail::Full;
         options.edge_routing_policies = mmdflux::diagram::EdgeRoutingPolicyToggles::all_enabled();
@@ -2298,7 +2299,7 @@ fn svg_unified_preview_five_fan_in_keeps_e_terminal_not_left_of_d() {
 
     let mut options = RenderOptions::default_svg();
     options.edge_routing = Some(EdgeRouting::UnifiedPreview);
-    options.svg.edge_style = EdgeStyle::Basis;
+    options.svg.edge_style = EdgeStyle::Curved;
     let svg = render_svg(&diagram, &options);
 
     let d_points = edge_path_for_svg_order(&diagram, &svg, d_edge);
@@ -2313,7 +2314,7 @@ fn svg_unified_preview_five_fan_in_keeps_e_terminal_not_left_of_d() {
 }
 
 #[test]
-fn svg_basis_unified_preview_five_fan_in_keeps_mirrored_pairs_visually_symmetric() {
+fn svg_curved_unified_preview_five_fan_in_keeps_mirrored_pairs_visually_symmetric() {
     let diagram = load_flowchart_fixture_diagram("five_fan_in.mmd");
     let b_edge = edge_index(&diagram, "B", "F");
     let d_edge = edge_index(&diagram, "D", "F");
@@ -2322,7 +2323,7 @@ fn svg_basis_unified_preview_five_fan_in_keeps_mirrored_pairs_visually_symmetric
 
     let mut options = RenderOptions::default_svg();
     options.edge_routing = Some(EdgeRouting::UnifiedPreview);
-    options.svg.edge_style = EdgeStyle::Basis;
+    options.svg.edge_style = EdgeStyle::Curved;
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -2333,7 +2334,7 @@ fn svg_basis_unified_preview_five_fan_in_keeps_mirrored_pairs_visually_symmetric
 
     assert!(
         b_points.len() >= 2 && d_points.len() >= 2 && a_points.len() >= 2 && e_points.len() >= 2,
-        "basis fan-in edges should each include at least one segment: B={b_points:?} D={d_points:?} A={a_points:?} E={e_points:?}"
+        "curved fan-in edges should each include at least one segment: B={b_points:?} D={d_points:?} A={a_points:?} E={e_points:?}"
     );
     let b_prev = b_points[b_points.len() - 2];
     let d_prev = d_points[d_points.len() - 2];
@@ -2342,29 +2343,29 @@ fn svg_basis_unified_preview_five_fan_in_keeps_mirrored_pairs_visually_symmetric
 
     assert!(
         (b_prev.1 - d_prev.1).abs() <= 1.0,
-        "basis B->Target and D->Target should have mirrored terminal approach depth after fan-in channel collapse: B_prev={b_prev:?}, D_prev={d_prev:?}, B={b_points:?}, D={d_points:?}"
+        "curved B->Target and D->Target should have mirrored terminal approach depth after fan-in channel collapse: B_prev={b_prev:?}, D_prev={d_prev:?}, B={b_points:?}, D={d_points:?}"
     );
     assert!(
         (a_prev.1 - e_prev.1).abs() <= 1.0,
-        "basis A->Target and E->Target should have mirrored terminal approach depth after fan-in channel collapse: A_prev={a_prev:?}, E_prev={e_prev:?}, A={a_points:?}, E={e_points:?}"
+        "curved A->Target and E->Target should have mirrored terminal approach depth after fan-in channel collapse: A_prev={a_prev:?}, E_prev={e_prev:?}, A={a_points:?}, E={e_points:?}"
     );
 }
 
 #[test]
-fn svg_basis_unified_preview_git_workflow_backward_edge_keeps_terminal_support_into_working_dir() {
+fn svg_curved_unified_preview_git_workflow_backward_edge_keeps_terminal_support_into_working_dir() {
     let diagram = load_flowchart_fixture_diagram("git_workflow.mmd");
     let backward_edge = edge_index(&diagram, "Remote", "Working");
 
     let mut options = RenderOptions::default_svg();
     options.edge_routing = Some(EdgeRouting::UnifiedPreview);
-    options.svg.edge_style = EdgeStyle::Basis;
+    options.svg.edge_style = EdgeStyle::Curved;
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
     let points = edge_path_for_svg_order(&diagram, &svg, backward_edge);
     assert!(
         points.len() >= 2,
-        "git_workflow backward basis edge should include a terminal segment: {points:?}"
+        "git_workflow backward curved edge should include a terminal segment: {points:?}"
     );
 
     let prev = points[points.len() - 2];
@@ -2372,7 +2373,7 @@ fn svg_basis_unified_preview_git_workflow_backward_edge_keeps_terminal_support_i
     let terminal_support = (prev.0 - end.0).abs() + (prev.1 - end.1).abs();
     assert!(
         terminal_support >= 3.0,
-        "git_workflow backward basis edge should keep at least ~3px terminal support into Working Dir: support={terminal_support}, prev={prev:?}, end={end:?}, points={points:?}"
+        "git_workflow backward curved edge should keep at least ~3px terminal support into Working Dir: support={terminal_support}, prev={prev:?}, end={end:?}, points={points:?}"
     );
 }
 
@@ -2396,12 +2397,13 @@ fn style_segment_monitor_reports_actionable_summary_for_svg() {
 }
 
 #[test]
-fn svg_linear_unified_preview_self_loop_tail_does_not_collapse_upward_before_arrow() {
+fn svg_straight_unified_preview_self_loop_tail_does_not_collapse_upward_before_arrow() {
     let diagram = load_flowchart_fixture_diagram("self_loop_labeled.mmd");
     let edge_idx = edge_index(&diagram, "B", "B");
 
-    let full_svg = render_fixture_svg(&diagram, EdgeRouting::FullCompute, EdgeStyle::Linear);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Linear);
+    let full_svg = render_fixture_svg(&diagram, EdgeRouting::FullCompute, EdgeStyle::Straight);
+    let unified_svg =
+        render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Straight);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_idx);
     let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_idx);
@@ -2417,7 +2419,7 @@ fn svg_linear_unified_preview_self_loop_tail_does_not_collapse_upward_before_arr
 
     assert!(
         delta_y <= 12.0,
-        "self-loop tail elbow should remain near full-compute in unified linear mode (avoid upward collapse); full_tail_elbow={full_tail_elbow:?}, unified_tail_elbow={unified_tail_elbow:?}, delta_y={delta_y}, full_points={full_points:?}, unified_points={unified_points:?}"
+        "self-loop tail elbow should remain near full-compute in unified straight mode (avoid upward collapse); full_tail_elbow={full_tail_elbow:?}, unified_tail_elbow={unified_tail_elbow:?}, delta_y={delta_y}, full_points={full_points:?}, unified_points={unified_points:?}"
     );
 }
 
@@ -2462,8 +2464,8 @@ fn unified_preview_subgraph_to_subgraph_edge_keeps_terminal_attachment() {
     let diagram = load_flowchart_fixture_diagram("subgraph_to_subgraph_edge.mmd");
     let edge_index = edge_index(&diagram, "API", "DB");
 
-    let full_svg = render_fixture_svg(&diagram, EdgeRouting::FullCompute, EdgeStyle::Basis);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Basis);
+    let full_svg = render_fixture_svg(&diagram, EdgeRouting::FullCompute, EdgeStyle::Curved);
+    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Curved);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
     let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
@@ -2483,8 +2485,8 @@ fn unified_preview_inner_bt_subgraph_edge_does_not_collapse() {
     let diagram = load_flowchart_fixture_diagram("subgraph_direction_nested_both.mmd");
     let edge_index = edge_index(&diagram, "A", "B");
 
-    let full_svg = render_fixture_svg(&diagram, EdgeRouting::FullCompute, EdgeStyle::Basis);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Basis);
+    let full_svg = render_fixture_svg(&diagram, EdgeRouting::FullCompute, EdgeStyle::Curved);
+    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Curved);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
     let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
@@ -2823,7 +2825,7 @@ fn assert_mmds_svg_endpoint_convergence(
     let mmds_end = mmds_edge.path.last().unwrap();
 
     // SVG path (with SVG post-adjustment pipeline)
-    let svg = render_fixture_svg(diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Basis);
+    let svg = render_fixture_svg(diagram, EdgeRouting::UnifiedPreview, EdgeStyle::Curved);
     let edge_idx = edge_index(diagram, from, to);
     let svg_points = edge_path_for_svg_order(diagram, &svg, edge_idx);
     let svg_start = svg_points[0];

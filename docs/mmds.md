@@ -143,7 +143,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
   "profiles": ["mmds-core-v1", "mmdflux-svg-v1"],
   "extensions": {
     "org.mmdflux.render.svg.v1": {
-      "edge_style": "basis",
+      "edge_style": "curved",
       "edge_radius": 5
     }
   },

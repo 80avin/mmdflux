@@ -2648,7 +2648,7 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                edge_style: Some(EdgeStyle::Linear),
+                edge_style: Some(EdgeStyle::Straight),
                 edge_routing: Some(EdgeRouting::FullCompute),
                 ..RenderConfig::default()
             },
@@ -2663,7 +2663,7 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                edge_style: Some(EdgeStyle::Linear),
+                edge_style: Some(EdgeStyle::Straight),
                 edge_routing: Some(EdgeRouting::UnifiedPreview),
                 ..RenderConfig::default()
             },
@@ -3114,7 +3114,7 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_
                 format,
                 &RenderConfig {
                     edge_routing: Some(EdgeRouting::UnifiedPreview),
-                    edge_style: Some(EdgeStyle::Linear),
+                    edge_style: Some(EdgeStyle::Straight),
                     edge_routing_policies: EdgeRoutingPolicyToggles::all_enabled(),
                     ..RenderConfig::default()
                 },
@@ -3675,7 +3675,7 @@ fn full_compute_rollback_is_stable_for_text_and_svg() {
                 format,
                 &RenderConfig {
                     edge_routing: Some(EdgeRouting::FullCompute),
-                    edge_style: Some(EdgeStyle::Linear),
+                    edge_style: Some(EdgeStyle::Straight),
                     edge_routing_policies: EdgeRoutingPolicyToggles::all_enabled(),
                     ..RenderConfig::default()
                 },

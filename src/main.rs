@@ -77,7 +77,7 @@ struct Cli {
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
 
-    /// SVG edge style (basis, linear, rounded, or orthogonal)
+    /// SVG edge style (curved, straight, rounded, or orthogonal)
     #[arg(long, value_enum)]
     edge_style: Option<EdgeStyleArg>,
 
@@ -152,8 +152,8 @@ impl From<RankerArg> for Ranker {
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
 enum EdgeStyleArg {
-    Basis,
-    Linear,
+    Curved,
+    Straight,
     Rounded,
     Orthogonal,
 }
@@ -161,8 +161,8 @@ enum EdgeStyleArg {
 impl From<EdgeStyleArg> for EdgeStyle {
     fn from(arg: EdgeStyleArg) -> Self {
         match arg {
-            EdgeStyleArg::Basis => EdgeStyle::Basis,
-            EdgeStyleArg::Linear => EdgeStyle::Linear,
+            EdgeStyleArg::Curved => EdgeStyle::Curved,
+            EdgeStyleArg::Straight => EdgeStyle::Straight,
             EdgeStyleArg::Rounded => EdgeStyle::Rounded,
             EdgeStyleArg::Orthogonal => EdgeStyle::Orthogonal,
         }
