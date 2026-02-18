@@ -2974,6 +2974,111 @@ fn five_fan_in_primary_face_channels_are_staggered_without_overlap() {
 }
 
 #[test]
+fn five_fan_out_primary_face_channels_are_staggered_without_overlap() {
+    let (diagram, geom) = layout_fixture_svg("five_fan_out.mmd");
+    let routed = route_graph_geometry_with_policies(
+        &diagram,
+        &geom,
+        RoutingMode::UnifiedPreview,
+        RoutingPolicyToggles::all_enabled(),
+    );
+
+    let outbound: Vec<_> = routed
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A" && !edge.is_backward)
+        .collect();
+    assert_eq!(
+        outbound.len(),
+        5,
+        "five_fan_out should produce five outbound forward edges from A"
+    );
+
+    let mut source_xs: Vec<f64> = outbound
+        .iter()
+        .map(|edge| {
+            edge.path
+                .first()
+                .copied()
+                .expect("edge should have start")
+                .x
+        })
+        .collect();
+    source_xs.sort_by(|a, b| a.total_cmp(b));
+    let mut unique_source_count = 0usize;
+    let mut last_source: Option<f64> = None;
+    for value in &source_xs {
+        let is_new = match last_source {
+            Some(prev) => (*value - prev).abs() > 0.5,
+            None => true,
+        };
+        if is_new {
+            unique_source_count += 1;
+            last_source = Some(*value);
+        }
+    }
+    assert_eq!(
+        unique_source_count, 5,
+        "five_fan_out source ports should occupy distinct attachment anchors: source_xs={source_xs:?}"
+    );
+
+    for i in 0..outbound.len() {
+        for j in (i + 1)..outbound.len() {
+            assert!(
+                !has_coincident_horizontal_overlap(&outbound[i].path, &outbound[j].path),
+                "five_fan_out should avoid coincident horizontal channel overlap between A -> {} and A -> {}: left={:?} right={:?}",
+                outbound[i].to,
+                outbound[j].to,
+                outbound[i].path,
+                outbound[j].path
+            );
+        }
+    }
+
+    let mut lanes_by_target: HashMap<String, f64> = HashMap::new();
+    for edge in &outbound {
+        if let Some(y) = td_bt_middle_horizontal_lane(&edge.path) {
+            lanes_by_target.insert(edge.to.clone(), y);
+        }
+    }
+    for target in ["B", "C", "E", "F"] {
+        assert!(
+            lanes_by_target.contains_key(target),
+            "five_fan_out should route A -> {target} with a V-H-V fan-out channel path"
+        );
+    }
+
+    let b_lane = *lanes_by_target
+        .get("B")
+        .expect("lane for A -> B should be present");
+    let c_lane = *lanes_by_target
+        .get("C")
+        .expect("lane for A -> C should be present");
+    let e_lane = *lanes_by_target
+        .get("E")
+        .expect("lane for A -> E should be present");
+    let f_lane = *lanes_by_target
+        .get("F")
+        .expect("lane for A -> F should be present");
+    assert!(
+        b_lane + 0.5 < c_lane,
+        "five_fan_out should place outer-left A -> B shallower than inner-left A -> C for source-centric fan-out opening: B={b_lane}, C={c_lane}"
+    );
+    assert!(
+        f_lane + 0.5 < e_lane,
+        "five_fan_out should place outer-right A -> F shallower than inner-right A -> E for source-centric fan-out opening: F={f_lane}, E={e_lane}"
+    );
+    assert!(
+        (c_lane - e_lane).abs() <= 0.5,
+        "five_fan_out mirrored inner pair should share a symmetric lane depth: C={c_lane}, E={e_lane}"
+    );
+    assert!(
+        (b_lane - f_lane).abs() <= 0.5,
+        "five_fan_out mirrored outer pair should share a symmetric lane depth: B={b_lane}, F={f_lane}"
+    );
+}
+
+#[test]
 fn very_narrow_fan_in_channels_are_staggered_without_overlap() {
     let (diagram, geom) = layout_fixture_svg("very_narrow_fan_in.mmd");
     let routed = route_graph_geometry_with_policies(

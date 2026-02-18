@@ -44,6 +44,8 @@ pub(crate) fn route_edges_unified(
 ) -> Vec<RoutedEdgeGeometry> {
     let fan_in_target_conflict =
         fan_in_target_overflow_context(geometry, geometry.direction, diagram.edges.len());
+    let fan_out_source_stagger =
+        fan_out_source_stagger_context(geometry, geometry.direction, diagram.edges.len());
     let override_nodes = build_override_node_map(diagram);
     geometry
         .edges
@@ -75,6 +77,14 @@ pub(crate) fn route_edges_unified(
                 .target_primary_channel_depth_for_edge
                 .get(&edge.index)
                 .copied();
+            let source_primary_channel_depth = fan_out_source_stagger
+                .source_primary_channel_depth_for_edge
+                .get(&edge.index)
+                .copied();
+            let source_primary_face_fraction = fan_out_source_stagger
+                .source_fraction_for_edge
+                .get(&edge.index)
+                .copied();
             let target_overflowed = fan_in_target_conflict.overflow_targeted.contains(&edge.to);
             let target_has_backward_conflict = fan_in_target_conflict
                 .targets_with_backward_inbound
@@ -88,6 +98,8 @@ pub(crate) fn route_edges_unified(
                 overflow_policy_target_face,
                 overflow_policy_target_fraction,
                 target_primary_channel_depth,
+                source_primary_channel_depth,
+                source_primary_face_fraction,
                 target_overflowed,
                 target_has_backward_conflict,
                 rank_span,
@@ -303,6 +315,8 @@ fn build_unified_path(
     overflow_policy_target_face: Option<Face>,
     overflow_policy_target_fraction: Option<f64>,
     target_primary_channel_depth: Option<f64>,
+    source_primary_channel_depth: Option<f64>,
+    source_primary_face_fraction: Option<f64>,
     target_overflowed: bool,
     target_has_backward_conflict: bool,
     rank_span: usize,
@@ -326,6 +340,7 @@ fn build_unified_path(
         is_backward,
         overflow_policy_target_face,
         overflow_policy_target_fraction,
+        source_primary_face_fraction,
         target_overflowed,
         target_has_backward_conflict,
     );
@@ -354,11 +369,19 @@ fn build_unified_path(
     let base_finalized = normalize_orthogonal_route_contracts(&normalized, direction);
     let mut finalized = base_finalized.clone();
     if !is_backward {
+        let stagger_depth = target_primary_channel_depth.or(source_primary_channel_depth);
+        let stagger_target_face_policy = if target_primary_channel_depth.is_some() {
+            overflow_policy_target_face
+        } else if source_primary_channel_depth.is_some() {
+            Some(flow_target_face_for_direction(direction))
+        } else {
+            None
+        };
         stagger_primary_face_shared_axis_segment(
             &mut finalized,
             direction,
-            overflow_policy_target_face,
-            target_primary_channel_depth,
+            stagger_target_face_policy,
+            stagger_depth,
         );
         finalized = normalize_orthogonal_route_contracts(&finalized, direction);
     }
@@ -1125,6 +1148,12 @@ struct FanInTargetOverflowContext {
     targets_with_backward_inbound: HashSet<String>,
 }
 
+#[derive(Default)]
+struct FanOutSourceStaggerContext {
+    source_primary_channel_depth_for_edge: HashMap<usize, f64>,
+    source_fraction_for_edge: HashMap<usize, f64>,
+}
+
 fn fan_in_target_overflow_context(
     geometry: &GraphGeometry,
     direction: Direction,
@@ -1324,6 +1353,128 @@ fn fan_in_target_overflow_context(
     }
 }
 
+fn fan_out_source_stagger_context(
+    geometry: &GraphGeometry,
+    direction: Direction,
+    visible_edge_count: usize,
+) -> FanOutSourceStaggerContext {
+    let mut outgoing_by_source: HashMap<
+        String,
+        Vec<&crate::diagrams::flowchart::geometry::LayoutEdge>,
+    > = HashMap::new();
+    for edge in geometry
+        .edges
+        .iter()
+        .filter(|edge| edge.index < visible_edge_count)
+    {
+        outgoing_by_source
+            .entry(edge.from.clone())
+            .or_default()
+            .push(edge);
+    }
+
+    let mut source_primary_channel_depth_for_edge: HashMap<usize, f64> = HashMap::new();
+    let mut source_fraction_for_edge: HashMap<usize, f64> = HashMap::new();
+    const CENTER_EPS: f64 = 0.5;
+
+    for (source_id, mut outgoing_edges) in outgoing_by_source {
+        outgoing_edges.sort_unstable_by_key(|edge| edge.index);
+        let mut forward_edges: Vec<&crate::diagrams::flowchart::geometry::LayoutEdge> = Vec::new();
+        for edge in outgoing_edges {
+            if geometry.reversed_edges.contains(&edge.index) {
+                continue;
+            }
+            forward_edges.push(edge);
+        }
+        if forward_edges.len() <= 1 {
+            continue;
+        }
+
+        let source_cross = forward_edges
+            .first()
+            .and_then(|edge| endpoint_rect(geometry, &source_id, edge.from_subgraph.as_deref()))
+            .map(|rect| face_cross_axis(rect, direction))
+            .unwrap_or(0.0);
+
+        let mut ordered_for_fraction: Vec<(usize, f64)> = forward_edges
+            .iter()
+            .map(|edge| {
+                (
+                    edge.index,
+                    fan_out_target_cross_axis(geometry, edge, direction),
+                )
+            })
+            .collect();
+        ordered_for_fraction.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+        let count = ordered_for_fraction.len();
+        for (idx, (edge_index, _)) in ordered_for_fraction.iter().enumerate() {
+            let fraction = if count <= 1 {
+                0.5
+            } else {
+                idx as f64 / (count - 1) as f64
+            };
+            source_fraction_for_edge.insert(*edge_index, fraction);
+        }
+
+        let mut left_edges: Vec<(usize, f64)> = Vec::new();
+        let mut right_edges: Vec<(usize, f64)> = Vec::new();
+        let mut center_edges: Vec<(usize, f64)> = Vec::new();
+        for edge in &forward_edges {
+            let target_cross = fan_out_target_cross_axis(geometry, edge, direction);
+            if target_cross < source_cross - CENTER_EPS {
+                left_edges.push((edge.index, target_cross));
+            } else if target_cross > source_cross + CENTER_EPS {
+                right_edges.push((edge.index, target_cross));
+            } else {
+                center_edges.push((edge.index, target_cross));
+            }
+        }
+
+        // Fan-out is source-centric: make outer branches shallower and inner
+        // branches deeper so the bundle opens outward from the source.
+        left_edges.sort_by(|a, b| {
+            (source_cross - b.1)
+                .total_cmp(&(source_cross - a.1))
+                .then_with(|| a.0.cmp(&b.0))
+        });
+        right_edges.sort_by(|a, b| {
+            (b.1 - source_cross)
+                .total_cmp(&(a.1 - source_cross))
+                .then_with(|| a.0.cmp(&b.0))
+        });
+        center_edges.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+
+        let band_count = left_edges.len().max(right_edges.len());
+        for (band_index, (edge_index, _)) in left_edges.into_iter().enumerate() {
+            source_primary_channel_depth_for_edge.insert(
+                edge_index,
+                symmetric_side_band_depth(band_index, band_count),
+            );
+        }
+        for (band_index, (edge_index, _)) in right_edges.into_iter().enumerate() {
+            source_primary_channel_depth_for_edge.insert(
+                edge_index,
+                symmetric_side_band_depth(band_index, band_count),
+            );
+        }
+
+        if center_edges.len() == 1 {
+            source_primary_channel_depth_for_edge.insert(center_edges[0].0, 0.5);
+        } else if center_edges.len() > 1 {
+            let denom = center_edges.len() as f64 + 1.0;
+            for (idx, (edge_index, _)) in center_edges.into_iter().enumerate() {
+                source_primary_channel_depth_for_edge
+                    .insert(edge_index, (idx as f64 + 1.0) / denom);
+            }
+        }
+    }
+
+    FanOutSourceStaggerContext {
+        source_primary_channel_depth_for_edge,
+        source_fraction_for_edge,
+    }
+}
+
 fn adaptive_fan_in_primary_face_capacity(direction: Direction, target_rect: &FRect) -> usize {
     let baseline_capacity = fan_in_primary_face_capacity(direction);
     let face_span = match direction {
@@ -1353,6 +1504,17 @@ fn fan_in_source_cross_axis(
     direction: Direction,
 ) -> f64 {
     let Some(rect) = endpoint_rect(geometry, &edge.from, edge.from_subgraph.as_deref()) else {
+        return edge.index as f64;
+    };
+    face_cross_axis(rect, direction)
+}
+
+fn fan_out_target_cross_axis(
+    geometry: &GraphGeometry,
+    edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
+    direction: Direction,
+) -> f64 {
+    let Some(rect) = endpoint_rect(geometry, &edge.to, edge.to_subgraph.as_deref()) else {
         return edge.index as f64;
     };
     face_cross_axis(rect, direction)
@@ -3150,6 +3312,7 @@ fn anchor_path_endpoints_to_endpoint_faces(
     is_backward: bool,
     overflow_policy_target_face: Option<Face>,
     overflow_policy_target_fraction: Option<f64>,
+    source_primary_face_fraction: Option<f64>,
     target_overflowed: bool,
     target_has_backward_conflict: bool,
 ) {
@@ -3164,18 +3327,38 @@ fn anchor_path_endpoints_to_endpoint_faces(
         let start = path[0];
         let next = path[1];
         if point_on_or_inside_rect(start, &from_rect, EPS) {
-            let clipped = clip_point_to_axis_face(
-                start,
-                next,
-                from_rect,
-                direction,
-                is_backward,
-                false,
-                None,
-                None,
-                false,
-                false,
-            );
+            let source_segment_on_flow_axis = match direction {
+                Direction::TopDown | Direction::BottomTop => {
+                    (start.x - next.x).abs() <= POINT_EPS && (start.y - next.y).abs() > POINT_EPS
+                }
+                Direction::LeftRight | Direction::RightLeft => {
+                    (start.y - next.y).abs() <= POINT_EPS && (start.x - next.x).abs() > POINT_EPS
+                }
+            };
+            let clipped = if !is_backward
+                && source_segment_on_flow_axis
+                && let Some(fraction) = source_primary_face_fraction
+            {
+                clip_point_to_rect_face_fraction_with_inset(
+                    from_rect,
+                    map_face_to_rect_face(flow_source_face_for_direction(direction)),
+                    fraction,
+                    MIN_PORT_CORNER_INSET_FORWARD,
+                )
+            } else {
+                clip_point_to_axis_face(
+                    start,
+                    next,
+                    from_rect,
+                    direction,
+                    is_backward,
+                    false,
+                    None,
+                    None,
+                    false,
+                    false,
+                )
+            };
             path[0] = project_endpoint_to_shape(clipped, next, from_rect, from_shape);
         }
     }
@@ -3927,6 +4110,15 @@ fn flow_target_face_for_direction(direction: Direction) -> Face {
         Direction::BottomTop => Face::Bottom,
         Direction::LeftRight => Face::Left,
         Direction::RightLeft => Face::Right,
+    }
+}
+
+fn flow_source_face_for_direction(direction: Direction) -> Face {
+    match direction {
+        Direction::TopDown => Face::Bottom,
+        Direction::BottomTop => Face::Top,
+        Direction::LeftRight => Face::Right,
+        Direction::RightLeft => Face::Left,
     }
 }
 
