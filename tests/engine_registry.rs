@@ -1,7 +1,7 @@
 //! Engine registry tests: typed engine IDs, parsing, availability, and registry lookup.
 
 use mmdflux::diagram::{
-    EngineCapabilities, LayoutEngineId, OutputFormat, RenderConfig, RenderError, RoutingMode,
+    EdgeRouting, EngineCapabilities, LayoutEngineId, OutputFormat, RenderConfig, RenderError,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::engines::graph::GraphEngineRegistry;
@@ -194,7 +194,7 @@ fn unknown_engine_returns_error() {
 }
 
 // =============================================================================
-// Routing mode from capabilities
+// Edge routing from capabilities
 // =============================================================================
 
 #[test]
@@ -204,8 +204,8 @@ fn position_only_engine_uses_full_compute() {
         ..Default::default()
     };
     assert_eq!(
-        RoutingMode::for_capabilities(&caps),
-        RoutingMode::FullCompute
+        EdgeRouting::for_capabilities(&caps),
+        EdgeRouting::FullCompute
     );
 }
 
@@ -216,18 +216,18 @@ fn routed_engine_uses_pass_through_clip() {
         ..Default::default()
     };
     assert_eq!(
-        RoutingMode::for_capabilities(&caps),
-        RoutingMode::PassThroughClip
+        EdgeRouting::for_capabilities(&caps),
+        EdgeRouting::PassThroughClip
     );
 }
 
 #[test]
-fn dagre_routing_mode_is_full_compute() {
+fn dagre_edge_routing_is_full_compute() {
     let registry = GraphEngineRegistry::default();
     let engine = registry.get(LayoutEngineId::Dagre).unwrap();
     assert_eq!(
-        RoutingMode::for_capabilities(&engine.capabilities()),
-        RoutingMode::FullCompute
+        EdgeRouting::for_capabilities(&engine.capabilities()),
+        EdgeRouting::FullCompute
     );
 }
 
@@ -253,11 +253,11 @@ fn cose_bilkent_alias_also_returns_not_implemented() {
 
 #[cfg(feature = "engine-elk")]
 #[test]
-fn elk_routing_mode_is_pass_through_clip() {
+fn elk_edge_routing_is_pass_through_clip() {
     let registry = GraphEngineRegistry::default();
     let engine = registry.get(LayoutEngineId::Elk).unwrap();
     assert_eq!(
-        RoutingMode::for_capabilities(&engine.capabilities()),
-        RoutingMode::PassThroughClip
+        EdgeRouting::for_capabilities(&engine.capabilities()),
+        EdgeRouting::PassThroughClip
     );
 }

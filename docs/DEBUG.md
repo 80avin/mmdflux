@@ -137,15 +137,15 @@ SVG and routed MMDS outputs:
 
 ```bash
 # Preview unified float-first routing (SVG)
-cargo run -- -f svg --routing-mode unified-preview --svg-edge-path-style linear diagram.mmd
+cargo run -- -f svg --edge-routing unified-preview --edge-style linear diagram.mmd
 
 # Roll back to legacy routing behavior (default)
-cargo run -- -f svg --svg-edge-path-style linear diagram.mmd
+cargo run -- -f svg --edge-style linear diagram.mmd
 ```
 
 Notes:
-- Default rendering remains legacy unless `--routing-mode unified-preview` is set.
-- `--routing-mode full-compute` is the explicit legacy override.
+- Default rendering remains legacy unless `--edge-routing unified-preview` is set.
+- `--edge-routing full-compute` is the explicit legacy override.
 - The parity harness currently tracks a known linear-SVG delta on
   `simple_cycle.mmd` for unified preview.
 

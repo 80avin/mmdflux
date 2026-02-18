@@ -13,7 +13,7 @@ This checklist assumes you are willing to ship breaking rendering deltas in a mi
 - [x] Accepted deltas are documented:
   - Which fixtures can differ and why.
 - [x] Rollback policy is documented:
-  - Keep `--routing-mode full-compute` available for at least one release.
+  - Keep `--edge-routing full-compute` available for at least one release.
 
 ## Current Decision (2026-02-11)
 
@@ -22,12 +22,12 @@ This checklist assumes you are willing to ship breaking rendering deltas in a mi
   - **Graph-family wide promotion is deferred.**
 - [x] Why graph-family promotion is deferred:
   - Class diagram DAGRE SVG path still uses legacy direct render path in `ClassInstance` and does not mirror flowchart unified-preview call-site routing.
-  - Class routed MMDS path currently uses engine-derived routing mode directly and does not apply `config.routing_mode` override semantics used by flowchart.
-  - Flowchart has explicit unified-vs-legacy parity/rollback harnesses; class currently has snapshot compliance coverage but no equivalent routing-mode parity gate.
+  - Class routed MMDS path currently uses engine-derived edge routing directly and does not apply `config.edge_routing` override semantics used by flowchart.
+  - Flowchart has explicit unified-vs-legacy parity/rollback harnesses; class currently has snapshot compliance coverage but no equivalent edge-routing parity gate.
 - [x] Backward-edge policy (current):
   - Keep backward-edge hint fallback as intentional release-N behavior.
 - [x] Rollback policy (current):
-  - Keep `--routing-mode full-compute` documented and supported for at least one release after default flip.
+  - Keep `--edge-routing full-compute` documented and supported for at least one release after default flip.
 
 ## Phase-0 Policy Specs (Pre-Implementation Contracts)
 
@@ -113,9 +113,9 @@ This is the decision record for known output differences when unified routing is
 | Area | Classification | Decision | Notes |
 | ---- | -------------- | -------- | ----- |
 | Flowchart SVG linear parity-classification subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`, `decision.mmd`, `fan_out.mmd`, `left_right.mmd`, `subgraph_direction_cross_boundary.mmd`, `multi_subgraph_direction_override.mmd`) | accepted-improvement | Accept for Release N | Unified-preview deltas are explicitly classified and test-enforced in `svg_unified_preview_parity_fixture_subset_matches_expected_classification`. |
-| Flowchart text label-revalidation fixture parity (`labeled_edges.mmd`, `inline_label_flowchart.mmd`) | must-match | Must match | `text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes` enforces routing-mode parity for text output across label-revalidation fixtures. |
+| Flowchart text label-revalidation fixture parity (`labeled_edges.mmd`, `inline_label_flowchart.mmd`) | must-match | Must match | `text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes` enforces edge-routing parity for text output across label-revalidation fixtures. |
 | Flowchart backward-edge routing behavior | accepted-design | Accept for Release N | Keep route-hint fallback as intentional behavior (stability-first) instead of forcing full backward-edge unification in this release. |
-| Rollback parity guard (`--routing-mode full-compute`) for linear core subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`) | must-match-legacy | Must match | `svg_full_compute_override_matches_legacy_linear_core_subset` requires byte-identical legacy parity when rollback mode is selected. |
+| Rollback parity guard (`--edge-routing full-compute`) for linear core subset (`simple.mmd`, `chain.mmd`, `simple_cycle.mmd`) | must-match-legacy | Must match | `svg_full_compute_override_matches_legacy_linear_core_subset` requires byte-identical legacy parity when rollback mode is selected. |
 
 ### Delta Evidence Sources
 
@@ -134,11 +134,11 @@ This is the decision record for known output differences when unified routing is
 
 ## Follow-Up Planning Items (Required Before Graph-Family Promotion)
 
-- [ ] Create follow-up implementation plan: **class routing-mode parity plumbing**
-  - Make class DAGRE SVG path honor explicit routing-mode override semantics consistently.
-  - Make class routed MMDS path honor explicit routing-mode override semantics consistently.
+- [ ] Create follow-up implementation plan: **class edge-routing parity plumbing**
+  - Make class DAGRE SVG path honor explicit edge-routing override semantics consistently.
+  - Make class routed MMDS path honor explicit edge-routing override semantics consistently.
 - [ ] Create follow-up implementation plan: **class parity/rollback harness**
-  - Add class unified-vs-legacy routing-mode parity tests equivalent in intent to flowchart gates.
+  - Add class unified-vs-legacy edge-routing parity tests equivalent in intent to flowchart gates.
 - [ ] Create follow-up implementation plan: **graph-family default promotion**
   - Promote unified routing default across class + flowchart only after the above two plans are complete.
 
@@ -155,8 +155,8 @@ This is the decision record for known output differences when unified routing is
   - `must-match-legacy` rollback: full-compute override parity for `simple.mmd`, `chain.mmd`, `simple_cycle.mmd`
 
 - [x] Determinism confirmed for unified mode (same input, same output bytes):
-  - SVG (`--routing-mode unified-preview`)
-  - MMDS routed (`--routing-mode unified-preview`)
+  - SVG (`--edge-routing unified-preview`)
+  - MMDS routed (`--edge-routing unified-preview`)
 
 - [x] Full regression gates pass:
 
@@ -213,7 +213,7 @@ Use this playbook if rollout metrics or fixture gates regress.
 2. Force legacy routing behavior for immediate rollback validation:
 
 ```bash
-mmdflux --routing-mode full-compute <input.mmd>
+mmdflux --edge-routing full-compute <input.mmd>
 ```
 
 3. Re-run targeted gates and compare with baseline classifications:
@@ -230,9 +230,9 @@ mmdflux --routing-mode full-compute <input.mmd>
 
 - [ ] Change default routing selection to unified mode for intended scope.
 - [ ] Keep CLI override behavior intact:
-  - `--routing-mode unified-preview`
-  - `--routing-mode full-compute`
-  - `--routing-mode pass-through-clip`
+  - `--edge-routing unified-preview`
+  - `--edge-routing full-compute`
+  - `--edge-routing pass-through-clip`
 - [ ] Keep rollback tests green:
   - `svg_full_compute_override_matches_legacy_linear_core_subset`
 - [ ] Update docs to reflect new default:
@@ -248,7 +248,7 @@ Copy into release notes/changelog:
 Routing default changed: unified routing is now the default for <scope>.
 
 This may change edge path geometry in some diagrams (notably cycle/backward-edge cases).
-Use --routing-mode full-compute to force legacy routing behavior during transition.
+Use --edge-routing full-compute to force legacy routing behavior during transition.
 
 Known accepted deltas:
 - <fixture/category>: <short reason>

@@ -37,9 +37,9 @@ pub enum OutputFormat {
     Mermaid,
 }
 
-/// SVG edge path style.
+/// SVG edge style.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SvgEdgePathStyle {
+pub enum EdgeStyle {
     Basis,
     Linear,
     Rounded,
@@ -84,37 +84,37 @@ impl FromStr for OutputFormat {
     }
 }
 
-impl std::fmt::Display for SvgEdgePathStyle {
+impl std::fmt::Display for EdgeStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SvgEdgePathStyle::Basis => write!(f, "basis"),
-            SvgEdgePathStyle::Linear => write!(f, "linear"),
-            SvgEdgePathStyle::Rounded => write!(f, "rounded"),
-            SvgEdgePathStyle::Orthogonal => write!(f, "orthogonal"),
+            EdgeStyle::Basis => write!(f, "basis"),
+            EdgeStyle::Linear => write!(f, "linear"),
+            EdgeStyle::Rounded => write!(f, "rounded"),
+            EdgeStyle::Orthogonal => write!(f, "orthogonal"),
         }
     }
 }
 
-impl SvgEdgePathStyle {
-    /// Parse SVG edge path style from user-provided text.
+impl EdgeStyle {
+    /// Parse SVG edge style from user-provided text.
     pub fn parse(s: &str) -> Result<Self, RenderError> {
         match normalize_enum_token(s).as_str() {
-            "basis" => Ok(SvgEdgePathStyle::Basis),
-            "linear" => Ok(SvgEdgePathStyle::Linear),
-            "rounded" => Ok(SvgEdgePathStyle::Rounded),
-            "orthogonal" => Ok(SvgEdgePathStyle::Orthogonal),
+            "basis" => Ok(EdgeStyle::Basis),
+            "linear" => Ok(EdgeStyle::Linear),
+            "rounded" => Ok(EdgeStyle::Rounded),
+            "orthogonal" => Ok(EdgeStyle::Orthogonal),
             _ => Err(RenderError {
-                message: format!("unknown svg edge path style: {s:?}"),
+                message: format!("unknown svg edge style: {s:?}"),
             }),
         }
     }
 }
 
-impl FromStr for SvgEdgePathStyle {
+impl FromStr for EdgeStyle {
     type Err = RenderError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        SvgEdgePathStyle::parse(s)
+        EdgeStyle::parse(s)
     }
 }
 
@@ -278,11 +278,11 @@ pub struct EngineCapabilities {
     pub supports_direction_overrides: bool,
 }
 
-/// Routing mode determined by engine capabilities.
+/// Edge routing determined by engine capabilities.
 ///
 /// Controls how the rendering pipeline processes edge paths after layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RoutingMode {
+pub enum EdgeRouting {
     /// Engine provides only node positions; run full edge routing.
     FullCompute,
     /// Engine provides routed edge paths; apply clipping and spacing only.
@@ -291,13 +291,13 @@ pub enum RoutingMode {
     UnifiedPreview,
 }
 
-impl RoutingMode {
-    /// Determine routing mode from engine capabilities.
+impl EdgeRouting {
+    /// Determine edge routing from engine capabilities.
     pub fn for_capabilities(caps: &EngineCapabilities) -> Self {
         if caps.routes_edges {
-            RoutingMode::PassThroughClip
+            EdgeRouting::PassThroughClip
         } else {
-            RoutingMode::FullCompute
+            EdgeRouting::FullCompute
         }
     }
 }
@@ -307,9 +307,9 @@ impl RoutingMode {
 /// All unified-routing policies are currently fixed; this type remains as a
 /// compatibility envelope for render config and test helpers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct RoutingPolicyToggles;
+pub struct EdgeRoutingPolicyToggles;
 
-impl RoutingPolicyToggles {
+impl EdgeRoutingPolicyToggles {
     pub const fn all_enabled() -> Self {
         Self
     }
@@ -540,10 +540,10 @@ pub struct RenderConfig {
     pub padding: Option<usize>,
     /// SVG-specific: scale factor.
     pub svg_scale: Option<f64>,
-    /// SVG-specific: edge path style.
-    pub svg_edge_path_style: Option<SvgEdgePathStyle>,
-    /// SVG-specific: edge path radius (px) for rounded corners.
-    pub svg_edge_path_radius: Option<f64>,
+    /// SVG-specific: edge style.
+    pub edge_style: Option<EdgeStyle>,
+    /// SVG-specific: edge radius (px) for rounded corners.
+    pub edge_radius: Option<f64>,
     /// SVG-specific: diagram padding (px).
     pub svg_diagram_padding: Option<f64>,
     /// SVG-specific: node padding on x-axis (px).
@@ -556,10 +556,10 @@ pub struct RenderConfig {
     pub geometry_level: GeometryLevel,
     /// Path detail level for edge waypoints (MMDS and SVG).
     pub path_detail: PathDetail,
-    /// Optional routing mode override for routed-geometry preview/testing.
-    pub routing_mode: Option<RoutingMode>,
+    /// Optional edge routing override for routed-geometry preview/testing.
+    pub edge_routing: Option<EdgeRouting>,
     /// Policy toggles for staged unified-routing rollout.
-    pub routing_policies: RoutingPolicyToggles,
+    pub edge_routing_policies: EdgeRoutingPolicyToggles,
 }
 
 /// Error type for rendering failures.

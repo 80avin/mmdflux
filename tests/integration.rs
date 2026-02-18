@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::{OutputFormat, RenderConfig, RoutingPolicyToggles, SvgEdgePathStyle};
+use mmdflux::diagram::{EdgeRoutingPolicyToggles, EdgeStyle, OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::engine::{DagreLayoutEngine, MeasurementMode};
 use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::diagrams::mmds::from_mmds_str;
@@ -15,7 +15,7 @@ use mmdflux::render::{
     render_all_edges_with_labels, route_all_edges,
 };
 use mmdflux::{
-    Diagram, Direction, EngineConfig, GraphLayoutEngine, RoutingMode, Shape, build_diagram,
+    Diagram, Direction, EdgeRouting, EngineConfig, GraphLayoutEngine, Shape, build_diagram,
     default_registry, parse_flowchart,
 };
 
@@ -2620,7 +2620,7 @@ fn test_unified_preview_routed_geometry_is_axis_aligned_for_forward_edges() {
     let geom = engine
         .layout(&diagram, &config)
         .expect("layout should succeed");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     for edge in routed.edges.iter().filter(|edge| !edge.is_backward) {
         assert!(
@@ -2648,8 +2648,8 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
-                routing_mode: Some(RoutingMode::FullCompute),
+                edge_style: Some(EdgeStyle::Linear),
+                edge_routing: Some(EdgeRouting::FullCompute),
                 ..RenderConfig::default()
             },
         )
@@ -2663,8 +2663,8 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
-                routing_mode: Some(RoutingMode::UnifiedPreview),
+                edge_style: Some(EdgeStyle::Linear),
+                edge_routing: Some(EdgeRouting::UnifiedPreview),
                 ..RenderConfig::default()
             },
         )
@@ -3113,9 +3113,9 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_
             .render(
                 format,
                 &RenderConfig {
-                    routing_mode: Some(RoutingMode::UnifiedPreview),
-                    svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
-                    routing_policies: RoutingPolicyToggles::all_enabled(),
+                    edge_routing: Some(EdgeRouting::UnifiedPreview),
+                    edge_style: Some(EdgeStyle::Linear),
+                    edge_routing_policies: EdgeRoutingPolicyToggles::all_enabled(),
                     ..RenderConfig::default()
                 },
             )
@@ -3300,7 +3300,7 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
         }
     }
 
-    let render_text_with_mode = |input: &str, mode: RoutingMode| {
+    let render_text_with_mode = |input: &str, mode: EdgeRouting| {
         let registry = default_registry();
         let mut instance = registry
             .create("flowchart")
@@ -3310,7 +3310,7 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             .render(
                 OutputFormat::Text,
                 &RenderConfig {
-                    routing_mode: Some(mode),
+                    edge_routing: Some(mode),
                     ..RenderConfig::default()
                 },
             )
@@ -3351,8 +3351,8 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {to}"))
             .rect;
 
-        let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-        let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
         let full_edge = full
             .edges
             .iter()
@@ -3416,10 +3416,10 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             full_edge.path, unified_edge.path
         );
 
-        // Text output should still match between routing modes (backward edge
+        // Text output should still match between edge routings (backward edge
         // face differences only affect SVG path geometry, not text grid).
-        let full_text = render_text_with_mode(&input, RoutingMode::FullCompute);
-        let unified_text = render_text_with_mode(&input, RoutingMode::UnifiedPreview);
+        let full_text = render_text_with_mode(&input, EdgeRouting::FullCompute);
+        let unified_text = render_text_with_mode(&input, EdgeRouting::UnifiedPreview);
         assert_eq!(
             unified_text, full_text,
             "fixture {fixture} unified-preview text should match full-compute text"
@@ -3464,7 +3464,7 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
         }
     }
 
-    let render_text_with_mode = |input: &str, mode: RoutingMode| {
+    let render_text_with_mode = |input: &str, mode: EdgeRouting| {
         let registry = default_registry();
         let mut instance = registry
             .create("flowchart")
@@ -3474,7 +3474,7 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .render(
                 OutputFormat::Text,
                 &RenderConfig {
-                    routing_mode: Some(mode),
+                    edge_routing: Some(mode),
                     ..RenderConfig::default()
                 },
             )
@@ -3509,8 +3509,8 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Working"))
             .rect;
 
-        let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-        let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
         let full_edge = full
             .edges
@@ -3564,8 +3564,8 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             unified_edge.path
         );
 
-        let full_text = render_text_with_mode(&input, RoutingMode::FullCompute);
-        let unified_text = render_text_with_mode(&input, RoutingMode::UnifiedPreview);
+        let full_text = render_text_with_mode(&input, EdgeRouting::FullCompute);
+        let unified_text = render_text_with_mode(&input, EdgeRouting::UnifiedPreview);
         assert_eq!(
             unified_text, full_text,
             "fixture {fixture} unified-preview text should match full-compute text once LR backward channel spacing parity is satisfied"
@@ -3594,8 +3594,8 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Client"))
             .rect;
 
-        let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-        let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
         let full_edge = full
             .edges
@@ -3651,8 +3651,8 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             unified_edge.path
         );
 
-        let full_text = render_text_with_mode(&input, RoutingMode::FullCompute);
-        let unified_text = render_text_with_mode(&input, RoutingMode::UnifiedPreview);
+        let full_text = render_text_with_mode(&input, EdgeRouting::FullCompute);
+        let unified_text = render_text_with_mode(&input, EdgeRouting::UnifiedPreview);
         assert_eq!(
             unified_text, full_text,
             "fixture {fixture} unified-preview text should match full-compute text once right-side backward clearance parity is satisfied"
@@ -3674,9 +3674,9 @@ fn full_compute_rollback_is_stable_for_text_and_svg() {
             .render(
                 format,
                 &RenderConfig {
-                    routing_mode: Some(RoutingMode::FullCompute),
-                    svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
-                    routing_policies: RoutingPolicyToggles::all_enabled(),
+                    edge_routing: Some(EdgeRouting::FullCompute),
+                    edge_style: Some(EdgeStyle::Linear),
+                    edge_routing_policies: EdgeRoutingPolicyToggles::all_enabled(),
                     ..RenderConfig::default()
                 },
             )
@@ -3702,7 +3702,7 @@ fn full_compute_rollback_is_stable_for_text_and_svg() {
 fn text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes() {
     let fixtures = ["labeled_edges.mmd", "inline_label_flowchart.mmd"];
 
-    let render_with_mode = |input: &str, mode: RoutingMode| {
+    let render_with_mode = |input: &str, mode: EdgeRouting| {
         let registry = default_registry();
         let mut instance = registry
             .create("flowchart")
@@ -3712,8 +3712,8 @@ fn text_label_revalidation_fixtures_match_between_unified_preview_and_full_compu
             .render(
                 OutputFormat::Text,
                 &RenderConfig {
-                    routing_mode: Some(mode),
-                    routing_policies: RoutingPolicyToggles::all_enabled(),
+                    edge_routing: Some(mode),
+                    edge_routing_policies: EdgeRoutingPolicyToggles::all_enabled(),
                     ..RenderConfig::default()
                 },
             )
@@ -3722,8 +3722,8 @@ fn text_label_revalidation_fixtures_match_between_unified_preview_and_full_compu
 
     for fixture in fixtures {
         let input = load_fixture(fixture);
-        let full = render_with_mode(&input, RoutingMode::FullCompute);
-        let unified = render_with_mode(&input, RoutingMode::UnifiedPreview);
+        let full = render_with_mode(&input, EdgeRouting::FullCompute);
+        let unified = render_with_mode(&input, EdgeRouting::UnifiedPreview);
         assert_eq!(
             unified, full,
             "Label revalidation text parity guard failed for fixture {fixture}: unified-preview text output diverged from full-compute"

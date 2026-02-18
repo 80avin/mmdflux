@@ -7,14 +7,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::RoutingPolicyToggles;
+use mmdflux::diagram::EdgeRoutingPolicyToggles;
 use mmdflux::diagrams::flowchart::engine::{DagreLayoutEngine, MeasurementMode};
 use mmdflux::diagrams::flowchart::geometry::*;
 use mmdflux::diagrams::flowchart::routing::{
     route_graph_geometry, route_graph_geometry_with_policies, snap_path_to_grid_preview,
 };
 use mmdflux::{
-    EngineConfig, GraphLayoutEngine, OutputFormat, RenderConfig, RoutingMode, build_diagram,
+    EdgeRouting, EngineConfig, GraphLayoutEngine, OutputFormat, RenderConfig, build_diagram,
     parse_flowchart,
 };
 
@@ -139,8 +139,8 @@ fn style_segment_monitor_report_for_routed_geometry(
         let routed = route_graph_geometry_with_policies(
             &diagram,
             &geom,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles::all_enabled(),
+            EdgeRouting::UnifiedPreview,
+            EdgeRoutingPolicyToggles::all_enabled(),
         );
 
         for edge in diagram
@@ -472,7 +472,7 @@ fn effective_edge_direction_for_test(
 #[test]
 fn routed_geometry_has_correct_node_count() {
     let (diagram, geom) = layout_test("graph TD\nA-->B\nB-->C");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
 
     assert_eq!(routed.nodes.len(), 3);
     assert!(routed.nodes.contains_key("A"));
@@ -483,7 +483,7 @@ fn routed_geometry_has_correct_node_count() {
 #[test]
 fn routed_geometry_has_correct_edge_count() {
     let (diagram, geom) = layout_test("graph TD\nA-->B\nB-->C");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
 
     assert_eq!(routed.edges.len(), 2);
 }
@@ -491,7 +491,7 @@ fn routed_geometry_has_correct_edge_count() {
 #[test]
 fn routed_edges_have_non_empty_paths() {
     let (diagram, geom) = layout_test("graph TD\nA-->B\nB-->C");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
 
     for edge in &routed.edges {
         assert!(
@@ -507,7 +507,7 @@ fn routed_edges_have_non_empty_paths() {
 #[test]
 fn routed_geometry_preserves_label_positions() {
     let (diagram, geom) = layout_test("graph TD\nA--label-->B");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
 
     let edge = &routed.edges[0];
     assert!(
@@ -521,7 +521,7 @@ const LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT: f64 = 2.0;
 #[test]
 fn unified_labels_remain_attached_to_active_segments_labeled_edges() {
     let (diagram, geom) = layout_fixture_svg("labeled_edges.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let failures = labeled_edge_label_drift_failures(
         &diagram,
         &routed,
@@ -537,7 +537,7 @@ fn unified_labels_remain_attached_to_active_segments_labeled_edges() {
 #[test]
 fn unified_labels_remain_attached_to_active_segments_inline_label_flowchart() {
     let (diagram, geom) = layout_fixture_svg("inline_label_flowchart.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let failures = labeled_edge_label_drift_failures(
         &diagram,
         &routed,
@@ -579,8 +579,8 @@ fn stale_label_anchor_is_replaced_with_valid_route_anchor() {
     let routed = route_graph_geometry_with_policies(
         &diagram,
         &stale_geom,
-        RoutingMode::UnifiedPreview,
-        RoutingPolicyToggles,
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles,
     );
     let routed_edge = routed
         .edges
@@ -608,14 +608,14 @@ fn stale_label_anchor_is_replaced_with_valid_route_anchor() {
 #[test]
 fn routed_geometry_preserves_direction() {
     let (diagram, geom) = layout_test("graph LR\nA-->B");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
     assert_eq!(routed.direction, mmdflux::Direction::LeftRight);
 }
 
 #[test]
 fn routed_geometry_preserves_bounds() {
     let (diagram, geom) = layout_test("graph TD\nA-->B");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
     assert!(routed.bounds.width > 0.0);
     assert!(routed.bounds.height > 0.0);
 }
@@ -623,7 +623,7 @@ fn routed_geometry_preserves_bounds() {
 #[test]
 fn routed_geometry_preserves_subgraphs() {
     let (diagram, geom) = layout_test("graph TD\nsubgraph sg1[Group]\nA-->B\nend");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
 
     assert!(!routed.subgraphs.is_empty());
     let sg = &routed.subgraphs["sg1"];
@@ -634,7 +634,7 @@ fn routed_geometry_preserves_subgraphs() {
 #[test]
 fn routed_geometry_marks_backward_edges() {
     let (diagram, geom) = layout_test("graph TD\nA-->B\nB-->A");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
 
     // At least one edge should be marked backward (the cycle)
     let backward_count = routed.edges.iter().filter(|e| e.is_backward).count();
@@ -647,7 +647,7 @@ fn routed_geometry_marks_backward_edges() {
 #[test]
 fn routed_self_edges_have_paths() {
     let (diagram, geom) = layout_test("graph TD\nA-->A");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
 
     assert_eq!(routed.self_edges.len(), 1);
     assert!(
@@ -658,13 +658,13 @@ fn routed_self_edges_have_paths() {
 }
 
 // -----------------------------------------------------------------------
-// Task 1.2: Routing mode tests
+// Task 1.2: Edge routing tests
 // -----------------------------------------------------------------------
 
 #[test]
 fn pass_through_mode_uses_layout_path_hints() {
     let (diagram, geom) = layout_test("graph TD\nA-->B");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::PassThroughClip);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PassThroughClip);
 
     let edge = &routed.edges[0];
     // PassThroughClip should use the engine-provided path hints directly
@@ -682,7 +682,7 @@ fn pass_through_mode_uses_layout_path_hints() {
 #[test]
 fn full_compute_mode_produces_valid_paths() {
     let (diagram, geom) = layout_test("graph TD\nA-->B\nB-->C\nA-->C");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
 
     assert_eq!(routed.edges.len(), 3);
     for edge in &routed.edges {
@@ -696,11 +696,11 @@ fn full_compute_mode_produces_valid_paths() {
 }
 
 #[test]
-fn routing_modes_produce_same_structure() {
+fn edge_routings_produce_same_structure() {
     let (diagram, geom) = layout_test("graph TD\nA-->B");
 
-    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-    let pass = route_graph_geometry(&diagram, &geom, RoutingMode::PassThroughClip);
+    let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+    let pass = route_graph_geometry(&diagram, &geom, EdgeRouting::PassThroughClip);
 
     // Both modes should produce the same structural output
     assert_eq!(full.nodes.len(), pass.nodes.len());
@@ -712,7 +712,7 @@ fn routing_modes_produce_same_structure() {
 #[test]
 fn routed_edges_preserve_subgraph_references() {
     let (diagram, geom) = layout_test("graph TD\nsubgraph sg1[Group]\nA\nend\nB-->sg1");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
 
     // Check that subgraph references are preserved in routed edges.
     // If the edge connects to a subgraph-as-node, the reference should be preserved.
@@ -732,7 +732,7 @@ fn routed_edges_preserve_subgraph_references() {
 #[test]
 fn unified_router_produces_axis_aligned_forward_paths() {
     let (diagram, geom) = layout_test("graph TD\nA-->B\nA-->C\nB-->D\nC-->D");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     for edge in routed.edges.iter().filter(|edge| !edge.is_backward) {
         assert!(
@@ -764,8 +764,8 @@ fn snap_path_to_grid_preserves_start_and_end_nodes() {
 fn unified_preview_preserves_core_routed_geometry_contracts() {
     for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
         let (diagram, geom) = layout_fixture(fixture);
-        let legacy = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-        let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let legacy = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
         assert_eq!(
             unified.edges.len(),
@@ -799,7 +799,7 @@ fn unified_preview_preserves_core_routed_geometry_contracts() {
 #[test]
 fn unified_route_contracts_are_axis_aligned_and_non_degenerate() {
     let (diagram, geom) = layout_fixture("simple_cycle.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     for edge in &routed.edges {
         assert!(
@@ -836,7 +836,7 @@ fn unified_route_contracts_preserve_terminal_support_segment() {
     let (diagram, geom) = layout_fixture("ampersand.mmd");
     assert_eq!(geom.direction, mmdflux::Direction::TopDown);
 
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     for edge in routed.edges.iter().filter(|edge| !edge.is_backward) {
         assert!(
             edge.path.len() >= 2,
@@ -869,8 +869,8 @@ fn unified_route_contracts_preserve_terminal_support_segment() {
 #[test]
 fn unified_route_contracts_are_deterministic_for_repeated_runs() {
     let (diagram, geom) = layout_fixture("multi_subgraph_direction_override.mmd");
-    let first = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
-    let second = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let first = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
+    let second = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     assert_eq!(first.edges.len(), second.edges.len());
     for (lhs, rhs) in first.edges.iter().zip(second.edges.iter()) {
@@ -884,7 +884,7 @@ fn unified_route_contracts_are_deterministic_for_repeated_runs() {
 #[test]
 fn unified_preview_multi_subgraph_bmid_to_f_keeps_terminal_support_clearance() {
     let (diagram, geom) = layout_fixture("multi_subgraph_direction_override.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let edge = routed
         .edges
@@ -918,7 +918,7 @@ fn unified_preview_multi_subgraph_bmid_to_f_keeps_terminal_support_clearance() {
 #[test]
 fn unified_preview_fan_in_lr_target_endpoints_stay_on_or_outside_target_border() {
     let (diagram, geom) = layout_fixture("fan_in_lr.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let target_rect = geom
         .nodes
         .get("D")
@@ -973,7 +973,7 @@ fn unified_preview_ports_keep_minimum_corner_inset_for_fan_edges() {
 
     for (fixture, from, to) in cases {
         let (diagram, geom) = layout_fixture_svg(fixture);
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
         let edge = routed
             .edges
             .iter()
@@ -1028,7 +1028,7 @@ fn unified_preview_ports_keep_minimum_corner_inset_for_fan_edges() {
 #[test]
 fn unified_preview_http_request_backward_edge_preserves_client_side_face_attachment() {
     let (diagram, geom) = layout_fixture("http_request.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let edge = routed
         .edges
@@ -1068,7 +1068,7 @@ fn unified_preview_http_request_backward_edge_preserves_client_side_face_attachm
 fn unified_route_contracts_keep_primary_axis_departure_stem_for_off_center_td_source_ports() {
     let (diagram, geom) = layout_fixture("compat_kitchen_sink.mmd");
     assert_eq!(geom.direction, mmdflux::Direction::TopDown);
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     for (from, to) in [("check-1", "process-A"), ("check-1", "error-1")] {
         let edge = routed
@@ -1122,7 +1122,7 @@ fn unified_route_contracts_keep_primary_axis_departure_stem_for_off_center_td_so
 fn unified_route_contracts_keep_primary_stem_before_outward_td_fan_out_sweeps() {
     let (diagram, geom) = layout_fixture("fan_out.mmd");
     assert_eq!(geom.direction, mmdflux::Direction::TopDown);
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     for (from, to) in [("A", "B"), ("A", "D")] {
         let edge = routed
@@ -1188,7 +1188,7 @@ fn unified_route_contracts_keep_directional_source_exits_for_selected_fixtures()
             mmdflux::Direction::TopDown,
             "fixture {fixture} should be TD for outward-first source contract"
         );
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
         for (from, to, min_offset) in *edges {
             let edge = routed
@@ -1254,7 +1254,7 @@ fn unified_route_contracts_keep_directional_source_exits_for_selected_fixtures()
         mmdflux::Direction::LeftRight,
         "git_workflow fixture should be LR"
     );
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     for (from, to) in [("Working", "Staging"), ("Local", "Remote")] {
         let edge = routed
             .edges
@@ -1287,7 +1287,7 @@ fn unified_route_contracts_avoid_source_turnback_spikes_for_selected_fixtures() 
 
     for (fixture, from, to) in cases {
         let (diagram, geom) = layout_fixture_svg(fixture);
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
         let edge = routed
             .edges
             .iter()
@@ -1312,7 +1312,7 @@ fn unified_route_contracts_avoid_immediate_axial_turnbacks() {
 
     for (fixture, from, to) in cases {
         let (diagram, geom) = layout_fixture_svg(fixture);
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
         let edge = routed
             .edges
             .iter()
@@ -1331,7 +1331,7 @@ fn unified_route_contracts_preserve_backward_cycle_outer_lane_clearance() {
     const MIN_OUTER_LANE_CLEARANCE: f64 = 12.0;
 
     let (diagram, geom) = layout_fixture_svg("multiple_cycles.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let edge = routed
         .edges
         .iter()
@@ -1368,7 +1368,7 @@ fn unified_route_contracts_preserve_backward_cycle_outer_lane_clearance() {
 #[test]
 fn shared_builder_prefers_terminal_segment_matching_layout_entry_axis() {
     let (diagram, geom) = layout_fixture("direction_override.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     for edge in routed.edges.iter().filter(|edge| !edge.is_backward) {
         let expected_direction = effective_edge_direction_for_test(
@@ -1418,8 +1418,8 @@ fn unified_preview_nested_override_cross_boundary_edge_matches_lr_face_parity() 
         .unwrap_or_else(|| panic!("fixture {fixture} should contain target node A"))
         .rect;
 
-    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let full_edge = full
         .edges
@@ -1496,7 +1496,7 @@ fn unified_preview_nested_override_cross_boundary_edge_matches_lr_face_parity() 
 #[test]
 fn shared_builder_reduces_midfield_jogs_for_large_horizontal_offset_edges() {
     let (diagram, geom) = layout_fixture("decision.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let edge = routed
         .edges
         .iter()
@@ -1533,7 +1533,7 @@ fn shared_builder_keeps_alignment_tolerance_stable_for_near_aligned_points() {
         end,
     ]);
 
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let edge = &routed.edges[0];
     assert!(
         bend_count(&edge.path) <= 2,
@@ -1567,7 +1567,7 @@ fn unified_route_contracts_keep_td_source_ports_normal_and_compact() {
             mmdflux::Direction::TopDown,
             "fixture {fixture} should be TD for source-support contract"
         );
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
         for (from, to) in *edges {
             let edge = routed
@@ -1634,8 +1634,8 @@ fn unified_preview_decision_backward_debug_to_start_supports_td_top_bottom_parit
         .unwrap_or_else(|| panic!("fixture {fixture} should contain target node A"))
         .rect;
 
-    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let full_edge = full
         .edges
@@ -1713,7 +1713,7 @@ fn unified_preview_decision_backward_debug_to_start_keeps_vertical_source_stem_b
         "fixture {fixture} should be TD for source-stem normalization checks"
     );
 
-    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let edge = unified
         .edges
         .iter()
@@ -1753,7 +1753,7 @@ fn unified_preview_backward_in_subgraph_uses_compact_inline_terminal_return() {
         "fixture {fixture} should be TD for compact backward return-shape checks"
     );
 
-    let edge = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview)
+    let edge = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview)
         .edges
         .into_iter()
         .find(|edge| edge.from == "B" && edge.to == "A")
@@ -1832,8 +1832,8 @@ fn unified_preview_complex_backward_more_data_to_input_supports_td_entry_parity(
         .unwrap_or_else(|| panic!("fixture {fixture} should contain target node A"))
         .rect;
 
-    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let full_edge = full
         .edges
@@ -1894,7 +1894,7 @@ fn unified_preview_complex_backward_more_data_to_input_avoids_tiny_terminal_stai
         "fixture {fixture} should be TD for terminal staircase checks"
     );
 
-    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let edge = unified
         .edges
         .iter()
@@ -1953,8 +1953,8 @@ fn unified_preview_td_backward_followup_edges_match_full_compute_entry_face_pari
             .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {to}"))
             .rect;
 
-        let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-        let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
         let full_edge = full
             .edges
@@ -1969,7 +1969,7 @@ fn unified_preview_td_backward_followup_edges_match_full_compute_entry_face_pari
 
         assert!(
             full_edge.is_backward && unified_edge.is_backward,
-            "fixture {fixture} contract invalid: {from} -> {to} should be backward in both routing modes"
+            "fixture {fixture} contract invalid: {from} -> {to} should be backward in both edge routings"
         );
 
         let full_start = full_edge
@@ -2015,7 +2015,7 @@ fn unified_preview_td_backward_followup_edges_match_full_compute_entry_face_pari
 fn unified_preview_simple_cycle_backward_terminal_port_respects_minimum_corner_inset() {
     const MIN_CORNER_INSET: f64 = 8.0;
     let (diagram, geom) = layout_fixture_svg("simple_cycle.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let edge = routed
         .edges
@@ -2078,8 +2078,8 @@ fn unified_preview_git_workflow_backward_remote_to_working_preserves_min_lr_chan
         .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Working"))
         .rect;
 
-    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let full_edge = full
         .edges
@@ -2094,7 +2094,7 @@ fn unified_preview_git_workflow_backward_remote_to_working_preserves_min_lr_chan
 
     assert!(
         full_edge.is_backward && unified_edge.is_backward,
-        "fixture contract invalid: Remote -> Working should be backward in both routing modes"
+        "fixture contract invalid: Remote -> Working should be backward in both edge routings"
     );
 
     let unified_start = unified_edge
@@ -2171,7 +2171,7 @@ fn unified_preview_git_workflow_backward_no_target_node_intrusion() {
     let top = target_rect.y + INTRUSION_MARGIN;
     let bottom = target_rect.y + target_rect.height - INTRUSION_MARGIN;
 
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let edge = routed
         .edges
         .iter()
@@ -2217,8 +2217,8 @@ fn unified_preview_http_request_backward_response_to_client_preserves_min_right_
         .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Client"))
         .rect;
 
-    let full = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
-    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let full_edge = full
         .edges
@@ -2233,7 +2233,7 @@ fn unified_preview_http_request_backward_response_to_client_preserves_min_right_
 
     assert!(
         full_edge.is_backward && unified_edge.is_backward,
-        "fixture contract invalid: Response -> Client should be backward in both routing modes"
+        "fixture contract invalid: Response -> Client should be backward in both edge routings"
     );
 
     let full_start = full_edge
@@ -2457,8 +2457,8 @@ fn fan_in_overflow_policy_spec_defines_spill_distribution_order() {
 fn fan_in_backward_channel_conflict_resolution_is_deterministic_and_documented() {
     let fixture = "fan_in_backward_channel_conflict.mmd";
     let (diagram, geom) = layout_fixture_svg(fixture);
-    let first = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
-    let second = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let first = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
+    let second = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     assert_eq!(
         first.edges.len(),
@@ -2602,8 +2602,8 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
         let routed = route_graph_geometry_with_policies(
             &diagram,
             &geom,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles::all_enabled(),
+            EdgeRouting::UnifiedPreview,
+            EdgeRoutingPolicyToggles::all_enabled(),
         );
         let target_rect = geom
             .nodes
@@ -2697,8 +2697,8 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_face_po
         let routed = route_graph_geometry_with_policies(
             &diagram,
             &geom,
-            RoutingMode::UnifiedPreview,
-            RoutingPolicyToggles::all_enabled(),
+            EdgeRouting::UnifiedPreview,
+            EdgeRoutingPolicyToggles::all_enabled(),
         );
 
         let edge = routed
@@ -2748,8 +2748,8 @@ graph TD
     let routed = route_graph_geometry_with_policies(
         &diagram,
         &geom,
-        RoutingMode::UnifiedPreview,
-        RoutingPolicyToggles::all_enabled(),
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
     );
     let target_rect = geom
         .nodes
@@ -2837,8 +2837,8 @@ fn very_narrow_fan_in_primary_face_ports_do_not_collapse_to_single_anchor() {
     let routed = route_graph_geometry_with_policies(
         &diagram,
         &geom,
-        RoutingMode::UnifiedPreview,
-        RoutingPolicyToggles::all_enabled(),
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
     );
     let target_rect = geom
         .nodes
@@ -2908,8 +2908,8 @@ fn five_fan_in_primary_face_channels_are_staggered_without_overlap() {
     let routed = route_graph_geometry_with_policies(
         &diagram,
         &geom,
-        RoutingMode::UnifiedPreview,
-        RoutingPolicyToggles::all_enabled(),
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
     );
     let target_rect = geom
         .nodes
@@ -3005,8 +3005,8 @@ fn five_fan_in_diamond_target_ports_use_distinct_primary_slots() {
     let routed = route_graph_geometry_with_policies(
         &diagram,
         &geom,
-        RoutingMode::UnifiedPreview,
-        RoutingPolicyToggles::all_enabled(),
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
     );
 
     let inbound: Vec<_> = routed
@@ -3055,8 +3055,8 @@ fn five_fan_out_primary_face_channels_are_staggered_without_overlap() {
     let routed = route_graph_geometry_with_policies(
         &diagram,
         &geom,
-        RoutingMode::UnifiedPreview,
-        RoutingPolicyToggles::all_enabled(),
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
     );
 
     let outbound: Vec<_> = routed
@@ -3160,8 +3160,8 @@ fn five_fan_out_diamond_primary_face_channels_are_staggered_without_overlap() {
     let routed = route_graph_geometry_with_policies(
         &diagram,
         &geom,
-        RoutingMode::UnifiedPreview,
-        RoutingPolicyToggles::all_enabled(),
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
     );
 
     let outbound: Vec<_> = routed
@@ -3265,8 +3265,8 @@ fn very_narrow_fan_in_channels_are_staggered_without_overlap() {
     let routed = route_graph_geometry_with_policies(
         &diagram,
         &geom,
-        RoutingMode::UnifiedPreview,
-        RoutingPolicyToggles::all_enabled(),
+        EdgeRouting::UnifiedPreview,
+        EdgeRoutingPolicyToggles::all_enabled(),
     );
 
     let inbound: Vec<_> = routed
@@ -3362,7 +3362,7 @@ fn style_segment_monitor_reports_actionable_summary_for_routed_geometry() {
 #[test]
 fn unified_preview_diamond_source_endpoints_on_boundary() {
     let (diagram, geom) = layout_fixture_svg("decision.mmd");
-    let unified = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     // B is a diamond node; B->C and B->D are forward edges from B
     for (from, to) in [("B", "C"), ("B", "D")] {
@@ -3390,7 +3390,7 @@ fn unified_preview_diamond_source_endpoints_on_boundary() {
 #[test]
 fn diamond_fan_out_source_endpoints_on_boundary() {
     let (diagram, geom) = layout_fixture_svg("diamond_fan_out.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let a_rect = geom.nodes.get("A").unwrap().rect;
     let cx = a_rect.x + a_rect.width / 2.0;
     let cy = a_rect.y + a_rect.height / 2.0;
@@ -3415,7 +3415,7 @@ fn diamond_fan_out_source_endpoints_on_boundary() {
 #[test]
 fn diamond_fan_out_source_endpoints_spread() {
     let (diagram, geom) = layout_fixture_svg("diamond_fan_out.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     let mut source_xs: Vec<(String, f64)> = Vec::new();
     for to in ["B", "C", "D"] {
@@ -3438,7 +3438,7 @@ fn diamond_fan_out_source_endpoints_spread() {
 #[test]
 fn hexagon_flow_target_lands_on_flat_top_edge() {
     let (diagram, geom) = layout_fixture_svg("hexagon_flow.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let a_rect = geom.nodes.get("A").unwrap().rect;
     let indent = a_rect.width * 0.2;
 
@@ -3469,7 +3469,7 @@ fn hexagon_flow_target_lands_on_flat_top_edge() {
 #[test]
 fn hexagon_flow_sources_use_inset_side_departure_for_lateral_branches() {
     let (diagram, geom) = layout_fixture_svg("hexagon_flow.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
     let a_rect = geom.nodes.get("A").unwrap().rect;
     let center_x = a_rect.x + a_rect.width / 2.0;
     let center_y = a_rect.y + a_rect.height / 2.0;
@@ -3530,7 +3530,7 @@ fn hexagon_flow_sources_use_inset_side_departure_for_lateral_branches() {
 #[test]
 fn diamond_backward_target_on_boundary() {
     let (diagram, geom) = layout_fixture_svg("diamond_backward.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     // C->B backward edge: target endpoint on diamond B's boundary
     let edge = routed
@@ -3559,7 +3559,7 @@ fn diamond_backward_target_on_boundary() {
 #[test]
 fn mixed_shape_chain_diamond_to_hexagon_endpoints() {
     let (diagram, geom) = layout_fixture_svg("mixed_shape_chain.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     // B->C: diamond source, hexagon target
     let edge = routed
@@ -3595,7 +3595,7 @@ fn mixed_shape_chain_diamond_to_hexagon_endpoints() {
 #[test]
 fn mixed_shape_chain_no_staircase_artifacts() {
     let (diagram, geom) = layout_fixture_svg("mixed_shape_chain.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     // No edge should have excessive bends (staircase from shape mismatch)
     for edge in &routed.edges {
@@ -3631,7 +3631,7 @@ fn mixed_shape_chain_no_staircase_artifacts() {
 #[test]
 fn unified_preview_complex_backward_edge_clears_intermediate_nodes() {
     let (diagram, geom) = layout_fixture_svg("complex.mmd");
-    let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
     // Find backward edge E→A ("More Data?" → "Input")
     let backward_edge = routed
@@ -3680,7 +3680,7 @@ fn unified_preview_backward_edges_clear_all_intermediate_node_bodies() {
 
     for fixture in &fixtures {
         let (diagram, geom) = layout_fixture_svg(fixture);
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::UnifiedPreview);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
 
         for edge in routed.edges.iter().filter(|e| e.is_backward) {
             for seg in edge.path.windows(2) {

@@ -79,8 +79,8 @@ render_svg() {
   "$MMDFLUX_BIN" \
     --format svg \
     --geometry-level routed \
-    --routing-mode "$mode" \
-    --svg-edge-path-style "$style" \
+    --edge-routing "$mode" \
+    --edge-style "$style" \
     "$fixture_path" >"$out_file"
 }
 

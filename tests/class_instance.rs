@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::{GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig, RoutingMode};
+use mmdflux::diagram::{EdgeRouting, GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig};
 use mmdflux::diagrams::class::ClassInstance;
 use mmdflux::registry::DiagramInstance;
 
@@ -178,7 +178,7 @@ fn class_instance_known_non_dagre_engine_errors_cleanly() {
 }
 
 #[test]
-fn class_routed_mmds_honors_routing_mode_override() {
+fn class_routed_mmds_honors_edge_routing_override() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -194,7 +194,7 @@ fn class_routed_mmds_honors_routing_mode_override() {
             OutputFormat::Mmds,
             &RenderConfig {
                 geometry_level: GeometryLevel::Routed,
-                routing_mode: Some(RoutingMode::FullCompute),
+                edge_routing: Some(EdgeRouting::FullCompute),
                 ..RenderConfig::default()
             },
         )
@@ -204,7 +204,7 @@ fn class_routed_mmds_honors_routing_mode_override() {
             OutputFormat::Mmds,
             &RenderConfig {
                 geometry_level: GeometryLevel::Routed,
-                routing_mode: Some(RoutingMode::UnifiedPreview),
+                edge_routing: Some(EdgeRouting::UnifiedPreview),
                 ..RenderConfig::default()
             },
         )
@@ -212,12 +212,12 @@ fn class_routed_mmds_honors_routing_mode_override() {
 
     assert_ne!(
         full, unified,
-        "class routed MMDS should reflect routing-mode override semantics"
+        "class routed MMDS should reflect edge-routing override semantics"
     );
 }
 
 #[test]
-fn class_routed_mmds_honors_routing_mode_override_on_cycle() {
+fn class_routed_mmds_honors_edge_routing_override_on_cycle() {
     let input = "classDiagram\nA --> B\nB --> C\nC --> A\n";
     let mut instance = ClassInstance::new();
     instance.parse(input).expect("class cycle should parse");
@@ -227,7 +227,7 @@ fn class_routed_mmds_honors_routing_mode_override_on_cycle() {
             OutputFormat::Mmds,
             &RenderConfig {
                 geometry_level: GeometryLevel::Routed,
-                routing_mode: Some(RoutingMode::FullCompute),
+                edge_routing: Some(EdgeRouting::FullCompute),
                 ..RenderConfig::default()
             },
         )
@@ -237,7 +237,7 @@ fn class_routed_mmds_honors_routing_mode_override_on_cycle() {
             OutputFormat::Mmds,
             &RenderConfig {
                 geometry_level: GeometryLevel::Routed,
-                routing_mode: Some(RoutingMode::UnifiedPreview),
+                edge_routing: Some(EdgeRouting::UnifiedPreview),
                 ..RenderConfig::default()
             },
         )
@@ -250,7 +250,7 @@ fn class_routed_mmds_honors_routing_mode_override_on_cycle() {
 }
 
 #[test]
-fn class_svg_honors_routing_mode_override_on_cycle() {
+fn class_svg_honors_edge_routing_override_on_cycle() {
     let input = "classDiagram\nA --> B\nB --> C\nC --> A\n";
     let mut instance = ClassInstance::new();
     instance.parse(input).expect("class cycle should parse");
@@ -259,7 +259,7 @@ fn class_svg_honors_routing_mode_override_on_cycle() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                routing_mode: Some(RoutingMode::FullCompute),
+                edge_routing: Some(EdgeRouting::FullCompute),
                 ..RenderConfig::default()
             },
         )
@@ -268,7 +268,7 @@ fn class_svg_honors_routing_mode_override_on_cycle() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                routing_mode: Some(RoutingMode::UnifiedPreview),
+                edge_routing: Some(EdgeRouting::UnifiedPreview),
                 ..RenderConfig::default()
             },
         )

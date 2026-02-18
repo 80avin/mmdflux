@@ -132,7 +132,7 @@ impl GraphLayoutEngine for DagreLayoutEngine {
     }
 }
 
-/// Result of engine selection: geometry output + routing mode.
+/// Result of engine selection: geometry output + edge routing.
 ///
 /// Fields are read in tests and will be consumed by the rendering pipeline
 /// once full engine integration is complete.
@@ -140,7 +140,7 @@ impl GraphLayoutEngine for DagreLayoutEngine {
 pub struct EngineLayoutResult {
     pub engine_id: LayoutEngineId,
     pub geometry: GraphGeometry,
-    pub routing_mode: crate::diagram::RoutingMode,
+    pub edge_routing: crate::diagram::EdgeRouting,
 }
 
 /// Resolve the configured flowchart layout engine and execute it.
@@ -153,7 +153,7 @@ pub fn layout_with_selected_engine(
     config: &RenderConfig,
     format: OutputFormat,
 ) -> Result<EngineLayoutResult, RenderError> {
-    use crate::diagram::RoutingMode;
+    use crate::diagram::EdgeRouting;
 
     let engine_id = config.layout_engine.unwrap_or(LayoutEngineId::Dagre);
 
@@ -163,13 +163,13 @@ pub fn layout_with_selected_engine(
         LayoutEngineId::Dagre => {
             let mode = MeasurementMode::for_format(format, config);
             let engine = DagreLayoutEngine::with_mode(mode);
-            let routing_mode = RoutingMode::for_capabilities(&engine.capabilities());
+            let edge_routing = EdgeRouting::for_capabilities(&engine.capabilities());
             let engine_config = EngineConfig::Dagre(config.layout.clone());
             let geometry = engine.layout(diagram, &engine_config)?;
             Ok(EngineLayoutResult {
                 engine_id,
                 geometry,
-                routing_mode,
+                edge_routing,
             })
         }
         _ => {
@@ -178,13 +178,13 @@ pub fn layout_with_selected_engine(
             let engine = registry.get(engine_id).ok_or_else(|| RenderError {
                 message: format!("no adapter registered for engine: {engine_id}"),
             })?;
-            let routing_mode = RoutingMode::for_capabilities(&engine.capabilities());
+            let edge_routing = EdgeRouting::for_capabilities(&engine.capabilities());
             let engine_config = EngineConfig::Dagre(config.layout.clone());
             let geometry = engine.layout(diagram, &engine_config)?;
             Ok(EngineLayoutResult {
                 engine_id,
                 geometry,
-                routing_mode,
+                edge_routing,
             })
         }
     }
@@ -320,8 +320,8 @@ mod tests {
                 .unwrap();
         assert_eq!(result.geometry.nodes.len(), 2);
         assert_eq!(
-            result.routing_mode,
-            crate::diagram::RoutingMode::FullCompute
+            result.edge_routing,
+            crate::diagram::EdgeRouting::FullCompute
         );
     }
 
@@ -338,8 +338,8 @@ mod tests {
         let result = layout_with_selected_engine(&diagram, &config, OutputFormat::Text).unwrap();
         assert_eq!(result.geometry.edges.len(), 1);
         assert_eq!(
-            result.routing_mode,
-            crate::diagram::RoutingMode::FullCompute
+            result.edge_routing,
+            crate::diagram::EdgeRouting::FullCompute
         );
     }
 

@@ -52,13 +52,13 @@ impl DiagramInstance for ClassInstance {
 
         if matches!(format, OutputFormat::Mmds) {
             let engine_result = layout_with_selected_engine(diagram, config, format)?;
-            let routing_mode = config.routing_mode.unwrap_or(engine_result.routing_mode);
+            let edge_routing = config.edge_routing.unwrap_or(engine_result.edge_routing);
             let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
                 Some(routing::route_graph_geometry_with_policies(
                     diagram,
                     &engine_result.geometry,
-                    routing_mode,
-                    config.routing_policies,
+                    edge_routing,
+                    config.edge_routing_policies,
                 ))
             } else {
                 None
@@ -75,19 +75,19 @@ impl DiagramInstance for ClassInstance {
 
         if matches!(format, OutputFormat::Svg) && selected_engine != LayoutEngineId::Dagre {
             let engine_result = layout_with_selected_engine(diagram, config, format)?;
-            let routing_mode = config.routing_mode.unwrap_or(engine_result.routing_mode);
+            let edge_routing = config.edge_routing.unwrap_or(engine_result.edge_routing);
             let routed = routing::route_graph_geometry_with_policies(
                 diagram,
                 &engine_result.geometry,
-                routing_mode,
-                config.routing_policies,
+                edge_routing,
+                config.edge_routing_policies,
             );
             let geom = inject_routed_paths(&engine_result.geometry, &routed);
             return Ok(render_svg_from_geometry(
                 diagram,
                 &options,
                 &geom,
-                routing_mode,
+                edge_routing,
             ));
         }
 

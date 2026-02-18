@@ -10,7 +10,7 @@
 
 ## 1. Purpose
 
-This document defines the product requirements for mmdflux's edge routing system across all supported output formats (text/ASCII, SVG, MMDS JSON). It consolidates research findings, architectural constraints, and design decisions into a single reference that guides implementation of edge path construction, port attachment, and visual quality across the four supported edge path styles.
+This document defines the product requirements for mmdflux's edge routing system across all supported output formats (text/ASCII, SVG, MMDS JSON). It consolidates research findings, architectural constraints, and design decisions into a single reference that guides implementation of edge path construction, port attachment, and visual quality across the four supported edge styles.
 
 The routing system is the most complex subsystem in mmdflux's graph-family pipeline. It sits between layout (Sugiyama/dagre coordinate assignment) and rendering, and its quality directly determines diagram readability.
 
@@ -21,7 +21,7 @@ The routing system is the most complex subsystem in mmdflux's graph-family pipel
 ### In scope
 
 - Edge path construction for graph-family diagrams (flowchart, class)
-- Four edge path styles: orthogonal, linear, rounded, basis (curved)
+- Four edge styles: orthogonal, linear, rounded, basis (curved)
 - Port attachment policy for directional layouts (TD, BT, LR, RL)
 - Bend minimization and crossing avoidance heuristics
 - Backward edge (cycle) routing conventions
@@ -48,7 +48,7 @@ Diagram → Layout Engine → GraphGeometry (L1) → route_graph_geometry() → 
 
 The routing stage receives engine-agnostic node positions, edge topology, and layout hints (waypoints), then produces resolved polyline paths, label positions, and backward-edge markers. Both text and SVG renderers consume the same `RoutedGraphGeometry` IR.
 
-### Current routing modes
+### Current edge routings
 
 | Mode | Description | Status |
 |------|-------------|--------|
@@ -56,14 +56,14 @@ The routing stage receives engine-agnostic node positions, edge topology, and la
 | `pass-through-clip` | Use engine-provided paths with clipping | Used by ELK adapter |
 | `unified-preview` | Float-first shared routing engine | In hardening (plan 0076+) |
 
-### Current edge path styles (SVG)
+### Current edge styles (SVG)
 
 | Style | CLI flag | Description |
 |-------|----------|-------------|
-| `basis` | `--svg-edge-path-style basis` | Smooth B-spline through waypoints (default) |
-| `linear` | `--svg-edge-path-style linear` | Straight polyline segments |
-| `rounded` | `--svg-edge-path-style rounded` | Polyline with rounded corners |
-| `orthogonal` | `--svg-edge-path-style orthogonal` | Axis-aligned path construction |
+| `basis` | `--edge-style basis` | Smooth B-spline through waypoints (default) |
+| `linear` | `--edge-style linear` | Straight polyline segments |
+| `rounded` | `--edge-style rounded` | Polyline with rounded corners |
+| `orthogonal` | `--edge-style orthogonal` | Axis-aligned path construction |
 
 Text rendering always uses orthogonal paths (inherent to the character grid).
 
@@ -195,7 +195,7 @@ Rounded edges behave like orthogonal with corner radii applied at bends.
 | R-RND-1 | Underlying path construction follows orthogonal routing rules | P0 | Rounding is a visual treatment, not a routing strategy |
 | R-RND-2 | Corner radius is consistent across all bends in a single edge | P1 | Visual consistency |
 | R-RND-3 | Corner radius adapts to avoid distortion on short segments | P1 | Radius > segment length produces visual artifacts |
-| R-RND-4 | Corner radius is user-configurable via `--svg-edge-path-radius` | P1 | Currently implemented |
+| R-RND-4 | Corner radius is user-configurable via `--edge-radius` | P1 | Currently implemented |
 
 #### R-BAS: Basis (curved) style
 
@@ -325,7 +325,7 @@ This ordering is derived from the research hierarchy (§4.1) combined with the f
 
 ### DD-2: Orthogonal routing is the canonical routing strategy
 
-All edge path styles share the same upstream routing logic through the orthogonal path builder. Style-specific rendering is a downstream visual treatment:
+All edge styles share the same upstream routing logic through the orthogonal path builder. Style-specific rendering is a downstream visual treatment:
 
 - **Orthogonal:** render axis-aligned segments directly
 - **Rounded:** apply corner radii at bends
@@ -346,7 +346,7 @@ For users who prioritize readability over visual similarity to Mermaid.js, `orth
 
 ### DD-4: Linear style uses orthogonal routing with diagonal simplification as a post-processing step
 
-The linear edge path style has a two-phase pipeline:
+The linear edge style has a two-phase pipeline:
 
 1. **Route orthogonally** — use the same shared orthogonal path builder as all other styles. This guarantees correct flow-direction port attachment, departure stems, collision avoidance, and crossing behavior.
 2. **Simplify to diagonals** — as a downstream rendering step, collapse orthogonal waypoint sequences into straight diagonal segments where doing so does not cross node bodies or violate collision constraints.
@@ -572,7 +572,7 @@ When routing constraints conflict:
 
 ## Appendix D: Edge Path Style Selection Guide
 
-The four edge path styles serve different audiences and contexts. The routing strategy (where waypoints go) and corner treatment (how bends render) are independent axes:
+The four edge styles serve different audiences and contexts. The routing strategy (where waypoints go) and corner treatment (how bends render) are independent axes:
 
 ```
                  │ Sharp corners    │ Rounded corners  │ Smooth curves

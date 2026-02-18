@@ -567,9 +567,9 @@ mod tests {
     }
 
     fn routed_geometry(diagram: &Diagram, geometry: &GraphGeometry) -> RoutedGraphGeometry {
-        use crate::diagram::RoutingMode;
+        use crate::diagram::EdgeRouting;
         use crate::diagrams::flowchart::routing::route_graph_geometry;
-        route_graph_geometry(diagram, geometry, RoutingMode::FullCompute)
+        route_graph_geometry(diagram, geometry, EdgeRouting::FullCompute)
     }
 
     #[test]

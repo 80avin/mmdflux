@@ -53,28 +53,28 @@ Note: SVG output is currently supported for flowcharts. For MMDS geometry-level 
 ## SVG Routing Controls
 
 ```bash
-# Select SVG edge path style
-mmdflux --format svg --svg-edge-path-style basis diagram.mmd
-mmdflux --format svg --svg-edge-path-style linear diagram.mmd
-mmdflux --format svg --svg-edge-path-style rounded --svg-edge-path-radius 6 diagram.mmd
-mmdflux --format svg --svg-edge-path-style orthogonal diagram.mmd
+# Select SVG edge style
+mmdflux --format svg --edge-style basis diagram.mmd
+mmdflux --format svg --edge-style linear diagram.mmd
+mmdflux --format svg --edge-style rounded --edge-radius 6 diagram.mmd
+mmdflux --format svg --edge-style orthogonal diagram.mmd
 
-# Routing mode override (flowchart graph-family routing stage)
-mmdflux --format svg --routing-mode full-compute diagram.mmd
-mmdflux --format svg --routing-mode pass-through-clip diagram.mmd
-mmdflux --format svg --routing-mode unified-preview diagram.mmd
+# Edge routing override (flowchart graph-family routing stage)
+mmdflux --format svg --edge-routing full-compute diagram.mmd
+mmdflux --format svg --edge-routing pass-through-clip diagram.mmd
+mmdflux --format svg --edge-routing unified-preview diagram.mmd
 ```
 
-`--svg-edge-path-style` values:
+`--edge-style` values:
 
 | Value | Description |
 | ----- | ----------- |
 | `basis` | Smooth spline path (default) |
 | `linear` | Straight polyline segments |
-| `rounded` | Polyline with rounded corners (radius via `--svg-edge-path-radius`) |
+| `rounded` | Polyline with rounded corners (radius via `--edge-radius`) |
 | `orthogonal` | Axis-aligned path construction |
 
-`--routing-mode` values:
+`--edge-routing` values:
 
 | Value | Description |
 | ----- | ----------- |

@@ -32,7 +32,7 @@ render_mmds() {
   "$MMDFLUX_BIN" \
     --format mmds \
     --geometry-level routed \
-    --routing-mode "$mode" \
+    --edge-routing "$mode" \
     "$REPO_ROOT/tests/fixtures/flowchart/$fixture" >"$out_file"
 }
 
@@ -98,13 +98,13 @@ assert_diff "simple_cycle.mmd"
 print_section "Determinism checks"
 "$MMDFLUX_BIN" \
   --format svg \
-  --svg-edge-path-style linear \
-  --routing-mode unified-preview \
+  --edge-style linear \
+  --edge-routing unified-preview \
   "$REPO_ROOT/tests/fixtures/flowchart/simple_cycle.mmd" >"$OUT_DIR/simple_cycle.unified-preview.run1.svg"
 "$MMDFLUX_BIN" \
   --format svg \
-  --svg-edge-path-style linear \
-  --routing-mode unified-preview \
+  --edge-style linear \
+  --edge-routing unified-preview \
   "$REPO_ROOT/tests/fixtures/flowchart/simple_cycle.mmd" >"$OUT_DIR/simple_cycle.unified-preview.run2.svg"
 cmp -s "$OUT_DIR/simple_cycle.unified-preview.run1.svg" "$OUT_DIR/simple_cycle.unified-preview.run2.svg"
 echo "OK deterministic SVG unified-preview"

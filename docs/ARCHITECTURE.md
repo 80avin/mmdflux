@@ -376,4 +376,4 @@ The `GraphLayoutEngine` trait with associated types enables multiple layout back
 1. Implement `GraphLayoutEngine` with `Input = Diagram, Output = GraphGeometry`
 2. Add variant to `LayoutEngineId` in `diagram.rs`
 3. Register in `GraphEngineRegistry::default()`
-4. Set `EngineCapabilities` appropriately (the pipeline adapts routing mode automatically)
+4. Set `EngineCapabilities` appropriately (the pipeline adapts edge routing automatically)

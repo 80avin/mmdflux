@@ -3,8 +3,8 @@
   "profiles": ["mmds-core-v1", "mmdflux-svg-v1"],
   "extensions": {
     "org.mmdflux.render.svg.v1": {
-      "edge_curve": "basis",
-      "edge_curve_radius": 5,
+      "edge_style": "basis",
+      "edge_radius": 5,
       "font_family": "trebuchet ms",
       "diagram_padding": 8
     }

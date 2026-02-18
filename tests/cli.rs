@@ -69,9 +69,9 @@ fn cli_svg_format_renders_flowchart() {
 }
 
 #[test]
-fn cli_accepts_svg_edge_path_style_orthogonal() {
+fn cli_accepts_edge_style_orthogonal() {
     mmdflux()
-        .args(["--format", "svg", "--svg-edge-path-style", "orthogonal"])
+        .args(["--format", "svg", "--edge-style", "orthogonal"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success();
@@ -80,7 +80,7 @@ fn cli_accepts_svg_edge_path_style_orthogonal() {
 #[test]
 fn cli_accepts_full_compute_rollback_flag() {
     mmdflux()
-        .args(["--format", "svg", "--routing-mode", "full-compute"])
+        .args(["--format", "svg", "--edge-routing", "full-compute"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success()
@@ -88,11 +88,11 @@ fn cli_accepts_full_compute_rollback_flag() {
 }
 
 #[test]
-fn cli_svg_defaults_to_unified_preview_routing_mode() {
+fn cli_svg_defaults_to_unified_preview_edge_routing() {
     let input = "graph TD\nA[Start] --> B{Check}\nB --> C[Yes]\nB --> D[No]\nD --> A\n";
 
     let default = mmdflux()
-        .args(["--format", "svg", "--svg-edge-path-style", "linear"])
+        .args(["--format", "svg", "--edge-style", "linear"])
         .write_stdin(input)
         .output()
         .expect("default render should execute");
@@ -106,9 +106,9 @@ fn cli_svg_defaults_to_unified_preview_routing_mode() {
         .args([
             "--format",
             "svg",
-            "--svg-edge-path-style",
+            "--edge-style",
             "linear",
-            "--routing-mode",
+            "--edge-routing",
             "unified-preview",
         ])
         .write_stdin(input)
@@ -122,8 +122,32 @@ fn cli_svg_defaults_to_unified_preview_routing_mode() {
 
     assert_eq!(
         default.stdout, unified.stdout,
-        "default svg render should match explicit unified-preview routing mode"
+        "default svg render should match explicit unified-preview edge routing"
     );
+}
+
+#[test]
+fn cli_rejects_removed_routing_mode_flag() {
+    mmdflux()
+        .args(["--format", "svg", "--routing-mode", "full-compute"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "unexpected argument '--routing-mode' found",
+        ));
+}
+
+#[test]
+fn cli_rejects_removed_svg_edge_path_style_flag() {
+    mmdflux()
+        .args(["--format", "svg", "--svg-edge-path-style", "orthogonal"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "unexpected argument '--svg-edge-path-style' found",
+        ));
 }
 
 #[test]

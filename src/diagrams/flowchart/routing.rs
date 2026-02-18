@@ -9,7 +9,7 @@ use super::geometry::*;
 use super::render::unified_router::{
     UnifiedRoutingOptions, build_path_from_hints, route_edges_unified, snap_path_to_grid,
 };
-use crate::diagram::{RoutingMode, RoutingPolicyToggles};
+use crate::diagram::{EdgeRouting, EdgeRoutingPolicyToggles};
 use crate::graph::Diagram;
 
 /// Route graph geometry to produce fully-routed edge paths.
@@ -19,33 +19,33 @@ use crate::graph::Diagram;
 pub fn route_graph_geometry(
     diagram: &Diagram,
     geometry: &GraphGeometry,
-    routing_mode: RoutingMode,
+    edge_routing: EdgeRouting,
 ) -> RoutedGraphGeometry {
-    route_graph_geometry_with_policies(diagram, geometry, routing_mode, RoutingPolicyToggles)
+    route_graph_geometry_with_policies(diagram, geometry, edge_routing, EdgeRoutingPolicyToggles)
 }
 
 /// Route graph geometry with explicit policy toggles.
 pub fn route_graph_geometry_with_policies(
     diagram: &Diagram,
     geometry: &GraphGeometry,
-    routing_mode: RoutingMode,
-    _routing_policies: RoutingPolicyToggles,
+    edge_routing: EdgeRouting,
+    _edge_routing_policies: EdgeRoutingPolicyToggles,
 ) -> RoutedGraphGeometry {
-    let edges: Vec<RoutedEdgeGeometry> = match routing_mode {
-        RoutingMode::UnifiedPreview => {
+    let edges: Vec<RoutedEdgeGeometry> = match edge_routing {
+        EdgeRouting::UnifiedPreview => {
             route_edges_unified(diagram, geometry, UnifiedRoutingOptions::preview())
         }
-        RoutingMode::PassThroughClip | RoutingMode::FullCompute => geometry
+        EdgeRouting::PassThroughClip | EdgeRouting::FullCompute => geometry
             .edges
             .iter()
             .map(|edge| {
-                let path = match routing_mode {
-                    RoutingMode::PassThroughClip => edge
+                let path = match edge_routing {
+                    EdgeRouting::PassThroughClip => edge
                         .layout_path_hint
                         .clone()
                         .unwrap_or_else(|| build_path_from_hints(edge, geometry)),
-                    RoutingMode::FullCompute => build_path_from_hints(edge, geometry),
-                    RoutingMode::UnifiedPreview => unreachable!(),
+                    EdgeRouting::FullCompute => build_path_from_hints(edge, geometry),
+                    EdgeRouting::UnifiedPreview => unreachable!(),
                 };
                 let is_backward = geometry.reversed_edges.contains(&edge.index);
                 RoutedEdgeGeometry {
@@ -95,7 +95,7 @@ mod tests {
     use std::collections::HashMap;
 
     use super::*;
-    use crate::diagram::RoutingMode;
+    use crate::diagram::EdgeRouting;
 
     fn simple_geometry() -> (Diagram, GraphGeometry) {
         let mut diagram = Diagram::new(crate::graph::Direction::TopDown);
@@ -154,7 +154,7 @@ mod tests {
     #[test]
     fn full_compute_produces_routed_edges() {
         let (diagram, geom) = simple_geometry();
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
 
         assert_eq!(routed.nodes.len(), 2);
         assert_eq!(routed.edges.len(), 1);
@@ -165,7 +165,7 @@ mod tests {
     #[test]
     fn pass_through_uses_layout_path_hints() {
         let (diagram, geom) = simple_geometry();
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::PassThroughClip);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PassThroughClip);
 
         let edge = &routed.edges[0];
         assert_eq!(edge.path.len(), 2);
@@ -189,7 +189,7 @@ mod tests {
             ],
         });
 
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
         assert_eq!(routed.self_edges.len(), 1);
         assert_eq!(routed.self_edges[0].path.len(), 4);
         assert_eq!(routed.self_edges[0].node_id, "A");
@@ -200,7 +200,7 @@ mod tests {
         let (diagram, mut geom) = simple_geometry();
         geom.reversed_edges = vec![0];
 
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
         assert!(routed.edges[0].is_backward);
     }
 
@@ -211,7 +211,7 @@ mod tests {
         geom.edges[0].layout_path_hint = None;
         geom.edges[0].waypoints = vec![FPoint::new(50.0, 50.0)];
 
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
         let path = &routed.edges[0].path;
         // Should be: A center → waypoint → B center
         assert_eq!(path.len(), 3);
@@ -228,7 +228,7 @@ mod tests {
         let (diagram, mut geom) = simple_geometry();
         geom.edges[0].label_position = Some(FPoint::new(55.0, 50.0));
 
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
         let lp = routed.edges[0].label_position.unwrap();
         assert_eq!(lp.x, 55.0);
         assert_eq!(lp.y, 50.0);
@@ -247,7 +247,7 @@ mod tests {
             },
         );
 
-        let routed = route_graph_geometry(&diagram, &geom, RoutingMode::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
         assert_eq!(routed.nodes.len(), 2);
         assert_eq!(routed.subgraphs.len(), 1);
         assert_eq!(routed.subgraphs["sg1"].title, "Group");

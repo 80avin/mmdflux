@@ -2,12 +2,12 @@
 # Usage: scripts/view [file.mmd] [-- extra cargo run args...]
 #        cat file.mmd | scripts/view [-- extra cargo run args...]
 #
-# Defaults: -f svg --routing-mode unified-preview --svg-edge-path-style orthogonal
+# Defaults: -f svg --edge-routing unified-preview --edge-style orthogonal
 # Override any default by passing it explicitly after --
 #
 # Examples:
 #   scripts/view tests/fixtures/flowchart/simple.mmd
-#   scripts/view tests/fixtures/flowchart/simple.mmd -- --svg-edge-path-style basis
+#   scripts/view tests/fixtures/flowchart/simple.mmd -- --edge-style basis
 #   cat file.mmd | scripts/view
 
 set -euo pipefail
@@ -53,7 +53,7 @@ if (( lum < 128 )); then
 fi
 
 # Default mmdflux flags (can be overridden by passing them explicitly)
-MMDFLUX_DEFAULTS=(-f svg --routing-mode unified-preview --svg-edge-path-style orthogonal)
+MMDFLUX_DEFAULTS=(-f svg --edge-routing unified-preview --edge-style orthogonal)
 
 # Split args: optional file, then optional -- extra-flags
 FILE=""

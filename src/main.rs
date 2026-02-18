@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use clap::{Parser, ValueEnum};
 use mmdflux::dagre::Ranker;
 use mmdflux::diagram::{
-    GeometryLevel, LayoutConfig, LayoutEngineId, OutputFormat, PathDetail, RenderConfig,
-    RoutingMode, RoutingPolicyToggles, SvgEdgePathStyle,
+    EdgeRouting, EdgeRoutingPolicyToggles, EdgeStyle, GeometryLevel, LayoutConfig, LayoutEngineId,
+    OutputFormat, PathDetail, RenderConfig,
 };
 use mmdflux::registry::default_registry;
 
@@ -77,14 +77,14 @@ struct Cli {
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
 
-    /// SVG edge path style (basis, linear, rounded, or orthogonal)
+    /// SVG edge style (basis, linear, rounded, or orthogonal)
     #[arg(long, value_enum)]
-    svg_edge_path_style: Option<EdgePathStyleArg>,
+    edge_style: Option<EdgeStyleArg>,
 
-    /// SVG edge path radius (px) for rounded corners.
+    /// SVG edge radius (px) for rounded corners.
     /// Clamped to half the shortest adjacent segment length.
     #[arg(long)]
-    svg_edge_path_radius: Option<f64>,
+    edge_radius: Option<f64>,
 
     /// SVG diagram padding (px)
     #[arg(long)]
@@ -103,9 +103,9 @@ struct Cli {
     #[arg(long, value_enum)]
     path_detail: Option<PathDetailArg>,
 
-    /// Routing mode override for routed-geometry preview.
+    /// Edge routing override for routed-geometry preview.
     #[arg(long, value_enum)]
-    routing_mode: Option<RoutingModeArg>,
+    edge_routing: Option<EdgeRoutingArg>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -151,20 +151,20 @@ impl From<RankerArg> for Ranker {
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
-enum EdgePathStyleArg {
+enum EdgeStyleArg {
     Basis,
     Linear,
     Rounded,
     Orthogonal,
 }
 
-impl From<EdgePathStyleArg> for SvgEdgePathStyle {
-    fn from(arg: EdgePathStyleArg) -> Self {
+impl From<EdgeStyleArg> for EdgeStyle {
+    fn from(arg: EdgeStyleArg) -> Self {
         match arg {
-            EdgePathStyleArg::Basis => SvgEdgePathStyle::Basis,
-            EdgePathStyleArg::Linear => SvgEdgePathStyle::Linear,
-            EdgePathStyleArg::Rounded => SvgEdgePathStyle::Rounded,
-            EdgePathStyleArg::Orthogonal => SvgEdgePathStyle::Orthogonal,
+            EdgeStyleArg::Basis => EdgeStyle::Basis,
+            EdgeStyleArg::Linear => EdgeStyle::Linear,
+            EdgeStyleArg::Rounded => EdgeStyle::Rounded,
+            EdgeStyleArg::Orthogonal => EdgeStyle::Orthogonal,
         }
     }
 }
@@ -210,18 +210,18 @@ impl From<PathDetailArg> for PathDetail {
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
-enum RoutingModeArg {
+enum EdgeRoutingArg {
     FullCompute,
     PassThroughClip,
     UnifiedPreview,
 }
 
-impl From<RoutingModeArg> for RoutingMode {
-    fn from(arg: RoutingModeArg) -> Self {
+impl From<EdgeRoutingArg> for EdgeRouting {
+    fn from(arg: EdgeRoutingArg) -> Self {
         match arg {
-            RoutingModeArg::FullCompute => RoutingMode::FullCompute,
-            RoutingModeArg::PassThroughClip => RoutingMode::PassThroughClip,
-            RoutingModeArg::UnifiedPreview => RoutingMode::UnifiedPreview,
+            EdgeRoutingArg::FullCompute => EdgeRouting::FullCompute,
+            EdgeRoutingArg::PassThroughClip => EdgeRouting::PassThroughClip,
+            EdgeRoutingArg::UnifiedPreview => EdgeRouting::UnifiedPreview,
         }
     }
 }
@@ -274,18 +274,18 @@ fn main() -> io::Result<()> {
         None => None,
     };
 
-    let default_routing_mode = if cli.routing_mode.is_none()
+    let default_edge_routing = if cli.edge_routing.is_none()
         && matches!(
             layout_engine.unwrap_or(LayoutEngineId::Dagre),
             LayoutEngineId::Dagre
         ) {
-        Some(RoutingMode::UnifiedPreview)
+        Some(EdgeRouting::UnifiedPreview)
     } else {
         None
     };
 
     let config = RenderConfig {
-        routing_policies: RoutingPolicyToggles,
+        edge_routing_policies: EdgeRoutingPolicyToggles,
         layout: LayoutConfig {
             node_sep: cli.node_spacing.unwrap_or(50.0),
             edge_sep: cli.edge_spacing.unwrap_or(20.0),
@@ -300,13 +300,13 @@ fn main() -> io::Result<()> {
         svg_scale: cli.svg_scale,
         svg_node_padding_x: cli.svg_node_padding_x,
         svg_node_padding_y: cli.svg_node_padding_y,
-        svg_edge_path_style: cli.svg_edge_path_style.map(Into::into),
-        svg_edge_path_radius: cli.svg_edge_path_radius,
+        edge_style: cli.edge_style.map(Into::into),
+        edge_radius: cli.edge_radius,
         svg_diagram_padding: cli.svg_diagram_padding,
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),
         path_detail: cli.path_detail.map(Into::into).unwrap_or_default(),
-        routing_mode: cli.routing_mode.map(Into::into).or(default_routing_mode),
+        edge_routing: cli.edge_routing.map(Into::into).or(default_edge_routing),
     };
 
     // Use registry for detection and rendering

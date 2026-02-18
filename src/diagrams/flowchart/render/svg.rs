@@ -16,7 +16,7 @@ use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use super::unified_router::{UnifiedRoutingOptions, route_edges_unified};
 use crate::dagre::{LayoutResult, Point, Rect};
-use crate::diagram::{PathDetail, RoutingMode, SvgEdgePathStyle};
+use crate::diagram::{EdgeRouting, EdgeStyle, PathDetail};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 use crate::render::{RenderOptions, layout_config_for_diagram};
 
@@ -136,25 +136,25 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
     // From this point on, rendering reads from `geom` instead of `layout`.
     let geom = geometry::from_dagre_layout(&layout, diagram);
-    let geom = if options.routing_mode == Some(RoutingMode::UnifiedPreview) {
+    let geom = if options.edge_routing == Some(EdgeRouting::UnifiedPreview) {
         inject_unified_preview_paths(diagram, &geom)
     } else {
         geom
     };
-    if options.routing_mode == Some(RoutingMode::UnifiedPreview) {
+    if options.edge_routing == Some(EdgeRouting::UnifiedPreview) {
         rerouted_edges.extend(geom.edges.iter().map(|edge| edge.index));
     }
 
     let override_nodes = svg_router::build_override_node_map(diagram);
 
-    let routing_mode = options.routing_mode.unwrap_or(RoutingMode::FullCompute);
+    let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::FullCompute);
     render_svg_with_geometry_context(
         diagram,
         options,
         &geom,
         &rerouted_edges,
         &override_nodes,
-        routing_mode,
+        edge_routing,
     )
 }
 
@@ -165,10 +165,9 @@ pub fn render_svg_from_geometry(
     diagram: &Diagram,
     options: &RenderOptions,
     geom: &GraphGeometry,
-    routing_mode: RoutingMode,
+    edge_routing: EdgeRouting,
 ) -> String {
-    let rerouted_edges =
-        rerouted_edge_indexes_for_mode(geom, routing_mode, options.svg.edge_path_style);
+    let rerouted_edges = rerouted_edge_indexes_for_mode(geom, edge_routing, options.svg.edge_style);
     let override_nodes = svg_router::build_override_node_map(diagram);
     render_svg_with_geometry_context(
         diagram,
@@ -176,26 +175,26 @@ pub fn render_svg_from_geometry(
         geom,
         &rerouted_edges,
         &override_nodes,
-        routing_mode,
+        edge_routing,
     )
 }
 
 fn rerouted_edge_indexes_for_mode(
     geom: &GraphGeometry,
-    routing_mode: RoutingMode,
-    edge_path_style: SvgEdgePathStyle,
+    edge_routing: EdgeRouting,
+    edge_style: EdgeStyle,
 ) -> HashSet<usize> {
-    match routing_mode {
+    match edge_routing {
         // Pass-through paths are already positioned by the layout engine
         // and should not receive extra shape clipping.
-        RoutingMode::PassThroughClip => geom.edges.iter().map(|e| e.index).collect(),
+        EdgeRouting::PassThroughClip => geom.edges.iter().map(|e| e.index).collect(),
         // Unified preview routes already encode endpoint intent and should not
         // be shape-adjusted again in SVG (all path styles).
-        RoutingMode::UnifiedPreview => {
-            let _ = edge_path_style;
+        EdgeRouting::UnifiedPreview => {
+            let _ = edge_style;
             geom.edges.iter().map(|e| e.index).collect()
         }
-        RoutingMode::FullCompute => HashSet::new(),
+        EdgeRouting::FullCompute => HashSet::new(),
     }
 }
 
@@ -217,7 +216,7 @@ fn render_svg_with_geometry_context(
     geom: &GraphGeometry,
     rerouted_edges: &HashSet<usize>,
     override_nodes: &HashMap<String, String>,
-    routing_mode: RoutingMode,
+    edge_routing: EdgeRouting,
 ) -> String {
     let svg_options = &options.svg;
     let scale = svg_options.scale;
@@ -254,9 +253,9 @@ fn render_svg_with_geometry_context(
         override_nodes,
         &self_edge_paths,
         rerouted_edges,
-        routing_mode,
-        svg_options.edge_path_style,
-        svg_options.edge_path_radius,
+        edge_routing,
+        svg_options.edge_style,
+        svg_options.edge_radius,
         scale,
         options.path_detail,
     );
@@ -799,9 +798,9 @@ fn render_edges(
     override_nodes: &HashMap<String, String>,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     rerouted_edges: &std::collections::HashSet<usize>,
-    routing_mode: RoutingMode,
-    edge_path_style: SvgEdgePathStyle,
-    edge_path_radius: f64,
+    edge_routing: EdgeRouting,
+    edge_style: EdgeStyle,
+    edge_radius: f64,
     scale: f64,
     path_detail: PathDetail,
 ) -> HashMap<usize, Vec<Point>> {
@@ -836,7 +835,7 @@ fn render_edges(
             continue;
         }
         let mut points = points;
-        let edge_direction = if matches!(routing_mode, RoutingMode::UnifiedPreview) {
+        let edge_direction = if matches!(edge_routing, EdgeRouting::UnifiedPreview) {
             unified_preview_edge_direction(
                 diagram,
                 &geom.node_directions,
@@ -849,14 +848,14 @@ fn render_edges(
             diagram.direction
         };
         let is_backward = geom.reversed_edges.contains(&index);
-        let rounded_uses_orthogonal_geometry = matches!(edge_path_style, SvgEdgePathStyle::Rounded);
+        let rounded_uses_orthogonal_geometry = matches!(edge_style, EdgeStyle::Rounded);
         let preserve_orthogonal_endpoint_contract = rounded_uses_orthogonal_geometry
             || matches!(
-                (routing_mode, is_backward, edge_path_style),
+                (edge_routing, is_backward, edge_style),
                 (
-                    RoutingMode::UnifiedPreview,
+                    EdgeRouting::UnifiedPreview,
                     true,
-                    SvgEdgePathStyle::Basis | SvgEdgePathStyle::Linear | SvgEdgePathStyle::Rounded
+                    EdgeStyle::Basis | EdgeStyle::Linear | EdgeStyle::Rounded
                 )
             );
         // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
@@ -878,9 +877,9 @@ fn render_edges(
         // reclip when endpoints detach from expected faces or use non-rect
         // shapes (diamond/hexagon).
         let rerouted = rerouted_edges.contains(&index);
-        let should_adjust = !matches!(routing_mode, RoutingMode::PassThroughClip)
+        let should_adjust = !matches!(edge_routing, EdgeRouting::PassThroughClip)
             && (!rerouted
-                || (matches!(routing_mode, RoutingMode::UnifiedPreview)
+                || (matches!(edge_routing, EdgeRouting::UnifiedPreview)
                     && should_adjust_rerouted_edge_endpoints(
                         diagram,
                         geom,
@@ -896,21 +895,19 @@ fn render_edges(
                 &points,
                 edge_direction,
                 is_backward,
-                routing_mode,
+                edge_routing,
             )
         } else {
             points
         };
         // Only densify corners for linear edges; basis and rounded
         // handle smoothing natively from sparse waypoints.
-        if matches!(edge_path_style, SvgEdgePathStyle::Linear)
-            && !preserve_orthogonal_endpoint_contract
-        {
+        if matches!(edge_style, EdgeStyle::Linear) && !preserve_orthogonal_endpoint_contract {
             points = fix_corner_points(&points);
         }
         if matches!(
-            (routing_mode, edge_path_style),
-            (RoutingMode::UnifiedPreview, SvgEdgePathStyle::Basis)
+            (edge_routing, edge_style),
+            (EdgeRouting::UnifiedPreview, EdgeStyle::Basis)
         ) && !is_backward
             && edge.from != edge.to
         {
@@ -922,12 +919,9 @@ fn render_edges(
                 0.5,
             );
         }
-        let allow_interior_nudges = !matches!(edge_path_style, SvgEdgePathStyle::Linear);
-        let enforce_primary_axis_no_backtrack = matches!(routing_mode, RoutingMode::UnifiedPreview)
-            && !matches!(
-                edge_path_style,
-                SvgEdgePathStyle::Orthogonal | SvgEdgePathStyle::Rounded
-            )
+        let allow_interior_nudges = !matches!(edge_style, EdgeStyle::Linear);
+        let enforce_primary_axis_no_backtrack = matches!(edge_routing, EdgeRouting::UnifiedPreview)
+            && !matches!(edge_style, EdgeStyle::Orthogonal | EdgeStyle::Rounded)
             && !is_backward
             && edge.from != edge.to;
         points = apply_marker_offsets(
@@ -938,34 +932,30 @@ fn render_edges(
                 is_backward,
                 allow_interior_nudges,
                 enforce_primary_axis_no_backtrack,
-                preserve_orthogonal: matches!(edge_path_style, SvgEdgePathStyle::Orthogonal)
+                preserve_orthogonal: matches!(edge_style, EdgeStyle::Orthogonal)
                     || preserve_orthogonal_endpoint_contract,
-                collapse_terminal_elbows: !matches!(edge_path_style, SvgEdgePathStyle::Basis),
-                is_basis_style: matches!(edge_path_style, SvgEdgePathStyle::Basis),
+                collapse_terminal_elbows: !matches!(edge_style, EdgeStyle::Basis),
+                is_basis_style: matches!(edge_style, EdgeStyle::Basis),
             },
         );
         // Collapse tiny near-collinear jogs introduced by SVG marker offset
         // smoothing on unified-preview paths.
-        if matches!(routing_mode, RoutingMode::UnifiedPreview)
-            && !matches!(
-                edge_path_style,
-                SvgEdgePathStyle::Orthogonal | SvgEdgePathStyle::Rounded
-            )
-            && !matches!(edge_path_style, SvgEdgePathStyle::Basis)
+        if matches!(edge_routing, EdgeRouting::UnifiedPreview)
+            && !matches!(edge_style, EdgeStyle::Orthogonal | EdgeStyle::Rounded)
+            && !matches!(edge_style, EdgeStyle::Basis)
             && !preserve_orthogonal_endpoint_contract
             && edge.from != edge.to
         {
             points = collapse_tiny_linear_smoothing_jogs(&points, 30.0);
         }
         let point_prep_style = if preserve_orthogonal_endpoint_contract {
-            SvgEdgePathStyle::Orthogonal
+            EdgeStyle::Orthogonal
         } else {
-            edge_path_style
+            edge_style
         };
         let rendered_points =
             points_for_svg_path(&points, diagram.direction, point_prep_style, path_detail);
-        let d =
-            path_from_prepared_points(&rendered_points, scale, edge_path_style, edge_path_radius);
+        let d = path_from_prepared_points(&rendered_points, scale, edge_style, edge_radius);
         if d.is_empty() {
             continue;
         }
@@ -2309,16 +2299,13 @@ fn edge_marker_attrs(edge: &Edge) -> String {
 fn points_for_svg_path(
     points: &[Point],
     direction: Direction,
-    curve: SvgEdgePathStyle,
+    curve: EdgeStyle,
     path_detail: PathDetail,
 ) -> Vec<Point> {
     if points.is_empty() {
         return Vec::new();
     }
-    let orthogonalized_curve = matches!(
-        curve,
-        SvgEdgePathStyle::Orthogonal | SvgEdgePathStyle::Rounded
-    );
+    let orthogonalized_curve = matches!(curve, EdgeStyle::Orthogonal | EdgeStyle::Rounded);
     let points: Vec<Point> = if orthogonalized_curve && !points_are_axis_aligned(points) {
         let start: geometry::FPoint = points[0].into();
         let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
@@ -2357,7 +2344,7 @@ fn points_for_svg_path(
 fn path_from_prepared_points(
     points: &[Point],
     scale: f64,
-    curve: SvgEdgePathStyle,
+    curve: EdgeStyle,
     curve_radius: f64,
 ) -> String {
     if points.is_empty() {
@@ -2368,10 +2355,10 @@ fn path_from_prepared_points(
         .map(|point| (point.x * scale, point.y * scale))
         .collect();
     match curve {
-        SvgEdgePathStyle::Basis => path_from_points_basis(&scaled),
-        SvgEdgePathStyle::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
-        SvgEdgePathStyle::Linear => path_from_points_linear(&scaled),
-        SvgEdgePathStyle::Orthogonal => path_from_points_linear(&scaled),
+        EdgeStyle::Basis => path_from_points_basis(&scaled),
+        EdgeStyle::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
+        EdgeStyle::Linear => path_from_points_linear(&scaled),
+        EdgeStyle::Orthogonal => path_from_points_linear(&scaled),
     }
 }
 
@@ -2685,7 +2672,7 @@ fn adjust_edge_points_for_shapes(
     points: &[Point],
     direction: Direction,
     is_backward: bool,
-    routing_mode: RoutingMode,
+    edge_routing: EdgeRouting,
 ) -> Vec<Point> {
     const EPS: f64 = 0.5;
     if points.len() < 2 {
@@ -2705,11 +2692,11 @@ fn adjust_edge_points_for_shapes(
     // not be re-projected (different approach angles would shift them).
     // In full-compute mode dagre only clips to the bounding rect, so non-rect
     // shapes always need re-projection to the actual shape boundary.
-    let router_placed_source = matches!(routing_mode, RoutingMode::UnifiedPreview)
+    let router_placed_source = matches!(edge_routing, EdgeRouting::UnifiedPreview)
         && !is_self_loop
         && !is_backward
         && matches!(from_shape, Shape::Diamond | Shape::Hexagon);
-    let router_placed_target = matches!(routing_mode, RoutingMode::UnifiedPreview)
+    let router_placed_target = matches!(edge_routing, EdgeRouting::UnifiedPreview)
         && !is_self_loop
         && !is_backward
         && matches!(to_shape, Shape::Diamond | Shape::Hexagon);

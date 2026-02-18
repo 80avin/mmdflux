@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use mmdflux::diagram::{
-    OutputFormat, PathDetail, RenderConfig, RoutingMode, RoutingPolicyToggles, SvgEdgePathStyle,
+    EdgeRouting, EdgeRoutingPolicyToggles, EdgeStyle, OutputFormat, PathDetail, RenderConfig,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::mmds::from_mmds_str;
@@ -107,37 +107,37 @@ fn render_svg_fixture(name: &str) -> String {
     render_svg(&diagram, &options)
 }
 
-fn render_svg_fixture_with_curve(name: &str, curve: SvgEdgePathStyle) -> String {
+fn render_svg_fixture_with_curve(name: &str, curve: EdgeStyle) -> String {
     let input = load_fixture(name);
     let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
     let diagram = build_diagram(&flowchart);
     let mut options = RenderOptions::default_svg();
-    options.svg.edge_path_style = curve;
+    options.svg.edge_style = curve;
     options.path_detail = PathDetail::Full;
     render_svg(&diagram, &options)
 }
 
-fn render_svg_fixture_with_routing_mode(name: &str, mode: RoutingMode) -> String {
-    render_svg_fixture_with_routing_mode_and_policies(
+fn render_svg_fixture_with_edge_routing(name: &str, mode: EdgeRouting) -> String {
+    render_svg_fixture_with_edge_routing_and_policies(
         name,
         mode,
-        RoutingPolicyToggles::all_enabled(),
+        EdgeRoutingPolicyToggles::all_enabled(),
     )
 }
 
-fn render_svg_fixture_with_routing_mode_and_policies(
+fn render_svg_fixture_with_edge_routing_and_policies(
     name: &str,
-    mode: RoutingMode,
-    policies: RoutingPolicyToggles,
+    mode: EdgeRouting,
+    policies: EdgeRoutingPolicyToggles,
 ) -> String {
     let input = load_fixture(name);
     let mut instance = FlowchartInstance::new();
     instance.parse(&input).expect("Failed to parse fixture");
     let config = RenderConfig {
-        svg_edge_path_style: Some(SvgEdgePathStyle::Linear),
+        edge_style: Some(EdgeStyle::Linear),
         path_detail: PathDetail::Full,
-        routing_mode: Some(mode),
-        routing_policies: policies,
+        edge_routing: Some(mode),
+        edge_routing_policies: policies,
         ..RenderConfig::default()
     };
     instance
@@ -147,8 +147,8 @@ fn render_svg_fixture_with_routing_mode_and_policies(
 
 fn render_svg_fixture_full_vs_unified(name: &str) -> (String, String) {
     (
-        render_svg_fixture_with_routing_mode(name, RoutingMode::FullCompute),
-        render_svg_fixture_with_routing_mode(name, RoutingMode::UnifiedPreview),
+        render_svg_fixture_with_edge_routing(name, EdgeRouting::FullCompute),
+        render_svg_fixture_with_edge_routing(name, EdgeRouting::UnifiedPreview),
     )
 }
 
@@ -283,7 +283,7 @@ fn assert_snapshot(fixture: &str) {
 
 fn assert_orthogonal_snapshot(fixture: &str) {
     let stem = fixture.trim_end_matches(".mmd");
-    let output = render_svg_fixture_with_curve(fixture, SvgEdgePathStyle::Orthogonal);
+    let output = render_svg_fixture_with_curve(fixture, EdgeStyle::Orthogonal);
     let path = orthogonal_snapshot_path(stem);
 
     if std::env::var("GENERATE_SVG_SNAPSHOTS").is_ok() {
@@ -420,8 +420,8 @@ fn svg_unified_preview_parity_fixture_subset_matches_expected_classification() {
 #[test]
 fn unified_preview_svg_output_is_deterministic_for_fixture_subset() {
     for fixture in UNIFIED_PARITY_FIXTURE_SUBSET {
-        let first = render_svg_fixture_with_routing_mode(fixture, RoutingMode::UnifiedPreview);
-        let second = render_svg_fixture_with_routing_mode(fixture, RoutingMode::UnifiedPreview);
+        let first = render_svg_fixture_with_edge_routing(fixture, EdgeRouting::UnifiedPreview);
+        let second = render_svg_fixture_with_edge_routing(fixture, EdgeRouting::UnifiedPreview);
         assert_eq!(
             second, first,
             "unified-preview SVG output is nondeterministic for fixture {fixture}"
@@ -432,8 +432,8 @@ fn unified_preview_svg_output_is_deterministic_for_fixture_subset() {
 #[test]
 fn svg_full_compute_override_matches_legacy_linear_core_subset() {
     for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
-        let legacy = render_svg_fixture_with_curve(fixture, SvgEdgePathStyle::Linear);
-        let full_compute = render_svg_fixture_with_routing_mode(fixture, RoutingMode::FullCompute);
+        let legacy = render_svg_fixture_with_curve(fixture, EdgeStyle::Linear);
+        let full_compute = render_svg_fixture_with_edge_routing(fixture, EdgeRouting::FullCompute);
         assert_eq!(
             full_compute, legacy,
             "full-compute override should preserve legacy SVG for fixture {fixture}"
@@ -444,15 +444,15 @@ fn svg_full_compute_override_matches_legacy_linear_core_subset() {
 #[test]
 fn svg_full_compute_rollback_is_stable_across_repeated_renders() {
     for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
-        let baseline = render_svg_fixture_with_routing_mode_and_policies(
+        let baseline = render_svg_fixture_with_edge_routing_and_policies(
             fixture,
-            RoutingMode::FullCompute,
-            RoutingPolicyToggles::all_enabled(),
+            EdgeRouting::FullCompute,
+            EdgeRoutingPolicyToggles::all_enabled(),
         );
-        let output = render_svg_fixture_with_routing_mode_and_policies(
+        let output = render_svg_fixture_with_edge_routing_and_policies(
             fixture,
-            RoutingMode::FullCompute,
-            RoutingPolicyToggles::all_enabled(),
+            EdgeRouting::FullCompute,
+            EdgeRoutingPolicyToggles::all_enabled(),
         );
         assert_eq!(
             output, baseline,
@@ -463,13 +463,13 @@ fn svg_full_compute_rollback_is_stable_across_repeated_renders() {
 
 #[test]
 fn svg_unified_preview_preserves_subgraph_vertical_order_on_multi_override_fixture() {
-    let legacy = render_svg_fixture_with_routing_mode(
+    let legacy = render_svg_fixture_with_edge_routing(
         "multi_subgraph_direction_override.mmd",
-        RoutingMode::FullCompute,
+        EdgeRouting::FullCompute,
     );
-    let unified = render_svg_fixture_with_routing_mode(
+    let unified = render_svg_fixture_with_edge_routing(
         "multi_subgraph_direction_override.mmd",
-        RoutingMode::UnifiedPreview,
+        EdgeRouting::UnifiedPreview,
     );
 
     let legacy_ys = subgraph_rect_ys(&legacy);
@@ -620,7 +620,7 @@ fn promotion_record_has_rollback_validation() {
 
     let required_markers = [
         "### Rollback Playbook (Task 5.1)",
-        "--routing-mode full-compute",
+        "--edge-routing full-compute",
         "./scripts/tests/07-plan-0076-unified-routing-quality-qa.sh",
     ];
 
