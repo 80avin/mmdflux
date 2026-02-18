@@ -126,6 +126,10 @@
         "bounds": {
           "$ref": "#/$defs/Bounds",
           "description": "Overall diagram canvas extents in MMDS layout space. Not guaranteed to be a tight content bounding box."
+        },
+        "engine": {
+          "type": "string",
+          "description": "Engine+algorithm identifier that produced this output (e.g., 'flux-layered', 'mermaid-layered'). Present when the output was produced via the solve pipeline."
         }
       }
     },

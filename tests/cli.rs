@@ -760,3 +760,20 @@ fn cli_mermaid_format_errors_for_non_mmds_input() {
         .failure()
         .stderr(predicate::str::contains("do not support mermaid"));
 }
+
+// --- Task 4.5: MMDS engine metadata ---
+
+#[test]
+fn cli_mmds_routed_default_engine_is_flux_layered() {
+    mmdflux()
+        .args([
+            "--format",
+            "mmds",
+            "--geometry-level",
+            "routed",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"engine\": \"flux-layered\""));
+}

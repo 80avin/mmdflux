@@ -175,6 +175,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | `metadata.diagram_type` | string | `"flowchart"` or `"class"` |
 | `metadata.direction` | string | `"TD"`, `"BT"`, `"LR"`, or `"RL"` |
 | `metadata.bounds` | object | Overall diagram canvas extents (`width`, `height`) in MMDS layout space |
+| `metadata.engine` | string? | Engine+algorithm that produced this output (e.g., `"flux-layered"`). Omitted when not produced via the solve pipeline. |
 | `subgraphs` | array | Subgraph inventory (omitted when empty) |
 
 ## Profiles and Extensions Governance

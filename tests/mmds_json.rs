@@ -785,3 +785,41 @@ fn docs_reference_initial_profile_set() {
     assert!(docs.contains("mmdflux-svg-v1"));
     assert!(docs.contains("mmdflux-text-v1"));
 }
+
+// --- Task 4.5: MMDS engine metadata ---
+
+#[test]
+fn mmds_routed_output_includes_engine_metadata() {
+    let input = "graph TD\nA-->B";
+    let mut instance = FlowchartInstance::new();
+    instance.parse(input).unwrap();
+
+    let config = RenderConfig {
+        geometry_level: GeometryLevel::Routed,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+    assert_eq!(json["metadata"]["engine"], "flux-layered");
+}
+
+#[test]
+fn mmds_layout_output_omits_edge_paths_regardless_of_engine() {
+    let input = "graph TD\nA-->B";
+    let mut instance = FlowchartInstance::new();
+    instance.parse(input).unwrap();
+
+    let config = RenderConfig {
+        geometry_level: GeometryLevel::Layout,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+    // Layout level should not have edge paths
+    assert!(
+        json["edges"][0]["path"].is_null()
+            || !json["edges"][0].as_object().unwrap().contains_key("path")
+    );
+}

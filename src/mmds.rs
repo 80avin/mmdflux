@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::diagram::{GeometryLevel, PathDetail, RenderError};
+use crate::diagram::{EngineAlgorithmId, GeometryLevel, PathDetail, RenderError};
 use crate::diagrams::flowchart::geometry::{GraphGeometry, PositionedNode, RoutedGraphGeometry};
 use crate::graph::{Arrow, Diagram, Direction, Shape, Stroke};
 
@@ -33,7 +33,14 @@ pub fn to_mmds_layout_typed(
     diagram: &Diagram,
     geometry: &GraphGeometry,
 ) -> String {
-    let output = build_mmds_output(diagram_type, diagram, geometry, None, PathDetail::Full);
+    let output = build_mmds_output(
+        diagram_type,
+        diagram,
+        geometry,
+        None,
+        PathDetail::Full,
+        None,
+    );
     serialize_mmds_output(&output)
 }
 
@@ -62,6 +69,7 @@ pub fn to_mmds_routed_typed(
         geometry,
         Some(routed),
         PathDetail::Full,
+        None,
     );
     serialize_mmds_output(&output)
 }
@@ -73,8 +81,17 @@ pub fn to_mmds_json(
     routed: Option<&RoutedGraphGeometry>,
     level: GeometryLevel,
     path_detail: PathDetail,
+    engine_id: Option<EngineAlgorithmId>,
 ) -> Result<String, RenderError> {
-    to_mmds_json_typed("flowchart", diagram, geometry, routed, level, path_detail)
+    to_mmds_json_typed(
+        "flowchart",
+        diagram,
+        geometry,
+        routed,
+        level,
+        path_detail,
+        engine_id,
+    )
 }
 
 /// Serialize a diagram to MMDS JSON at the specified geometry level with explicit type.
@@ -85,16 +102,30 @@ pub fn to_mmds_json_typed(
     routed: Option<&RoutedGraphGeometry>,
     level: GeometryLevel,
     path_detail: PathDetail,
+    engine_id: Option<EngineAlgorithmId>,
 ) -> Result<String, RenderError> {
     match level {
         GeometryLevel::Layout => {
-            let output = build_mmds_output(diagram_type, diagram, geometry, None, path_detail);
+            let output = build_mmds_output(
+                diagram_type,
+                diagram,
+                geometry,
+                None,
+                path_detail,
+                engine_id,
+            );
             Ok(serialize_mmds_output(&output))
         }
         GeometryLevel::Routed => {
             if let Some(routed) = routed {
-                let output =
-                    build_mmds_output(diagram_type, diagram, geometry, Some(routed), path_detail);
+                let output = build_mmds_output(
+                    diagram_type,
+                    diagram,
+                    geometry,
+                    Some(routed),
+                    path_detail,
+                    engine_id,
+                );
                 Ok(serialize_mmds_output(&output))
             } else {
                 Err(RenderError {
@@ -116,6 +147,7 @@ fn build_mmds_output(
     geometry: &GraphGeometry,
     routed: Option<&RoutedGraphGeometry>,
     path_detail: PathDetail,
+    engine_id: Option<EngineAlgorithmId>,
 ) -> MmdsOutput {
     let level = if routed.is_some() { "routed" } else { "layout" };
 
@@ -126,6 +158,7 @@ fn build_mmds_output(
             width: geometry.bounds.width,
             height: geometry.bounds.height,
         },
+        engine: engine_id.map(|id| id.to_string()),
     };
 
     // Build nodes from geometry (float positions)
@@ -386,6 +419,10 @@ pub struct MmdsMetadata {
     pub direction: String,
     /// Overall diagram bounds in MMDS layout space.
     pub bounds: MmdsBounds,
+    /// Engine+algorithm identifier that produced this output (e.g., "flux-layered").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub engine: Option<String>,
 }
 
 /// Bounding box dimensions.
@@ -651,6 +688,7 @@ mod tests {
             None,
             GeometryLevel::Layout,
             PathDetail::Full,
+            None,
         )
         .unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
@@ -670,6 +708,7 @@ mod tests {
             None,
             GeometryLevel::Layout,
             PathDetail::Full,
+            None,
         )
         .unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
@@ -688,6 +727,7 @@ mod tests {
             None,
             GeometryLevel::Layout,
             PathDetail::Full,
+            None,
         )
         .unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
@@ -705,6 +745,7 @@ mod tests {
             None,
             GeometryLevel::Layout,
             PathDetail::Full,
+            None,
         )
         .unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
@@ -720,6 +761,7 @@ mod tests {
             None,
             GeometryLevel::Layout,
             PathDetail::Full,
+            None,
         )
         .unwrap();
         let output: MmdsOutput = serde_json::from_str(&json).unwrap();
@@ -835,6 +877,7 @@ mod tests {
             Some(&routed),
             GeometryLevel::Layout,
             PathDetail::Full,
+            None,
         )
         .unwrap();
         assert!(!layout_json.contains("\"path\""));
@@ -845,6 +888,7 @@ mod tests {
             Some(&routed),
             GeometryLevel::Routed,
             PathDetail::Full,
+            None,
         )
         .unwrap();
         assert!(routed_json.contains("\"path\""));
@@ -859,6 +903,7 @@ mod tests {
             None,
             GeometryLevel::Routed,
             PathDetail::Full,
+            None,
         )
         .unwrap_err();
         assert!(err.message.contains("routed MMDS output requested"));

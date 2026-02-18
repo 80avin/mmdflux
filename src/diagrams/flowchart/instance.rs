@@ -81,6 +81,7 @@ impl DiagramInstance for FlowchartInstance {
                     result.routed.as_ref(),
                     config.geometry_level,
                     config.path_detail,
+                    Some(engine_id),
                 )
             }
             // SVG and Text/Ascii: render() handles layout and routing internally.

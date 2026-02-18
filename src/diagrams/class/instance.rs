@@ -74,6 +74,7 @@ impl DiagramInstance for ClassInstance {
                     result.routed.as_ref(),
                     config.geometry_level,
                     config.path_detail,
+                    Some(engine_id),
                 )
             }
             OutputFormat::Svg => {
