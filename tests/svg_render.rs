@@ -2102,6 +2102,44 @@ fn svg_unified_preview_five_fan_in_keeps_e_terminal_not_left_of_d() {
 }
 
 #[test]
+fn svg_basis_unified_preview_five_fan_in_keeps_mirrored_pairs_visually_symmetric() {
+    let diagram = load_flowchart_fixture_diagram("five_fan_in.mmd");
+    let b_edge = edge_index(&diagram, "B", "F");
+    let d_edge = edge_index(&diagram, "D", "F");
+    let a_edge = edge_index(&diagram, "A", "F");
+    let e_edge = edge_index(&diagram, "E", "F");
+
+    let mut options = RenderOptions::default_svg();
+    options.routing_mode = Some(RoutingMode::UnifiedPreview);
+    options.svg.edge_path_style = SvgEdgePathStyle::Basis;
+    options.path_detail = PathDetail::Full;
+    let svg = render_svg(&diagram, &options);
+
+    let b_points = edge_path_for_svg_order(&diagram, &svg, b_edge);
+    let d_points = edge_path_for_svg_order(&diagram, &svg, d_edge);
+    let a_points = edge_path_for_svg_order(&diagram, &svg, a_edge);
+    let e_points = edge_path_for_svg_order(&diagram, &svg, e_edge);
+
+    assert!(
+        b_points.len() >= 2 && d_points.len() >= 2 && a_points.len() >= 2 && e_points.len() >= 2,
+        "basis fan-in edges should each include at least one segment: B={b_points:?} D={d_points:?} A={a_points:?} E={e_points:?}"
+    );
+    let b_prev = b_points[b_points.len() - 2];
+    let d_prev = d_points[d_points.len() - 2];
+    let a_prev = a_points[a_points.len() - 2];
+    let e_prev = e_points[e_points.len() - 2];
+
+    assert!(
+        (b_prev.1 - d_prev.1).abs() <= 1.0,
+        "basis B->Target and D->Target should have mirrored terminal approach depth after fan-in channel collapse: B_prev={b_prev:?}, D_prev={d_prev:?}, B={b_points:?}, D={d_points:?}"
+    );
+    assert!(
+        (a_prev.1 - e_prev.1).abs() <= 1.0,
+        "basis A->Target and E->Target should have mirrored terminal approach depth after fan-in channel collapse: A_prev={a_prev:?}, E_prev={e_prev:?}, A={a_points:?}, E={e_points:?}"
+    );
+}
+
+#[test]
 fn style_segment_monitor_reports_actionable_summary_for_svg() {
     let report =
         style_segment_monitor_report_for_svg(&["edge_styles.mmd", "inline_edge_labels.mmd"], 12.0);

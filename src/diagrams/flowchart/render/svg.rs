@@ -908,6 +908,20 @@ fn render_edges(
         {
             points = fix_corner_points(&points);
         }
+        if matches!(
+            (routing_mode, edge_path_style),
+            (RoutingMode::UnifiedPreview, SvgEdgePathStyle::Basis)
+        ) && !is_backward
+            && edge.from != edge.to
+        {
+            points = collapse_primary_face_fan_channel_for_basis(
+                geom,
+                edge,
+                edge_direction,
+                &points,
+                0.5,
+            );
+        }
         let allow_interior_nudges = !matches!(edge_path_style, SvgEdgePathStyle::Linear);
         let enforce_primary_axis_no_backtrack = matches!(routing_mode, RoutingMode::UnifiedPreview)
             && !matches!(
@@ -989,6 +1003,92 @@ fn segment_axis(start: Point, end: Point) -> Option<SegmentAxis> {
 
 fn segment_manhattan_len(start: Point, end: Point) -> f64 {
     (start.x - end.x).abs() + (start.y - end.y).abs()
+}
+
+fn collapse_primary_face_fan_channel_for_basis(
+    geom: &GraphGeometry,
+    edge: &Edge,
+    direction: Direction,
+    points: &[Point],
+    center_eps: f64,
+) -> Vec<Point> {
+    const MARKER_PULLBACK_TOLERANCE: f64 = 6.0;
+    const MIN_STEM_FOR_COLLAPSE: f64 = 8.0;
+    const MAX_STEM_FOR_COLLAPSE: f64 = 18.0;
+
+    if points.len() != 4 {
+        return points.to_vec();
+    }
+
+    let Some(target_geom) = geom.nodes.get(&edge.to) else {
+        return points.to_vec();
+    };
+    let target_rect: Rect = target_geom.rect.into();
+    let mut out = points.to_vec();
+    match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            let first_vertical = (out[0].x - out[1].x).abs() <= center_eps
+                && (out[0].y - out[1].y).abs() > center_eps;
+            let middle_horizontal = (out[1].y - out[2].y).abs() <= center_eps
+                && (out[1].x - out[2].x).abs() > center_eps;
+            let terminal_vertical = (out[2].x - out[3].x).abs() <= center_eps
+                && (out[2].y - out[3].y).abs() > center_eps;
+            if !(first_vertical && middle_horizontal && terminal_vertical) {
+                return points.to_vec();
+            }
+
+            let has_lateral_offset = (out[0].x - out[3].x).abs() > center_eps;
+            let target_is_primary_face = match direction {
+                Direction::TopDown => out[3].y <= target_rect.y + MARKER_PULLBACK_TOLERANCE,
+                Direction::BottomTop => {
+                    out[3].y >= target_rect.y + target_rect.height - MARKER_PULLBACK_TOLERANCE
+                }
+                _ => false,
+            };
+            if has_lateral_offset && target_is_primary_face {
+                let delta = out[3].y - out[0].y;
+                if delta.abs() > 2.0 * MIN_STEM_FOR_COLLAPSE {
+                    let stem = (delta.abs() * 0.28)
+                        .clamp(MIN_STEM_FOR_COLLAPSE, MAX_STEM_FOR_COLLAPSE);
+                    let dir = if delta >= 0.0 { 1.0 } else { -1.0 };
+                    out[1].y = out[0].y + (dir * stem);
+                    out[2].y = out[3].y - (dir * stem);
+                }
+            }
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            let first_horizontal = (out[0].y - out[1].y).abs() <= center_eps
+                && (out[0].x - out[1].x).abs() > center_eps;
+            let middle_vertical = (out[1].x - out[2].x).abs() <= center_eps
+                && (out[1].y - out[2].y).abs() > center_eps;
+            let terminal_horizontal = (out[2].y - out[3].y).abs() <= center_eps
+                && (out[2].x - out[3].x).abs() > center_eps;
+            if !(first_horizontal && middle_vertical && terminal_horizontal) {
+                return points.to_vec();
+            }
+
+            let has_lateral_offset = (out[0].y - out[3].y).abs() > center_eps;
+            let target_is_primary_face = match direction {
+                Direction::LeftRight => out[3].x <= target_rect.x + MARKER_PULLBACK_TOLERANCE,
+                Direction::RightLeft => {
+                    out[3].x >= target_rect.x + target_rect.width - MARKER_PULLBACK_TOLERANCE
+                }
+                _ => false,
+            };
+            if has_lateral_offset && target_is_primary_face {
+                let delta = out[3].x - out[0].x;
+                if delta.abs() > 2.0 * MIN_STEM_FOR_COLLAPSE {
+                    let stem = (delta.abs() * 0.28)
+                        .clamp(MIN_STEM_FOR_COLLAPSE, MAX_STEM_FOR_COLLAPSE);
+                    let dir = if delta >= 0.0 { 1.0 } else { -1.0 };
+                    out[1].x = out[0].x + (dir * stem);
+                    out[2].x = out[3].x - (dir * stem);
+                }
+            }
+        }
+    }
+
+    out
 }
 
 fn compact_visual_staircases(points: &[Point], short_tol: f64) -> Vec<Point> {
