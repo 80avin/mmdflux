@@ -537,6 +537,65 @@ pub trait GraphLayoutEngine: Send + Sync {
     ) -> Result<Self::Output, RenderError>;
 }
 
+/// Request parameters for a `GraphEngine::solve()` call.
+///
+/// Engines use this to determine measurement mode and output detail level.
+#[derive(Debug, Clone)]
+pub struct GraphSolveRequest {
+    /// Target output format (affects node measurement: text-grid vs pixel).
+    pub output_format: OutputFormat,
+    /// Geometry detail level requested by the caller.
+    pub geometry_level: GeometryLevel,
+    /// Edge path detail level for routed geometry.
+    pub path_detail: PathDetail,
+}
+
+impl GraphSolveRequest {
+    /// Build a solve request from a render config and output format.
+    pub fn from_config(config: &RenderConfig, output_format: OutputFormat) -> Self {
+        Self {
+            output_format,
+            geometry_level: config.geometry_level,
+            path_detail: config.path_detail,
+        }
+    }
+}
+
+/// Result of a `GraphEngine::solve()` call.
+///
+/// Always contains positioned layout geometry. Optionally contains
+/// routed edge paths when the engine owns routing and `geometry_level`
+/// is `Routed`.
+pub struct GraphSolveResult {
+    /// Which engine+algorithm produced this result.
+    pub engine_id: EngineAlgorithmId,
+    /// Positioned node and edge geometry.
+    pub geometry: crate::diagrams::flowchart::geometry::GraphGeometry,
+    /// Routed edge paths (present when engine routes natively and routed level requested).
+    pub routed: Option<crate::diagrams::flowchart::geometry::RoutedGraphGeometry>,
+}
+
+/// Unified graph engine trait combining layout and optional routing.
+///
+/// Replaces `GraphLayoutEngine` for the `EngineAlgorithmId`-aware pipeline.
+/// Engines compute layout and optionally route edges in a single `solve()` call.
+/// The routing strategy is engine-owned, determined by `capabilities().route_ownership`.
+pub trait GraphEngine: Send + Sync {
+    /// Combined engine+algorithm identifier.
+    fn id(&self) -> EngineAlgorithmId;
+
+    /// Capabilities this engine+algorithm provides.
+    fn capabilities(&self) -> EngineAlgorithmCapabilities;
+
+    /// Solve: layout and optionally route the diagram.
+    fn solve(
+        &self,
+        diagram: &crate::graph::Diagram,
+        config: &EngineConfig,
+        request: &GraphSolveRequest,
+    ) -> Result<GraphSolveResult, RenderError>;
+}
+
 /// Path detail level for edge waypoints in MMDS and SVG output.
 ///
 /// Controls how many anchor points are included in edge paths.

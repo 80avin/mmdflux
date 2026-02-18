@@ -2,7 +2,8 @@
 
 use mmdflux::diagram::{
     AlgorithmId, EdgeRouting, EdgeStyle, EngineAlgorithmId, EngineCapabilities, EngineId,
-    LayoutEngineId, OutputFormat, RenderConfig, RenderError, RouteOwnership,
+    GeometryLevel, GraphSolveRequest, LayoutEngineId, OutputFormat, PathDetail, RenderConfig,
+    RenderError, RouteOwnership,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::engines::graph::GraphEngineRegistry;
@@ -538,4 +539,31 @@ fn edge_style_rejects_orthogonal_with_migration() {
         "should explain removal: {}",
         err
     );
+}
+
+// =============================================================================
+// GraphEngine solve contract (plan-0081 Phase 3.1)
+// =============================================================================
+
+#[test]
+fn solve_request_fields_round_trip() {
+    let req = GraphSolveRequest {
+        output_format: OutputFormat::Text,
+        geometry_level: GeometryLevel::Layout,
+        path_detail: PathDetail::Full,
+    };
+    assert_eq!(req.output_format, OutputFormat::Text);
+    assert_eq!(req.geometry_level, GeometryLevel::Layout);
+    assert_eq!(req.path_detail, PathDetail::Full);
+}
+
+#[test]
+fn solve_request_from_config_derives_fields() {
+    let config = RenderConfig {
+        geometry_level: GeometryLevel::Routed,
+        ..RenderConfig::default()
+    };
+    let req = GraphSolveRequest::from_config(&config, OutputFormat::Svg);
+    assert_eq!(req.output_format, OutputFormat::Svg);
+    assert_eq!(req.geometry_level, GeometryLevel::Routed);
 }
