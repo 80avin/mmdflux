@@ -26,7 +26,7 @@ graph TD
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/at-a-glance-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/at-a-glance-light.svg">
-  <img alt="mmdflux at-a-glance SVG output" src="docs/assets/readme/at-a-glance-light.svg">
+  <img alt="mmdflux at-a-glance SVG output" src="docs/assets/readme/at-a-glance-light.svg" width="360">
 </picture>
 
 <details>
