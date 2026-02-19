@@ -769,3 +769,55 @@ fn capabilities_struct_exposes_supported_routing_styles() {
     let _styles: &[RoutingStyle] = caps.supported_routing_styles;
     assert!(!_styles.is_empty());
 }
+
+// =============================================================================
+// Routing style wired to edge path topology (plan-0081 Phase 7.4)
+// =============================================================================
+
+/// Helper: render a named flowchart fixture as SVG with a specific engine+routing style.
+fn render_cycle_svg_with_routing(engine: &str, routing: RoutingStyle) -> String {
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/simple_cycle.mmd").unwrap();
+    render_with_engine_routing(&input, engine, Some(routing), None).unwrap()
+}
+
+/// Helper: render a named flowchart fixture as SVG with a specific engine+preset.
+fn render_cycle_svg_with_preset(engine: &str, preset: EdgePreset) -> String {
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/simple_cycle.mmd").unwrap();
+    render_with_engine_routing(&input, engine, None, Some(preset)).unwrap()
+}
+
+#[test]
+fn flux_polyline_vs_orthogonal_produce_distinct_svg_for_cycle() {
+    // For a diagram with a backward edge, UnifiedPreview (orthogonal) and
+    // FullCompute (polyline) should produce distinct edge paths.
+    let orthogonal = render_cycle_svg_with_routing("flux-layered", RoutingStyle::Orthogonal);
+    let polyline = render_cycle_svg_with_routing("flux-layered", RoutingStyle::Polyline);
+    assert_ne!(
+        orthogonal, polyline,
+        "flux-layered orthogonal and polyline routing should produce distinct SVG edge paths"
+    );
+}
+
+#[test]
+fn bezier_preset_uses_polyline_edge_routing_on_flux() {
+    // bezier expands to Polyline+Bezier+Sharp — should use FullCompute (same as explicit Polyline).
+    // Edge path topology should match explicit polyline routing.
+    let bezier = render_cycle_svg_with_preset("flux-layered", EdgePreset::Bezier);
+    let polyline = render_cycle_svg_with_routing("flux-layered", RoutingStyle::Polyline);
+    assert_eq!(
+        bezier, polyline,
+        "bezier preset should produce same edge path topology as explicit polyline routing"
+    );
+}
+
+#[test]
+fn flux_polyline_routing_matches_mermaid_layered_for_cycle() {
+    // Both flux+polyline and mermaid+polyline use FullCompute routing.
+    // Edge paths (d attributes) should be identical for the same fixture.
+    let flux_polyline = render_cycle_svg_with_routing("flux-layered", RoutingStyle::Polyline);
+    let mermaid_polyline = render_cycle_svg_with_routing("mermaid-layered", RoutingStyle::Polyline);
+    assert_eq!(
+        flux_polyline, mermaid_polyline,
+        "flux+polyline and mermaid+polyline should produce identical edge paths (both FullCompute)"
+    );
+}

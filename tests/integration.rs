@@ -2646,7 +2646,6 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                edge_preset: Some(EdgePreset::Straight),
                 layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
                 ..RenderConfig::default()
             },
@@ -2661,7 +2660,6 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                edge_preset: Some(EdgePreset::Straight),
                 layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
                 ..RenderConfig::default()
             },
@@ -3112,7 +3110,6 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_
                 format,
                 &RenderConfig {
                     layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
-                    edge_preset: Some(EdgePreset::Straight),
                     ..RenderConfig::default()
                 },
             )

@@ -137,7 +137,6 @@ impl GraphEngine for FluxLayeredEngine {
         config: &EngineConfig,
         request: &GraphSolveRequest,
     ) -> Result<GraphSolveResult, RenderError> {
-        use crate::diagram::EdgeRouting;
         use crate::render::SvgOptions;
 
         // For SVG/MMDS output, pixel-accurate SVG measurement mode is required.
@@ -161,12 +160,14 @@ impl GraphEngine for FluxLayeredEngine {
         let geometry = run_dagre_layout(&mode, diagram, config)?;
 
         // Route when routed geometry is requested (Native ownership).
+        // Routing style selects the algorithm via edge_routing_for_style().
         let routed: Option<RoutedGraphGeometry> =
             if matches!(request.geometry_level, GeometryLevel::Routed) {
+                let edge_routing = self.id().edge_routing_for_style(request.routing_style);
                 Some(super::routing::route_graph_geometry(
                     diagram,
                     &geometry,
-                    EdgeRouting::UnifiedPreview,
+                    edge_routing,
                 ))
             } else {
                 None

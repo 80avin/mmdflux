@@ -2,8 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use mmdflux::diagram::{
-    CornerStyle, EdgePreset, EngineAlgorithmId, InterpolationStyle, OutputFormat, PathDetail,
-    RenderConfig, RoutingStyle,
+    CornerStyle, EngineAlgorithmId, InterpolationStyle, OutputFormat, PathDetail, RenderConfig,
+    RoutingStyle,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::mmds::from_mmds_str;
@@ -130,7 +130,6 @@ fn render_svg_fixture_with_engine(name: &str, engine: &str) -> String {
     let mut instance = FlowchartInstance::new();
     instance.parse(&input).expect("Failed to parse fixture");
     let config = RenderConfig {
-        edge_preset: Some(EdgePreset::Straight),
         path_detail: PathDetail::Full,
         layout_engine: Some(EngineAlgorithmId::parse(engine).unwrap()),
         ..RenderConfig::default()

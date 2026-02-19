@@ -3,8 +3,8 @@
 use super::compiler;
 use super::parser::parse_class_diagram;
 use crate::diagram::{
-    AlgorithmId, EdgeRouting, EngineAlgorithmId, EngineConfig, EngineId, GeometryLevel,
-    GraphSolveRequest, OutputFormat, RenderConfig, RenderError, RouteOwnership,
+    AlgorithmId, EngineAlgorithmId, EngineConfig, EngineId, GeometryLevel, GraphSolveRequest,
+    OutputFormat, RenderConfig, RenderError,
 };
 use crate::diagrams::flowchart::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::engines::graph::GraphEngineRegistry;
@@ -93,11 +93,11 @@ impl DiagramInstance for ClassInstance {
                     &EngineConfig::Layered(config.layout.clone()),
                     &request,
                 )?;
-                let edge_routing = match engine_id.capabilities().route_ownership {
-                    RouteOwnership::Native => EdgeRouting::UnifiedPreview,
-                    RouteOwnership::HintDriven => EdgeRouting::FullCompute,
-                    RouteOwnership::EngineProvided => EdgeRouting::PassThroughClip,
-                };
+                // Routing style selects the algorithm via edge_routing_for_style().
+                let resolved_routing = config
+                    .routing_style
+                    .or_else(|| config.edge_preset.map(|p| p.expand().0));
+                let edge_routing = engine_id.edge_routing_for_style(resolved_routing);
                 let geom = if let Some(ref routed) = result.routed {
                     inject_routed_paths(&result.geometry, routed)
                 } else {

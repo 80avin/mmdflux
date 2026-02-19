@@ -13,8 +13,8 @@ use canvas::{Cell, Connections};
 pub use chars::CharSet;
 
 use crate::diagram::{
-    CornerStyle, EdgePreset, EdgeRouting, EngineId, InterpolationStyle, OutputFormat, PathDetail,
-    RenderConfig, RouteOwnership, RoutingStyle,
+    AlgorithmId, CornerStyle, EdgePreset, EdgeRouting, EngineAlgorithmId, EngineId,
+    InterpolationStyle, OutputFormat, PathDetail, RenderConfig, RoutingStyle,
 };
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
@@ -84,15 +84,13 @@ impl From<&RenderConfig> for RenderOptions {
         svg.interpolation_style = config.interpolation_style.unwrap_or(preset_interp);
         svg.corner_style = config.corner_style.unwrap_or(preset_corner);
 
-        // Derive routing from engine capabilities. Default (None) is flux-layered behavior.
-        let edge_routing = config
-            .layout_engine
-            .map(|id| match id.capabilities().route_ownership {
-                RouteOwnership::Native => EdgeRouting::UnifiedPreview,
-                RouteOwnership::HintDriven => EdgeRouting::FullCompute,
-                RouteOwnership::EngineProvided => EdgeRouting::PassThroughClip,
-            })
-            .or(Some(EdgeRouting::UnifiedPreview)); // default: flux-layered
+        // Derive edge routing from engine capabilities + resolved routing style.
+        // Uses EngineAlgorithmId::edge_routing_for_style() for consistent selection.
+        // Default engine (None) behaves as flux-layered (Native + Orthogonal).
+        let resolved_routing = svg.routing_style; // already resolved above
+        let default_engine = EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered);
+        let engine_id = config.layout_engine.unwrap_or(default_engine);
+        let edge_routing = engine_id.edge_routing_for_style(Some(resolved_routing));
 
         RenderOptions {
             output_format: OutputFormat::Text,
@@ -105,7 +103,7 @@ impl From<&RenderConfig> for RenderOptions {
             cluster_ranksep: config.cluster_ranksep,
             padding: config.padding,
             path_detail: config.path_detail,
-            edge_routing,
+            edge_routing: Some(edge_routing),
         }
     }
 }

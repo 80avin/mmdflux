@@ -565,6 +565,23 @@ impl EngineAlgorithmId {
         }
     }
 
+    /// Resolve the edge routing algorithm for a given routing style.
+    ///
+    /// Maps `(route_ownership, routing_style)` to the concrete `EdgeRouting` variant.
+    /// Used by the render pipeline and class instance SVG path to select the routing algorithm.
+    ///
+    /// - `None` routing style means "use engine default" → resolves to `Orthogonal` for Native.
+    pub fn edge_routing_for_style(&self, routing_style: Option<RoutingStyle>) -> EdgeRouting {
+        match self.capabilities().route_ownership {
+            RouteOwnership::Native => match routing_style {
+                Some(RoutingStyle::Polyline) => EdgeRouting::FullCompute,
+                _ => EdgeRouting::UnifiedPreview,
+            },
+            RouteOwnership::HintDriven => EdgeRouting::FullCompute,
+            RouteOwnership::EngineProvided => EdgeRouting::PassThroughClip,
+        }
+    }
+
     /// Validate that the requested routing style is supported by this engine.
     ///
     /// Resolves the effective routing style from the config (explicit > preset > none),
