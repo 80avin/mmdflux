@@ -216,7 +216,7 @@ const MIN_FAN_IN_PRIMARY_SLOT_SPACING: f64 = 16.0;
 // Primary knob for TD/BT fan lane compaction near shared faces.
 // Increase for longer endpoint stems and tighter shared lanes;
 // decrease for wider lane spread.
-const FAN_PRIMARY_SIDE_BAND_DEPTH_MARGIN: f64 = 0.2;
+const FAN_PRIMARY_SIDE_BAND_DEPTH_MARGIN: f64 = 0.1;
 
 fn clamp_face_coordinate_with_corner_inset(value: f64, min: f64, max: f64, max_inset: f64) -> f64 {
     let lo = min.min(max);
@@ -968,6 +968,7 @@ fn prefer_lateral_departure_for_td_bt_angular_sources(
     const EPS: f64 = 0.000_001;
     const OFF_CENTER_MIN: f64 = 2.0;
     const MIN_HORIZONTAL_DEPARTURE: f64 = 2.0;
+    const MIN_HORIZONTAL_DEPARTURE_DIAMOND: f64 = 0.1;
     const INTRUSION_MARGIN: f64 = 1.0;
 
     if !matches!(direction, Direction::TopDown | Direction::BottomTop) || path.len() != 4 {
@@ -1041,7 +1042,12 @@ fn prefer_lateral_departure_for_td_bt_angular_sources(
     }
 
     let lateral_dx = elbow.x - start.x;
-    if lateral_dx.abs() < MIN_HORIZONTAL_DEPARTURE {
+    let min_horizontal_departure = if matches!(source_shape, Shape::Diamond) {
+        MIN_HORIZONTAL_DEPARTURE_DIAMOND
+    } else {
+        MIN_HORIZONTAL_DEPARTURE
+    };
+    if lateral_dx.abs() < min_horizontal_departure {
         return;
     }
     if (p3.y - elbow.y) * flow_sign <= EPS {
