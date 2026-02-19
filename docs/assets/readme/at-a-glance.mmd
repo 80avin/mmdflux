@@ -1,6 +1,7 @@
 graph TD
-    A[Request] --> B{Authenticated?}
-    B -->|yes| C[Serve from cache]
-    B -->|no| D[Query database]
-    C --> E[Respond]
-    D --> E
+    subgraph sg1[Horizontal Section]
+        direction LR
+        A[Step 1] --> B[Step 2] --> C[Step 3]
+    end
+    Start --> A
+    C --> End

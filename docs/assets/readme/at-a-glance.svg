@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 434.33 514.20" style="max-width: 434.33px; background-color: #ffffff;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 473.00 328.00" style="max-width: 473.00px; background-color: #ffffff;" font-family="&quot;trebuchet ms&quot;, verdana, arial, sans-serif" font-size="16.00">
   <defs>
     <marker id="arrowhead" viewBox="0 0 10.00 10.00" refX="5.00" refY="5.00" markerWidth="8.00" markerHeight="8.00" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
       <path d="M 0 0 L 10.00 5.00 L 0 10.00 z" fill="#333" />
@@ -19,29 +19,30 @@
       <polygon points="0,6.00 6.00,0 12.00,6.00 6.00,12.00" fill="white" stroke="#333" stroke-width="1" />
     </marker>
   </defs>
-  <g transform="translate(0.00,0.00)">
+  <g transform="translate(59.50,0.00)">
+    <g class="clusters">
+      <rect class="subgraph" x="-51.50" y="109.20" width="457.00" height="109.60" fill="none" stroke="#888" stroke-width="1.00" />
+      <text x="177.00" y="113.20" text-anchor="middle" dominant-baseline="hanging" fill="#333">Horizontal Section</text>
+    </g>
     <g class="edgePaths">
-      <path d="M221.90,62.00 L221.90,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M171.13,223.43 L109.82,223.43 Q104.82,223.43 104.82,228.43 L104.82,344.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M272.67,223.43 L333.98,223.43 Q338.98,223.43 338.98,228.43 L338.98,344.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M104.82,402.20 L104.82,412.00 Q104.82,417.00 109.82,417.00 L164.83,417.00 Q169.83,417.00 169.83,422.00 L169.83,448.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M338.98,402.20 L338.98,412.00 Q338.98,417.00 333.98,417.00 L278.97,417.00 Q273.97,417.00 273.97,422.00 L273.97,448.20" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M72.50,172.00 L118.50,172.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M231.50,172.00 L277.50,172.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M80.12,62.00 L80.12,98.50 Q80.12,103.50 75.12,103.50 L23.00,103.50 Q18.00,103.50 18.00,108.50 L18.00,141.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M336.00,199.00 L336.00,227.50 Q336.00,232.50 331.00,232.50 L278.87,232.50 Q273.87,232.50 273.87,237.50 L273.87,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
-      <text x="104.82" y="311.20" text-anchor="middle" dominant-baseline="middle" fill="#333">yes</text>
-      <text x="338.98" y="311.20" text-anchor="middle" dominant-baseline="middle" fill="#333">no</text>
     </g>
     <g class="nodes">
-      <rect x="163.13" y="8.00" width="117.54" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="221.90" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Request</text>
-      <polygon points="221.90,112.00 303.00,193.10 221.90,274.20 140.80,193.10" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="221.90" y="193.10" text-anchor="middle" dominant-baseline="middle" fill="#333">Authenticated?</text>
-      <rect x="8.00" y="348.20" width="193.63" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="104.82" y="375.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Serve from cache</text>
-      <rect x="251.63" y="348.20" width="174.70" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="338.98" y="375.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Query database</text>
-      <rect x="161.83" y="452.20" width="120.13" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
-      <text x="221.90" y="479.20" text-anchor="middle" dominant-baseline="middle" fill="#333">Respond</text>
+      <rect x="-36.50" y="145.00" width="109.00" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="18.00" y="172.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Step 1</text>
+      <rect x="122.50" y="145.00" width="109.00" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="177.00" y="172.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Step 2</text>
+      <rect x="281.50" y="145.00" width="109.00" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="336.00" y="172.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Step 3</text>
+      <rect x="230.88" y="266.00" width="85.98" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="273.87" y="293.00" text-anchor="middle" dominant-baseline="middle" fill="#333">End</text>
+      <rect x="32.49" y="8.00" width="95.26" height="54.00" fill="white" stroke="#333" stroke-width="1.00" stroke-linejoin="round" />
+      <text x="80.12" y="35.00" text-anchor="middle" dominant-baseline="middle" fill="#333">Start</text>
     </g>
   </g>
 </svg>
