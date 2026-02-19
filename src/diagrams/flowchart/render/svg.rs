@@ -2316,20 +2316,18 @@ fn points_for_svg_path(
     points: &[Point],
     direction: Direction,
     interp_style: InterpolationStyle,
-    corner_style: CornerStyle,
+    _corner_style: CornerStyle,
     path_detail: PathDetail,
 ) -> Vec<Point> {
     if points.is_empty() {
         return Vec::new();
     }
-    // Only orthogonalize for linear+rounded corners. The arc corner algorithm
-    // requires axis-aligned segments to produce correct 90° arcs.
-    // Bezier interpolation (orthogonal+bezier+sharp) does NOT need orthogonalization
-    // because bezier curves handle smoothness natively from sparse waypoints.
-    let needs_orthogonalization = matches!(
-        (interp_style, corner_style),
-        (InterpolationStyle::Linear, CornerStyle::Rounded)
-    );
+    // Orthogonalize for linear interpolation regardless of corner style.
+    // Both rounded (arc algorithm requires axis-aligned segments) and sharp
+    // (straight L-segments must be axis-aligned to produce right angles) need this.
+    // Bezier interpolation does NOT need orthogonalization because bezier curves
+    // handle smoothness natively from sparse waypoints.
+    let needs_orthogonalization = matches!(interp_style, InterpolationStyle::Linear);
     let points: Vec<Point> = if needs_orthogonalization && !points_are_axis_aligned(points) {
         let start: geometry::FPoint = points[0].into();
         let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
