@@ -78,6 +78,14 @@ jobs:
         working-directory: web
         run: npm run build
 
+      - name: Deploy preview
+        if: github.event_name == 'pull_request'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web/dist --project-name=mmdflux-play --branch=${{ github.head_ref }}
+
       - name: Run benchmark smoke checks (optional)
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_benchmark_smoke == 'true' }}
         working-directory: web

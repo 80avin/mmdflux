@@ -8,23 +8,18 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: playground-pages-${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
+  group: playground-deploy-${{ github.event_name == 'workflow_dispatch' && github.sha || github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build Playground Artifact
+  deploy:
+    name: Build & Deploy Playground
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -57,22 +52,10 @@ jobs:
       - name: Build playground
         working-directory: web
         run: npm run build:release
-        env:
-          VITE_BASE_PATH: /${{ github.event.repository.name }}/
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
         with:
-          path: web/dist/
-
-  deploy:
-    name: Deploy Playground
-    runs-on: ubuntu-latest
-    needs: build
-    environment:
-      name: ${{ 'github-pages' }}
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy Pages artifact
-        id: deployment
-        uses: actions/deploy-pages@v4
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web/dist --project-name=mmdflux-play

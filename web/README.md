@@ -37,17 +37,15 @@ These scripts tag reports with WASM profile metadata and fail on `dev` vs `relea
 - Trigger options:
   - Tag push matching `v*` (for example `v0.9.0`)
   - Manual `workflow_dispatch`
-- Artifact path: `web/dist/`
-- Pages base path:
-  - CI sets `VITE_BASE_PATH=/<repo-name>/`
-  - Local builds default to `/` unless `VITE_BASE_PATH` is explicitly set
+- Deploys to Cloudflare Pages project `mmdflux-play`
+- Production URL: `play.mmdflux.com`
+- PR previews: deployed automatically by `playground-ci.yml` on pull requests
 
 Operator sequence:
 
 1. Ensure `web` tests/build and `just wasm-build` are green locally.
 2. Push a `v*` tag (or run manual dispatch) to start the deploy workflow.
-3. Confirm the `Build Playground Artifact` job uploads `web/dist/`.
-4. Confirm the `Deploy Playground` job publishes a `github-pages` URL.
+3. Confirm the `Build & Deploy Playground` job deploys to Cloudflare Pages.
 
 ## Benchmark Runbook
 
