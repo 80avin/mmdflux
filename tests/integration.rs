@@ -8,6 +8,7 @@ use std::path::Path;
 
 use mmdflux::diagram::{EdgePreset, EngineAlgorithmId, OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::engine::{MeasurementMode, run_dagre_layout};
+use mmdflux::diagrams::flowchart::geometry::{FPoint, RoutedGraphGeometry};
 use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::render::{
@@ -89,6 +90,42 @@ fn assert_all_distinct(values: &[usize], context: &str) {
             );
         }
     }
+}
+
+fn route_fixture_orthogonal(fixture: &str) -> RoutedGraphGeometry {
+    let diagram = parse_and_build(fixture);
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
+    let geom =
+        run_dagre_layout(&MeasurementMode::Text, &diagram, &config).expect("layout should succeed");
+    route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute)
+}
+
+fn route_input_orthogonal(input: &str) -> RoutedGraphGeometry {
+    let flowchart = parse_flowchart(input).expect("fixture input should parse");
+    let diagram = build_diagram(&flowchart);
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
+    let geom =
+        run_dagre_layout(&MeasurementMode::Text, &diagram, &config).expect("layout should succeed");
+    route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute)
+}
+
+fn edge_path<'a>(routed: &'a RoutedGraphGeometry, from: &str, to: &str) -> &'a [FPoint] {
+    routed
+        .edges
+        .iter()
+        .find(|edge| edge.from == from && edge.to == to)
+        .unwrap_or_else(|| panic!("missing edge {from} -> {to}"))
+        .path
+        .as_slice()
+}
+
+fn first_segment(path: &[FPoint]) -> (f64, bool) {
+    assert!(path.len() >= 2, "routed path must have at least two points");
+    let p0 = path[0];
+    let p1 = path[1];
+    let dx = (p1.x - p0.x).abs();
+    let dy = (p1.y - p0.y).abs();
+    (dx + dy, dy > dx + 0.000_001)
 }
 
 // =============================================================================
@@ -2631,6 +2668,65 @@ fn test_orthogonal_route_routed_geometry_is_axis_aligned_for_forward_edges() {
             edge.path
         );
     }
+}
+
+#[test]
+fn test_step_topology_preserves_fan_stem_room_and_lane_compaction() {
+    let fan_out = route_fixture_orthogonal("five_fan_out.mmd");
+    let (a_b_stem, _) = first_segment(edge_path(&fan_out, "A", "B"));
+    let (a_c_stem, _) = first_segment(edge_path(&fan_out, "A", "C"));
+    let (a_f_stem, _) = first_segment(edge_path(&fan_out, "A", "F"));
+    assert!(
+        a_b_stem > 8.0 && a_f_stem > 8.0,
+        "five_fan_out outer branches should have >8px primary stem; got A->B={a_b_stem}, A->F={a_f_stem}"
+    );
+    assert!(
+        (a_c_stem - a_b_stem).abs() < 30.0,
+        "five_fan_out lane spacing should stay compact; got A->B stem={a_b_stem}, A->C stem={a_c_stem}"
+    );
+
+    let fan_in = route_fixture_orthogonal("five_fan_in_diamond.mmd");
+    let (b_f_stem, _) = first_segment(edge_path(&fan_in, "B", "F"));
+    let (d_f_stem, _) = first_segment(edge_path(&fan_in, "D", "F"));
+    let (a_f_stem_in, _) = first_segment(edge_path(&fan_in, "A", "F"));
+    let (e_f_stem_in, _) = first_segment(edge_path(&fan_in, "E", "F"));
+    assert!(
+        b_f_stem > 8.0 && d_f_stem > 8.0,
+        "five_fan_in_diamond inner branches should have >8px primary stem; got B->F={b_f_stem}, D->F={d_f_stem}"
+    );
+    assert!(
+        a_f_stem_in < 60.0 && e_f_stem_in < 60.0,
+        "five_fan_in_diamond outer branches should not consume most of the rank gap; got A->F={a_f_stem_in}, E->F={e_f_stem_in}"
+    );
+
+    let readme = route_input_orthogonal(
+        "graph TD\n\
+         A[Request] --> B{Authenticated?}\n\
+         B -->|yes| C[Serve from cache]\n\
+         B -->|no| D[Query database]\n\
+         C --> E[Respond]\n\
+         D --> E\n",
+    );
+    let (b_c_stem, b_c_vertical) = first_segment(edge_path(&readme, "B", "C"));
+    let (b_d_stem, b_d_vertical) = first_segment(edge_path(&readme, "B", "D"));
+    assert!(
+        !b_c_vertical && !b_d_vertical,
+        "README decision branches from angular source should depart laterally first; got B->C vertical={b_c_vertical}, B->D vertical={b_d_vertical}"
+    );
+    assert!(
+        b_c_stem > 8.0 && b_d_stem > 8.0,
+        "README decision branches should keep visible lateral departure segments; got B->C={b_c_stem}, B->D={b_d_stem}"
+    );
+    let (c_e_stem, c_e_vertical) = first_segment(edge_path(&readme, "C", "E"));
+    let (d_e_stem, d_e_vertical) = first_segment(edge_path(&readme, "D", "E"));
+    assert!(
+        c_e_vertical && d_e_vertical,
+        "README two-edge fan-in should depart along primary axis before lateral jog; got C->E vertical={c_e_vertical}, D->E vertical={d_e_vertical}"
+    );
+    assert!(
+        c_e_stem > 10.0 && d_e_stem > 10.0,
+        "README two-edge fan-in should keep >10px source stems; got C->E={c_e_stem}, D->E={d_e_stem}"
+    );
 }
 
 #[test]

@@ -213,6 +213,10 @@ const POINT_EPS: f64 = 0.000_001;
 const MIN_PORT_CORNER_INSET_FORWARD: f64 = 8.0;
 const MIN_PORT_CORNER_INSET_BACKWARD: f64 = 12.0;
 const MIN_FAN_IN_PRIMARY_SLOT_SPACING: f64 = 16.0;
+// Primary knob for TD/BT fan lane compaction near shared faces.
+// Increase for longer endpoint stems and tighter shared lanes;
+// decrease for wider lane spread.
+const FAN_PRIMARY_SIDE_BAND_DEPTH_MARGIN: f64 = 0.2;
 
 fn clamp_face_coordinate_with_corner_inset(value: f64, min: f64, max: f64, max_inset: f64) -> f64 {
     let lo = min.min(max);
@@ -1036,17 +1040,24 @@ fn prefer_lateral_departure_for_td_bt_angular_sources(
         return;
     }
 
-    let first_dx = elbow.x - start.x;
-    if first_dx.abs() < MIN_HORIZONTAL_DEPARTURE {
+    let lateral_dx = elbow.x - start.x;
+    if lateral_dx.abs() < MIN_HORIZONTAL_DEPARTURE {
         return;
     }
-    if (p3.y - start.y) * flow_sign <= EPS {
+    if (p3.y - elbow.y) * flow_sign <= EPS {
         return;
     }
 
-    if segment_crosses_any_other_node_interior(edge, geometry, start, elbow, INTRUSION_MARGIN)
-        || segment_crosses_any_other_node_interior(edge, geometry, elbow, p3, INTRUSION_MARGIN)
-    {
+    let segments_clear =
+        !segment_crosses_any_other_node_interior(edge, geometry, start, elbow, INTRUSION_MARGIN)
+            && !segment_crosses_any_other_node_interior(
+                edge,
+                geometry,
+                elbow,
+                p3,
+                INTRUSION_MARGIN,
+            );
+    if !segments_clear {
         return;
     }
 
@@ -1540,10 +1551,12 @@ fn adaptive_fan_in_primary_face_capacity(direction: Direction, target_rect: &FRe
 }
 
 fn symmetric_side_band_depth(band_index: usize, band_count: usize) -> f64 {
+    let margin = FAN_PRIMARY_SIDE_BAND_DEPTH_MARGIN.clamp(0.0, 0.49);
     if band_count <= 1 {
-        0.0
+        margin
     } else {
-        band_index as f64 / (band_count - 1) as f64
+        let raw = band_index as f64 / (band_count - 1) as f64;
+        margin + (1.0 - 2.0 * margin) * raw
     }
 }
 
