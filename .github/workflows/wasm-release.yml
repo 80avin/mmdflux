@@ -45,8 +45,8 @@ jobs:
           fi
           TAG_VERSION="${TAG#v}"
 
-          ROOT_VERSION="$(sed -n 's/^version = \"\\(.*\\)\"$/\\1/p' Cargo.toml | head -n1)"
-          WASM_VERSION="$(sed -n 's/^version = \"\\(.*\\)\"$/\\1/p' crates/mmdflux-wasm/Cargo.toml | head -n1)"
+          ROOT_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          WASM_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' crates/mmdflux-wasm/Cargo.toml | head -n1)"
 
           if [[ -z "$ROOT_VERSION" || -z "$WASM_VERSION" ]]; then
             echo "Could not read crate versions from Cargo.toml files" >&2
