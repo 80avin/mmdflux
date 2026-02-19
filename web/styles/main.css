@@ -264,6 +264,20 @@ body {
   white-space: pre;
 }
 
+/* Dark-mode overrides for inlined SVG output */
+:root[data-theme="dark"] .preview-output svg [fill="white"] {
+  fill: #161b22;
+}
+:root[data-theme="dark"] .preview-output svg [fill="#333"] {
+  fill: #e6edf3;
+}
+:root[data-theme="dark"] .preview-output svg [stroke="#333"] {
+  stroke: #8b949e;
+}
+:root[data-theme="dark"] .preview-output svg rect.subgraph {
+  stroke: #555;
+}
+
 @media (max-width: 900px) {
   .workspace {
     grid-template-columns: 1fr;

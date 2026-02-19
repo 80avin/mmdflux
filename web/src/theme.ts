@@ -65,6 +65,12 @@ export function createThemeController(
     return resolved;
   };
 
+  mediaQuery?.addEventListener("change", () => {
+    if (preference === "system") {
+      apply();
+    }
+  });
+
   return {
     apply,
     getPreference: () => preference,
