@@ -13,7 +13,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/index.js",
     "check": "biome check",
     "fmt": "biome check --write",
     "prepublishOnly": "npm run build",
