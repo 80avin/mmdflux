@@ -1136,15 +1136,17 @@ fn backward_td_bt_face_overrides(
         return (None, None);
     }
 
-    // Skip parity when the source node is significantly to the right of the
-    // target node. In that topology there is a forward target→source edge
-    // running rightward; the backward path's leftward approach to the target's
-    // bottom/top face (via the outer right channel) would cross that edge.
-    // Fall back to canonical side-channel routing to avoid the crossing.
+    // Skip parity when the source node's center is entirely to the right of
+    // the target's right edge. In that topology the forward target→source
+    // edge runs rightward through the space between the two nodes; the
+    // backward path's leftward approach to the target's top/bottom face would
+    // have to cross that forward edge. Fall back to canonical side-channel
+    // routing to avoid the crossing.
+    // Note: when the source center is still within the target's x-span, any
+    // parity approach is nearly vertical and does not cross the forward edge.
     let source_center_x = source_rect.x + source_rect.width / 2.0;
-    let target_center_x = target_rect.x + target_rect.width / 2.0;
-    let cross_threshold = (target_rect.width * 0.25).max(10.0);
-    if source_center_x > target_center_x + cross_threshold {
+    let target_right = target_rect.x + target_rect.width;
+    if source_center_x > target_right {
         return (None, None);
     }
 
