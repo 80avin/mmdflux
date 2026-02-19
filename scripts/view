@@ -76,6 +76,30 @@ else
     DISPLAY_CMD=(chafa)
 fi
 
+# Remove defaults that the user explicitly overrides
+MERGED_ARGS=()
+for (( i=0; i<${#MMDFLUX_DEFAULTS[@]}; i++ )); do
+    flag="${MMDFLUX_DEFAULTS[i]}"
+    # Check if this flag appears in EXTRA_ARGS (user override wins)
+    override=false
+    for extra in "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}"; do
+        if [[ "$extra" == "$flag" ]]; then
+            override=true
+            break
+        fi
+    done
+    if $override; then
+        # Skip this default flag and its value
+        (( i++ )) || true
+    else
+        MERGED_ARGS+=("$flag")
+        if (( i + 1 < ${#MMDFLUX_DEFAULTS[@]} )) && [[ "${MMDFLUX_DEFAULTS[i+1]}" != --* ]]; then
+            (( i++ ))
+            MERGED_ARGS+=("${MMDFLUX_DEFAULTS[i]}")
+        fi
+    fi
+done
+
 # Run the pipeline
 if [[ -n "$FILE" ]]; then
     INPUT_CMD=(cat "$FILE")
@@ -84,6 +108,6 @@ else
 fi
 
 "${INPUT_CMD[@]}" \
-    | cargo run -q -- "${MMDFLUX_DEFAULTS[@]}" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
+    | cargo run -q -- "${MERGED_ARGS[@]}" ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
     | rsvg-convert --background-color="$BG" -z "$SCALE" \
     | "${DISPLAY_CMD[@]}"
