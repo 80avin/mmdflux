@@ -34,9 +34,7 @@ function isThemePreference(value: string): value is ThemePreference {
   return value === "system" || value === "light" || value === "dark";
 }
 
-function hasStorageApi(
-  storage: Storage | undefined,
-): storage is Storage {
+function hasStorageApi(storage: Storage | undefined): storage is Storage {
   return (
     typeof storage === "object" &&
     storage !== null &&

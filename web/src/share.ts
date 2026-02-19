@@ -1,6 +1,11 @@
 export type ShareFormat = "text" | "svg" | "mmds";
 export type ShareLayoutEngine = "auto" | "flux-layered" | "mermaid-layered";
-export type ShareEdgePreset = "auto" | "straight" | "step" | "smoothstep" | "bezier";
+export type ShareEdgePreset =
+  | "auto"
+  | "straight"
+  | "step"
+  | "smoothstep"
+  | "bezier";
 export type ShareGeometryLevel = "layout" | "routed";
 export type SharePathDetail = "full" | "compact" | "simplified" | "endpoints";
 
@@ -83,21 +88,21 @@ export function normalizeShareRenderSettings(
   const layoutEngine =
     typeof settings.layoutEngine === "string" &&
     isLayoutEngine(settings.layoutEngine)
-    ? settings.layoutEngine
-    : DEFAULT_SHARE_RENDER_SETTINGS.layoutEngine;
+      ? settings.layoutEngine
+      : DEFAULT_SHARE_RENDER_SETTINGS.layoutEngine;
   const edgePreset =
     typeof settings.edgePreset === "string" && isEdgePreset(settings.edgePreset)
-    ? settings.edgePreset
-    : DEFAULT_SHARE_RENDER_SETTINGS.edgePreset;
+      ? settings.edgePreset
+      : DEFAULT_SHARE_RENDER_SETTINGS.edgePreset;
   const geometryLevel =
     typeof settings.geometryLevel === "string" &&
     isGeometryLevel(settings.geometryLevel)
-    ? settings.geometryLevel
-    : DEFAULT_SHARE_RENDER_SETTINGS.geometryLevel;
+      ? settings.geometryLevel
+      : DEFAULT_SHARE_RENDER_SETTINGS.geometryLevel;
   const pathDetail =
     typeof settings.pathDetail === "string" && isPathDetail(settings.pathDetail)
-    ? settings.pathDetail
-    : DEFAULT_SHARE_RENDER_SETTINGS.pathDetail;
+      ? settings.pathDetail
+      : DEFAULT_SHARE_RENDER_SETTINGS.pathDetail;
 
   return {
     layoutEngine,

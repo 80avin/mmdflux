@@ -107,14 +107,17 @@ describe("playground examples", () => {
     const layoutEngineSelect = root.querySelector<HTMLSelectElement>(
       "[data-layout-engine]",
     );
-    const edgePresetSelect = root.querySelector<HTMLSelectElement>(
-      "[data-edge-preset]",
-    );
-    const pathDetailSelect = root.querySelector<HTMLSelectElement>(
-      "[data-path-detail]",
-    );
+    const edgePresetSelect =
+      root.querySelector<HTMLSelectElement>("[data-edge-preset]");
+    const pathDetailSelect =
+      root.querySelector<HTMLSelectElement>("[data-path-detail]");
 
-    if (!svgTab || !layoutEngineSelect || !edgePresetSelect || !pathDetailSelect) {
+    if (
+      !svgTab ||
+      !layoutEngineSelect ||
+      !edgePresetSelect ||
+      !pathDetailSelect
+    ) {
       throw new Error("expected render setting controls");
     }
 

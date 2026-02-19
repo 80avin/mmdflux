@@ -76,9 +76,8 @@ describe("playground state persistence", () => {
     const geometryLevelSelect = root.querySelector<HTMLSelectElement>(
       "[data-geometry-level]",
     );
-    const pathDetailSelect = root.querySelector<HTMLSelectElement>(
-      "[data-path-detail]",
-    );
+    const pathDetailSelect =
+      root.querySelector<HTMLSelectElement>("[data-path-detail]");
 
     if (
       !editorInput ||
@@ -102,7 +101,11 @@ describe("playground state persistence", () => {
 
     const persisted = JSON.parse(
       storage.getItem("mmdflux-playground-state") ?? "{}",
-    ) as { input?: string; format?: string; renderSettings?: Record<string, string> };
+    ) as {
+      input?: string;
+      format?: string;
+      renderSettings?: Record<string, string>;
+    };
 
     expect(persisted.input).toBe("graph TD\nA-->Saved");
     expect(persisted.format).toBe("mmds");

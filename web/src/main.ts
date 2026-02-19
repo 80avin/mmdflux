@@ -432,12 +432,14 @@ export function renderApp(
   const formatButtons = root.querySelectorAll<HTMLButtonElement>(
     ".format-tabs button[data-format]",
   );
-  const layoutEngineSelect =
-    root.querySelector<HTMLSelectElement>("[data-layout-engine]");
+  const layoutEngineSelect = root.querySelector<HTMLSelectElement>(
+    "[data-layout-engine]",
+  );
   const edgePresetSelect =
     root.querySelector<HTMLSelectElement>("[data-edge-preset]");
-  const geometryLevelSelect =
-    root.querySelector<HTMLSelectElement>("[data-geometry-level]");
+  const geometryLevelSelect = root.querySelector<HTMLSelectElement>(
+    "[data-geometry-level]",
+  );
   const pathDetailSelect =
     root.querySelector<HTMLSelectElement>("[data-path-detail]");
 
@@ -492,7 +494,9 @@ export function renderApp(
       : undefined;
   const themeStorage = (() => {
     try {
-      return isStorageLike(window.localStorage) ? window.localStorage : undefined;
+      return isStorageLike(window.localStorage)
+        ? window.localStorage
+        : undefined;
     } catch {
       return undefined;
     }
