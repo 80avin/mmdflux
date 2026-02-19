@@ -6,6 +6,66 @@ Render diagrams as Unicode text, ASCII text, SVG, or JSON. Supports Mermaid synt
 
 [Playground](https://kevinswiber.github.io/mmdflux/) • [Releases](https://github.com/kevinswiber/mmdflux/releases) • [MMDS Spec](docs/mmds.md)
 
+## At a glance
+
+One Mermaid source, multiple outputs: terminal text, SVG, and machine-readable JSON.
+
+**Mermaid source** ([`docs/assets/readme/at-a-glance.mmd`](docs/assets/readme/at-a-glance.mmd))
+
+```
+graph TD
+    A[Request] --> B{Authenticated?}
+    B -->|yes| C[Serve from cache]
+    B -->|no| D[Query database]
+    C --> E[Respond]
+    D --> E
+```
+
+**SVG output** (`mmdflux --format svg --layout-engine flux-layered --edge-preset smoothstep ...`)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/at-a-glance-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/at-a-glance-light.svg">
+  <img alt="mmdflux at-a-glance SVG output" src="docs/assets/readme/at-a-glance-light.svg">
+</picture>
+
+<details>
+<summary>Text output (<code>mmdflux --format text ...</code>)</summary>
+
+```text
+                 ┌─────────┐
+                 │ Request │
+                 └─────────┘
+                      │
+                      │
+                      │
+                      │
+                      ▼
+             ┌────────────────┐
+             < Authenticated? >
+             └────────────────┘
+          ┌───┘              └────┐
+          │                       │
+         yes                     no
+          │                       │
+          ▼                       ▼
+┌──────────────────┐       ┌────────────────┐
+│ Serve from cache │       │ Query database │
+└──────────────────┘       └────────────────┘
+          │                       │
+          │                       │
+          │                       │
+          └───────┐       ┌───────┘
+                  ▼       ▼
+                 ┌─────────┐
+                 │ Respond │
+                 └─────────┘
+```
+
+</details>
+
+**MMDS JSON output**: [`docs/assets/readme/at-a-glance.mmds.json`](docs/assets/readme/at-a-glance.mmds.json)
+
 ## Why mmdflux
 
 - Terminal-native output that still preserves structure and readability

@@ -1,0 +1,6 @@
+graph TD
+    A[Request] --> B{Authenticated?}
+    B -->|yes| C[Serve from cache]
+    B -->|no| D[Query database]
+    C --> E[Respond]
+    D --> E
