@@ -574,11 +574,11 @@ impl EngineAlgorithmId {
     pub fn edge_routing_for_style(&self, routing_style: Option<RoutingStyle>) -> EdgeRouting {
         match self.capabilities().route_ownership {
             RouteOwnership::Native => match routing_style {
-                Some(RoutingStyle::Polyline) => EdgeRouting::FullCompute,
-                _ => EdgeRouting::UnifiedPreview,
+                Some(RoutingStyle::Polyline) => EdgeRouting::PolylineRoute,
+                _ => EdgeRouting::OrthogonalRoute,
             },
-            RouteOwnership::HintDriven => EdgeRouting::FullCompute,
-            RouteOwnership::EngineProvided => EdgeRouting::PassThroughClip,
+            RouteOwnership::HintDriven => EdgeRouting::PolylineRoute,
+            RouteOwnership::EngineProvided => EdgeRouting::EngineProvided,
         }
     }
 
@@ -638,11 +638,11 @@ impl From<LayoutConfig> for EngineConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdgeRouting {
     /// Engine provides only node positions; run full edge routing.
-    FullCompute,
+    PolylineRoute,
     /// Engine provides routed edge paths; apply clipping and spacing only.
-    PassThroughClip,
-    /// Preview float-first unified routing with guarded fallback behavior.
-    UnifiedPreview,
+    EngineProvided,
+    /// Orthogonal routing: engine produces axis-aligned (right-angle) edge paths.
+    OrthogonalRoute,
 }
 
 /// Request parameters for a `GraphEngine::solve()` call.

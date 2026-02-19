@@ -390,7 +390,7 @@ fn svg_snapshot_orthogonal_fixture_subset() {
 }
 
 #[test]
-fn svg_unified_preview_parity_fixture_subset_matches_expected_classification() {
+fn svg_orthogonal_route_parity_fixture_subset_matches_expected_classification() {
     assert_unified_parity_classification_is_complete();
 
     let mut differing: Vec<&str> = Vec::new();
@@ -417,31 +417,31 @@ fn svg_unified_preview_parity_fixture_subset_matches_expected_classification() {
 }
 
 #[test]
-fn unified_preview_svg_output_is_deterministic_for_fixture_subset() {
+fn orthogonal_route_svg_output_is_deterministic_for_fixture_subset() {
     for fixture in UNIFIED_PARITY_FIXTURE_SUBSET {
         let first = render_svg_fixture_with_engine(fixture, "flux-layered");
         let second = render_svg_fixture_with_engine(fixture, "flux-layered");
         assert_eq!(
             second, first,
-            "unified-preview SVG output is nondeterministic for fixture {fixture}"
+            "orthogonal SVG output is nondeterministic for fixture {fixture}"
         );
     }
 }
 
 #[test]
-fn svg_full_compute_rollback_is_stable_across_repeated_renders() {
+fn svg_polyline_route_rollback_is_stable_across_repeated_renders() {
     for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
         let baseline = render_svg_fixture_with_engine(fixture, "mermaid-layered");
         let output = render_svg_fixture_with_engine(fixture, "mermaid-layered");
         assert_eq!(
             output, baseline,
-            "full-compute rollback should be stable for fixture {fixture}"
+            "polyline rollback should be stable for fixture {fixture}"
         );
     }
 }
 
 #[test]
-fn svg_unified_preview_preserves_subgraph_vertical_order_on_multi_override_fixture() {
+fn svg_orthogonal_route_preserves_subgraph_vertical_order_on_multi_override_fixture() {
     let legacy =
         render_svg_fixture_with_engine("multi_subgraph_direction_override.mmd", "mermaid-layered");
     let unified =
@@ -456,10 +456,10 @@ fn svg_unified_preview_preserves_subgraph_vertical_order_on_multi_override_fixtu
     // Top subgraph A should remain above bottom subgraph G.
     assert!(
         unified_ys[1] > unified_ys[0],
-        "unified preview collapsed subgraph ordering: ys={:?}",
+        "orthogonal routing collapsed subgraph ordering: ys={:?}",
         unified_ys
     );
-    // Unified preview should keep the same top-to-bottom ordering as legacy.
+    // Orthogonal routing should keep the same top-to-bottom ordering as legacy.
     assert!(
         legacy_ys[1] > legacy_ys[0],
         "legacy output unexpectedly lacks top-to-bottom subgraph ordering: ys={:?}",

@@ -41,7 +41,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         config.dagre_cluster_rank_sep = 0.0;
     }
 
-    let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::UnifiedPreview);
+    let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::OrthogonalRoute);
     let geom = build_svg_layout(diagram, &config, &metrics, edge_routing);
     let rerouted_edges = geom.rerouted_edges.clone();
     let override_nodes = svg_router::build_override_node_map(diagram);
@@ -61,7 +61,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 /// post-processing (direction overrides, sublayout reconciliation, padding,
 /// edge rerouting), and converts to `GraphGeometry`. The result's
 /// `rerouted_edges` field carries edge indices rerouted by the subgraph
-/// pipeline. For `EdgeRouting::UnifiedPreview`, also injects orthogonal paths
+/// pipeline. For `EdgeRouting::OrthogonalRoute`, also injects orthogonal paths
 /// and extends `rerouted_edges` to cover all edges.
 ///
 /// This is the canonical SVG layout pipeline for both `FluxLayeredEngine::solve()`
@@ -163,8 +163,8 @@ pub(crate) fn build_svg_layout(
 
     // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
     let mut geom = geometry::from_dagre_layout(&layout, diagram);
-    if matches!(edge_routing, EdgeRouting::UnifiedPreview) {
-        geom = inject_unified_preview_paths(diagram, &geom);
+    if matches!(edge_routing, EdgeRouting::OrthogonalRoute) {
+        geom = inject_orthogonal_route_paths(diagram, &geom);
         rerouted_edges.extend(geom.edges.iter().map(|e| e.index));
     }
     geom.rerouted_edges = rerouted_edges;
@@ -202,15 +202,15 @@ fn rerouted_edge_indexes_for_mode(
     match edge_routing {
         // Pass-through paths are already positioned by the layout engine
         // and should not receive extra shape clipping.
-        EdgeRouting::PassThroughClip => geom.edges.iter().map(|e| e.index).collect(),
+        EdgeRouting::EngineProvided => geom.edges.iter().map(|e| e.index).collect(),
         // Unified preview routes already encode endpoint intent and should not
         // be shape-adjusted again in SVG (all path styles).
-        EdgeRouting::UnifiedPreview => geom.edges.iter().map(|e| e.index).collect(),
-        EdgeRouting::FullCompute => HashSet::new(),
+        EdgeRouting::OrthogonalRoute => geom.edges.iter().map(|e| e.index).collect(),
+        EdgeRouting::PolylineRoute => HashSet::new(),
     }
 }
 
-fn inject_unified_preview_paths(diagram: &Diagram, geom: &GraphGeometry) -> GraphGeometry {
+fn inject_orthogonal_route_paths(diagram: &Diagram, geom: &GraphGeometry) -> GraphGeometry {
     let routed = route_edges_unified(diagram, geom, UnifiedRoutingOptions::preview());
     let mut updated = geom.clone();
     for edge in routed {
@@ -853,8 +853,8 @@ fn render_edges(
             continue;
         }
         let mut points = points;
-        let edge_direction = if matches!(edge_routing, EdgeRouting::UnifiedPreview) {
-            unified_preview_edge_direction(
+        let edge_direction = if matches!(edge_routing, EdgeRouting::OrthogonalRoute) {
+            orthogonal_route_edge_direction(
                 diagram,
                 &geom.node_directions,
                 override_nodes,
@@ -867,10 +867,10 @@ fn render_edges(
         };
         let is_backward = geom.reversed_edges.contains(&index);
         // Engine-owned routing topology determines endpoint contract; style does not.
-        // Backward UnifiedPreview edges use orthogonal approach to preserve path integrity.
+        // Backward OrthogonalRoute edges use orthogonal approach to preserve path integrity.
         let preserve_orthogonal_endpoint_contract = matches!(
             (edge_routing, is_backward),
-            (EdgeRouting::UnifiedPreview, true)
+            (EdgeRouting::OrthogonalRoute, true)
         );
         // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
         // edges whose endpoints already land on the subgraph border).
@@ -891,9 +891,9 @@ fn render_edges(
         // reclip when endpoints detach from expected faces or use non-rect
         // shapes (diamond/hexagon).
         let rerouted = rerouted_edges.contains(&index);
-        let should_adjust = !matches!(edge_routing, EdgeRouting::PassThroughClip)
+        let should_adjust = !matches!(edge_routing, EdgeRouting::EngineProvided)
             && (!rerouted
-                || (matches!(edge_routing, EdgeRouting::UnifiedPreview)
+                || (matches!(edge_routing, EdgeRouting::OrthogonalRoute)
                     && should_adjust_rerouted_edge_endpoints(
                         diagram,
                         geom,
@@ -925,7 +925,7 @@ fn render_edges(
         if is_sharp && !preserve_orthogonal_endpoint_contract {
             points = fix_corner_points(&points);
         }
-        if matches!(edge_routing, EdgeRouting::UnifiedPreview)
+        if matches!(edge_routing, EdgeRouting::OrthogonalRoute)
             && is_bezier
             && !is_backward
             && edge.from != edge.to
@@ -939,10 +939,11 @@ fn render_edges(
             );
         }
         let allow_interior_nudges = !is_sharp;
-        let enforce_primary_axis_no_backtrack = matches!(edge_routing, EdgeRouting::UnifiedPreview)
-            && !is_rounded_corner
-            && !is_backward
-            && edge.from != edge.to;
+        let enforce_primary_axis_no_backtrack =
+            matches!(edge_routing, EdgeRouting::OrthogonalRoute)
+                && !is_rounded_corner
+                && !is_backward
+                && edge.from != edge.to;
         points = apply_marker_offsets(
             &points,
             edge,
@@ -957,8 +958,8 @@ fn render_edges(
             },
         );
         // Collapse tiny near-collinear jogs introduced by SVG marker offset
-        // smoothing on unified-preview paths.
-        if matches!(edge_routing, EdgeRouting::UnifiedPreview)
+        // smoothing on orthogonal routing paths.
+        if matches!(edge_routing, EdgeRouting::OrthogonalRoute)
             && !is_rounded_corner
             && !is_bezier
             && !preserve_orthogonal_endpoint_contract
@@ -2341,13 +2342,13 @@ fn points_for_svg_path(
         return Vec::new();
     }
     // Orthogonalize when both conditions hold:
-    // 1. Routing is orthogonal (UnifiedPreview) — right-angle paths are required.
+    // 1. Routing is orthogonal (OrthogonalRoute) — right-angle paths are required.
     // 2. Interpolation is linear — bezier curves handle smoothness from sparse waypoints
     //    and do not need axis-aligned segments.
     // Corner style (sharp vs rounded) does not affect whether orthogonalization is needed;
     // both require axis-aligned points to produce correct 90° paths.
-    // Polyline routing (FullCompute) intentionally allows diagonal segments — skip.
-    let needs_orthogonalization = matches!(edge_routing, EdgeRouting::UnifiedPreview)
+    // Polyline routing (PolylineRoute) intentionally allows diagonal segments — skip.
+    let needs_orthogonalization = matches!(edge_routing, EdgeRouting::OrthogonalRoute)
         && matches!(interp_style, InterpolationStyle::Linear);
     let points: Vec<Point> = if needs_orthogonalization && !points_are_axis_aligned(points) {
         let start: geometry::FPoint = points[0].into();
@@ -2459,7 +2460,7 @@ fn edge_endpoint_shape_rects(
     Some((from, to))
 }
 
-fn unified_preview_edge_direction(
+fn orthogonal_route_edge_direction(
     diagram: &Diagram,
     node_directions: &HashMap<String, Direction>,
     override_nodes: &HashMap<String, String>,
@@ -2477,7 +2478,7 @@ fn unified_preview_edge_direction(
             .get(sg_a.as_str())
             .and_then(|sg| sg.dir)
             .unwrap_or_else(|| effective_edge_direction(node_directions, from, to, fallback)),
-        _ => unified_preview_cross_boundary_direction(
+        _ => orthogonal_route_cross_boundary_direction(
             diagram,
             node_directions,
             from_sg,
@@ -2489,7 +2490,7 @@ fn unified_preview_edge_direction(
     }
 }
 
-fn unified_preview_cross_boundary_direction(
+fn orthogonal_route_cross_boundary_direction(
     diagram: &Diagram,
     node_directions: &HashMap<String, Direction>,
     from_sg: Option<&String>,
@@ -2560,7 +2561,7 @@ fn should_adjust_rerouted_edge_endpoints(
         return false;
     };
 
-    // For unified-preview, the router produces authoritative endpoint geometry.
+    // For orthogonal routing, the router produces authoritative endpoint geometry.
     // Keep intentional non-flow-face attachments (e.g. fan-in overflow) but
     // still re-adjust when endpoints drift inside/outside or violate expected
     // flow faces on the primary axis.
@@ -2732,16 +2733,16 @@ fn adjust_edge_points_for_shapes(
 
     let mut adjusted = points.to_vec();
     let is_self_loop = edge.from == edge.to;
-    // In unified-preview mode the router already places forward non-rect shape
+    // In orthogonal routing mode the router already places forward non-rect shape
     // endpoints on the actual shape boundary — these are authoritative and must
     // not be re-projected (different approach angles would shift them).
-    // In full-compute mode dagre only clips to the bounding rect, so non-rect
+    // In polyline routing mode dagre only clips to the bounding rect, so non-rect
     // shapes always need re-projection to the actual shape boundary.
-    let router_placed_source = matches!(edge_routing, EdgeRouting::UnifiedPreview)
+    let router_placed_source = matches!(edge_routing, EdgeRouting::OrthogonalRoute)
         && !is_self_loop
         && !is_backward
         && matches!(from_shape, Shape::Diamond | Shape::Hexagon);
-    let router_placed_target = matches!(edge_routing, EdgeRouting::UnifiedPreview)
+    let router_placed_target = matches!(edge_routing, EdgeRouting::OrthogonalRoute)
         && !is_self_loop
         && !is_backward
         && matches!(to_shape, Shape::Diamond | Shape::Hexagon);

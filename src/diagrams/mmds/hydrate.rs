@@ -347,9 +347,9 @@ pub fn hydrate_routed_geometry_from_output(
 ) -> Result<RoutedGraphGeometry, MmdsHydrationError> {
     let (diagram, geometry) = hydrate_geometry_parts(output)?;
     let edge_routing = if output.geometry_level == "routed" {
-        EdgeRouting::PassThroughClip
+        EdgeRouting::EngineProvided
     } else {
-        EdgeRouting::FullCompute
+        EdgeRouting::PolylineRoute
     };
     Ok(route_graph_geometry(&diagram, &geometry, edge_routing))
 }

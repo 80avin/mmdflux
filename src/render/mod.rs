@@ -39,7 +39,7 @@ fn engine_style_defaults(
     engine: Option<EngineId>,
 ) -> (RoutingStyle, InterpolationStyle, CornerStyle) {
     match engine {
-        // mermaid-layered: polyline routing (FullCompute), bezier interpolation (Mermaid default)
+        // mermaid-layered: polyline routing (PolylineRoute), bezier interpolation (Mermaid default)
         Some(EngineId::Mermaid) => (
             RoutingStyle::Polyline,
             InterpolationStyle::Bezier,

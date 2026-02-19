@@ -110,7 +110,7 @@ fn cli_svg_defaults_to_flux_layered_behavior() {
 #[test]
 fn cli_rejects_removed_routing_mode_flag() {
     mmdflux()
-        .args(["--format", "svg", "--routing-mode", "full-compute"])
+        .args(["--format", "svg", "--routing-mode", "polyline"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .failure()

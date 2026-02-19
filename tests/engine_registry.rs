@@ -788,8 +788,8 @@ fn render_cycle_svg_with_preset(engine: &str, preset: EdgePreset) -> String {
 
 #[test]
 fn flux_polyline_vs_orthogonal_produce_distinct_svg_for_cycle() {
-    // For a diagram with a backward edge, UnifiedPreview (orthogonal) and
-    // FullCompute (polyline) should produce distinct edge paths.
+    // For a diagram with a backward edge, OrthogonalRoute (orthogonal) and
+    // PolylineRoute (polyline) should produce distinct edge paths.
     let orthogonal = render_cycle_svg_with_routing("flux-layered", RoutingStyle::Orthogonal);
     let polyline = render_cycle_svg_with_routing("flux-layered", RoutingStyle::Polyline);
     assert_ne!(
@@ -800,7 +800,7 @@ fn flux_polyline_vs_orthogonal_produce_distinct_svg_for_cycle() {
 
 #[test]
 fn bezier_preset_uses_polyline_edge_routing_on_flux() {
-    // bezier expands to Polyline+Bezier+Sharp — should use FullCompute (same as explicit Polyline).
+    // bezier expands to Polyline+Bezier+Sharp — should use PolylineRoute (same as explicit Polyline).
     // Edge path topology should match explicit polyline routing.
     let bezier = render_cycle_svg_with_preset("flux-layered", EdgePreset::Bezier);
     let polyline = render_cycle_svg_with_routing("flux-layered", RoutingStyle::Polyline);
@@ -812,13 +812,13 @@ fn bezier_preset_uses_polyline_edge_routing_on_flux() {
 
 #[test]
 fn flux_polyline_routing_matches_mermaid_layered_for_cycle() {
-    // Both flux+polyline and mermaid+polyline use FullCompute routing.
+    // Both flux+polyline and mermaid+polyline use PolylineRoute routing.
     // Edge paths (d attributes) should be identical for the same fixture.
     let flux_polyline = render_cycle_svg_with_routing("flux-layered", RoutingStyle::Polyline);
     let mermaid_polyline = render_cycle_svg_with_routing("mermaid-layered", RoutingStyle::Polyline);
     assert_eq!(
         flux_polyline, mermaid_polyline,
-        "flux+polyline and mermaid+polyline should produce identical edge paths (both FullCompute)"
+        "flux+polyline and mermaid+polyline should produce identical edge paths (both PolylineRoute)"
     );
 }
 

@@ -2613,19 +2613,19 @@ fn test_route_policy_effective_edge_direction_with_nested_override_fixture() {
 }
 
 #[test]
-fn test_unified_preview_routed_geometry_is_axis_aligned_for_forward_edges() {
+fn test_orthogonal_route_routed_geometry_is_axis_aligned_for_forward_edges() {
     let diagram = parse_and_build("simple.mmd");
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom =
         run_dagre_layout(&MeasurementMode::Text, &diagram, &config).expect("layout should succeed");
-    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
     for edge in routed.edges.iter().filter(|edge| !edge.is_backward) {
         assert!(
             edge.path
                 .windows(2)
                 .all(|seg| seg[0].x == seg[1].x || seg[0].y == seg[1].y),
-            "unified preview produced diagonal segment for {} -> {}: {:?}",
+            "orthogonal routing produced diagonal segment for {} -> {}: {:?}",
             edge.from,
             edge.to,
             edge.path
@@ -2634,7 +2634,7 @@ fn test_unified_preview_routed_geometry_is_axis_aligned_for_forward_edges() {
 }
 
 #[test]
-fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
+fn test_svg_orthogonal_route_differs_from_legacy_for_cycle_fixture() {
     let input = load_fixture("simple_cycle.mmd");
     let registry = default_registry();
 
@@ -2668,7 +2668,7 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
 
     assert_ne!(
         legacy_output, unified_output,
-        "unified preview should route cycle fixture through a distinct path set"
+        "orthogonal routing should route cycle fixture through a distinct path set"
     );
 }
 
@@ -3313,8 +3313,8 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
 
     // (fixture, from, to, expected_source_face, full_target_face, unified_target_face)
     // Long backward edges (rank_span >= 6) use side-face channel routing in
-    // unified-preview (R-BACK-7 Heuristic 4), so unified target face may differ
-    // from full-compute.
+    // orthogonal routing (R-BACK-7 Heuristic 4), so unified target face may differ
+    // from polyline routing.
     type BackwardFaceCase<'a> = (&'a str, &'a str, &'a str, Option<&'a str>, &'a str, &'a str);
     let cases: [BackwardFaceCase<'_>; 2] = [
         ("decision.mmd", "D", "A", Some("top"), "bottom", "bottom"),
@@ -3342,8 +3342,8 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {to}"))
             .rect;
 
-        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
-        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
+        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
+        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
         let full_edge = full
             .edges
             .iter()
@@ -3359,22 +3359,22 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             .path
             .first()
             .copied()
-            .expect("full-compute edge should have source endpoint");
+            .expect("polyline edge should have source endpoint");
         let full_end = full_edge
             .path
             .last()
             .copied()
-            .expect("full-compute edge should have target endpoint");
+            .expect("polyline edge should have target endpoint");
         let unified_start = unified_edge
             .path
             .first()
             .copied()
-            .expect("unified-preview edge should have source endpoint");
+            .expect("orthogonal edge should have source endpoint");
         let unified_end = unified_edge
             .path
             .last()
             .copied()
-            .expect("unified-preview edge should have target endpoint");
+            .expect("orthogonal edge should have target endpoint");
 
         let full_source_face = point_face(source_rect, full_start);
         let full_target_face = point_face(target_rect, full_end);
@@ -3384,26 +3384,26 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
         if let Some(expected_source_face) = expected_source_face {
             assert_eq!(
                 full_source_face, expected_source_face,
-                "fixture contract changed unexpectedly: full-compute {from}->{to} should use source face {expected_source_face}; path={:?}",
+                "fixture contract changed unexpectedly: polyline {from}->{to} should use source face {expected_source_face}; path={:?}",
                 full_edge.path
             );
         }
         assert_eq!(
             full_target_face, expected_full_target,
-            "fixture contract changed unexpectedly: full-compute {from}->{to} should use target face {expected_full_target}; path={:?}",
+            "fixture contract changed unexpectedly: polyline {from}->{to} should use target face {expected_full_target}; path={:?}",
             full_edge.path
         );
 
         if let Some(expected_source_face) = expected_source_face {
             assert_eq!(
                 unified_source_face, expected_source_face,
-                "unified-preview {from}->{to} should match TD source-face parity with text/full ({expected_source_face}) for fixture {fixture}; full_path={:?}, unified_path={:?}",
+                "orthogonal {from}->{to} should match TD source-face parity with text/polyline ({expected_source_face}) for fixture {fixture}; full_path={:?}, unified_path={:?}",
                 full_edge.path, unified_edge.path
             );
         }
         assert_eq!(
             unified_target_face, expected_unified_target,
-            "unified-preview {from}->{to} target face should be {expected_unified_target} for fixture {fixture}; full_path={:?}, unified_path={:?}",
+            "orthogonal {from}->{to} target face should be {expected_unified_target} for fixture {fixture}; full_path={:?}, unified_path={:?}",
             full_edge.path, unified_edge.path
         );
 
@@ -3413,7 +3413,7 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
         let unified_text = render_text_with_engine(&input, "flux-layered");
         assert_eq!(
             unified_text, full_text,
-            "fixture {fixture} unified-preview text should match full-compute text"
+            "fixture {fixture} orthogonal text should match polyline text"
         );
     }
 }
@@ -3497,8 +3497,8 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Working"))
             .rect;
 
-        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
-        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
+        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
+        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
         let full_edge = full
             .edges
@@ -3525,14 +3525,14 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
         assert_eq!(
             point_face(source_rect, unified_start),
             "bottom",
-            "unified-preview Remote -> Working should preserve canonical bottom source face while matching spacing parity; full_path={:?}, unified_path={:?}",
+            "orthogonal Remote -> Working should preserve canonical bottom source face while matching spacing parity; full_path={:?}, unified_path={:?}",
             full_edge.path,
             unified_edge.path
         );
         assert_eq!(
             point_face(target_rect, unified_end),
             "bottom",
-            "unified-preview Remote -> Working should preserve canonical bottom target face while matching spacing parity; full_path={:?}, unified_path={:?}",
+            "orthogonal Remote -> Working should preserve canonical bottom target face while matching spacing parity; full_path={:?}, unified_path={:?}",
             full_edge.path,
             unified_edge.path
         );
@@ -3546,7 +3546,7 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .fold(f64::NEG_INFINITY, f64::max);
         assert!(
             unified_lane_y >= node_envelope_bottom + MIN_GIT_CHANNEL_CLEARANCE - 0.001,
-            "unified-preview Remote -> Working channel lane should have >= {MIN_GIT_CHANNEL_CLEARANCE}px clearance from node envelope (R-BACK-8): node_envelope_bottom={node_envelope_bottom}, unified_lane_y={unified_lane_y}, clearance={}, full_path={:?}, unified_path={:?}",
+            "orthogonal Remote -> Working channel lane should have >= {MIN_GIT_CHANNEL_CLEARANCE}px clearance from node envelope (R-BACK-8): node_envelope_bottom={node_envelope_bottom}, unified_lane_y={unified_lane_y}, clearance={}, full_path={:?}, unified_path={:?}",
             unified_lane_y - node_envelope_bottom,
             full_edge.path,
             unified_edge.path
@@ -3556,7 +3556,7 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
         let unified_text = render_text_with_engine(&input, "flux-layered");
         assert_eq!(
             unified_text, full_text,
-            "fixture {fixture} unified-preview text should match full-compute text once LR backward channel spacing parity is satisfied"
+            "fixture {fixture} orthogonal text should match polyline text once LR backward channel spacing parity is satisfied"
         );
     }
 
@@ -3580,8 +3580,8 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Client"))
             .rect;
 
-        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
-        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
+        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
+        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
         let full_edge = full
             .edges
@@ -3608,14 +3608,14 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
         assert_eq!(
             point_face(source_rect, unified_start),
             "right",
-            "unified-preview Response -> Client should preserve canonical right source face while matching right-clearance parity; full_path={:?}, unified_path={:?}",
+            "orthogonal Response -> Client should preserve canonical right source face while matching right-clearance parity; full_path={:?}, unified_path={:?}",
             full_edge.path,
             unified_edge.path
         );
         assert_eq!(
             point_face(target_rect, unified_end),
             "right",
-            "unified-preview Response -> Client should preserve canonical right target face while matching right-clearance parity; full_path={:?}, unified_path={:?}",
+            "orthogonal Response -> Client should preserve canonical right target face while matching right-clearance parity; full_path={:?}, unified_path={:?}",
             full_edge.path,
             unified_edge.path
         );
@@ -3632,7 +3632,7 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .fold(f64::NEG_INFINITY, f64::max);
         assert!(
             unified_right_lane_x + MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL >= full_right_lane_x,
-            "unified-preview Response -> Client should preserve right-side clearance close to full-compute text baseline (allowed shrink <= {MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL}): full_right_lane_x={full_right_lane_x}, unified_right_lane_x={unified_right_lane_x}, full_path={:?}, unified_path={:?}",
+            "orthogonal Response -> Client should preserve right-side clearance close to polyline text baseline (allowed shrink <= {MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL}): full_right_lane_x={full_right_lane_x}, unified_right_lane_x={unified_right_lane_x}, full_path={:?}, unified_path={:?}",
             full_edge.path,
             unified_edge.path
         );
@@ -3641,13 +3641,13 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
         let unified_text = render_text_with_engine(&input, "flux-layered");
         assert_eq!(
             unified_text, full_text,
-            "fixture {fixture} unified-preview text should match full-compute text once right-side backward clearance parity is satisfied"
+            "fixture {fixture} orthogonal text should match polyline text once right-side backward clearance parity is satisfied"
         );
     }
 }
 
 #[test]
-fn full_compute_rollback_is_stable_for_text_and_svg() {
+fn polyline_route_rollback_is_stable_for_text_and_svg() {
     let input = load_fixture("simple_cycle.mmd");
 
     let render_with = |format: OutputFormat| {
@@ -3684,7 +3684,7 @@ fn full_compute_rollback_is_stable_for_text_and_svg() {
 }
 
 #[test]
-fn text_label_revalidation_fixtures_match_between_unified_preview_and_full_compute_modes() {
+fn text_label_revalidation_fixtures_match_between_orthogonal_route_and_polyline_route_modes() {
     let fixtures = ["labeled_edges.mmd", "inline_label_flowchart.mmd"];
 
     let render_with_engine = |input: &str, engine: &str| {

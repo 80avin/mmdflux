@@ -30,8 +30,8 @@ render_mmds() {
   local fixture="$2"
   local out_file="$3"
   # Map legacy mode names to --routing-style values.
-  # full-compute → polyline (FullCompute on flux-layered)
-  # unified-preview → orthogonal (UnifiedPreview on flux-layered)
+  # full-compute → polyline (PolylineRoute on flux-layered)
+  # unified-preview → orthogonal (OrthogonalRoute on flux-layered)
   local routing_style
   case "$mode" in
     full-compute) routing_style="polyline" ;;
@@ -99,7 +99,7 @@ print_section "Parity + rollback gates (plan 0075 targeted tests)"
   run_exact_test "integration" "test_svg_unified_preview_differs_from_legacy_for_cycle_fixture"
 ) | tee "$OUT_DIR/targeted-gates.log"
 
-print_section "MMDS routed mode checks (full-compute vs unified-preview)"
+print_section "MMDS routed mode checks (polyline routing vs orthogonal routing)"
 assert_diff "simple.mmd"
 assert_diff "chain.mmd"
 assert_diff "simple_cycle.mmd"
@@ -114,12 +114,12 @@ print_section "Determinism checks"
   --routing-style orthogonal \
   "$REPO_ROOT/tests/fixtures/flowchart/simple_cycle.mmd" >"$OUT_DIR/simple_cycle.unified-preview.run2.svg"
 cmp -s "$OUT_DIR/simple_cycle.unified-preview.run1.svg" "$OUT_DIR/simple_cycle.unified-preview.run2.svg"
-echo "OK deterministic SVG unified-preview"
+echo "OK deterministic SVG orthogonal routing"
 
 render_mmds "unified-preview" "simple_cycle.mmd" "$OUT_DIR/simple_cycle.unified-preview.run1.mmds.json"
 render_mmds "unified-preview" "simple_cycle.mmd" "$OUT_DIR/simple_cycle.unified-preview.run2.mmds.json"
 cmp -s "$OUT_DIR/simple_cycle.unified-preview.run1.mmds.json" "$OUT_DIR/simple_cycle.unified-preview.run2.mmds.json"
-echo "OK deterministic MMDS unified-preview"
+echo "OK deterministic MMDS orthogonal routing"
 
 print_section "Full regression gates"
 (

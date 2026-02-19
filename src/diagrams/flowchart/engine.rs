@@ -209,11 +209,11 @@ impl GraphEngine for FluxLayeredEngine {
     }
 }
 
-/// Mermaid-layered engine: dagre layout with legacy (FullCompute) routing.
+/// Mermaid-layered engine: dagre layout with polyline routing.
 ///
 /// Implements `GraphEngine::solve()` with `RouteOwnership::HintDriven` —
 /// layout uses the same dagre kernel as `FluxLayeredEngine`, but routing
-/// uses the legacy `FullCompute` path for Mermaid.js compatibility.
+/// uses the `PolylineRoute` path for Mermaid.js compatibility.
 pub struct MermaidLayeredEngine {
     mode: MeasurementMode,
 }
@@ -274,7 +274,7 @@ impl GraphEngine for MermaidLayeredEngine {
 
         // SVG output: run the full SVG layout pipeline (subgraph post-processing,
         // direction overrides, padding, edge rerouting) via build_svg_layout().
-        // MermaidLayeredEngine uses FullCompute routing (no unified-preview path
+        // MermaidLayeredEngine uses PolylineRoute routing (no orthogonal path
         // injection), preserving the legacy render_svg() behavior for this engine.
         if matches!(request.output_format, OutputFormat::Svg) {
             let MeasurementMode::Svg(ref metrics) = mode else {
@@ -289,7 +289,7 @@ impl GraphEngine for MermaidLayeredEngine {
                 diagram,
                 &layout_config,
                 metrics,
-                EdgeRouting::FullCompute,
+                EdgeRouting::PolylineRoute,
             );
             return Ok(GraphSolveResult {
                 engine_id: self.id(),
@@ -300,13 +300,13 @@ impl GraphEngine for MermaidLayeredEngine {
 
         let geometry = run_dagre_layout(&mode, diagram, config)?;
 
-        // HintDriven: route via legacy FullCompute path if routed level requested.
+        // HintDriven: route via PolylineRoute path if routed level requested.
         let routed: Option<RoutedGraphGeometry> =
             if matches!(request.geometry_level, GeometryLevel::Routed) {
                 Some(super::routing::route_graph_geometry(
                     diagram,
                     &geometry,
-                    EdgeRouting::FullCompute,
+                    EdgeRouting::PolylineRoute,
                 ))
             } else {
                 None

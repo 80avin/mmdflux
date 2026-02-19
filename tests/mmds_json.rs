@@ -324,7 +324,7 @@ fn path_detail_monotonicity_holds_full_compact_simplified() {
 }
 
 #[test]
-fn unified_preview_mmds_routed_output_is_deterministic_for_fixture_subset() {
+fn orthogonal_route_mmds_routed_output_is_deterministic_for_fixture_subset() {
     for fixture in [
         "simple.mmd",
         "decision.mmd",
@@ -337,7 +337,7 @@ fn unified_preview_mmds_routed_output_is_deterministic_for_fixture_subset() {
         let second = render_routed_mmds_with_engine(&input, "flux-layered");
         assert_eq!(
             second, first,
-            "unified-preview MMDS routed output is nondeterministic for fixture {fixture}"
+            "orthogonal MMDS routed output is nondeterministic for fixture {fixture}"
         );
     }
 }

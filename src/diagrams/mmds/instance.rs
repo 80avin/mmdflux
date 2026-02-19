@@ -91,7 +91,7 @@ impl DiagramInstance for MmdsInstance {
                 &diagram,
                 &options,
                 &geometry,
-                EdgeRouting::PassThroughClip,
+                EdgeRouting::EngineProvided,
             ));
         }
 

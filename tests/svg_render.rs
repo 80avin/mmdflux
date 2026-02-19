@@ -525,7 +525,7 @@ fn style_segment_monitor_report_for_svg(
         options.svg.routing_style = RoutingStyle::Polyline;
         options.svg.interpolation_style = InterpolationStyle::Linear;
         options.svg.corner_style = CornerStyle::Sharp;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = PathDetail::Full;
         let svg = render_svg(&diagram, &options);
 
@@ -839,7 +839,7 @@ fn svg_orthogonal_mode_renders_axis_aligned_path_commands() {
 }
 
 #[test]
-fn svg_compact_path_detail_sits_between_full_and_simplified_for_unified_preview() {
+fn svg_compact_path_detail_sits_between_full_and_simplified_for_orthogonal_route() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -854,7 +854,7 @@ fn svg_compact_path_detail_sits_between_full_and_simplified_for_unified_preview(
         options.svg.routing_style = RoutingStyle::Orthogonal;
         options.svg.interpolation_style = InterpolationStyle::Linear;
         options.svg.corner_style = CornerStyle::Rounded;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = path_detail;
         render_svg(&diagram, &options)
     };
@@ -898,7 +898,7 @@ fn routed_svg_defaults_to_full_path_detail() {
     default_options.svg.routing_style = RoutingStyle::Orthogonal;
     default_options.svg.interpolation_style = InterpolationStyle::Linear;
     default_options.svg.corner_style = CornerStyle::Rounded;
-    default_options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    default_options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     let default_svg = render_svg(&diagram, &default_options);
     let default_points = edge_path_for_svg_order(&diagram, &default_svg, edge_index);
 
@@ -936,13 +936,13 @@ fn routed_svg_defaults_to_full_path_detail() {
 const SVG_LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT: f64 = 2.0;
 
 #[test]
-fn svg_orthogonal_unified_preview_labeled_edges_labels_remain_attached_to_active_segments() {
+fn svg_orthogonal_orthogonal_route_labeled_edges_labels_remain_attached_to_active_segments() {
     let diagram = load_flowchart_fixture_diagram("labeled_edges.mmd");
     let mut options = RenderOptions::default_svg();
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -959,14 +959,14 @@ fn svg_orthogonal_unified_preview_labeled_edges_labels_remain_attached_to_active
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_inline_label_flowchart_labels_remain_attached_to_active_segments()
-{
+fn svg_orthogonal_orthogonal_route_inline_label_flowchart_labels_remain_attached_to_active_segments()
+ {
     let diagram = load_flowchart_fixture_diagram("inline_label_flowchart.mmd");
     let mut options = RenderOptions::default_svg();
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -983,13 +983,13 @@ fn svg_orthogonal_unified_preview_inline_label_flowchart_labels_remain_attached_
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_inline_label_flowchart_avoids_known_node_intrusions() {
+fn svg_orthogonal_orthogonal_route_inline_label_flowchart_avoids_known_node_intrusions() {
     let diagram = load_flowchart_fixture_diagram("inline_label_flowchart.mmd");
     let mut options = RenderOptions::default_svg();
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -1072,7 +1072,7 @@ fn path_detail_monotonicity_holds_full_compact_simplified() {
         options.svg.routing_style = RoutingStyle::Orthogonal;
         options.svg.interpolation_style = InterpolationStyle::Linear;
         options.svg.corner_style = CornerStyle::Rounded;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = path_detail;
         let svg = render_svg(&diagram, &options);
         edge_path_for_svg_order(&diagram, &svg, edge_index).len()
@@ -1089,7 +1089,7 @@ fn path_detail_monotonicity_holds_full_compact_simplified() {
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_preserves_clear_terminal_stem_into_arrowhead() {
+fn svg_orthogonal_orthogonal_route_preserves_clear_terminal_stem_into_arrowhead() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -1109,7 +1109,7 @@ fn svg_orthogonal_unified_preview_preserves_clear_terminal_stem_into_arrowhead()
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
@@ -1150,7 +1150,7 @@ fn svg_orthogonal_unified_preview_preserves_clear_terminal_stem_into_arrowhead()
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_does_not_add_short_staircase_jogs_after_adjustment() {
+fn svg_orthogonal_orthogonal_route_does_not_add_short_staircase_jogs_after_adjustment() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -1170,7 +1170,7 @@ fn svg_orthogonal_unified_preview_does_not_add_short_staircase_jogs_after_adjust
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom =
         run_dagre_layout(&MeasurementMode::Text, &diagram, &config).expect("layout should succeed");
-    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
     let routed_edge = routed
         .edges
         .iter()
@@ -1184,7 +1184,7 @@ fn svg_orthogonal_unified_preview_does_not_add_short_staircase_jogs_after_adjust
     options.svg.routing_style = RoutingStyle::Polyline;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Sharp;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
@@ -1196,7 +1196,7 @@ fn svg_orthogonal_unified_preview_does_not_add_short_staircase_jogs_after_adjust
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_multiple_cycles_avoids_tiny_terminal_staircase_jogs() {
+fn svg_orthogonal_orthogonal_route_multiple_cycles_avoids_tiny_terminal_staircase_jogs() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -1214,7 +1214,7 @@ fn svg_orthogonal_unified_preview_multiple_cycles_avoids_tiny_terminal_staircase
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -1246,7 +1246,7 @@ fn svg_orthogonal_unified_preview_multiple_cycles_avoids_tiny_terminal_staircase
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_double_skip_avoids_tiny_leading_lateral_jog() {
+fn svg_orthogonal_orthogonal_route_double_skip_avoids_tiny_leading_lateral_jog() {
     let diagram = load_flowchart_fixture_diagram("double_skip.mmd");
     let edge_idx = edge_index(&diagram, "A", "C");
 
@@ -1254,7 +1254,7 @@ fn svg_orthogonal_unified_preview_double_skip_avoids_tiny_leading_lateral_jog() 
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
@@ -1282,7 +1282,7 @@ fn svg_orthogonal_unified_preview_double_skip_avoids_tiny_leading_lateral_jog() 
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_decision_diamond_outbound_prefers_horizontal_departure() {
+fn svg_orthogonal_orthogonal_route_decision_diamond_outbound_prefers_horizontal_departure() {
     let diagram = load_flowchart_fixture_diagram("decision.mmd");
     let edges = [
         edge_index(&diagram, "B", "C"),
@@ -1293,7 +1293,7 @@ fn svg_orthogonal_unified_preview_decision_diamond_outbound_prefers_horizontal_d
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -1317,7 +1317,7 @@ fn svg_orthogonal_unified_preview_decision_diamond_outbound_prefers_horizontal_d
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_hexagon_outbound_departure_insets_from_bottom_border() {
+fn svg_orthogonal_orthogonal_route_hexagon_outbound_departure_insets_from_bottom_border() {
     let diagram = load_flowchart_fixture_diagram("hexagon_flow.mmd");
     let edges = [
         edge_index(&diagram, "A", "B"),
@@ -1339,7 +1339,7 @@ fn svg_orthogonal_unified_preview_hexagon_outbound_departure_insets_from_bottom_
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -1369,7 +1369,7 @@ fn svg_orthogonal_unified_preview_hexagon_outbound_departure_insets_from_bottom_
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_nested_subgraph_edge_avoids_large_lateral_detour() {
+fn svg_orthogonal_orthogonal_route_nested_subgraph_edge_avoids_large_lateral_detour() {
     let diagram = load_flowchart_fixture_diagram("nested_subgraph_edge.mmd");
     let edges = [
         edge_index(&diagram, "Client", "Server1"),
@@ -1380,7 +1380,7 @@ fn svg_orthogonal_unified_preview_nested_subgraph_edge_avoids_large_lateral_deto
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -1395,7 +1395,7 @@ fn svg_orthogonal_unified_preview_nested_subgraph_edge_avoids_large_lateral_deto
 }
 
 #[test]
-fn svg_curved_unified_preview_ampersand_avoids_tiny_terminal_hook_before_arrow() {
+fn svg_curved_orthogonal_route_ampersand_avoids_tiny_terminal_hook_before_arrow() {
     let diagram = load_flowchart_fixture_diagram("ampersand.mmd");
     let merge_in_edges = [
         edge_index(&diagram, "A", "C"),
@@ -1406,7 +1406,7 @@ fn svg_curved_unified_preview_ampersand_avoids_tiny_terminal_hook_before_arrow()
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Bezier;
     options.svg.corner_style = CornerStyle::Sharp;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -1425,7 +1425,7 @@ fn svg_curved_unified_preview_ampersand_avoids_tiny_terminal_hook_before_arrow()
 }
 
 #[test]
-fn svg_non_orth_unified_preview_backward_edges_terminal_tangent_points_toward_target() {
+fn svg_non_orth_orthogonal_route_backward_edges_terminal_tangent_points_toward_target() {
     let cases = [
         ("decision.mmd", "D", "A"),
         ("git_workflow.mmd", "Remote", "Working"),
@@ -1446,7 +1446,7 @@ fn svg_non_orth_unified_preview_backward_edges_terminal_tangent_points_toward_ta
             options.svg.interpolation_style = style.1;
 
             options.svg.corner_style = style.2;
-            options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+            options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
             options.path_detail = PathDetail::Full;
             let svg = render_svg(&diagram, &options);
             let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
@@ -1468,7 +1468,7 @@ fn svg_non_orth_unified_preview_backward_edges_terminal_tangent_points_toward_ta
 }
 
 #[test]
-fn svg_straight_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
+fn svg_straight_orthogonal_route_avoids_primary_axis_backtrack_for_bmid_to_f() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -1488,7 +1488,7 @@ fn svg_straight_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
     options.svg.routing_style = RoutingStyle::Polyline;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Sharp;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
@@ -1500,7 +1500,7 @@ fn svg_straight_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
 }
 
 #[test]
-fn svg_curved_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
+fn svg_curved_orthogonal_route_avoids_primary_axis_backtrack_for_bmid_to_f() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -1520,7 +1520,7 @@ fn svg_curved_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Bezier;
     options.svg.corner_style = CornerStyle::Sharp;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
@@ -1532,7 +1532,7 @@ fn svg_curved_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
 }
 
 #[test]
-fn svg_rounded_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
+fn svg_rounded_orthogonal_route_avoids_primary_axis_backtrack_for_bmid_to_f() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -1552,7 +1552,7 @@ fn svg_rounded_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
@@ -1564,7 +1564,7 @@ fn svg_rounded_unified_preview_avoids_primary_axis_backtrack_for_bmid_to_f() {
 }
 
 #[test]
-fn svg_non_orth_unified_preview_keeps_endpoint_pulled_back_for_visible_arrow_tip() {
+fn svg_non_orth_orthogonal_route_keeps_endpoint_pulled_back_for_visible_arrow_tip() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -1589,7 +1589,7 @@ fn svg_non_orth_unified_preview_keeps_endpoint_pulled_back_for_visible_arrow_tip
         options.svg.interpolation_style = style.1;
 
         options.svg.corner_style = style.2;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = PathDetail::Full;
         let svg = render_svg(&diagram, &options);
         let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
@@ -1611,7 +1611,7 @@ fn svg_non_orth_unified_preview_keeps_endpoint_pulled_back_for_visible_arrow_tip
 }
 
 #[test]
-fn svg_non_orth_unified_preview_fan_in_lr_terminal_arrowheads_do_not_end_inside_target() {
+fn svg_non_orth_orthogonal_route_fan_in_lr_terminal_arrowheads_do_not_end_inside_target() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -1632,7 +1632,7 @@ fn svg_non_orth_unified_preview_fan_in_lr_terminal_arrowheads_do_not_end_inside_
         options.svg.interpolation_style = style.1;
 
         options.svg.corner_style = style.2;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = PathDetail::Full;
         let svg = render_svg(&diagram, &options);
         let (tx, ty, tw, th) =
@@ -1658,7 +1658,7 @@ fn svg_non_orth_unified_preview_fan_in_lr_terminal_arrowheads_do_not_end_inside_
 }
 
 #[test]
-fn svg_non_orth_unified_preview_backward_edges_keep_terminal_arrowheads_visible() {
+fn svg_non_orth_orthogonal_route_backward_edges_keep_terminal_arrowheads_visible() {
     let cases = [
         ("decision.mmd", "D", "A", "Start"),
         ("labeled_edges.mmd", "Error", "Setup", "Setup"),
@@ -1678,7 +1678,7 @@ fn svg_non_orth_unified_preview_backward_edges_keep_terminal_arrowheads_visible(
             options.svg.interpolation_style = style.1;
 
             options.svg.corner_style = style.2;
-            options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+            options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
             options.path_detail = PathDetail::Full;
             let svg = render_svg(&diagram, &options);
             let (tx, ty, tw, th) = node_rect_for_label(&svg, target_label)
@@ -1702,7 +1702,7 @@ fn svg_non_orth_unified_preview_backward_edges_keep_terminal_arrowheads_visible(
 }
 
 #[test]
-fn svg_non_orth_unified_preview_backward_in_subgraph_avoids_tiny_terminal_tail_hooks() {
+fn svg_non_orth_orthogonal_route_backward_in_subgraph_avoids_tiny_terminal_tail_hooks() {
     const MIN_TERMINAL_SUPPORT: f64 = 3.5;
     let diagram = load_flowchart_fixture_diagram("backward_in_subgraph.mmd");
     let edge_idx = edge_index(&diagram, "B", "A");
@@ -1715,7 +1715,7 @@ fn svg_non_orth_unified_preview_backward_in_subgraph_avoids_tiny_terminal_tail_h
         options.svg.interpolation_style = style.1;
 
         options.svg.corner_style = style.2;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = PathDetail::Full;
         let svg = render_svg(&diagram, &options);
         let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
@@ -1747,7 +1747,7 @@ fn svg_non_orth_unified_preview_backward_in_subgraph_avoids_tiny_terminal_tail_h
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_complex_backward_edge_keeps_arrowhead_visible() {
+fn svg_orthogonal_orthogonal_route_complex_backward_edge_keeps_arrowhead_visible() {
     let diagram = load_flowchart_fixture_diagram("complex.mmd");
     let edge_idx = edge_index(&diagram, "E", "A");
 
@@ -1755,7 +1755,7 @@ fn svg_orthogonal_unified_preview_complex_backward_edge_keeps_arrowhead_visible(
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let (tx, ty, tw, th) =
@@ -1775,7 +1775,7 @@ fn svg_orthogonal_unified_preview_complex_backward_edge_keeps_arrowhead_visible(
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_complex_backward_edge_terminal_tangent_points_toward_target() {
+fn svg_orthogonal_orthogonal_route_complex_backward_edge_terminal_tangent_points_toward_target() {
     let diagram = load_flowchart_fixture_diagram("complex.mmd");
     let edge_idx = edge_index(&diagram, "E", "A");
 
@@ -1783,7 +1783,7 @@ fn svg_orthogonal_unified_preview_complex_backward_edge_terminal_tangent_points_
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let rect = node_rect_for_label(&svg, "Input").expect("target rect should exist for Input");
@@ -1820,7 +1820,7 @@ fn svg_orthogonal_unified_preview_complex_backward_edge_terminal_tangent_points_
 }
 
 #[test]
-fn svg_unified_preview_complex_top_diamond_loop_avoids_single_edge_micro_jogs() {
+fn svg_orthogonal_route_complex_top_diamond_loop_avoids_single_edge_micro_jogs() {
     const MIN_SEGMENT_LEN: f64 = 6.0;
 
     let diagram = load_flowchart_fixture_diagram("complex.mmd");
@@ -1828,7 +1828,7 @@ fn svg_unified_preview_complex_top_diamond_loop_avoids_single_edge_micro_jogs() 
     straight_options.svg.routing_style = RoutingStyle::Polyline;
     straight_options.svg.interpolation_style = InterpolationStyle::Linear;
     straight_options.svg.corner_style = CornerStyle::Sharp;
-    straight_options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    straight_options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     straight_options.path_detail = PathDetail::Full;
     let straight_svg = render_svg(&diagram, &straight_options);
 
@@ -1850,7 +1850,7 @@ fn svg_unified_preview_complex_top_diamond_loop_avoids_single_edge_micro_jogs() 
     orth_options.svg.routing_style = RoutingStyle::Orthogonal;
     orth_options.svg.interpolation_style = InterpolationStyle::Linear;
     orth_options.svg.corner_style = CornerStyle::Rounded;
-    orth_options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    orth_options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     orth_options.path_detail = PathDetail::Full;
     let orth_svg = render_svg(&diagram, &orth_options);
     let backward_idx = edge_index(&diagram, "E", "A");
@@ -1862,7 +1862,7 @@ fn svg_unified_preview_complex_top_diamond_loop_avoids_single_edge_micro_jogs() 
 }
 
 #[test]
-fn svg_non_orth_unified_preview_complex_backward_edge_avoids_center_biased_input_attachment() {
+fn svg_non_orth_orthogonal_route_complex_backward_edge_avoids_center_biased_input_attachment() {
     const MIN_CENTER_OFFSET: f64 = 12.0;
 
     let diagram = load_flowchart_fixture_diagram("complex.mmd");
@@ -1876,7 +1876,7 @@ fn svg_non_orth_unified_preview_complex_backward_edge_avoids_center_biased_input
         options.svg.interpolation_style = style.1;
 
         options.svg.corner_style = style.2;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = PathDetail::Full;
         let svg = render_svg(&diagram, &options);
 
@@ -1899,13 +1899,13 @@ fn svg_non_orth_unified_preview_complex_backward_edge_avoids_center_biased_input
 }
 
 #[test]
-fn svg_straight_unified_preview_ci_pipeline_diamond_exits_avoid_extra_elbow_jogs() {
+fn svg_straight_orthogonal_route_ci_pipeline_diamond_exits_avoid_extra_elbow_jogs() {
     let diagram = load_flowchart_fixture_diagram("ci_pipeline.mmd");
     let mut options = RenderOptions::default_svg();
     options.svg.routing_style = RoutingStyle::Polyline;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Sharp;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -1933,22 +1933,22 @@ fn svg_straight_unified_preview_ci_pipeline_diamond_exits_avoid_extra_elbow_jogs
 }
 
 #[test]
-fn svg_unified_preview_backward_edges_preserve_selected_non_orth_style() {
+fn svg_orthogonal_route_backward_edges_preserve_selected_non_orth_style() {
     let diagram = load_flowchart_fixture_diagram("simple_cycle.mmd");
     let edge_idx = edge_index(&diagram, "C", "A");
 
-    let curved_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, SMOOTH);
+    let curved_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SMOOTH);
     let curved_d = edge_path_d_for_svg_order(&diagram, &curved_svg, edge_idx);
     assert!(
         curved_d.contains('C'),
-        "simple_cycle C->A backward edge should use curved-style cubic segments in unified preview: d={curved_d}"
+        "simple_cycle C->A backward edge should use curved-style cubic segments in orthogonal routing: d={curved_d}"
     );
 
-    let rounded_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, ROUNDED);
+    let rounded_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, ROUNDED);
     let rounded_d = edge_path_d_for_svg_order(&diagram, &rounded_svg, edge_idx);
     assert!(
         rounded_d.contains('Q'),
-        "simple_cycle C->A backward edge should use rounded corner commands in unified preview: d={rounded_d}"
+        "simple_cycle C->A backward edge should use rounded corner commands in orthogonal routing: d={rounded_d}"
     );
     let rounded_points = edge_path_for_svg_order(&diagram, &rounded_svg, edge_idx);
     assert!(
@@ -1964,7 +1964,7 @@ fn svg_unified_preview_backward_edges_preserve_selected_non_orth_style() {
         "simple_cycle C->A rounded backward terminal approach should stay axis-aligned (no diagonal terminal tail): prev={rounded_prev:?}, end={rounded_end:?}, d={rounded_d}"
     );
 
-    let straight_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, SHARP);
+    let straight_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SHARP);
     let straight_d = edge_path_d_for_svg_order(&diagram, &straight_svg, edge_idx);
     assert!(
         !straight_d.contains('Q') && !straight_d.contains('C'),
@@ -1986,13 +1986,13 @@ fn svg_unified_preview_backward_edges_preserve_selected_non_orth_style() {
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_label_spacing_keeps_td_departure_stems_from_source() {
+fn svg_orthogonal_orthogonal_route_label_spacing_keeps_td_departure_stems_from_source() {
     let diagram = load_flowchart_fixture_diagram("label_spacing.mmd");
     let mut options = RenderOptions::default_svg();
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
 
@@ -2013,7 +2013,7 @@ fn svg_orthogonal_unified_preview_label_spacing_keeps_td_departure_stems_from_so
 }
 
 #[test]
-fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_keeps_backward_canonical_face() {
+fn svg_non_orth_orthogonal_route_fan_in_backward_channel_conflict_keeps_backward_canonical_face() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("fixtures")
@@ -2035,7 +2035,7 @@ fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_keeps_backward_
         options.svg.interpolation_style = style.1;
 
         options.svg.corner_style = style.2;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = PathDetail::Full;
         let svg = render_svg(&diagram, &options);
         let (tx, ty, tw, th) = match rect {
@@ -2064,7 +2064,7 @@ fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_keeps_backward_
 }
 
 #[test]
-fn svg_curved_unified_preview_fan_in_backward_channel_conflict_avoids_tiny_terminal_hook_before_arrow()
+fn svg_curved_orthogonal_route_fan_in_backward_channel_conflict_avoids_tiny_terminal_hook_before_arrow()
  {
     let diagram = load_flowchart_fixture_diagram("fan_in_backward_channel_conflict.mmd");
     let edge_idx = edge_index(&diagram, "Loop", "B");
@@ -2073,7 +2073,7 @@ fn svg_curved_unified_preview_fan_in_backward_channel_conflict_avoids_tiny_termi
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Bezier;
     options.svg.corner_style = CornerStyle::Sharp;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
@@ -2092,7 +2092,7 @@ fn svg_curved_unified_preview_fan_in_backward_channel_conflict_avoids_tiny_termi
 }
 
 #[test]
-fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_preserves_lower_terminal_lane() {
+fn svg_non_orth_orthogonal_route_fan_in_backward_channel_conflict_preserves_lower_terminal_lane() {
     let diagram = load_flowchart_fixture_diagram("fan_in_backward_channel_conflict.mmd");
     let edge_idx = edge_index(&diagram, "Loop", "B");
     let styles = [SHARP, ROUNDED, SMOOTH];
@@ -2105,7 +2105,7 @@ fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_preserves_lower
         options.svg.interpolation_style = style.1;
 
         options.svg.corner_style = style.2;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = PathDetail::Full;
         let svg = render_svg(&diagram, &options);
         let (_tx, ty, _tw, th) = match rect {
@@ -2131,7 +2131,7 @@ fn svg_non_orth_unified_preview_fan_in_backward_channel_conflict_preserves_lower
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_fan_in_backward_channel_conflict_avoids_terminal_axis_backtrack()
+fn svg_orthogonal_orthogonal_route_fan_in_backward_channel_conflict_avoids_terminal_axis_backtrack()
 {
     let diagram = load_flowchart_fixture_diagram("fan_in_backward_channel_conflict.mmd");
     let edge_idx = edge_index(&diagram, "Loop", "B");
@@ -2140,7 +2140,7 @@ fn svg_orthogonal_unified_preview_fan_in_backward_channel_conflict_avoids_termin
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
@@ -2152,7 +2152,7 @@ fn svg_orthogonal_unified_preview_fan_in_backward_channel_conflict_avoids_termin
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_decision_backward_edge_avoids_source_elbow_axis_backtrack() {
+fn svg_orthogonal_orthogonal_route_decision_backward_edge_avoids_source_elbow_axis_backtrack() {
     let diagram = load_flowchart_fixture_diagram("decision.mmd");
     let edge_idx = edge_index(&diagram, "D", "A");
 
@@ -2160,7 +2160,7 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_avoids_source_elbow_axi
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
@@ -2172,7 +2172,7 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_avoids_source_elbow_axi
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_decision_backward_edge_keeps_bottom_target_face_parity() {
+fn svg_orthogonal_orthogonal_route_decision_backward_edge_keeps_bottom_target_face_parity() {
     let diagram = load_flowchart_fixture_diagram("decision.mmd");
     let edge_idx = edge_index(&diagram, "D", "A");
 
@@ -2180,7 +2180,7 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_keeps_bottom_target_fac
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
@@ -2195,7 +2195,7 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_keeps_bottom_target_fac
 }
 
 #[test]
-fn svg_orthogonal_unified_preview_decision_backward_edge_preserves_routed_terminal_lane_x() {
+fn svg_orthogonal_orthogonal_route_decision_backward_edge_preserves_routed_terminal_lane_x() {
     const MAX_TERMINAL_LANE_X_DRIFT: f64 = 8.0;
 
     let diagram = load_flowchart_fixture_diagram("decision.mmd");
@@ -2205,7 +2205,7 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_preserves_routed_termin
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom = run_dagre_layout(&measurement_mode, &diagram, &config)
         .expect("layout should succeed for decision fixture");
-    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
     let routed_edge = routed
         .edges
         .iter()
@@ -2222,7 +2222,7 @@ fn svg_orthogonal_unified_preview_decision_backward_edge_preserves_routed_termin
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Linear;
     options.svg.corner_style = CornerStyle::Rounded;
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
     let svg = render_svg(&diagram, &options);
     let points = edge_path_for_svg_order(&diagram, &svg, edge_idx);
@@ -2254,7 +2254,7 @@ fn svg_straight_fan_in_backward_channel_interaction_fixture_matrix_matches_docum
         options.svg.routing_style = RoutingStyle::Polyline;
         options.svg.interpolation_style = InterpolationStyle::Linear;
         options.svg.corner_style = CornerStyle::Sharp;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = PathDetail::Full;
         let svg = render_svg(&diagram, &options);
         let rect = node_rect_for_label(&svg, target_label)
@@ -2363,7 +2363,7 @@ fn svg_straight_fan_in_backward_channel_interaction_fixture_matrix_matches_docum
         options.svg.routing_style = RoutingStyle::Polyline;
         options.svg.interpolation_style = InterpolationStyle::Linear;
         options.svg.corner_style = CornerStyle::Sharp;
-        options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+        options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
         options.path_detail = PathDetail::Full;
         let svg = render_svg(&diagram, &options);
         let source_rect = node_rect_for_label(&svg, source_label)
@@ -2386,13 +2386,13 @@ fn svg_straight_fan_in_backward_channel_interaction_fixture_matrix_matches_docum
 }
 
 #[test]
-fn svg_unified_preview_five_fan_in_keeps_e_terminal_not_left_of_d() {
+fn svg_orthogonal_route_five_fan_in_keeps_e_terminal_not_left_of_d() {
     let diagram = load_flowchart_fixture_diagram("five_fan_in.mmd");
     let d_edge = edge_index(&diagram, "D", "F");
     let e_edge = edge_index(&diagram, "E", "F");
 
     let mut options = RenderOptions::default_svg();
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Bezier;
     options.svg.corner_style = CornerStyle::Sharp;
@@ -2405,12 +2405,12 @@ fn svg_unified_preview_five_fan_in_keeps_e_terminal_not_left_of_d() {
 
     assert!(
         e_end.0 + 1.0 >= d_end.0,
-        "five_fan_in unified-preview should not place E->Target terminal left of D->Target: d_end={d_end:?}, e_end={e_end:?}, d_points={d_points:?}, e_points={e_points:?}"
+        "five_fan_in orthogonal routing should not place E->Target terminal left of D->Target: d_end={d_end:?}, e_end={e_end:?}, d_points={d_points:?}, e_points={e_points:?}"
     );
 }
 
 #[test]
-fn svg_curved_unified_preview_five_fan_in_keeps_mirrored_pairs_visually_symmetric() {
+fn svg_curved_orthogonal_route_five_fan_in_keeps_mirrored_pairs_visually_symmetric() {
     let diagram = load_flowchart_fixture_diagram("five_fan_in.mmd");
     let b_edge = edge_index(&diagram, "B", "F");
     let d_edge = edge_index(&diagram, "D", "F");
@@ -2418,7 +2418,7 @@ fn svg_curved_unified_preview_five_fan_in_keeps_mirrored_pairs_visually_symmetri
     let e_edge = edge_index(&diagram, "E", "F");
 
     let mut options = RenderOptions::default_svg();
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Bezier;
     options.svg.corner_style = CornerStyle::Sharp;
@@ -2450,12 +2450,13 @@ fn svg_curved_unified_preview_five_fan_in_keeps_mirrored_pairs_visually_symmetri
 }
 
 #[test]
-fn svg_curved_unified_preview_git_workflow_backward_edge_keeps_terminal_support_into_working_dir() {
+fn svg_curved_orthogonal_route_git_workflow_backward_edge_keeps_terminal_support_into_working_dir()
+{
     let diagram = load_flowchart_fixture_diagram("git_workflow.mmd");
     let backward_edge = edge_index(&diagram, "Remote", "Working");
 
     let mut options = RenderOptions::default_svg();
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.svg.routing_style = RoutingStyle::Orthogonal;
     options.svg.interpolation_style = InterpolationStyle::Bezier;
     options.svg.corner_style = CornerStyle::Sharp;
@@ -2497,12 +2498,12 @@ fn style_segment_monitor_reports_actionable_summary_for_svg() {
 }
 
 #[test]
-fn svg_straight_unified_preview_self_loop_tail_does_not_collapse_upward_before_arrow() {
+fn svg_straight_orthogonal_route_self_loop_tail_does_not_collapse_upward_before_arrow() {
     let diagram = load_flowchart_fixture_diagram("self_loop_labeled.mmd");
     let edge_idx = edge_index(&diagram, "B", "B");
 
-    let full_svg = render_fixture_svg(&diagram, EdgeRouting::FullCompute, SHARP);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, SHARP);
+    let full_svg = render_fixture_svg(&diagram, EdgeRouting::PolylineRoute, SHARP);
+    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SHARP);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_idx);
     let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_idx);
@@ -2518,22 +2519,22 @@ fn svg_straight_unified_preview_self_loop_tail_does_not_collapse_upward_before_a
 
     assert!(
         delta_y <= 12.0,
-        "self-loop tail elbow should remain near full-compute in unified straight mode (avoid upward collapse); full_tail_elbow={full_tail_elbow:?}, unified_tail_elbow={unified_tail_elbow:?}, delta_y={delta_y}, full_points={full_points:?}, unified_points={unified_points:?}"
+        "self-loop tail elbow should remain near polyline routing in orthogonal straight mode (avoid upward collapse); full_tail_elbow={full_tail_elbow:?}, unified_tail_elbow={unified_tail_elbow:?}, delta_y={delta_y}, full_points={full_points:?}, unified_points={unified_points:?}"
     );
 }
 
 #[test]
-fn unified_preview_diamond_boundary_clipping_matches_shape_boundary() {
+fn orthogonal_route_diamond_boundary_clipping_matches_shape_boundary() {
     let diagram = load_flowchart_fixture_diagram("decision.mmd");
 
     let mut options = RenderOptions::default_svg();
-    options.edge_routing = Some(EdgeRouting::UnifiedPreview);
+    options.edge_routing = Some(EdgeRouting::OrthogonalRoute);
     options.path_detail = PathDetail::Full;
 
     let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom = run_dagre_layout(&mode, &diagram, &config).unwrap();
-    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::UnifiedPreview);
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
     // B is a diamond; B->D is a forward edge — verify source endpoint is on diamond boundary
     let edge = routed
@@ -2550,17 +2551,17 @@ fn unified_preview_diamond_boundary_clipping_matches_shape_boundary() {
     let boundary = (start.x - cx).abs() / w + (start.y - cy).abs() / h;
     assert!(
         (boundary - 1.0).abs() < 0.05,
-        "unified-preview B->D source should be on diamond boundary: boundary={boundary}, start={start:?}"
+        "orthogonal B->D source should be on diamond boundary: boundary={boundary}, start={start:?}"
     );
 }
 
 #[test]
-fn unified_preview_subgraph_to_subgraph_edge_keeps_terminal_attachment() {
+fn orthogonal_route_subgraph_to_subgraph_edge_keeps_terminal_attachment() {
     let diagram = load_flowchart_fixture_diagram("subgraph_to_subgraph_edge.mmd");
     let edge_index = edge_index(&diagram, "API", "DB");
 
-    let full_svg = render_fixture_svg(&diagram, EdgeRouting::FullCompute, SMOOTH);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, SMOOTH);
+    let full_svg = render_fixture_svg(&diagram, EdgeRouting::PolylineRoute, SMOOTH);
+    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SMOOTH);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
     let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
@@ -2571,17 +2572,17 @@ fn unified_preview_subgraph_to_subgraph_edge_keeps_terminal_attachment() {
 
     assert!(
         (full_start.1 - unified_start.1).abs() <= 1.0 && (full_end.1 - unified_end.1).abs() <= 1.0,
-        "API -> DB should keep vertical attachment parity with full-compute; full_points={full_points:?}, unified_points={unified_points:?}"
+        "API -> DB should keep vertical attachment parity with polyline routing; full_points={full_points:?}, unified_points={unified_points:?}"
     );
 }
 
 #[test]
-fn unified_preview_inner_bt_subgraph_edge_does_not_collapse() {
+fn orthogonal_route_inner_bt_subgraph_edge_does_not_collapse() {
     let diagram = load_flowchart_fixture_diagram("subgraph_direction_nested_both.mmd");
     let edge_index = edge_index(&diagram, "A", "B");
 
-    let full_svg = render_fixture_svg(&diagram, EdgeRouting::FullCompute, SMOOTH);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, SMOOTH);
+    let full_svg = render_fixture_svg(&diagram, EdgeRouting::PolylineRoute, SMOOTH);
+    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SMOOTH);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
     let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
@@ -2596,17 +2597,17 @@ fn unified_preview_inner_bt_subgraph_edge_does_not_collapse() {
         (full_start.1 - unified_start.1).abs() <= 1.0
             && (full_end.1 - unified_end.1).abs() <= 1.0
             && unified_span >= full_span - 1.0,
-        "A -> B in inner BT subgraph should preserve full-compute span; full_points={full_points:?}, unified_points={unified_points:?}, full_span={full_span}, unified_span={unified_span}"
+        "A -> B in inner BT subgraph should preserve polyline span; full_points={full_points:?}, unified_points={unified_points:?}, full_span={full_span}, unified_span={unified_span}"
     );
 }
 
 #[test]
-fn unified_preview_nested_override_cross_boundary_edge_keeps_lr_side_faces() {
+fn orthogonal_route_nested_override_cross_boundary_edge_keeps_lr_side_faces() {
     let diagram = load_flowchart_fixture_diagram("subgraph_direction_nested_both.mmd");
     let edge_index = edge_index(&diagram, "C", "A");
 
-    let full_svg = render_fixture_svg(&diagram, EdgeRouting::FullCompute, ROUNDED);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, ROUNDED);
+    let full_svg = render_fixture_svg(&diagram, EdgeRouting::PolylineRoute, ROUNDED);
+    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, ROUNDED);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
     let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
@@ -2623,19 +2624,19 @@ fn unified_preview_nested_override_cross_boundary_edge_keeps_lr_side_faces() {
 
     assert_eq!(
         full_source_face, "right",
-        "fixture contract invalid: full-compute C->A should depart C from east/right face: points={full_points:?}"
+        "fixture contract invalid: polyline C->A should depart C from east/right face: points={full_points:?}"
     );
     assert_eq!(
         full_target_face, "left",
-        "fixture contract invalid: full-compute C->A should enter A from west/left face: points={full_points:?}"
+        "fixture contract invalid: polyline C->A should enter A from west/left face: points={full_points:?}"
     );
     assert_eq!(
         unified_source_face, full_source_face,
-        "unified-preview C->A should preserve source face parity with full-compute in nested override cross-boundary routing: full={full_source_face}, unified={unified_source_face}, full_points={full_points:?}, unified_points={unified_points:?}"
+        "orthogonal C->A should preserve source face parity with polyline in nested override cross-boundary routing: full={full_source_face}, unified={unified_source_face}, full_points={full_points:?}, unified_points={unified_points:?}"
     );
     assert_eq!(
         unified_target_face, full_target_face,
-        "unified-preview C->A should preserve target face parity with full-compute in nested override cross-boundary routing: full={full_target_face}, unified={unified_target_face}, full_points={full_points:?}, unified_points={unified_points:?}"
+        "orthogonal C->A should preserve target face parity with polyline in nested override cross-boundary routing: full={full_target_face}, unified={unified_target_face}, full_points={full_points:?}, unified_points={unified_points:?}"
     );
 }
 
@@ -2905,7 +2906,7 @@ fn assert_mmds_svg_endpoint_convergence(
     let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let geom = run_dagre_layout(&mode, diagram, &config).unwrap();
-    let routed = route_graph_geometry(diagram, &geom, EdgeRouting::UnifiedPreview);
+    let routed = route_graph_geometry(diagram, &geom, EdgeRouting::OrthogonalRoute);
     let mmds_edge = routed
         .edges
         .iter()
@@ -2915,7 +2916,7 @@ fn assert_mmds_svg_endpoint_convergence(
     let mmds_end = mmds_edge.path.last().unwrap();
 
     // SVG path (with SVG post-adjustment pipeline)
-    let svg = render_fixture_svg(diagram, EdgeRouting::UnifiedPreview, SMOOTH);
+    let svg = render_fixture_svg(diagram, EdgeRouting::OrthogonalRoute, SMOOTH);
     let edge_idx = edge_index(diagram, from, to);
     let svg_points = edge_path_for_svg_order(diagram, &svg, edge_idx);
     let svg_start = svg_points[0];
@@ -3019,11 +3020,11 @@ fn extract_edge_endpoints(svg: &str) -> Vec<((f64, f64), (f64, f64))> {
 #[test]
 fn svg_style_does_not_alter_edge_path_topology() {
     // Style (Sharp vs Smooth) should not change which points edges connect —
-    // only how segments are drawn. Both use UnifiedPreview routing.
+    // only how segments are drawn.
     let diagram = load_flowchart_fixture_diagram("fan_in.mmd");
 
-    let sharp_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, SHARP);
-    let smooth_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, SMOOTH);
+    let sharp_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SHARP);
+    let smooth_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SMOOTH);
 
     let sharp_endpoints = extract_edge_endpoints(&sharp_svg);
     let smooth_endpoints = extract_edge_endpoints(&smooth_svg);
@@ -3058,8 +3059,8 @@ fn svg_rounded_style_does_not_force_orthogonal_topology() {
     // It must not alter how endpoints connect to nodes.
     let diagram = load_flowchart_fixture_diagram("fan_in.mmd");
 
-    let rounded_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, ROUNDED);
-    let smooth_svg = render_fixture_svg(&diagram, EdgeRouting::UnifiedPreview, SMOOTH);
+    let rounded_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, ROUNDED);
+    let smooth_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SMOOTH);
 
     let rounded_endpoints = extract_edge_endpoints(&rounded_svg);
     let smooth_endpoints = extract_edge_endpoints(&smooth_svg);

@@ -141,20 +141,20 @@ fn render_options_explicit_interpolation_overrides_preset_interpolation() {
 }
 
 #[test]
-fn render_options_default_flux_engine_selects_unified_preview() {
-    // Default flux-layered with no explicit style → Orthogonal → UnifiedPreview.
+fn render_options_default_flux_engine_selects_orthogonal_route() {
+    // Default flux-layered with no explicit style → Orthogonal → OrthogonalRoute.
     let config = RenderConfig::default();
     let options: mmdflux::render::RenderOptions = (&config).into();
     assert_eq!(
         options.edge_routing,
-        Some(EdgeRouting::UnifiedPreview),
-        "default flux-layered should select UnifiedPreview for orthogonal routing"
+        Some(EdgeRouting::OrthogonalRoute),
+        "default flux-layered should select OrthogonalRoute for orthogonal routing"
     );
 }
 
 #[test]
-fn render_options_straight_preset_selects_full_compute_on_flux() {
-    // Straight preset → Polyline routing → FullCompute on flux-layered (Native).
+fn render_options_straight_preset_selects_polyline_route_on_flux() {
+    // Straight preset → Polyline routing → PolylineRoute on flux-layered (Native).
     let config = RenderConfig {
         edge_preset: Some(EdgePreset::Straight),
         ..Default::default()
@@ -162,8 +162,8 @@ fn render_options_straight_preset_selects_full_compute_on_flux() {
     let options: mmdflux::render::RenderOptions = (&config).into();
     assert_eq!(
         options.edge_routing,
-        Some(EdgeRouting::FullCompute),
-        "Straight preset (Polyline routing) on flux-layered should select FullCompute"
+        Some(EdgeRouting::PolylineRoute),
+        "Straight preset (Polyline routing) on flux-layered should select PolylineRoute"
     );
 }
 
@@ -181,7 +181,7 @@ fn render_options_interpolation_change_does_not_affect_edge_routing_selection() 
     };
     let opts_bezier: mmdflux::render::RenderOptions = (&config_bezier).into();
     let opts_straight: mmdflux::render::RenderOptions = (&config_straight).into();
-    // Both are Polyline routing → both should get FullCompute (same edge routing).
+    // Both are Polyline routing → both should get PolylineRoute (same edge routing).
     assert_eq!(
         opts_bezier.edge_routing, opts_straight.edge_routing,
         "interpolation style change should not affect EdgeRouting selection (same routing style)"
@@ -189,8 +189,8 @@ fn render_options_interpolation_change_does_not_affect_edge_routing_selection() 
 }
 
 #[test]
-fn render_options_mermaid_engine_uses_full_compute_by_default() {
-    // mermaid-layered uses HintDriven → always FullCompute regardless of routing style.
+fn render_options_mermaid_engine_uses_polyline_route_by_default() {
+    // mermaid-layered uses HintDriven → always PolylineRoute regardless of routing style.
     let config = RenderConfig {
         layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
         ..Default::default()
@@ -198,7 +198,7 @@ fn render_options_mermaid_engine_uses_full_compute_by_default() {
     let options: mmdflux::render::RenderOptions = (&config).into();
     assert_eq!(
         options.edge_routing,
-        Some(EdgeRouting::FullCompute),
-        "mermaid-layered (HintDriven) should always select FullCompute"
+        Some(EdgeRouting::PolylineRoute),
+        "mermaid-layered (HintDriven) should always select PolylineRoute"
     );
 }

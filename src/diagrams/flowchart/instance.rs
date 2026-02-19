@@ -101,7 +101,7 @@ impl DiagramInstance for FlowchartInstance {
                     &EngineConfig::Layered(config.layout.clone()),
                     &request,
                 )?;
-                let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::UnifiedPreview);
+                let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::OrthogonalRoute);
                 Ok(render_svg_from_geometry(
                     diagram,
                     &options,

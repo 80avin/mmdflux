@@ -1,9 +1,10 @@
 //! Graph-family routing stage.
 //!
 //! Produces `RoutedGraphGeometry` (Layer 2) from `GraphGeometry` (Layer 1).
-//! Supports two modes:
-//! - `FullCompute`: Build edge paths from layout hints + node positions.
-//! - `PassThroughClip`: Use engine-provided paths directly.
+//! Supports three modes:
+//! - `PolylineRoute`: Build edge paths from layout hints + node positions.
+//! - `EngineProvided`: Use engine-provided paths directly.
+//! - `OrthogonalRoute`: Produce axis-aligned (right-angle) edge paths.
 
 use super::geometry::*;
 use super::render::unified_router::{
@@ -22,20 +23,20 @@ pub fn route_graph_geometry(
     edge_routing: EdgeRouting,
 ) -> RoutedGraphGeometry {
     let edges: Vec<RoutedEdgeGeometry> = match edge_routing {
-        EdgeRouting::UnifiedPreview => {
+        EdgeRouting::OrthogonalRoute => {
             route_edges_unified(diagram, geometry, UnifiedRoutingOptions::preview())
         }
-        EdgeRouting::PassThroughClip | EdgeRouting::FullCompute => geometry
+        EdgeRouting::EngineProvided | EdgeRouting::PolylineRoute => geometry
             .edges
             .iter()
             .map(|edge| {
                 let path = match edge_routing {
-                    EdgeRouting::PassThroughClip => edge
+                    EdgeRouting::EngineProvided => edge
                         .layout_path_hint
                         .clone()
                         .unwrap_or_else(|| build_path_from_hints(edge, geometry)),
-                    EdgeRouting::FullCompute => build_path_from_hints(edge, geometry),
-                    EdgeRouting::UnifiedPreview => unreachable!(),
+                    EdgeRouting::PolylineRoute => build_path_from_hints(edge, geometry),
+                    EdgeRouting::OrthogonalRoute => unreachable!(),
                 };
                 let is_backward = geometry.reversed_edges.contains(&edge.index);
                 RoutedEdgeGeometry {
@@ -143,9 +144,9 @@ mod tests {
     }
 
     #[test]
-    fn full_compute_produces_routed_edges() {
+    fn polyline_route_produces_routed_edges() {
         let (diagram, geom) = simple_geometry();
-        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
 
         assert_eq!(routed.nodes.len(), 2);
         assert_eq!(routed.edges.len(), 1);
@@ -154,9 +155,9 @@ mod tests {
     }
 
     #[test]
-    fn pass_through_uses_layout_path_hints() {
+    fn engine_provided_uses_layout_path_hints() {
         let (diagram, geom) = simple_geometry();
-        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PassThroughClip);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::EngineProvided);
 
         let edge = &routed.edges[0];
         assert_eq!(edge.path.len(), 2);
@@ -180,7 +181,7 @@ mod tests {
             ],
         });
 
-        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
         assert_eq!(routed.self_edges.len(), 1);
         assert_eq!(routed.self_edges[0].path.len(), 4);
         assert_eq!(routed.self_edges[0].node_id, "A");
@@ -191,7 +192,7 @@ mod tests {
         let (diagram, mut geom) = simple_geometry();
         geom.reversed_edges = vec![0];
 
-        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
         assert!(routed.edges[0].is_backward);
     }
 
@@ -202,7 +203,7 @@ mod tests {
         geom.edges[0].layout_path_hint = None;
         geom.edges[0].waypoints = vec![FPoint::new(50.0, 50.0)];
 
-        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
         let path = &routed.edges[0].path;
         // Should be: A center → waypoint → B center
         assert_eq!(path.len(), 3);
@@ -219,7 +220,7 @@ mod tests {
         let (diagram, mut geom) = simple_geometry();
         geom.edges[0].label_position = Some(FPoint::new(55.0, 50.0));
 
-        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
         let lp = routed.edges[0].label_position.unwrap();
         assert_eq!(lp.x, 55.0);
         assert_eq!(lp.y, 50.0);
@@ -238,7 +239,7 @@ mod tests {
             },
         );
 
-        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::FullCompute);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
         assert_eq!(routed.nodes.len(), 2);
         assert_eq!(routed.subgraphs.len(), 1);
         assert_eq!(routed.subgraphs["sg1"].title, "Group");
