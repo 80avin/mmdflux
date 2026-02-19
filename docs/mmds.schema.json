@@ -4,7 +4,14 @@
   "title": "MMDS — Machine-Mediated Diagram Specification",
   "description": "Structured JSON output for graph-family Mermaid diagrams produced by mmdflux.",
   "type": "object",
-  "required": ["version", "defaults", "geometry_level", "metadata", "nodes", "edges"],
+  "required": [
+    "version",
+    "defaults",
+    "geometry_level",
+    "metadata",
+    "nodes",
+    "edges"
+  ],
   "properties": {
     "version": {
       "const": 1,
@@ -12,7 +19,9 @@
     },
     "profiles": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "default": [],
       "description": "Optional behavior bundles used for profile negotiation (for example 'mmds-core-v1', 'mmdflux-svg-v1')."
     },
@@ -33,7 +42,10 @@
       "description": "Document-level defaults for omitted node/edge fields."
     },
     "geometry_level": {
-      "enum": ["layout", "routed"],
+      "enum": [
+        "layout",
+        "routed"
+      ],
       "description": "Geometry detail level. 'layout' includes node geometry + edge topology only. 'routed' adds edge paths, bounds, and routing metadata."
     },
     "metadata": {
@@ -41,31 +53,23 @@
     },
     "nodes": {
       "type": "array",
-      "items": { "$ref": "#/$defs/Node" },
+      "items": {
+        "$ref": "#/$defs/Node"
+      },
       "description": "Node inventory, sorted by ID."
     },
     "edges": {
       "type": "array",
-      "items": { "$ref": "#/$defs/Edge" },
-      "description": "Edge inventory in declaration order."
-    },
-    "profiles": {
-      "type": "array",
-      "items": { "type": "string" },
-      "default": [],
-      "description": "Optional profile identifiers. Unknown profile values are tolerated."
-    },
-    "extensions": {
-      "type": "object",
-      "default": {},
-      "additionalProperties": {
-        "type": "object"
+      "items": {
+        "$ref": "#/$defs/Edge"
       },
-      "description": "Optional namespaced extension payloads. Unknown namespaces are tolerated; each namespace value must be an object."
+      "description": "Edge inventory in declaration order."
     },
     "subgraphs": {
       "type": "array",
-      "items": { "$ref": "#/$defs/Subgraph" },
+      "items": {
+        "$ref": "#/$defs/Subgraph"
+      },
       "default": [],
       "description": "Subgraph inventory, sorted by ID."
     }
@@ -73,15 +77,24 @@
   "$defs": {
     "Defaults": {
       "type": "object",
-      "required": ["node", "edge"],
+      "required": [
+        "node",
+        "edge"
+      ],
       "properties": {
-        "node": { "$ref": "#/$defs/NodeDefaults" },
-        "edge": { "$ref": "#/$defs/EdgeDefaults" }
+        "node": {
+          "$ref": "#/$defs/NodeDefaults"
+        },
+        "edge": {
+          "$ref": "#/$defs/EdgeDefaults"
+        }
       }
     },
     "NodeDefaults": {
       "type": "object",
-      "required": ["shape"],
+      "required": [
+        "shape"
+      ],
       "properties": {
         "shape": {
           "type": "string",
@@ -91,18 +104,38 @@
     },
     "EdgeDefaults": {
       "type": "object",
-      "required": ["stroke", "arrow_start", "arrow_end", "minlen"],
+      "required": [
+        "stroke",
+        "arrow_start",
+        "arrow_end",
+        "minlen"
+      ],
       "properties": {
         "stroke": {
-          "enum": ["solid", "dotted", "thick", "invisible"],
+          "enum": [
+            "solid",
+            "dotted",
+            "thick",
+            "invisible"
+          ],
           "description": "Default edge stroke used when an edge omits stroke."
         },
         "arrow_start": {
-          "enum": ["none", "normal", "cross", "circle"],
+          "enum": [
+            "none",
+            "normal",
+            "cross",
+            "circle"
+          ],
           "description": "Default source-end marker used when an edge omits arrow_start."
         },
         "arrow_end": {
-          "enum": ["none", "normal", "cross", "circle"],
+          "enum": [
+            "none",
+            "normal",
+            "cross",
+            "circle"
+          ],
           "description": "Default target-end marker used when an edge omits arrow_end."
         },
         "minlen": {
@@ -113,14 +146,23 @@
     },
     "Metadata": {
       "type": "object",
-      "required": ["diagram_type", "direction", "bounds"],
+      "required": [
+        "diagram_type",
+        "direction",
+        "bounds"
+      ],
       "properties": {
         "diagram_type": {
           "type": "string",
           "description": "Diagram type identifier (e.g., 'flowchart', 'class')."
         },
         "direction": {
-          "enum": ["TD", "BT", "LR", "RL"],
+          "enum": [
+            "TD",
+            "BT",
+            "LR",
+            "RL"
+          ],
           "description": "Layout direction."
         },
         "bounds": {
@@ -135,16 +177,30 @@
     },
     "Node": {
       "type": "object",
-      "required": ["id", "label", "position", "size"],
+      "required": [
+        "id",
+        "label",
+        "position",
+        "size"
+      ],
       "properties": {
-        "id": { "type": "string", "description": "Node identifier from Mermaid source." },
-        "label": { "type": "string", "description": "Display label." },
+        "id": {
+          "type": "string",
+          "description": "Node identifier from Mermaid source."
+        },
+        "label": {
+          "type": "string",
+          "description": "Display label."
+        },
         "shape": {
           "type": "string",
           "default": "rectangle",
           "description": "Shape name in snake_case. If omitted, consumers should use defaults.node.shape."
         },
-        "parent": { "type": "string", "description": "Parent subgraph ID, if any." },
+        "parent": {
+          "type": "string",
+          "description": "Parent subgraph ID, if any."
+        },
         "position": {
           "$ref": "#/$defs/Position",
           "description": "Node center position in unitless MMDS layout space (not top-left anchor)."
@@ -157,14 +213,24 @@
     },
     "Edge": {
       "type": "object",
-      "required": ["id", "source", "target"],
+      "required": [
+        "id",
+        "source",
+        "target"
+      ],
       "properties": {
         "id": {
           "type": "string",
           "description": "Deterministic edge identifier (e.g., 'e0', 'e1') in declaration order."
         },
-        "source": { "type": "string", "description": "Source node ID." },
-        "target": { "type": "string", "description": "Target node ID." },
+        "source": {
+          "type": "string",
+          "description": "Source node ID."
+        },
+        "target": {
+          "type": "string",
+          "description": "Target node ID."
+        },
         "from_subgraph": {
           "type": "string",
           "description": "Original source subgraph ID when this edge represented a subgraph-as-source endpoint intent."
@@ -173,19 +239,37 @@
           "type": "string",
           "description": "Original target subgraph ID when this edge represented a subgraph-as-target endpoint intent."
         },
-        "label": { "type": "string", "description": "Edge label text." },
+        "label": {
+          "type": "string",
+          "description": "Edge label text."
+        },
         "stroke": {
-          "enum": ["solid", "dotted", "thick", "invisible"],
+          "enum": [
+            "solid",
+            "dotted",
+            "thick",
+            "invisible"
+          ],
           "default": "solid",
           "description": "Stroke style. If omitted, consumers should use defaults.edge.stroke."
         },
         "arrow_start": {
-          "enum": ["none", "normal", "cross", "circle"],
+          "enum": [
+            "none",
+            "normal",
+            "cross",
+            "circle"
+          ],
           "default": "none",
           "description": "Arrow at source end. If omitted, consumers should use defaults.edge.arrow_start."
         },
         "arrow_end": {
-          "enum": ["none", "normal", "cross", "circle"],
+          "enum": [
+            "none",
+            "normal",
+            "cross",
+            "circle"
+          ],
           "default": "normal",
           "description": "Arrow at target end. If omitted, consumers should use defaults.edge.arrow_end."
         },
@@ -198,7 +282,9 @@
           "type": "array",
           "items": {
             "type": "array",
-            "items": { "type": "number" },
+            "items": {
+              "type": "number"
+            },
             "minItems": 2,
             "maxItems": 2
           },
@@ -216,18 +302,38 @@
     },
     "Subgraph": {
       "type": "object",
-      "required": ["id", "title", "children"],
+      "required": [
+        "id",
+        "title",
+        "children"
+      ],
       "properties": {
-        "id": { "type": "string", "description": "Subgraph identifier." },
-        "title": { "type": "string", "description": "Display title." },
+        "id": {
+          "type": "string",
+          "description": "Subgraph identifier."
+        },
+        "title": {
+          "type": "string",
+          "description": "Display title."
+        },
         "children": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "IDs of nodes directly in this subgraph."
         },
-        "parent": { "type": "string", "description": "Parent subgraph ID, if nested." },
+        "parent": {
+          "type": "string",
+          "description": "Parent subgraph ID, if nested."
+        },
         "direction": {
-          "enum": ["TD", "BT", "LR", "RL"],
+          "enum": [
+            "TD",
+            "BT",
+            "LR",
+            "RL"
+          ],
           "description": "Subgraph direction override."
         },
         "bounds": {
@@ -238,26 +344,53 @@
     },
     "Position": {
       "type": "object",
-      "required": ["x", "y"],
+      "required": [
+        "x",
+        "y"
+      ],
       "properties": {
-        "x": { "type": "number", "description": "X coordinate in unitless MMDS layout space." },
-        "y": { "type": "number", "description": "Y coordinate in unitless MMDS layout space." }
+        "x": {
+          "type": "number",
+          "description": "X coordinate in unitless MMDS layout space."
+        },
+        "y": {
+          "type": "number",
+          "description": "Y coordinate in unitless MMDS layout space."
+        }
       }
     },
     "Size": {
       "type": "object",
-      "required": ["width", "height"],
+      "required": [
+        "width",
+        "height"
+      ],
       "properties": {
-        "width": { "type": "number", "description": "Width in unitless MMDS layout space." },
-        "height": { "type": "number", "description": "Height in unitless MMDS layout space." }
+        "width": {
+          "type": "number",
+          "description": "Width in unitless MMDS layout space."
+        },
+        "height": {
+          "type": "number",
+          "description": "Height in unitless MMDS layout space."
+        }
       }
     },
     "Bounds": {
       "type": "object",
-      "required": ["width", "height"],
+      "required": [
+        "width",
+        "height"
+      ],
       "properties": {
-        "width": { "type": "number", "description": "Overall width in unitless MMDS layout space." },
-        "height": { "type": "number", "description": "Overall height in unitless MMDS layout space. Consumers should preserve width/height aspect ratio when scaling." }
+        "width": {
+          "type": "number",
+          "description": "Overall width in unitless MMDS layout space."
+        },
+        "height": {
+          "type": "number",
+          "description": "Overall height in unitless MMDS layout space. Consumers should preserve width/height aspect ratio when scaling."
+        }
       }
     }
   }

@@ -1,15 +1,15 @@
 # mmdflux
 
-Render Mermaid diagrams as Unicode text, ASCII, SVG, or MMDS JSON.
+Render diagrams as Unicode text, ASCII text, SVG, or JSON. Supports Mermaid syntax.
 
 `mmdflux` is built for diagram-as-code pipelines: fast rendering, terminal-friendly output, linting, and machine-readable graph data for tooling and agents.
 
-[Playground](https://kevinswiber.github.io/mmdflux/) • [Releases](https://github.com/kevinswiber/mmdflux/releases) • [CLI Reference](docs/CLI_REFERENCE.md) • [MMDS Spec](docs/mmds.md)
+[Playground](https://kevinswiber.github.io/mmdflux/) • [Releases](https://github.com/kevinswiber/mmdflux/releases) • [MMDS Spec](docs/mmds.md)
 
 ## Why mmdflux
 
 - Terminal-native output that still preserves structure and readability
-- SVG and MMDS output for web tooling, automation, and data pipelines
+- SVG and MMDS JSON output for web tooling, automation, and data pipelines
 - Native `flux-layered` engine with deterministic routing policies
 - Compatibility `mermaid-layered` engine when Mermaid-style behavior is preferred
 
@@ -95,17 +95,9 @@ mmdflux --lint diagram.mmd
 
 ## Documentation
 
-- [CLI reference](docs/CLI_REFERENCE.md)
-- [Class diagram support matrix](docs/CLASS_DIAGRAM_SUPPORT.md)
-- [MMDS specification](docs/mmds.md)
-- [MMDS JSON schema](docs/mmds.schema.json)
 - [Gallery](docs/gallery.md)
-- [Library usage](docs/LIBRARY.md)
+- [MMDS specification](docs/mmds.md)
 - [Edge routing design](docs/edge-routing-heuristics.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Debugging and parity tools](docs/DEBUG.md)
-- [WASM build/test commands](docs/WASM.md)
-- [Releasing](docs/RELEASING.md)
 
 ## License
 
