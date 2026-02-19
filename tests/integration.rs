@@ -6,12 +6,18 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::OutputFormat;
+use mmdflux::diagram::{EdgePreset, EngineAlgorithmId, OutputFormat, RenderConfig};
+use mmdflux::diagrams::flowchart::engine::{MeasurementMode, run_dagre_layout};
+use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::render::{
-    Layout, LayoutConfig, RenderOptions, compute_layout_direct, render, route_all_edges,
+    Layout, LayoutConfig, RenderOptions, compute_layout_direct, render,
+    render_all_edges_with_labels, route_all_edges,
 };
-use mmdflux::{Diagram, Direction, Shape, build_diagram, default_registry, parse_flowchart};
+use mmdflux::{
+    Diagram, Direction, EdgeRouting, EngineConfig, Shape, build_diagram, default_registry,
+    parse_flowchart,
+};
 
 /// Load a fixture file by name from `tests/fixtures/flowchart/`.
 fn load_fixture(name: &str) -> String {
@@ -675,6 +681,14 @@ mod spreading {
 
     #[test]
     fn five_fan_in_distinct_arrivals() {
+        assert_distinct_arrival_x("five_fan_in.mmd", "F");
+    }
+
+    #[test]
+    fn fan_in_arrival_points_remain_spread_after_shared_attachment_planner() {
+        let output = render_fixture("five_fan_in.mmd");
+        assert!(output.contains("A"));
+        assert!(output.contains("Target"));
         assert_distinct_arrival_x("five_fan_in.mmd", "F");
     }
 
@@ -2585,6 +2599,80 @@ fn test_subgraph_direction_nested_both_layout() {
 }
 
 #[test]
+fn test_route_policy_effective_edge_direction_with_nested_override_fixture() {
+    let (diagram, layout) = layout_fixture("subgraph_direction_nested_both.mmd");
+
+    assert_eq!(
+        layout.effective_edge_direction("A", "B", diagram.direction),
+        Direction::BottomTop
+    );
+    assert_eq!(
+        layout.effective_edge_direction("C", "A", diagram.direction),
+        Direction::LeftRight
+    );
+}
+
+#[test]
+fn test_orthogonal_route_routed_geometry_is_axis_aligned_for_forward_edges() {
+    let diagram = parse_and_build("simple.mmd");
+    let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
+    let geom =
+        run_dagre_layout(&MeasurementMode::Text, &diagram, &config).expect("layout should succeed");
+    let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+
+    for edge in routed.edges.iter().filter(|edge| !edge.is_backward) {
+        assert!(
+            edge.path
+                .windows(2)
+                .all(|seg| seg[0].x == seg[1].x || seg[0].y == seg[1].y),
+            "orthogonal routing produced diagonal segment for {} -> {}: {:?}",
+            edge.from,
+            edge.to,
+            edge.path
+        );
+    }
+}
+
+#[test]
+fn test_svg_orthogonal_route_differs_from_legacy_for_cycle_fixture() {
+    let input = load_fixture("simple_cycle.mmd");
+    let registry = default_registry();
+
+    let mut legacy = registry
+        .create("flowchart")
+        .expect("flowchart instance should exist");
+    legacy.parse(&input).expect("fixture should parse");
+    let legacy_output = legacy
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("mermaid-layered render should succeed");
+
+    let mut orthogonal = registry
+        .create("flowchart")
+        .expect("flowchart instance should exist");
+    orthogonal.parse(&input).expect("fixture should parse");
+    let orthogonal_output = orthogonal
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("flux-layered render should succeed");
+
+    assert_ne!(
+        legacy_output, orthogonal_output,
+        "orthogonal routing should route cycle fixture through a distinct path set"
+    );
+}
+
+#[test]
 fn test_subgraph_direction_cross_boundary_no_stale_waypoints() {
     // Cross-boundary edges (one endpoint inside override subgraph, one outside)
     // should NOT retain waypoints from the parent layout after reconciliation.
@@ -2713,4 +2801,1097 @@ fn mmds_integration_fixture_matrix() {
             should_pass
         );
     }
+}
+
+#[test]
+fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_in_text_and_svg() {
+    fn edge_path_data(svg: &str) -> Vec<String> {
+        svg.lines()
+            .map(str::trim)
+            .filter(|line| {
+                line.starts_with("<path d=\"")
+                    && (line.contains("marker-end=") || line.contains("marker-start="))
+            })
+            .filter_map(|line| {
+                let start = line.find("d=\"")?;
+                let after = &line[start + 3..];
+                let end = after.find('"')?;
+                Some(after[..end].to_string())
+            })
+            .collect()
+    }
+
+    fn parse_svg_path_points(path_data: &str) -> Vec<(f64, f64)> {
+        path_data
+            .split_whitespace()
+            .filter_map(|token| {
+                let token = token.trim_start_matches(|c: char| c.is_ascii_alphabetic());
+                let (x, y) = token.split_once(',')?;
+                Some((x.parse::<f64>().ok()?, y.parse::<f64>().ok()?))
+            })
+            .collect()
+    }
+
+    fn parse_attr_f64(line: &str, attr: &str) -> Option<f64> {
+        let marker = format!("{attr}=\"");
+        let start = line.find(&marker)? + marker.len();
+        let rest = &line[start..];
+        let end = rest.find('"')?;
+        rest[..end].parse::<f64>().ok()
+    }
+
+    fn node_rect_for_label(svg: &str, label: &str) -> Option<(f64, f64, f64, f64)> {
+        let (text_x, text_y) = svg.lines().find_map(|line| {
+            if !line.contains("<text") || !line.contains(&format!(">{label}<")) {
+                return None;
+            }
+            Some((parse_attr_f64(line, "x")?, parse_attr_f64(line, "y")?))
+        })?;
+
+        svg.lines().find_map(|line| {
+            if !line.contains("<rect ")
+                || !line.contains("stroke=\"#333\"")
+                || !line.contains("fill=\"white\"")
+            {
+                return None;
+            }
+            let x = parse_attr_f64(line, "x")?;
+            let y = parse_attr_f64(line, "y")?;
+            let width = parse_attr_f64(line, "width")?;
+            let height = parse_attr_f64(line, "height")?;
+            let inside = text_x >= x && text_x <= x + width && text_y >= y && text_y <= y + height;
+            if inside {
+                Some((x, y, width, height))
+            } else {
+                None
+            }
+        })
+    }
+
+    fn svg_point_face(rect: (f64, f64, f64, f64), point: (f64, f64)) -> &'static str {
+        let eps = 0.5;
+        let (x, y, w, h) = rect;
+        let left = x;
+        let right = x + w;
+        let top = y;
+        let bottom = y + h;
+
+        let on_right = (point.0 - right).abs() <= eps;
+        let on_left = (point.0 - left).abs() <= eps;
+        let on_top = (point.1 - top).abs() <= eps;
+        let on_bottom = (point.1 - bottom).abs() <= eps;
+
+        if on_right && point.1 > top + eps && point.1 < bottom - eps {
+            "right"
+        } else if on_left && point.1 > top + eps && point.1 < bottom - eps {
+            "left"
+        } else if on_top && point.0 > left + eps && point.0 < right - eps {
+            "top"
+        } else if on_bottom && point.0 > left + eps && point.0 < right - eps {
+            "bottom"
+        } else if on_right {
+            "right"
+        } else if on_left {
+            "left"
+        } else {
+            "interior_or_corner"
+        }
+    }
+
+    fn svg_terminal_approach_face(
+        rect: (f64, f64, f64, f64),
+        points: &[(f64, f64)],
+    ) -> &'static str {
+        if points.is_empty() {
+            return "interior_or_corner";
+        }
+        let end = *points.last().expect("path should include endpoint");
+        let direct_face = svg_point_face(rect, end);
+        if direct_face != "interior_or_corner" {
+            return direct_face;
+        }
+        if points.len() < 2 {
+            return direct_face;
+        }
+        let prev = points[points.len() - 2];
+        let dx = end.0 - prev.0;
+        let dy = end.1 - prev.1;
+        let (x, y, w, h) = rect;
+        let left = x;
+        let right = x + w;
+        let top = y;
+        let bottom = y + h;
+        const MARKER_PULLBACK_TOLERANCE: f64 = 6.0;
+
+        // SVG marker pullback can place the endpoint slightly outside the
+        // node border while still visually attaching to that face.
+        if end.0 > right
+            && end.0 - right <= MARKER_PULLBACK_TOLERANCE
+            && end.1 >= top - MARKER_PULLBACK_TOLERANCE
+            && end.1 <= bottom + MARKER_PULLBACK_TOLERANCE
+            && dy.abs() <= 0.5
+            && dx < 0.0
+        {
+            return "right";
+        }
+        if end.0 < left
+            && left - end.0 <= MARKER_PULLBACK_TOLERANCE
+            && end.1 >= top - MARKER_PULLBACK_TOLERANCE
+            && end.1 <= bottom + MARKER_PULLBACK_TOLERANCE
+            && dy.abs() <= 0.5
+            && dx > 0.0
+        {
+            return "left";
+        }
+        if end.1 > bottom
+            && end.1 - bottom <= MARKER_PULLBACK_TOLERANCE
+            && end.0 >= left - MARKER_PULLBACK_TOLERANCE
+            && end.0 <= right + MARKER_PULLBACK_TOLERANCE
+            && dx.abs() <= 0.5
+            && dy < 0.0
+        {
+            return "bottom";
+        }
+        if end.1 < top
+            && top - end.1 <= MARKER_PULLBACK_TOLERANCE
+            && end.0 >= left - MARKER_PULLBACK_TOLERANCE
+            && end.0 <= right + MARKER_PULLBACK_TOLERANCE
+            && dx.abs() <= 0.5
+            && dy > 0.0
+        {
+            return "top";
+        }
+
+        if dx.abs() >= dy.abs() {
+            if dx > 0.0 {
+                "right"
+            } else if dx < 0.0 {
+                "left"
+            } else {
+                "interior_or_corner"
+            }
+        } else if dy > 0.0 {
+            "bottom"
+        } else if dy < 0.0 {
+            "top"
+        } else {
+            "interior_or_corner"
+        }
+    }
+
+    fn svg_terminal_approach_face_relaxed(
+        rect: (f64, f64, f64, f64),
+        points: &[(f64, f64)],
+    ) -> &'static str {
+        if points.is_empty() {
+            return "interior_or_corner";
+        }
+        let end = *points.last().expect("path should include endpoint");
+        let direct_face = svg_point_face(rect, end);
+        if direct_face != "interior_or_corner" {
+            return direct_face;
+        }
+        if points.len() < 2 {
+            return direct_face;
+        }
+
+        let prev = points[points.len() - 2];
+        let dx = end.0 - prev.0;
+        let dy = end.1 - prev.1;
+        let (x, y, w, h) = rect;
+        let left = x;
+        let right = x + w;
+        let top = y;
+        let bottom = y + h;
+        const MARKER_PULLBACK_TOLERANCE: f64 = 6.0;
+
+        if end.0 > right
+            && end.0 - right <= MARKER_PULLBACK_TOLERANCE
+            && end.1 >= top - MARKER_PULLBACK_TOLERANCE
+            && end.1 <= bottom + MARKER_PULLBACK_TOLERANCE
+            && dx < 0.0
+        {
+            return "right";
+        }
+        if end.0 < left
+            && left - end.0 <= MARKER_PULLBACK_TOLERANCE
+            && end.1 >= top - MARKER_PULLBACK_TOLERANCE
+            && end.1 <= bottom + MARKER_PULLBACK_TOLERANCE
+            && dx > 0.0
+        {
+            return "left";
+        }
+        if end.1 > bottom
+            && end.1 - bottom <= MARKER_PULLBACK_TOLERANCE
+            && end.0 >= left - MARKER_PULLBACK_TOLERANCE
+            && end.0 <= right + MARKER_PULLBACK_TOLERANCE
+            && dy < 0.0
+        {
+            return "bottom";
+        }
+        if end.1 < top
+            && top - end.1 <= MARKER_PULLBACK_TOLERANCE
+            && end.0 >= left - MARKER_PULLBACK_TOLERANCE
+            && end.0 <= right + MARKER_PULLBACK_TOLERANCE
+            && dy > 0.0
+        {
+            return "top";
+        }
+
+        svg_terminal_approach_face(rect, points)
+    }
+
+    fn svg_source_departure_face(
+        rect: (f64, f64, f64, f64),
+        points: &[(f64, f64)],
+    ) -> &'static str {
+        if points.is_empty() {
+            return "interior_or_corner";
+        }
+        let start = points[0];
+        let direct_face = svg_point_face(rect, start);
+        if direct_face != "interior_or_corner" {
+            return direct_face;
+        }
+        if points.len() < 2 {
+            return direct_face;
+        }
+
+        let next = points[1];
+        let dx = next.0 - start.0;
+        let dy = next.1 - start.1;
+        if dx.abs() >= dy.abs() {
+            if dx > 0.0 {
+                "right"
+            } else if dx < 0.0 {
+                "left"
+            } else {
+                "interior_or_corner"
+            }
+        } else if dy > 0.0 {
+            "bottom"
+        } else if dy < 0.0 {
+            "top"
+        } else {
+            "interior_or_corner"
+        }
+    }
+
+    fn edge_path_for_svg_order(diagram: &Diagram, svg: &str, edge_index: usize) -> Vec<(f64, f64)> {
+        let mut visible_edge_indexes: Vec<usize> = diagram
+            .edges
+            .iter()
+            .filter(|edge| edge.stroke != mmdflux::graph::Stroke::Invisible)
+            .map(|edge| edge.index)
+            .collect();
+        visible_edge_indexes.sort_unstable();
+
+        let svg_position = visible_edge_indexes
+            .iter()
+            .position(|idx| *idx == edge_index)
+            .expect("edge index should be visible in SVG");
+        let paths = edge_path_data(svg);
+        parse_svg_path_points(
+            paths
+                .get(svg_position)
+                .expect("edge path should exist at visible edge position"),
+        )
+    }
+
+    let render_with_registry = |fixture_name: &str, format: OutputFormat| {
+        let input = load_fixture(fixture_name);
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(&input).expect("fixture should parse");
+        instance
+            .render(
+                format,
+                &RenderConfig {
+                    layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("render should succeed")
+    };
+
+    let fan_in_cases = [
+        ("stacked_fan_in.mmd", "C", "Bot", 0usize),
+        ("fan_in.mmd", "D", "Target", 0usize),
+        ("five_fan_in.mmd", "F", "Target", 0usize),
+    ];
+    for (fixture_name, target_id, target_label, min_side_faces) in fan_in_cases {
+        let diagram = parse_and_build(fixture_name);
+        let text = render_with_registry(fixture_name, OutputFormat::Text);
+        assert!(
+            text.contains(target_label),
+            "text output should contain target label {target_label} for {fixture_name}"
+        );
+        let svg = render_with_registry(fixture_name, OutputFormat::Svg);
+        let rect = node_rect_for_label(&svg, target_label)
+            .unwrap_or_else(|| panic!("missing target rect for {target_label} in {fixture_name}"));
+        let inbound_indices: Vec<usize> = diagram
+            .edges
+            .iter()
+            .filter(|edge| edge.to == target_id)
+            .map(|edge| edge.index)
+            .collect();
+        assert!(
+            !inbound_indices.is_empty(),
+            "fixture {fixture_name} should have inbound edges to {target_id}"
+        );
+
+        let mut side_face_count = 0usize;
+        let mut interior_or_corner_count = 0usize;
+        for edge_index in inbound_indices {
+            let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+            let face = svg_terminal_approach_face(rect, &points);
+            if face == "interior_or_corner" {
+                interior_or_corner_count += 1;
+            }
+            if matches!(face, "left" | "right") {
+                side_face_count += 1;
+            }
+        }
+
+        assert_eq!(
+            interior_or_corner_count, 0,
+            "fixture {fixture_name} should keep inbound endpoints on a concrete target face under Fan-in overflow policy"
+        );
+        if min_side_faces == 0 {
+            assert_eq!(
+                side_face_count, 0,
+                "fixture {fixture_name} should stay on primary TD incoming face when overflow is not required"
+            );
+        } else {
+            assert!(
+                side_face_count >= min_side_faces,
+                "fixture {fixture_name} should spill overflow arrivals to side faces under Fan-in overflow policy: expected >= {min_side_faces}, actual={side_face_count}"
+            );
+        }
+    }
+
+    let backward_channel_cases = [
+        (
+            "simple_cycle.mmd",
+            "C",
+            "A",
+            "End",
+            "Start",
+            "top",
+            "bottom",
+        ),
+        (
+            "multiple_cycles.mmd",
+            "C",
+            "A",
+            "Bottom",
+            "Top",
+            "top",
+            "bottom",
+        ),
+        (
+            "fan_in_backward_channel_conflict.mmd",
+            "Loop",
+            "B",
+            "Sink",
+            "Target",
+            "top",
+            "bottom",
+        ),
+        (
+            "http_request.mmd",
+            "Response",
+            "Client",
+            "Send Response",
+            "Client",
+            "right",
+            "right",
+        ),
+        (
+            "git_workflow.mmd",
+            "Remote",
+            "Working",
+            "Remote Repo",
+            "Working Dir",
+            "bottom",
+            "bottom",
+        ),
+    ];
+    for (
+        fixture_name,
+        from,
+        to,
+        source_label,
+        target_label,
+        expected_source_face,
+        expected_target_face,
+    ) in backward_channel_cases
+    {
+        let diagram = parse_and_build(fixture_name);
+        let text = render_with_registry(fixture_name, OutputFormat::Text);
+        assert!(
+            text.contains(target_label),
+            "text output should contain target label {target_label} for {fixture_name}"
+        );
+        let svg = render_with_registry(fixture_name, OutputFormat::Svg);
+        let source_rect = node_rect_for_label(&svg, source_label)
+            .unwrap_or_else(|| panic!("missing source rect for {source_label} in {fixture_name}"));
+        let target_rect = node_rect_for_label(&svg, target_label)
+            .unwrap_or_else(|| panic!("missing target rect for {target_label} in {fixture_name}"));
+        let edge_index = diagram
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("expected edge {from} -> {to} in {fixture_name}"))
+            .index;
+        let points = edge_path_for_svg_order(&diagram, &svg, edge_index);
+        let source_face = svg_source_departure_face(source_rect, &points);
+        assert_eq!(
+            source_face, expected_source_face,
+            "fixture {fixture_name} edge {from}->{to} should keep expected backward source face {expected_source_face}; points={points:?}"
+        );
+        let target_face = svg_terminal_approach_face_relaxed(target_rect, &points);
+        assert_eq!(
+            target_face, expected_target_face,
+            "fixture {fixture_name} edge {from}->{to} should keep expected backward target face {expected_target_face}; points={points:?}"
+        );
+    }
+}
+
+#[test]
+fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex() {
+    fn point_face(
+        rect: mmdflux::diagrams::flowchart::geometry::FRect,
+        point: mmdflux::diagrams::flowchart::geometry::FPoint,
+    ) -> &'static str {
+        let eps = 0.5;
+        let left = rect.x;
+        let right = rect.x + rect.width;
+        let top = rect.y;
+        let bottom = rect.y + rect.height;
+
+        let on_right = (point.x - right).abs() <= eps;
+        let on_left = (point.x - left).abs() <= eps;
+        let on_top = (point.y - top).abs() <= eps;
+        let on_bottom = (point.y - bottom).abs() <= eps;
+
+        if on_right && point.y > top + eps && point.y < bottom - eps {
+            "right"
+        } else if on_left && point.y > top + eps && point.y < bottom - eps {
+            "left"
+        } else if on_top && point.x > left + eps && point.x < right - eps {
+            "top"
+        } else if on_bottom && point.x > left + eps && point.x < right - eps {
+            "bottom"
+        } else if on_right {
+            "right"
+        } else if on_left {
+            "left"
+        } else {
+            "interior_or_corner"
+        }
+    }
+
+    let render_text_with_engine = |input: &str, engine: &str| {
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(input).expect("fixture should parse");
+        instance
+            .render(
+                OutputFormat::Text,
+                &RenderConfig {
+                    layout_engine: EngineAlgorithmId::parse(engine).ok(),
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("text render should succeed")
+    };
+
+    // (fixture, from, to, expected_source_face, full_target_face, orthogonal_target_face)
+    // Long backward edges (rank_span >= 6) use side-face channel routing in
+    // orthogonal routing (R-BACK-7 Heuristic 4), so orthogonal target face may differ
+    // from polyline routing.
+    type BackwardFaceCase<'a> = (&'a str, &'a str, &'a str, Option<&'a str>, &'a str, &'a str);
+    let cases: [BackwardFaceCase<'_>; 2] = [
+        // D is to the right of A; parity override is bypassed to avoid crossing
+        // the forward A->D edge, so orthogonal uses side-channel (right-face) routing.
+        ("decision.mmd", "D", "A", None, "bottom", "right"),
+        ("complex.mmd", "E", "A", None, "bottom", "right"),
+    ];
+
+    for (
+        fixture,
+        from,
+        to,
+        expected_source_face,
+        expected_full_target,
+        expected_orthogonal_target,
+    ) in cases
+    {
+        let input = load_fixture(fixture);
+        let flowchart = parse_flowchart(&input).expect("fixture should parse");
+        let diagram = build_diagram(&flowchart);
+        let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
+        let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
+        let geom = run_dagre_layout(&mode, &diagram, &config).expect("layout should succeed");
+
+        let source_rect = geom
+            .nodes
+            .get(from)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain source node {from}"))
+            .rect;
+        let target_rect = geom
+            .nodes
+            .get(to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target node {to}"))
+            .rect;
+
+        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
+        let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+        let full_edge = full
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain edge {from}->{to}"));
+        let orthogonal_edge = orthogonal
+            .edges
+            .iter()
+            .find(|edge| edge.from == from && edge.to == to)
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain edge {from}->{to}"));
+
+        let full_start = full_edge
+            .path
+            .first()
+            .copied()
+            .expect("polyline edge should have source endpoint");
+        let full_end = full_edge
+            .path
+            .last()
+            .copied()
+            .expect("polyline edge should have target endpoint");
+        let orthogonal_start = orthogonal_edge
+            .path
+            .first()
+            .copied()
+            .expect("orthogonal edge should have source endpoint");
+        let orthogonal_end = orthogonal_edge
+            .path
+            .last()
+            .copied()
+            .expect("orthogonal edge should have target endpoint");
+
+        let full_source_face = point_face(source_rect, full_start);
+        let full_target_face = point_face(target_rect, full_end);
+        let orthogonal_source_face = point_face(source_rect, orthogonal_start);
+        let orthogonal_target_face = point_face(target_rect, orthogonal_end);
+
+        if let Some(expected_source_face) = expected_source_face {
+            assert_eq!(
+                full_source_face, expected_source_face,
+                "fixture contract changed unexpectedly: polyline {from}->{to} should use source face {expected_source_face}; path={:?}",
+                full_edge.path
+            );
+        }
+        assert_eq!(
+            full_target_face, expected_full_target,
+            "fixture contract changed unexpectedly: polyline {from}->{to} should use target face {expected_full_target}; path={:?}",
+            full_edge.path
+        );
+
+        if let Some(expected_source_face) = expected_source_face {
+            assert_eq!(
+                orthogonal_source_face, expected_source_face,
+                "orthogonal {from}->{to} should match TD source-face parity with text/polyline ({expected_source_face}) for fixture {fixture}; full_path={:?}, orthogonal_path={:?}",
+                full_edge.path, orthogonal_edge.path
+            );
+        }
+        assert_eq!(
+            orthogonal_target_face, expected_orthogonal_target,
+            "orthogonal {from}->{to} target face should be {expected_orthogonal_target} for fixture {fixture}; full_path={:?}, orthogonal_path={:?}",
+            full_edge.path, orthogonal_edge.path
+        );
+
+        // Text output should still match between edge routings (backward edge
+        // face differences only affect SVG path geometry, not text grid).
+        let full_text = render_text_with_engine(&input, "mermaid-layered");
+        let orthogonal_text = render_text_with_engine(&input, "flux-layered");
+        assert_eq!(
+            orthogonal_text, full_text,
+            "fixture {fixture} orthogonal text should match polyline text"
+        );
+    }
+}
+
+#[test]
+fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
+    const MIN_GIT_CHANNEL_CLEARANCE: f64 = 12.0;
+    const MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL: f64 = 8.0;
+
+    fn point_face(
+        rect: mmdflux::diagrams::flowchart::geometry::FRect,
+        point: mmdflux::diagrams::flowchart::geometry::FPoint,
+    ) -> &'static str {
+        let eps = 0.5;
+        let left = rect.x;
+        let right = rect.x + rect.width;
+        let top = rect.y;
+        let bottom = rect.y + rect.height;
+
+        let on_right = (point.x - right).abs() <= eps;
+        let on_left = (point.x - left).abs() <= eps;
+        let on_top = (point.y - top).abs() <= eps;
+        let on_bottom = (point.y - bottom).abs() <= eps;
+
+        if on_right && point.y > top + eps && point.y < bottom - eps {
+            "right"
+        } else if on_left && point.y > top + eps && point.y < bottom - eps {
+            "left"
+        } else if on_top && point.x > left + eps && point.x < right - eps {
+            "top"
+        } else if on_bottom && point.x > left + eps && point.x < right - eps {
+            "bottom"
+        } else if on_right {
+            "right"
+        } else if on_left {
+            "left"
+        } else {
+            "interior_or_corner"
+        }
+    }
+
+    let render_text_with_engine = |input: &str, engine: &str| {
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(input).expect("fixture should parse");
+        instance
+            .render(
+                OutputFormat::Text,
+                &RenderConfig {
+                    layout_engine: EngineAlgorithmId::parse(engine).ok(),
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("text render should succeed")
+    };
+
+    {
+        let fixture = "git_workflow.mmd";
+        let input = load_fixture(fixture);
+        let flowchart = parse_flowchart(&input).expect("fixture should parse");
+        let diagram = build_diagram(&flowchart);
+        let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
+        let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
+        let geom = run_dagre_layout(&mode, &diagram, &config).expect("layout should succeed");
+        assert_eq!(
+            geom.direction,
+            Direction::LeftRight,
+            "fixture {fixture} should remain LR for backward channel spacing parity checks"
+        );
+
+        let source_rect = geom
+            .nodes
+            .get("Remote")
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain source node Remote"))
+            .rect;
+        let target_rect = geom
+            .nodes
+            .get("Working")
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Working"))
+            .rect;
+
+        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
+        let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+
+        let full_edge = full
+            .edges
+            .iter()
+            .find(|edge| edge.from == "Remote" && edge.to == "Working")
+            .expect("fixture should contain edge Remote -> Working");
+        let orthogonal_edge = orthogonal
+            .edges
+            .iter()
+            .find(|edge| edge.from == "Remote" && edge.to == "Working")
+            .expect("fixture should contain edge Remote -> Working");
+
+        let full_start = full_edge.path[0];
+        let _full_end = *full_edge
+            .path
+            .last()
+            .expect("full edge should have endpoint");
+        let orthogonal_start = orthogonal_edge.path[0];
+        let orthogonal_end = *orthogonal_edge
+            .path
+            .last()
+            .expect("orthogonal edge should have endpoint");
+        let _full_source_face = point_face(source_rect, full_start);
+        assert_eq!(
+            point_face(source_rect, orthogonal_start),
+            "bottom",
+            "orthogonal Remote -> Working should preserve canonical bottom source face while matching spacing parity; full_path={:?}, orthogonal_path={:?}",
+            full_edge.path,
+            orthogonal_edge.path
+        );
+        assert_eq!(
+            point_face(target_rect, orthogonal_end),
+            "bottom",
+            "orthogonal Remote -> Working should preserve canonical bottom target face while matching spacing parity; full_path={:?}, orthogonal_path={:?}",
+            full_edge.path,
+            orthogonal_edge.path
+        );
+
+        let node_envelope_bottom =
+            (source_rect.y + source_rect.height).max(target_rect.y + target_rect.height);
+        let orthogonal_lane_y = orthogonal_edge
+            .path
+            .iter()
+            .map(|point| point.y)
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(
+            orthogonal_lane_y >= node_envelope_bottom + MIN_GIT_CHANNEL_CLEARANCE - 0.001,
+            "orthogonal Remote -> Working channel lane should have >= {MIN_GIT_CHANNEL_CLEARANCE}px clearance from node envelope (R-BACK-8): node_envelope_bottom={node_envelope_bottom}, orthogonal_lane_y={orthogonal_lane_y}, clearance={}, full_path={:?}, orthogonal_path={:?}",
+            orthogonal_lane_y - node_envelope_bottom,
+            full_edge.path,
+            orthogonal_edge.path
+        );
+
+        let full_text = render_text_with_engine(&input, "mermaid-layered");
+        let orthogonal_text = render_text_with_engine(&input, "flux-layered");
+        assert_eq!(
+            orthogonal_text, full_text,
+            "fixture {fixture} orthogonal text should match polyline text once LR backward channel spacing parity is satisfied"
+        );
+    }
+
+    {
+        let fixture = "http_request.mmd";
+        let input = load_fixture(fixture);
+        let flowchart = parse_flowchart(&input).expect("fixture should parse");
+        let diagram = build_diagram(&flowchart);
+        let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
+        let geom = run_dagre_layout(&MeasurementMode::Text, &diagram, &config)
+            .expect("layout should succeed");
+
+        let source_rect = geom
+            .nodes
+            .get("Response")
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain source node Response"))
+            .rect;
+        let target_rect = geom
+            .nodes
+            .get("Client")
+            .unwrap_or_else(|| panic!("fixture {fixture} should contain target node Client"))
+            .rect;
+
+        let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
+        let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+
+        let full_edge = full
+            .edges
+            .iter()
+            .find(|edge| edge.from == "Response" && edge.to == "Client")
+            .expect("fixture should contain edge Response -> Client");
+        let orthogonal_edge = orthogonal
+            .edges
+            .iter()
+            .find(|edge| edge.from == "Response" && edge.to == "Client")
+            .expect("fixture should contain edge Response -> Client");
+
+        let full_start = full_edge.path[0];
+        let _full_end = *full_edge
+            .path
+            .last()
+            .expect("full edge should have endpoint");
+        let orthogonal_start = orthogonal_edge.path[0];
+        let orthogonal_end = *orthogonal_edge
+            .path
+            .last()
+            .expect("orthogonal edge should have endpoint");
+        let _full_source_face = point_face(source_rect, full_start);
+        assert_eq!(
+            point_face(source_rect, orthogonal_start),
+            "right",
+            "orthogonal Response -> Client should preserve canonical right source face while matching right-clearance parity; full_path={:?}, orthogonal_path={:?}",
+            full_edge.path,
+            orthogonal_edge.path
+        );
+        assert_eq!(
+            point_face(target_rect, orthogonal_end),
+            "right",
+            "orthogonal Response -> Client should preserve canonical right target face while matching right-clearance parity; full_path={:?}, orthogonal_path={:?}",
+            full_edge.path,
+            orthogonal_edge.path
+        );
+
+        let full_right_lane_x = full_edge
+            .path
+            .iter()
+            .map(|point| point.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let orthogonal_right_lane_x = orthogonal_edge
+            .path
+            .iter()
+            .map(|point| point.x)
+            .fold(f64::NEG_INFINITY, f64::max);
+        assert!(
+            orthogonal_right_lane_x + MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL
+                >= full_right_lane_x,
+            "orthogonal Response -> Client should preserve right-side clearance close to polyline text baseline (allowed shrink <= {MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL}): full_right_lane_x={full_right_lane_x}, orthogonal_right_lane_x={orthogonal_right_lane_x}, full_path={:?}, orthogonal_path={:?}",
+            full_edge.path,
+            orthogonal_edge.path
+        );
+
+        let full_text = render_text_with_engine(&input, "mermaid-layered");
+        let orthogonal_text = render_text_with_engine(&input, "flux-layered");
+        assert_eq!(
+            orthogonal_text, full_text,
+            "fixture {fixture} orthogonal text should match polyline text once right-side backward clearance parity is satisfied"
+        );
+    }
+}
+
+#[test]
+fn polyline_route_rollback_is_stable_for_text_and_svg() {
+    let input = load_fixture("simple_cycle.mmd");
+
+    let render_with = |format: OutputFormat| {
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(&input).expect("fixture should parse");
+        instance
+            .render(
+                format,
+                &RenderConfig {
+                    layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
+                    edge_preset: Some(EdgePreset::Straight),
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("render should succeed")
+    };
+
+    let baseline_text = render_with(OutputFormat::Text);
+    let baseline_svg = render_with(OutputFormat::Svg);
+
+    let text = render_with(OutputFormat::Text);
+    let svg = render_with(OutputFormat::Svg);
+    assert_eq!(
+        text, baseline_text,
+        "text rollback should be stable across repeated renders"
+    );
+    assert_eq!(
+        svg, baseline_svg,
+        "svg rollback should be stable across repeated renders"
+    );
+}
+
+#[test]
+fn text_label_revalidation_fixtures_match_between_orthogonal_route_and_polyline_route_modes() {
+    let fixtures = ["labeled_edges.mmd", "inline_label_flowchart.mmd"];
+
+    let render_with_engine = |input: &str, engine: &str| {
+        let registry = default_registry();
+        let mut instance = registry
+            .create("flowchart")
+            .expect("flowchart instance should exist");
+        instance.parse(input).expect("fixture should parse");
+        instance
+            .render(
+                OutputFormat::Text,
+                &RenderConfig {
+                    layout_engine: EngineAlgorithmId::parse(engine).ok(),
+                    ..RenderConfig::default()
+                },
+            )
+            .expect("text render should succeed")
+    };
+
+    for fixture in fixtures {
+        let input = load_fixture(fixture);
+        let mermaid_layered = render_with_engine(&input, "mermaid-layered");
+        let flux_layered = render_with_engine(&input, "flux-layered");
+        assert_eq!(
+            flux_layered, mermaid_layered,
+            "Label revalidation text parity guard failed for fixture {fixture}: flux-layered text output diverged from mermaid-layered"
+        );
+    }
+}
+
+#[test]
+fn text_renderer_rejects_stale_precomputed_label_anchor_for_label_revalidation_fixture() {
+    fn distance_to_segment(point: (f64, f64), start: (f64, f64), end: (f64, f64)) -> f64 {
+        let (px, py) = point;
+        let (sx, sy) = start;
+        let (ex, ey) = end;
+        let dx = ex - sx;
+        let dy = ey - sy;
+        let len_sq = dx * dx + dy * dy;
+        if len_sq <= 0.000_001 {
+            return ((px - sx).powi(2) + (py - sy).powi(2)).sqrt();
+        }
+        let projection = ((px - sx) * dx + (py - sy) * dy) / len_sq;
+        let t = projection.clamp(0.0, 1.0);
+        let cx = sx + t * dx;
+        let cy = sy + t * dy;
+        ((px - cx).powi(2) + (py - cy).powi(2)).sqrt()
+    }
+
+    fn distance_to_routed_path(
+        point: (usize, usize),
+        segments: &[mmdflux::render::Segment],
+    ) -> f64 {
+        let p = (point.0 as f64, point.1 as f64);
+        segments
+            .iter()
+            .map(|segment| match segment {
+                mmdflux::render::Segment::Horizontal { y, x_start, x_end } => {
+                    distance_to_segment(p, (*x_start as f64, *y as f64), (*x_end as f64, *y as f64))
+                }
+                mmdflux::render::Segment::Vertical { x, y_start, y_end } => {
+                    distance_to_segment(p, (*x as f64, *y_start as f64), (*x as f64, *y_end as f64))
+                }
+            })
+            .fold(f64::INFINITY, f64::min)
+    }
+
+    fn render_label_center(
+        diagram: &Diagram,
+        layout: &Layout,
+        routed_edges: &[mmdflux::render::RoutedEdge],
+        label: &str,
+        label_positions: &HashMap<usize, (usize, usize)>,
+    ) -> ((usize, usize), String) {
+        let mut canvas = mmdflux::render::Canvas::new(layout.width, layout.height);
+        let charset = mmdflux::render::CharSet::unicode();
+
+        let mut node_keys: Vec<&String> = diagram.nodes.keys().collect();
+        node_keys.sort();
+        for node_id in node_keys {
+            let node = &diagram.nodes[node_id];
+            if let Some(&(x, y)) = layout.draw_positions.get(node_id) {
+                mmdflux::render::render_node(&mut canvas, node, x, y, &charset, diagram.direction);
+            }
+        }
+
+        render_all_edges_with_labels(
+            &mut canvas,
+            routed_edges,
+            &charset,
+            diagram.direction,
+            label_positions,
+        );
+
+        let output = canvas.to_string();
+        let mut matches = Vec::new();
+        for (y, line) in output.lines().enumerate() {
+            if let Some(x) = line.find(label) {
+                matches.push((x, y));
+            }
+        }
+        assert_eq!(
+            matches.len(),
+            1,
+            "expected exactly one rendered '{label}' label occurrence; got {:?}\n{output}",
+            matches
+        );
+        (matches[0], output)
+    }
+
+    let flowchart =
+        parse_flowchart("graph TD\nA[Very Wide Source Node] -->|cfg| B[Very Wide Target Node]\n")
+            .expect("fixture should parse");
+    let diagram = build_diagram(&flowchart);
+    let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+    let routed_edges = route_all_edges(&diagram.edges, &layout, diagram.direction);
+
+    let target_edge = diagram
+        .edges
+        .iter()
+        .find(|edge| edge.label.as_deref() == Some("cfg"))
+        .expect("diagram should contain labeled edge");
+    let label = target_edge
+        .label
+        .as_ref()
+        .expect("target edge should include label");
+    let label_width = label.chars().count();
+    let routed_edge = routed_edges
+        .iter()
+        .find(|edge| edge.edge.index == target_edge.index)
+        .expect("routed edge should exist");
+
+    let (baseline_left, baseline_output) = render_label_center(
+        &diagram,
+        &layout,
+        &routed_edges,
+        label,
+        &layout.edge_label_positions,
+    );
+    let baseline_center = (baseline_left.0 + label_width / 2, baseline_left.1);
+    let baseline_drift = distance_to_routed_path(baseline_center, &routed_edge.segments);
+
+    let stale_candidates = [
+        (layout.width.saturating_sub(label_width + 2), 1usize),
+        (
+            layout.width.saturating_sub(label_width + 2),
+            layout.height / 2,
+        ),
+        (1usize + label_width / 2, layout.height.saturating_sub(2)),
+    ];
+    let stale_center = stale_candidates
+        .iter()
+        .copied()
+        .max_by(|a, b| {
+            distance_to_routed_path(*a, &routed_edge.segments)
+                .partial_cmp(&distance_to_routed_path(*b, &routed_edge.segments))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .expect("stale candidate list should be non-empty");
+    let stale_drift = distance_to_routed_path(stale_center, &routed_edge.segments);
+    assert!(
+        stale_drift > baseline_drift + 6.0,
+        "test setup invalid: stale candidate should be much farther than baseline (baseline={baseline_drift:.2}, stale={stale_drift:.2})\nbaseline output:\n{baseline_output}"
+    );
+
+    let mut poisoned_positions = layout.edge_label_positions.clone();
+    poisoned_positions.insert(target_edge.index, stale_center);
+    let (rendered_left, output) =
+        render_label_center(&diagram, &layout, &routed_edges, label, &poisoned_positions);
+    let rendered_center = (rendered_left.0 + label_width / 2, rendered_left.1);
+    let rendered_drift = distance_to_routed_path(rendered_center, &routed_edge.segments);
+
+    assert!(
+        rendered_drift <= baseline_drift + 1.0,
+        "stale precomputed anchor should be ignored so rendered drift stays near baseline; baseline={baseline_drift:.2}, stale={stale_drift:.2}, rendered={rendered_drift:.2}, stale_center={stale_center:?}, rendered_left={rendered_left:?}\n{output}"
+    );
+}
+
+#[test]
+fn classify_face_matches_expected_common_approaches() {
+    use mmdflux::render::NodeBounds;
+    use mmdflux::render::intersect::{NodeFace, classify_face};
+
+    let bounds = NodeBounds {
+        x: 10,
+        y: 10,
+        width: 20,
+        height: 10,
+        dagre_center_x: None,
+        dagre_center_y: None,
+    };
+
+    assert_eq!(
+        classify_face(&bounds, (20, 0), Shape::Rectangle),
+        NodeFace::Top
+    );
+    assert_eq!(
+        classify_face(&bounds, (35, 15), Shape::Rectangle),
+        NodeFace::Right
+    );
 }

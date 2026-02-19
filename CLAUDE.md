@@ -51,7 +51,7 @@ Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram → Dag
 - `edge.rs` - `Edge` with `Stroke` (Solid, Dotted, Thick) and `Arrow` (Normal, None)
 - `builder.rs` - `build_diagram()` converts AST to Diagram
 
-**`src/dagre/`** - Hierarchical graph layout (Sugiyama framework)
+**`src/layered/`** - Hierarchical graph layout (Sugiyama framework, based on dagre.js)
 
 - `mod.rs` - `layout()` entry point, orchestrates the layout phases
 - `graph.rs` - `DiGraph` input graph, `LayoutGraph` internal representation
@@ -65,7 +65,7 @@ Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram → Dag
 
 **`src/render/`** - Text rendering
 
-- `layout.rs` - `compute_layout()` bridges Diagram to dagre, converts to draw coordinates
+- `layout.rs` - `compute_layout()` bridges Diagram to layered layout, converts to draw coordinates
 - `router.rs` - `route_edge()` and `route_backward_edge()` compute paths using waypoints
 - `edge.rs` - `render_edge()` draws edges with arrows and labels
 - `shape.rs` - `render_node()` draws node shapes
@@ -76,7 +76,7 @@ Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram → Dag
 
 1. `parse_flowchart(input)` → `Flowchart` AST
 2. `build_diagram(&flowchart)` → `Diagram` with nodes/edges
-3. `dagre::layout()` → Sugiyama layout (acyclic → rank → normalize → order → position)
+3. `layered::layout()` → Sugiyama layout (acyclic → rank → normalize → order → position)
 4. `compute_layout(&diagram, &config)` → `Layout` with draw coordinates and waypoints
 5. `route_edge()` / `route_backward_edge()` → edge paths using waypoints
 6. `render()` → `Canvas` → String output

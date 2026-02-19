@@ -11,7 +11,17 @@ import {
   type LiveUpdateDebounceSetting,
 } from "./live-update";
 import { createPreviewController } from "./preview";
-import { decodeShareState, encodeShareState } from "./share";
+import {
+  DEFAULT_SHARE_RENDER_SETTINGS,
+  decodeShareState,
+  encodeShareState,
+  normalizeShareRenderSettings,
+  type ShareEdgePreset,
+  type ShareGeometryLevel,
+  type ShareLayoutEngine,
+  type SharePathDetail,
+  type ShareRenderSettings,
+} from "./share";
 import { createThemeController, type ThemePreference } from "./theme";
 import type {
   WorkerOutputFormat,
@@ -45,11 +55,28 @@ export interface RenderWorkerClient {
 type PlaygroundFormat = "text" | "svg" | "mmds";
 type StateStorage = Pick<Storage, "getItem" | "setItem">;
 
-interface PersistedPlaygroundState {
+interface PersistedPlaygroundStateV1 {
   v: 1;
   input: string;
   format: PlaygroundFormat;
 }
+
+interface PersistedPlaygroundStateV2 {
+  v: 2;
+  input: string;
+  format: PlaygroundFormat;
+  renderSettings: ShareRenderSettings;
+}
+
+interface EffectivePlaygroundState {
+  input: string;
+  format: PlaygroundFormat;
+  renderSettings: ShareRenderSettings;
+}
+
+type PersistedPlaygroundState =
+  | PersistedPlaygroundStateV1
+  | PersistedPlaygroundStateV2;
 
 const PLAYGROUND_STATE_STORAGE_KEY = "mmdflux-playground-state";
 
@@ -78,27 +105,65 @@ function defaultAdaptiveDebounce(requestInput: string): number {
 function resolveStateStorage(
   explicitStorage?: StateStorage,
 ): StateStorage | undefined {
-  if (explicitStorage) {
+  if (isStorageLike(explicitStorage)) {
     return explicitStorage;
   }
 
   try {
-    return window.localStorage;
+    return isStorageLike(window.localStorage) ? window.localStorage : undefined;
   } catch {
     return undefined;
   }
 }
 
+function isStorageLike(value: unknown): value is StateStorage {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as Pick<Storage, "getItem">).getItem === "function" &&
+    typeof (value as Pick<Storage, "setItem">).setItem === "function"
+  );
+}
+
+function isLayoutEngine(value: string): value is ShareLayoutEngine {
+  return (
+    value === "auto" || value === "flux-layered" || value === "mermaid-layered"
+  );
+}
+
+function isEdgePreset(value: string): value is ShareEdgePreset {
+  return (
+    value === "auto" ||
+    value === "straight" ||
+    value === "step" ||
+    value === "smoothstep" ||
+    value === "bezier"
+  );
+}
+
+function isGeometryLevel(value: string): value is ShareGeometryLevel {
+  return value === "layout" || value === "routed";
+}
+
+function isPathDetail(value: string): value is SharePathDetail {
+  return (
+    value === "full" ||
+    value === "compact" ||
+    value === "simplified" ||
+    value === "endpoints"
+  );
+}
+
 function parsePersistedPlaygroundState(
   rawValue: string | null,
-): PersistedPlaygroundState | null {
+): EffectivePlaygroundState | null {
   if (!rawValue) {
     return null;
   }
 
   try {
     const parsed = JSON.parse(rawValue) as Partial<PersistedPlaygroundState>;
-    if (parsed.v !== 1) {
+    if (parsed.v !== 1 && parsed.v !== 2) {
       return null;
     }
     if (typeof parsed.input !== "string") {
@@ -111,10 +176,15 @@ function parsePersistedPlaygroundState(
       return null;
     }
 
+    const renderSettings =
+      parsed.v === 2
+        ? normalizeShareRenderSettings(parsed.renderSettings)
+        : DEFAULT_SHARE_RENDER_SETTINGS;
+
     return {
-      v: 1,
       input: parsed.input,
       format: parsed.format,
+      renderSettings,
     };
   } catch {
     return null;
@@ -123,7 +193,7 @@ function parsePersistedPlaygroundState(
 
 function readPersistedPlaygroundState(
   storage: StateStorage | undefined,
-): PersistedPlaygroundState | null {
+): EffectivePlaygroundState | null {
   if (!storage) {
     return null;
   }
@@ -135,13 +205,19 @@ function readPersistedPlaygroundState(
 
 function persistPlaygroundState(
   storage: StateStorage | undefined,
-  state: PersistedPlaygroundState,
+  state: EffectivePlaygroundState,
 ): void {
   if (!storage) {
     return;
   }
 
-  storage.setItem(PLAYGROUND_STATE_STORAGE_KEY, JSON.stringify(state));
+  const persisted: PersistedPlaygroundStateV2 = {
+    v: 2,
+    input: state.input,
+    format: state.format,
+    renderSettings: state.renderSettings,
+  };
+  storage.setItem(PLAYGROUND_STATE_STORAGE_KEY, JSON.stringify(persisted));
 }
 
 function createDefaultWorker(): Worker {
@@ -268,6 +344,10 @@ export function renderApp(
     "";
   const initialFormat =
     restoredShareState?.format ?? restoredLocalState?.format ?? "text";
+  const initialRenderSettings =
+    restoredShareState?.renderSettings ??
+    restoredLocalState?.renderSettings ??
+    DEFAULT_SHARE_RENDER_SETTINGS;
 
   root.innerHTML = `
     <main class="playground">
@@ -283,6 +363,40 @@ export function renderApp(
             <button type="button" role="tab" data-format="svg" aria-selected="false">SVG</button>
             <button type="button" role="tab" data-format="mmds" aria-selected="false">MMDS</button>
           </div>
+          <label class="render-control">
+            <span>Engine</span>
+            <select data-layout-engine>
+              <option value="auto">Auto</option>
+              <option value="flux-layered">flux-layered</option>
+              <option value="mermaid-layered">mermaid-layered</option>
+            </select>
+          </label>
+          <label class="render-control">
+            <span>Edge Preset</span>
+            <select data-edge-preset>
+              <option value="auto">Auto</option>
+              <option value="straight">straight</option>
+              <option value="step">step</option>
+              <option value="smoothstep">smoothstep</option>
+              <option value="bezier">bezier</option>
+            </select>
+          </label>
+          <label class="render-control">
+            <span>Geometry</span>
+            <select data-geometry-level>
+              <option value="layout">layout</option>
+              <option value="routed">routed</option>
+            </select>
+          </label>
+          <label class="render-control">
+            <span>Path Detail</span>
+            <select data-path-detail>
+              <option value="full">full</option>
+              <option value="compact">compact</option>
+              <option value="simplified">simplified</option>
+              <option value="endpoints">endpoints</option>
+            </select>
+          </label>
           <button type="button" class="toolbar-button" data-theme-toggle>Theme: System</button>
           <button type="button" class="toolbar-button" data-share>Copy Share URL</button>
         </div>
@@ -318,6 +432,14 @@ export function renderApp(
   const formatButtons = root.querySelectorAll<HTMLButtonElement>(
     ".format-tabs button[data-format]",
   );
+  const layoutEngineSelect =
+    root.querySelector<HTMLSelectElement>("[data-layout-engine]");
+  const edgePresetSelect =
+    root.querySelector<HTMLSelectElement>("[data-edge-preset]");
+  const geometryLevelSelect =
+    root.querySelector<HTMLSelectElement>("[data-geometry-level]");
+  const pathDetailSelect =
+    root.querySelector<HTMLSelectElement>("[data-path-detail]");
 
   if (
     !editorRoot ||
@@ -326,7 +448,11 @@ export function renderApp(
     !shareStatus ||
     !shareButton ||
     !themeToggleButton ||
-    !exampleSelect
+    !exampleSelect ||
+    !layoutEngineSelect ||
+    !edgePresetSelect ||
+    !geometryLevelSelect ||
+    !pathDetailSelect
   ) {
     return;
   }
@@ -366,7 +492,7 @@ export function renderApp(
       : undefined;
   const themeStorage = (() => {
     try {
-      return window.localStorage;
+      return isStorageLike(window.localStorage) ? window.localStorage : undefined;
     } catch {
       return undefined;
     }
@@ -382,11 +508,54 @@ export function renderApp(
   );
 
   let selectedFormat: PlaygroundFormat = initialFormat;
+  let renderSettings: ShareRenderSettings = normalizeShareRenderSettings(
+    initialRenderSettings,
+  );
   const workerClient = options.renderClientFactory
     ? options.renderClientFactory()
     : typeof Worker === "undefined"
       ? null
       : createRenderWorkerClient();
+
+  const applyRenderSettingsToControls = (): void => {
+    layoutEngineSelect.value = renderSettings.layoutEngine;
+    edgePresetSelect.value = renderSettings.edgePreset;
+    geometryLevelSelect.value = renderSettings.geometryLevel;
+    pathDetailSelect.value = renderSettings.pathDetail;
+  };
+
+  const setControlsEnabledForFormat = (format: PlaygroundFormat): void => {
+    const isSvg = format === "svg";
+    const isMmds = format === "mmds";
+    edgePresetSelect.disabled = !isSvg;
+    geometryLevelSelect.disabled = !isMmds;
+    pathDetailSelect.disabled = !(isSvg || isMmds);
+  };
+
+  const currentConfigJson = (): string => {
+    const config: Record<string, string> = {};
+    if (renderSettings.layoutEngine !== "auto") {
+      config.layoutEngine = renderSettings.layoutEngine;
+    }
+
+    if (selectedFormat === "svg") {
+      if (renderSettings.edgePreset !== "auto") {
+        config.edgePreset = renderSettings.edgePreset;
+      }
+      if (renderSettings.pathDetail !== "full") {
+        config.pathDetail = renderSettings.pathDetail;
+      }
+    }
+
+    if (selectedFormat === "mmds") {
+      config.geometryLevel = renderSettings.geometryLevel;
+      if (renderSettings.pathDetail !== "full") {
+        config.pathDetail = renderSettings.pathDetail;
+      }
+    }
+
+    return JSON.stringify(config);
+  };
 
   const setFormat = (format: PlaygroundFormat): void => {
     selectedFormat = format;
@@ -395,6 +564,7 @@ export function renderApp(
       button.classList.toggle("is-active", active);
       button.setAttribute("aria-selected", String(active));
     }
+    setControlsEnabledForFormat(format);
   };
 
   const updateShareStatus = (message: string): void => {
@@ -404,9 +574,9 @@ export function renderApp(
 
   const persistCurrentState = (): void => {
     persistPlaygroundState(stateStorage, {
-      v: 1,
       input: editor.getValue(),
       format: selectedFormat,
+      renderSettings,
     });
   };
 
@@ -435,7 +605,7 @@ export function renderApp(
     liveUpdate.schedule({
       input: editor.getValue(),
       format: selectedFormat,
-      configJson: "{}",
+      configJson: currentConfigJson(),
     });
   };
 
@@ -463,6 +633,50 @@ export function renderApp(
     scheduleRender();
   });
 
+  layoutEngineSelect.addEventListener("change", () => {
+    if (isLayoutEngine(layoutEngineSelect.value)) {
+      renderSettings = {
+        ...renderSettings,
+        layoutEngine: layoutEngineSelect.value,
+      };
+      persistCurrentState();
+      scheduleRender();
+    }
+  });
+
+  edgePresetSelect.addEventListener("change", () => {
+    if (isEdgePreset(edgePresetSelect.value)) {
+      renderSettings = {
+        ...renderSettings,
+        edgePreset: edgePresetSelect.value,
+      };
+      persistCurrentState();
+      scheduleRender();
+    }
+  });
+
+  geometryLevelSelect.addEventListener("change", () => {
+    if (isGeometryLevel(geometryLevelSelect.value)) {
+      renderSettings = {
+        ...renderSettings,
+        geometryLevel: geometryLevelSelect.value,
+      };
+      persistCurrentState();
+      scheduleRender();
+    }
+  });
+
+  pathDetailSelect.addEventListener("change", () => {
+    if (isPathDetail(pathDetailSelect.value)) {
+      renderSettings = {
+        ...renderSettings,
+        pathDetail: pathDetailSelect.value,
+      };
+      persistCurrentState();
+      scheduleRender();
+    }
+  });
+
   themeToggleButton.addEventListener("click", () => {
     const nextPreference = nextThemePreference(themeController.getPreference());
     themeController.setPreference(nextPreference);
@@ -475,6 +689,7 @@ export function renderApp(
     const shareState = {
       input: editor.getValue(),
       format: selectedFormat,
+      renderSettings,
     };
     const hash = encodeShareState(shareState);
     const shareUrl = `${window.location.origin}${window.location.pathname}#${hash}`;
@@ -495,6 +710,7 @@ export function renderApp(
     scheduleRender();
   });
 
+  applyRenderSettingsToControls();
   setFormat(selectedFormat);
   persistCurrentState();
   scheduleRender();

@@ -27,8 +27,8 @@
       <text x="121.77" y="126.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Inner</text>
     </g>
     <g class="edgePaths">
-      <path d="M121.77,216.00 L121.77,220.17 C121.77,224.33 121.77,232.67 121.77,240.33 C121.77,248.00 121.77,255.00 121.77,258.50 L121.77,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M121.77,87.00 L121.77,91.17 C121.77,95.33 121.77,103.67 121.77,112.00 C121.77,120.33 121.77,128.67 121.77,136.33 C121.77,144.00 121.77,151.00 121.77,154.50 L121.77,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M121.77,216.00 L121.77,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M121.77,87.00 L121.77,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

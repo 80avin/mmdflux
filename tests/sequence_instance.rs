@@ -1,4 +1,4 @@
-use mmdflux::diagram::{LayoutEngineId, OutputFormat, RenderConfig};
+use mmdflux::diagram::{EngineAlgorithmId, OutputFormat, RenderConfig};
 use mmdflux::diagrams::sequence::SequenceInstance;
 use mmdflux::registry::DiagramInstance;
 
@@ -16,8 +16,8 @@ fn sequence_instance_parse_and_render_text() {
 
 #[test]
 fn sequence_instance_unknown_engine_rejected_at_parse_boundary() {
-    let err = LayoutEngineId::parse("nonexistent").unwrap_err();
-    assert!(err.message.contains("unknown layout engine"));
+    let err = EngineAlgorithmId::parse("nonexistent").unwrap_err();
+    assert!(err.message.contains("unknown engine"));
 }
 
 #[test]
@@ -27,7 +27,7 @@ fn sequence_instance_rejects_layout_engine_selection() {
     let result = instance.render(
         OutputFormat::Text,
         &RenderConfig {
-            layout_engine: Some(LayoutEngineId::Dagre),
+            layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
             ..RenderConfig::default()
         },
     );

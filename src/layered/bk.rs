@@ -1330,9 +1330,9 @@ fn debug_dump_border_blocks(graph: &LayoutGraph, conflicts: &ConflictSet) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::graph::{BorderType, DiGraph};
-    use crate::dagre::normalize::{DummyNode, DummyType, LabelPos};
-    use crate::dagre::{LayoutConfig, order, rank};
+    use crate::layered::graph::{BorderType, DiGraph};
+    use crate::layered::normalize::{DummyNode, DummyType, LabelPos};
+    use crate::layered::{LayoutConfig, order, rank};
 
     /// Test helper: check if two nodes are in the same block
     fn same_block(alignment: &BlockAlignment, v: NodeIndex, w: NodeIndex) -> bool {
@@ -2623,7 +2623,7 @@ mod tests {
         g.set_parent("B", "sg1");
 
         let config = LayoutConfig::default();
-        let result = crate::dagre::layout(&g, &config, |_, dims| *dims);
+        let result = crate::layered::layout(&g, &config, |_, dims| *dims);
 
         // Verify the layout produces valid subgraph bounds
         assert!(

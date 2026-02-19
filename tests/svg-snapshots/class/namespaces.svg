@@ -29,8 +29,8 @@
       <text x="128.36" y="280.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Primitives</text>
     </g>
     <g class="edgePaths">
-      <path d="M128.36,241.00 L128.36,245.17 C128.36,249.33 128.36,257.67 128.36,266.00 C128.36,274.33 128.36,282.67 128.36,290.33 C128.36,298.00 128.36,305.00 128.36,308.50 L128.36,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M128.36,87.00 L128.36,91.17 C128.36,95.33 128.36,103.67 128.36,112.00 C128.36,120.33 128.36,128.67 128.36,137.00 C128.36,145.33 128.36,153.67 128.36,161.33 C128.36,169.00 128.36,176.00 128.36,179.50 L128.36,183.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M128.36,241.00 L128.36,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M128.36,87.00 L128.36,183.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

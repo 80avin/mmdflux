@@ -1,6 +1,6 @@
 use std::{env, fs};
 
-use mmdflux::dagre::LayoutConfig;
+use mmdflux::layered::LayoutConfig;
 use mmdflux::render::node_dimensions;
 use mmdflux::{Direction, build_diagram, parse_flowchart};
 

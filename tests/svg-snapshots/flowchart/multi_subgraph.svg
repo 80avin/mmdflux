@@ -27,9 +27,9 @@
       <text x="464.65" y="-3.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Backend</text>
     </g>
     <g class="edgePaths">
-      <path d="M110.82,70.00 L114.98,70.00 C119.15,70.00 127.48,70.00 135.15,70.00 C142.82,70.00 149.82,70.00 153.32,70.00 L156.82,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M453.94,70.00 L458.11,70.00 C462.28,70.00 470.61,70.00 478.28,70.00 C485.94,70.00 492.94,70.00 496.44,70.00 L499.94,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M247.54,70.00 L251.71,70.00 C255.88,70.00 264.21,70.00 272.54,70.00 C280.88,70.00 289.21,70.00 297.54,70.00 C305.88,70.00 314.21,70.00 321.88,70.00 C329.54,70.00 336.54,70.00 340.04,70.00 L343.54,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M110.82,70.00 L156.82,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M453.94,70.00 L499.94,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M247.54,70.00 L343.54,70.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

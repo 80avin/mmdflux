@@ -27,7 +27,7 @@
       <text x="97.45" y="22.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Inner</text>
     </g>
     <g class="edgePaths">
-      <path d="M97.45,112.00 L97.45,116.17 C97.45,120.33 97.45,128.67 97.45,136.33 C97.45,144.00 97.45,151.00 97.45,154.50 L97.45,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M97.45,112.00 L97.45,158.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

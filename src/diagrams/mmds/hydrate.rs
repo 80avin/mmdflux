@@ -7,7 +7,7 @@ use std::fmt;
 
 use serde_json::{Map, Value};
 
-use crate::diagram::RoutingMode;
+use crate::diagram::EdgeRouting;
 use crate::diagrams::flowchart::geometry::{
     FPoint, FRect, GraphGeometry, LayoutEdge, PositionedNode, RoutedGraphGeometry,
     SelfEdgeGeometry, SubgraphGeometry,
@@ -346,12 +346,12 @@ pub fn hydrate_routed_geometry_from_output(
     output: &MmdsOutput,
 ) -> Result<RoutedGraphGeometry, MmdsHydrationError> {
     let (diagram, geometry) = hydrate_geometry_parts(output)?;
-    let routing_mode = if output.geometry_level == "routed" {
-        RoutingMode::PassThroughClip
+    let edge_routing = if output.geometry_level == "routed" {
+        EdgeRouting::EngineProvided
     } else {
-        RoutingMode::FullCompute
+        EdgeRouting::PolylineRoute
     };
-    Ok(route_graph_geometry(&diagram, &geometry, routing_mode))
+    Ok(route_graph_geometry(&diagram, &geometry, edge_routing))
 }
 
 fn hydrate_geometry_parts(
@@ -385,6 +385,7 @@ fn build_graph_geometry(
         ),
         reversed_edges,
         engine_hints: None,
+        rerouted_edges: std::collections::HashSet::new(),
     })
 }
 

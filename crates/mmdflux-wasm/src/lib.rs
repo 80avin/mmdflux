@@ -1,49 +1,39 @@
-use mmdflux::dagre::Ranker;
 use mmdflux::diagram::{
-    GeometryLevel, LayoutEngineId, OutputFormat, PathDetail, RenderConfig, RenderError,
-    SvgEdgePathStyle,
+    AlgorithmId, CornerStyle, EdgePreset, EngineAlgorithmId, EngineId, GeometryLevel,
+    InterpolationStyle, OutputFormat, PathDetail, RenderConfig, RenderError, RoutingStyle,
 };
+use mmdflux::layered::Ranker;
 use mmdflux::registry::default_registry;
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 struct WasmRenderConfig {
-    #[serde(alias = "layoutEngine")]
     layout_engine: Option<String>,
-    #[serde(alias = "clusterRanksep")]
     cluster_ranksep: Option<f64>,
     padding: Option<usize>,
-    #[serde(alias = "svgScale")]
     svg_scale: Option<f64>,
-    #[serde(alias = "svgEdgeCurve")]
-    svg_edge_curve: Option<String>,
-    #[serde(alias = "svgEdgeCurveRadius")]
-    svg_edge_curve_radius: Option<f64>,
-    #[serde(alias = "svgDiagramPadding")]
+    /// Edge style preset (straight, step, smoothstep, or bezier).
+    edge_preset: Option<String>,
+    routing_style: Option<String>,
+    interpolation_style: Option<String>,
+    corner_style: Option<String>,
+    edge_radius: Option<f64>,
     svg_diagram_padding: Option<f64>,
-    #[serde(alias = "svgNodePaddingX")]
     svg_node_padding_x: Option<f64>,
-    #[serde(alias = "svgNodePaddingY")]
     svg_node_padding_y: Option<f64>,
-    #[serde(alias = "showIds")]
     show_ids: Option<bool>,
-    #[serde(alias = "geometryLevel")]
     geometry_level: Option<String>,
-    #[serde(alias = "pathDetail")]
     path_detail: Option<String>,
     layout: Option<WasmLayoutConfig>,
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 struct WasmLayoutConfig {
-    #[serde(alias = "nodeSep", alias = "nodeSpacing")]
     node_sep: Option<f64>,
-    #[serde(alias = "edgeSep", alias = "edgeSpacing")]
     edge_sep: Option<f64>,
-    #[serde(alias = "rankSep", alias = "rankSpacing")]
     rank_sep: Option<f64>,
     margin: Option<f64>,
     ranker: Option<String>,
@@ -52,7 +42,7 @@ struct WasmLayoutConfig {
 #[wasm_bindgen]
 pub fn render(input: &str, format: &str, config_json: &str) -> Result<String, JsError> {
     let format = parse_output_format(format)?;
-    let config = parse_render_config(config_json)?;
+    let config = parse_render_config(format, config_json)?;
     let registry = default_registry();
 
     let diagram_id = registry
@@ -87,37 +77,54 @@ pub fn version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
-fn parse_render_config(config_json: &str) -> Result<RenderConfig, JsError> {
+fn parse_render_config(format: OutputFormat, config_json: &str) -> Result<RenderConfig, JsError> {
     if config_json.trim().is_empty() {
-        return Ok(RenderConfig::default());
+        let mut config = RenderConfig::default();
+        apply_wasm_format_defaults(format, &mut config);
+        return Ok(config);
     }
 
     let wasm_config: WasmRenderConfig = serde_json::from_str(config_json)
         .map_err(|error| js_error(format!("invalid config_json: {error}")))?;
-    wasm_config.into_render_config()
+    let mut config = wasm_config.into_render_config()?;
+    apply_wasm_format_defaults(format, &mut config);
+    Ok(config)
 }
 
 impl WasmRenderConfig {
     fn into_render_config(self) -> Result<RenderConfig, JsError> {
-        let mut config = RenderConfig::default();
-
-        config.cluster_ranksep = self.cluster_ranksep;
-        config.padding = self.padding;
-        config.svg_scale = self.svg_scale;
-        config.svg_edge_curve_radius = self.svg_edge_curve_radius;
-        config.svg_diagram_padding = self.svg_diagram_padding;
-        config.svg_node_padding_x = self.svg_node_padding_x;
-        config.svg_node_padding_y = self.svg_node_padding_y;
+        let mut config = RenderConfig {
+            cluster_ranksep: self.cluster_ranksep,
+            padding: self.padding,
+            svg_scale: self.svg_scale,
+            edge_radius: self.edge_radius,
+            svg_diagram_padding: self.svg_diagram_padding,
+            svg_node_padding_x: self.svg_node_padding_x,
+            svg_node_padding_y: self.svg_node_padding_y,
+            ..RenderConfig::default()
+        };
 
         if let Some(layout_engine) = self.layout_engine {
-            config.layout_engine =
-                Some(LayoutEngineId::parse(&layout_engine).map_err(|err| js_error(err.message))?);
+            config.layout_engine = Some(
+                EngineAlgorithmId::parse(&layout_engine).map_err(|err| js_error(err.message))?,
+            );
         }
         if let Some(show_ids) = self.show_ids {
             config.show_ids = show_ids;
         }
-        if let Some(svg_edge_curve) = self.svg_edge_curve {
-            config.svg_edge_curve = Some(parse_svg_edge_curve(&svg_edge_curve)?);
+        if let Some(edge_preset) = self.edge_preset {
+            config.edge_preset = Some(parse_edge_preset(&edge_preset)?);
+        }
+        if let Some(routing_style) = self.routing_style {
+            config.routing_style = Some(parse_via_render_error::<RoutingStyle>(&routing_style)?);
+        }
+        if let Some(interpolation_style) = self.interpolation_style {
+            config.interpolation_style = Some(parse_via_render_error::<InterpolationStyle>(
+                &interpolation_style,
+            )?);
+        }
+        if let Some(corner_style) = self.corner_style {
+            config.corner_style = Some(parse_via_render_error::<CornerStyle>(&corner_style)?);
         }
         if let Some(geometry_level) = self.geometry_level {
             config.geometry_level = parse_geometry_level(&geometry_level)?;
@@ -151,8 +158,8 @@ fn parse_output_format(value: &str) -> Result<OutputFormat, JsError> {
     parse_via_render_error(value)
 }
 
-fn parse_svg_edge_curve(value: &str) -> Result<SvgEdgePathStyle, JsError> {
-    parse_via_render_error(value)
+fn parse_edge_preset(value: &str) -> Result<EdgePreset, JsError> {
+    EdgePreset::parse(value).map_err(|err| js_error(err.message))
 }
 
 fn parse_geometry_level(value: &str) -> Result<GeometryLevel, JsError> {
@@ -188,6 +195,14 @@ fn js_error(message: impl Into<String>) -> JsError {
     JsError::new(&message.into())
 }
 
+fn apply_wasm_format_defaults(format: OutputFormat, config: &mut RenderConfig) {
+    // For SVG output, default to flux-layered engine (provides orthogonal routing).
+    // This preserves the previous behavior where SVG defaulted to orthogonal routing.
+    if matches!(format, OutputFormat::Svg) && config.layout_engine.is_none() {
+        config.layout_engine = Some(EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,5 +224,73 @@ mod tests {
     #[test]
     fn detect_returns_flowchart_for_graph_input() {
         assert_eq!(detect("graph TD\nA-->B"), Some("flowchart".to_string()));
+    }
+
+    #[test]
+    fn parse_render_config_defaults_svg_to_flux_layered_engine() {
+        let config = parse_render_config(OutputFormat::Svg, "{}")
+            .expect("svg config parsing should succeed");
+        assert_eq!(
+            config.layout_engine,
+            Some(EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered))
+        );
+    }
+
+    #[test]
+    fn parse_render_config_keeps_non_svg_without_engine_default() {
+        let config = parse_render_config(OutputFormat::Text, "{}")
+            .expect("text config parsing should succeed");
+        assert_eq!(config.layout_engine, None);
+    }
+
+    #[test]
+    fn parse_render_config_respects_explicit_layout_engine() {
+        let config =
+            parse_render_config(OutputFormat::Svg, r#"{"layoutEngine":"mermaid-layered"}"#)
+                .expect("explicit layout engine should parse");
+        assert_eq!(
+            config.layout_engine,
+            Some(EngineAlgorithmId::new(
+                EngineId::Mermaid,
+                AlgorithmId::Layered
+            ))
+        );
+    }
+
+    #[test]
+    fn parse_render_config_does_not_force_default_with_layout_engine_override() {
+        let config =
+            parse_render_config(OutputFormat::Svg, r#"{"layoutEngine":"mermaid-layered"}"#)
+                .expect("layout engine config should parse");
+        // When an explicit engine is set, no additional default is forced
+        assert_eq!(
+            config.layout_engine,
+            Some(EngineAlgorithmId::new(
+                EngineId::Mermaid,
+                AlgorithmId::Layered
+            ))
+        );
+    }
+
+    #[test]
+    fn parse_render_config_applies_mmds_geometry_and_path_fields() {
+        let config = parse_render_config(
+            OutputFormat::Mmds,
+            r#"{"geometryLevel":"routed","pathDetail":"endpoints"}"#,
+        )
+        .expect("mmds config parsing should succeed");
+
+        assert_eq!(config.geometry_level, GeometryLevel::Routed);
+        assert_eq!(config.path_detail, PathDetail::Endpoints);
+    }
+
+    #[test]
+    fn parse_render_config_defaults_svg_to_flux_layered_when_empty() {
+        let config =
+            parse_render_config(OutputFormat::Svg, "{}").expect("empty config should parse");
+        assert_eq!(
+            config.layout_engine,
+            Some(EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered))
+        );
     }
 }

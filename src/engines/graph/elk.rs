@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-use crate::diagram::{EngineCapabilities, EngineConfig, GraphLayoutEngine, RenderError};
+use crate::diagram::{EngineConfig, RenderError};
 use crate::diagrams::flowchart::geometry::{
     FPoint, FRect, GraphGeometry, LayoutEdge, PositionedNode, SubgraphGeometry,
 };
@@ -28,27 +28,12 @@ impl ElkLayoutEngine {
     }
 }
 
-impl GraphLayoutEngine for ElkLayoutEngine {
-    type Input = Diagram;
-    type Output = GraphGeometry;
-
-    fn name(&self) -> &str {
-        "elk"
-    }
-
-    fn capabilities(&self) -> EngineCapabilities {
-        EngineCapabilities {
-            routes_edges: true,
-            supports_subgraphs: true,
-            supports_direction_overrides: true,
-        }
-    }
-
-    fn layout(
+impl ElkLayoutEngine {
+    pub fn layout(
         &self,
-        diagram: &Self::Input,
+        diagram: &Diagram,
         _config: &EngineConfig,
-    ) -> Result<Self::Output, RenderError> {
+    ) -> Result<GraphGeometry, RenderError> {
         let elk_input = diagram_to_elk_json(diagram);
         let elk_output = invoke_elk_subprocess(&elk_input)?;
         parse_elk_output(&elk_output, diagram)
@@ -366,6 +351,7 @@ fn parse_elk_output(output: &str, diagram: &Diagram) -> Result<GraphGeometry, Re
         bounds: FRect::new(max_x / 2.0, max_y / 2.0, max_x, max_y),
         reversed_edges: Vec::new(),
         engine_hints: None,
+        rerouted_edges: std::collections::HashSet::new(),
     })
 }
 
@@ -386,17 +372,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn elk_engine_name() {
-        let engine = ElkLayoutEngine;
-        assert_eq!(engine.name(), "elk");
+    fn elk_command_defaults_to_mmdflux_elk() {
+        // SAFETY: test runs single-threaded; no other thread reads this env var
+        unsafe {
+            std::env::remove_var("MMDFLUX_ELK_CMD");
+        }
+        assert_eq!(ElkLayoutEngine::elk_command(), "mmdflux-elk");
     }
 
     #[test]
-    fn elk_engine_capabilities() {
-        let engine = ElkLayoutEngine;
-        let caps = engine.capabilities();
-        assert!(caps.routes_edges);
-        assert!(caps.supports_subgraphs);
+    fn elk_command_respects_env_override() {
+        // SAFETY: test runs single-threaded; no other thread reads this env var
+        unsafe {
+            std::env::set_var("MMDFLUX_ELK_CMD", "elk-custom");
+        }
+        assert_eq!(ElkLayoutEngine::elk_command(), "elk-custom");
+        unsafe {
+            std::env::remove_var("MMDFLUX_ELK_CMD");
+        }
     }
 
     #[test]

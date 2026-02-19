@@ -12,7 +12,10 @@ pub use canvas::Canvas;
 use canvas::{Cell, Connections};
 pub use chars::CharSet;
 
-use crate::diagram::{OutputFormat, PathDetail, RenderConfig, SvgEdgePathStyle};
+use crate::diagram::{
+    AlgorithmId, CornerStyle, EdgePreset, EdgeRouting, EngineAlgorithmId, EngineId,
+    InterpolationStyle, OutputFormat, PathDetail, RenderConfig, RoutingStyle,
+};
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
 };
@@ -28,6 +31,29 @@ pub use crate::diagrams::flowchart::render::svg::{render_svg, render_svg_from_ge
 use crate::diagrams::flowchart::render::svg_metrics::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
 use crate::graph::{Diagram, Direction};
 
+/// Engine defaults for SVG style (routing + interpolation + corner).
+///
+/// When no preset or explicit style is specified, these engine-specific defaults
+/// preserve the pre-Phase-7 rendering behaviour.
+fn engine_style_defaults(
+    engine: Option<EngineId>,
+) -> (RoutingStyle, InterpolationStyle, CornerStyle) {
+    match engine {
+        // mermaid-layered: polyline routing (PolylineRoute), bezier interpolation (Mermaid default)
+        Some(EngineId::Mermaid) => (
+            RoutingStyle::Polyline,
+            InterpolationStyle::Bezier,
+            CornerStyle::Sharp,
+        ),
+        // flux-layered (default) and ELK: orthogonal routing, bezier interpolation
+        _ => (
+            RoutingStyle::Orthogonal,
+            InterpolationStyle::Bezier,
+            CornerStyle::Sharp,
+        ),
+    }
+}
+
 impl From<&RenderConfig> for RenderOptions {
     fn from(config: &RenderConfig) -> Self {
         let mut svg = SvgOptions::default();
@@ -40,15 +66,31 @@ impl From<&RenderConfig> for RenderOptions {
         if let Some(padding_y) = config.svg_node_padding_y {
             svg.node_padding_y = padding_y;
         }
-        if let Some(curve) = config.svg_edge_curve {
-            svg.edge_curve = curve;
-        }
-        if let Some(radius) = config.svg_edge_curve_radius {
-            svg.edge_curve_radius = radius;
+        if let Some(radius) = config.edge_radius {
+            svg.edge_radius = radius;
         }
         if let Some(padding) = config.svg_diagram_padding {
             svg.diagram_padding = padding;
         }
+
+        // Resolve style model: explicit low-level > preset defaults > engine defaults.
+        let engine_id = config.layout_engine.map(|id| id.engine());
+        let (def_routing, def_interp, def_corner) = engine_style_defaults(engine_id);
+        let (preset_routing, preset_interp, preset_corner) = config
+            .edge_preset
+            .map(EdgePreset::expand)
+            .unwrap_or((def_routing, def_interp, def_corner));
+        svg.routing_style = config.routing_style.unwrap_or(preset_routing);
+        svg.interpolation_style = config.interpolation_style.unwrap_or(preset_interp);
+        svg.corner_style = config.corner_style.unwrap_or(preset_corner);
+
+        // Derive edge routing from engine capabilities + resolved routing style.
+        // Uses EngineAlgorithmId::edge_routing_for_style() for consistent selection.
+        // Default engine (None) behaves as flux-layered (Native + Orthogonal).
+        let resolved_routing = svg.routing_style; // already resolved above
+        let default_engine = EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered);
+        let engine_id = config.layout_engine.unwrap_or(default_engine);
+        let edge_routing = engine_id.edge_routing_for_style(Some(resolved_routing));
 
         RenderOptions {
             output_format: OutputFormat::Text,
@@ -61,6 +103,7 @@ impl From<&RenderConfig> for RenderOptions {
             cluster_ranksep: config.cluster_ranksep,
             padding: config.padding,
             path_detail: config.path_detail,
+            edge_routing: Some(edge_routing),
         }
     }
 }
@@ -73,8 +116,15 @@ pub struct SvgOptions {
     pub font_size: f64,
     pub node_padding_x: f64,
     pub node_padding_y: f64,
-    pub edge_curve: SvgEdgePathStyle,
-    pub edge_curve_radius: f64,
+    /// Path routing topology for SVG edge rendering.
+    /// Drives orthogonalization post-processing in the SVG path builder.
+    pub routing_style: RoutingStyle,
+    /// Path interpolation treatment for SVG edge rendering.
+    pub interpolation_style: InterpolationStyle,
+    /// Corner arc treatment for SVG edge rendering (only for `InterpolationStyle::Linear`).
+    pub corner_style: CornerStyle,
+    /// Corner arc radius in pixels (for `CornerStyle::Rounded`).
+    pub edge_radius: f64,
     pub diagram_padding: f64,
 }
 
@@ -87,8 +137,12 @@ impl Default for SvgOptions {
             font_size,
             node_padding_x: 15.0,
             node_padding_y: 15.0,
-            edge_curve: SvgEdgePathStyle::Basis,
-            edge_curve_radius: 5.0,
+            // Default matches flux-layered engine: orthogonal routing + bezier interpolation
+            // (equivalent to the former EdgeStyle::Smooth default).
+            routing_style: RoutingStyle::Orthogonal,
+            interpolation_style: InterpolationStyle::Bezier,
+            corner_style: CornerStyle::Sharp,
+            edge_radius: 5.0,
             diagram_padding: 8.0,
         }
     }
@@ -102,7 +156,7 @@ pub struct RenderOptions {
     /// SVG-specific options.
     pub svg: SvgOptions,
     /// Ranking algorithm override. None uses the default (NetworkSimplex).
-    pub ranker: Option<crate::dagre::types::Ranker>,
+    pub ranker: Option<crate::layered::types::Ranker>,
     /// Dagre nodesep override (node spacing).
     pub node_spacing: Option<f64>,
     /// Dagre ranksep override (rank spacing).
@@ -117,6 +171,8 @@ pub struct RenderOptions {
     pub padding: Option<usize>,
     /// Edge path detail level (MMDS and SVG only).
     pub path_detail: PathDetail,
+    /// Optional edge routing override for graph-family renderers.
+    pub edge_routing: Option<EdgeRouting>,
 }
 
 impl Default for RenderOptions {
@@ -131,7 +187,8 @@ impl Default for RenderOptions {
             margin: None,
             cluster_ranksep: None,
             padding: None,
-            path_detail: PathDetail::Full,
+            path_detail: PathDetail::default(),
+            edge_routing: None,
         }
     }
 }

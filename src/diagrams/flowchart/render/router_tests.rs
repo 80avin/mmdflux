@@ -1,6 +1,13 @@
 use super::super::layout::{LayoutConfig, compute_layout_direct};
 use super::*;
+use crate::diagrams::flowchart::geometry::{FPoint, FRect};
+use crate::diagrams::flowchart::render::routing_core::{
+    Face, OverflowSide, build_orthogonal_path_float, canonical_backward_channel_face,
+    classify_face_float, edge_faces, fan_in_overflow_face_for_slot, fan_in_primary_face_capacity,
+    plan_attachments, point_on_face_float, resolve_overflow_backward_channel_conflict,
+};
 use crate::graph::{Diagram, Node};
+use crate::render::intersect::NodeFace;
 
 fn simple_td_diagram() -> Diagram {
     let mut diagram = Diagram::new(Direction::TopDown);
@@ -1015,4 +1022,327 @@ fn point_at_offset_zero_length_segment() {
         y_end: 10,
     };
     assert_eq!(seg.point_at_offset(0), Point { x: 5, y: 10 });
+}
+
+#[test]
+fn routing_core_edge_faces_all_directions_forward_and_backward() {
+    assert_eq!(
+        edge_faces(Direction::TopDown, false),
+        (Face::Bottom, Face::Top)
+    );
+    assert_eq!(
+        edge_faces(Direction::TopDown, true),
+        (Face::Top, Face::Bottom)
+    );
+
+    assert_eq!(
+        edge_faces(Direction::BottomTop, false),
+        (Face::Top, Face::Bottom)
+    );
+    assert_eq!(
+        edge_faces(Direction::BottomTop, true),
+        (Face::Bottom, Face::Top)
+    );
+
+    assert_eq!(
+        edge_faces(Direction::LeftRight, false),
+        (Face::Right, Face::Left)
+    );
+    assert_eq!(
+        edge_faces(Direction::LeftRight, true),
+        (Face::Left, Face::Right)
+    );
+
+    assert_eq!(
+        edge_faces(Direction::RightLeft, false),
+        (Face::Left, Face::Right)
+    );
+    assert_eq!(
+        edge_faces(Direction::RightLeft, true),
+        (Face::Right, Face::Left)
+    );
+}
+
+#[test]
+fn routing_core_classify_face_float_prefers_major_axis() {
+    let center = FPoint::new(50.0, 50.0);
+    let rect = FRect::new(40.0, 40.0, 20.0, 20.0);
+    assert_eq!(
+        classify_face_float(center, rect, FPoint::new(50.0, 10.0)),
+        Face::Top
+    );
+    assert_eq!(
+        classify_face_float(center, rect, FPoint::new(90.0, 50.0)),
+        Face::Right
+    );
+}
+
+#[test]
+fn routing_core_point_on_face_float_uses_fraction_and_clamps() {
+    let rect = FRect::new(10.0, 20.0, 40.0, 20.0);
+    assert_eq!(
+        point_on_face_float(rect, Face::Top, 0.0),
+        FPoint::new(10.0, 20.0)
+    );
+    assert_eq!(
+        point_on_face_float(rect, Face::Top, 1.0),
+        FPoint::new(50.0, 20.0)
+    );
+    assert_eq!(
+        point_on_face_float(rect, Face::Right, -2.0),
+        FPoint::new(50.0, 20.0)
+    );
+    assert_eq!(
+        point_on_face_float(rect, Face::Left, 2.0),
+        FPoint::new(10.0, 40.0)
+    );
+}
+
+#[test]
+fn routing_core_face_conversions_are_explicit_and_lossless() {
+    assert_eq!(Face::from_node_face(NodeFace::Top), Face::Top);
+    assert_eq!(Face::from_node_face(NodeFace::Bottom), Face::Bottom);
+    assert_eq!(Face::from_node_face(NodeFace::Left), Face::Left);
+    assert_eq!(Face::from_node_face(NodeFace::Right), Face::Right);
+
+    assert_eq!(Face::Top.to_node_face(), NodeFace::Top);
+    assert_eq!(Face::Bottom.to_node_face(), NodeFace::Bottom);
+    assert_eq!(Face::Left.to_node_face(), NodeFace::Left);
+    assert_eq!(Face::Right.to_node_face(), NodeFace::Right);
+}
+
+#[test]
+fn routing_core_build_orthogonal_path_float_emits_axis_aligned_segments() {
+    let points = build_orthogonal_path_float(
+        FPoint::new(10.0, 10.0),
+        FPoint::new(80.0, 60.0),
+        Direction::TopDown,
+        &[],
+    );
+
+    assert!(points.windows(2).all(|seg| {
+        (seg[0].x - seg[1].x).abs() < f64::EPSILON || (seg[0].y - seg[1].y).abs() < f64::EPSILON
+    }));
+}
+
+#[test]
+fn overflow_backward_channel_precedence_prefers_backward_channel_over_overflow_target_slot() {
+    assert_eq!(
+        fan_in_primary_face_capacity(Direction::TopDown),
+        4,
+        "TD/Bt primary capacity should remain in sync with contract"
+    );
+    assert_eq!(
+        fan_in_primary_face_capacity(Direction::LeftRight),
+        2,
+        "LR/RL primary capacity should remain in sync with contract"
+    );
+
+    assert_eq!(
+        canonical_backward_channel_face(Direction::TopDown),
+        Face::Right,
+        "TD backward canonical channel should be right"
+    );
+    assert_eq!(
+        canonical_backward_channel_face(Direction::LeftRight),
+        Face::Bottom,
+        "LR backward canonical channel should be bottom"
+    );
+
+    assert_eq!(
+        fan_in_overflow_face_for_slot(Direction::TopDown, OverflowSide::LeftOrTop),
+        Face::Left,
+        "TD overflow slot 0 should map to left"
+    );
+    assert_eq!(
+        fan_in_overflow_face_for_slot(Direction::TopDown, OverflowSide::RightOrBottom),
+        Face::Right,
+        "TD overflow slot 1 should map to right"
+    );
+
+    assert_eq!(
+        resolve_overflow_backward_channel_conflict(
+            Direction::TopDown,
+            true,
+            true,
+            Some(Face::Right),
+            Face::Right
+        ),
+        Face::Right
+    );
+    assert_eq!(
+        resolve_overflow_backward_channel_conflict(
+            Direction::TopDown,
+            true,
+            true,
+            Some(Face::Top),
+            Face::Top
+        ),
+        Face::Right
+    );
+    assert_eq!(
+        resolve_overflow_backward_channel_conflict(
+            Direction::TopDown,
+            false,
+            false,
+            Some(Face::Right),
+            Face::Right
+        ),
+        Face::Right
+    );
+}
+
+#[test]
+fn overflow_backward_channel_precedence_resolver_is_stable_and_direction_aware() {
+    let cases = [
+        (
+            Direction::TopDown,
+            true,
+            true,
+            Some(Face::Right),
+            Face::Right,
+            Face::Right,
+        ),
+        (
+            Direction::TopDown,
+            false,
+            true,
+            Some(Face::Right),
+            Face::Right,
+            Face::Left,
+        ),
+        (
+            Direction::TopDown,
+            false,
+            true,
+            Some(Face::Left),
+            Face::Left,
+            Face::Left,
+        ),
+        (
+            Direction::LeftRight,
+            true,
+            true,
+            Some(Face::Bottom),
+            Face::Bottom,
+            Face::Bottom,
+        ),
+        (
+            Direction::LeftRight,
+            false,
+            true,
+            Some(Face::Bottom),
+            Face::Bottom,
+            Face::Top,
+        ),
+        (
+            Direction::LeftRight,
+            false,
+            false,
+            Some(Face::Bottom),
+            Face::Bottom,
+            Face::Bottom,
+        ),
+    ];
+
+    for (direction, is_backward, has_backward_conflict, overflow_face, proposed, expected) in cases
+    {
+        let first = resolve_overflow_backward_channel_conflict(
+            direction,
+            is_backward,
+            has_backward_conflict,
+            overflow_face,
+            proposed,
+        );
+        let second = resolve_overflow_backward_channel_conflict(
+            direction,
+            is_backward,
+            has_backward_conflict,
+            overflow_face,
+            proposed,
+        );
+        assert_eq!(
+            first, expected,
+            "resolver returned wrong face for direction={direction:?}, backward={is_backward}, conflict={has_backward_conflict}, overflow={overflow_face:?}, proposed={proposed:?}"
+        );
+        assert_eq!(
+            first, second,
+            "resolver must be deterministic across repeated evaluation"
+        );
+    }
+}
+
+#[test]
+fn plan_attachments_spreads_edges_monotonically_on_same_face() {
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(Node::new("A"));
+    diagram.add_node(Node::new("B"));
+    diagram.add_node(Node::new("C"));
+    diagram.add_node(Node::new("D"));
+    diagram.add_edge(Edge::new("A", "B"));
+    diagram.add_edge(Edge::new("A", "C"));
+    diagram.add_edge(Edge::new("A", "D"));
+
+    let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+    let plan = plan_attachments(&diagram.edges, &layout, Direction::TopDown);
+    let fractions = plan.source_fractions_for("A", Face::Bottom);
+
+    assert!(
+        fractions.windows(2).all(|w| w[0] <= w[1]),
+        "source fractions must be monotonic: {fractions:?}"
+    );
+}
+
+#[test]
+fn plan_attachments_is_stable_for_equal_cross_axis_positions() {
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(Node::new("A"));
+    diagram.add_node(Node::new("B"));
+    diagram.add_edge(Edge::new("A", "B"));
+    diagram.add_edge(Edge::new("A", "B"));
+    diagram.add_edge(Edge::new("A", "B"));
+
+    let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+    let first = plan_attachments(&diagram.edges, &layout, Direction::TopDown);
+    let second = plan_attachments(&diagram.edges, &layout, Direction::TopDown);
+
+    assert_eq!(first, second);
+}
+
+#[test]
+fn shared_planner_adapter_spreads_fan_in_arrivals() {
+    let mut diagram = Diagram::new(Direction::TopDown);
+    diagram.add_node(Node::new("A"));
+    diagram.add_node(Node::new("B"));
+    diagram.add_node(Node::new("C"));
+    diagram.add_node(Node::new("D"));
+    diagram.add_node(Node::new("E"));
+    diagram.add_node(Node::new("F"));
+    diagram.add_edge(Edge::new("A", "B"));
+    diagram.add_edge(Edge::new("A", "C"));
+    diagram.add_edge(Edge::new("A", "D"));
+    diagram.add_edge(Edge::new("A", "E"));
+    diagram.add_edge(Edge::new("A", "F"));
+
+    let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+    let overrides =
+        compute_attachment_plan_from_shared_planner(&diagram.edges, &layout, Direction::TopDown);
+
+    let mut src_x: Vec<usize> = diagram
+        .edges
+        .iter()
+        .filter(|edge| edge.from == "A")
+        .filter_map(|edge| {
+            overrides
+                .get(&edge.index)
+                .and_then(|ov| ov.source.map(|p| p.0))
+        })
+        .collect();
+    src_x.sort_unstable();
+    src_x.dedup();
+
+    assert!(
+        src_x.len() > 1,
+        "fan-in/fan-out source attachments should be spread: {src_x:?}"
+    );
 }

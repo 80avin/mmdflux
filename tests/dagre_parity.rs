@@ -6,7 +6,7 @@
 use std::fs;
 use std::path::Path;
 
-use mmdflux::dagre::{DiGraph, LayoutConfig, layout};
+use mmdflux::layered::{DiGraph, LayoutConfig, layout};
 use serde::Deserialize;
 
 // =============================================================================

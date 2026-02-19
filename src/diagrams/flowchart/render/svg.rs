@@ -8,11 +8,16 @@ use super::layout::{
     build_dagre_layout, center_override_subgraphs, compute_sublayouts, dagre_config_for_layout,
     expand_parent_bounds_dagre, reconcile_sublayouts_dagre, resolve_sublayout_overlaps,
 };
+use super::orthogonal_router::{OrthogonalRoutingOptions, route_edges_orthogonal};
+use super::route_policy::effective_edge_direction;
+use super::routing_core::{
+    build_orthogonal_path_float, hexagon_vertices, intersect_convex_polygon,
+};
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
-use crate::dagre::{LayoutResult, Point, Rect};
-use crate::diagram::{PathDetail, RoutingMode, SvgEdgePathStyle};
+use crate::diagram::{CornerStyle, EdgeRouting, InterpolationStyle, PathDetail};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
+use crate::layered::{LayoutResult, Point, Rect};
 use crate::render::{RenderOptions, layout_config_for_diagram};
 
 const STROKE_COLOR: &str = "#333";
@@ -36,11 +41,42 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         config.dagre_cluster_rank_sep = 0.0;
     }
 
+    let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::OrthogonalRoute);
+    let geom = build_svg_layout(diagram, &config, &metrics, edge_routing);
+    let rerouted_edges = geom.rerouted_edges.clone();
+    let override_nodes = svg_router::build_override_node_map(diagram);
+    render_svg_with_geometry_context(
+        diagram,
+        options,
+        &geom,
+        &rerouted_edges,
+        &override_nodes,
+        edge_routing,
+    )
+}
+
+/// Build fully post-processed SVG layout geometry.
+///
+/// Runs the dagre layout with SVG pixel metrics, applies all subgraph
+/// post-processing (direction overrides, sublayout reconciliation, padding,
+/// edge rerouting), and converts to `GraphGeometry`. The result's
+/// `rerouted_edges` field carries edge indices rerouted by the subgraph
+/// pipeline. For `EdgeRouting::OrthogonalRoute`, also injects orthogonal paths
+/// and extends `rerouted_edges` to cover all edges.
+///
+/// This is the canonical SVG layout pipeline for both `FluxLayeredEngine::solve()`
+/// (via `instance.rs`) and the legacy `render_svg()` path.
+pub(crate) fn build_svg_layout(
+    diagram: &Diagram,
+    config: &super::layout::LayoutConfig,
+    metrics: &SvgTextMetrics,
+    edge_routing: EdgeRouting,
+) -> GraphGeometry {
     let direction = diagram.direction;
     let mut layout = build_dagre_layout(
         diagram,
-        &config,
-        |node| svg_node_dimensions(&metrics, node, direction),
+        config,
+        |node| svg_node_dimensions(metrics, node, direction),
         |edge| {
             edge.label
                 .as_ref()
@@ -48,11 +84,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         },
     );
 
-    let dagre_config = dagre_config_for_layout(diagram, &config);
+    let dagre_config = dagre_config_for_layout(diagram, config);
     let sublayouts = compute_sublayouts(
         diagram,
         &dagre_config,
-        |node| svg_node_dimensions(&metrics, node, direction),
+        |node| svg_node_dimensions(metrics, node, direction),
         |edge| {
             edge.label
                 .as_ref()
@@ -75,15 +111,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     center_override_subgraphs(diagram, &mut layout);
 
     // Expand parent subgraph bounds to encompass repositioned children.
-    // Use node_padding as margin so parent borders don't overlap child borders
-    // after apply_subgraph_svg_padding adds equal padding to both.
-    // Title margin adds extra top space so child borders clear the parent's title.
     let child_margin = metrics.node_padding_x.max(metrics.node_padding_y);
     let title_margin = metrics.font_size;
     expand_parent_bounds_dagre(diagram, &mut layout, child_margin, title_margin);
 
     // Push external nodes that now overlap with reconciled subgraph bounds.
-    // The gap must account for subgraph padding (added later) plus breathing room.
     let overlap_gap = metrics.node_padding_y + metrics.font_size;
     resolve_sublayout_overlaps(diagram, &mut layout, overlap_gap);
 
@@ -111,15 +143,16 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         svg_router::reroute_override_edges(diagram, &mut layout, &node_directions);
 
     // Add padding to subgraph bounds for breathing room around nodes.
-    let subgraph_pad_x = metrics.node_padding_x;
-    let subgraph_pad_y = metrics.node_padding_y;
-    apply_subgraph_svg_padding(diagram, &mut layout, subgraph_pad_x, subgraph_pad_y);
+    apply_subgraph_svg_padding(
+        diagram,
+        &mut layout,
+        metrics.node_padding_x,
+        metrics.node_padding_y,
+    );
 
     // Push external nodes away from subgraph borders so that subgraph-as-node
-    // edges have visible length comparable to normal edges.  Without this,
-    // the subgraph padding eats into the gap dagre allocated.
-    let min_edge_gap = config.dagre_rank_sep;
-    ensure_subgraph_edge_spacing(diagram, &mut layout, min_edge_gap);
+    // edges have visible length comparable to normal edges.
+    ensure_subgraph_edge_spacing(diagram, &mut layout, config.dagre_rank_sep);
 
     // Reroute subgraph-as-node edges with fresh orthogonal paths computed from
     // padded subgraph bounds.  Must run after padding so endpoints land on the
@@ -129,12 +162,13 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     rerouted_edges.extend(sg_node_rerouted);
 
     // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
-    // From this point on, rendering reads from `geom` instead of `layout`.
-    let geom = geometry::from_dagre_layout(&layout, diagram);
-
-    let override_nodes = svg_router::build_override_node_map(diagram);
-
-    render_svg_with_geometry_context(diagram, options, &geom, &rerouted_edges, &override_nodes)
+    let mut geom = geometry::from_dagre_layout(&layout, diagram);
+    if matches!(edge_routing, EdgeRouting::OrthogonalRoute) {
+        geom = inject_orthogonal_route_paths(diagram, &geom);
+        rerouted_edges.extend(geom.edges.iter().map(|e| e.index));
+    }
+    geom.rerouted_edges = rerouted_edges;
+    geom
 }
 
 /// Render SVG directly from precomputed graph geometry.
@@ -144,15 +178,48 @@ pub fn render_svg_from_geometry(
     diagram: &Diagram,
     options: &RenderOptions,
     geom: &GraphGeometry,
-    routing_mode: RoutingMode,
+    edge_routing: EdgeRouting,
 ) -> String {
-    let rerouted_edges: HashSet<usize> = if routing_mode == RoutingMode::PassThroughClip {
-        geom.edges.iter().map(|e| e.index).collect()
-    } else {
-        HashSet::new()
-    };
+    // Merge mode-derived rerouted edges with any engine-provided rerouted edges
+    // (e.g., direction-override subgraph edges set by build_svg_layout).
+    let mut rerouted_edges = rerouted_edge_indexes_for_mode(geom, edge_routing);
+    rerouted_edges.extend(geom.rerouted_edges.iter().copied());
     let override_nodes = svg_router::build_override_node_map(diagram);
-    render_svg_with_geometry_context(diagram, options, geom, &rerouted_edges, &override_nodes)
+    render_svg_with_geometry_context(
+        diagram,
+        options,
+        geom,
+        &rerouted_edges,
+        &override_nodes,
+        edge_routing,
+    )
+}
+
+fn rerouted_edge_indexes_for_mode(
+    geom: &GraphGeometry,
+    edge_routing: EdgeRouting,
+) -> HashSet<usize> {
+    match edge_routing {
+        // Pass-through paths are already positioned by the layout engine
+        // and should not receive extra shape clipping.
+        EdgeRouting::EngineProvided => geom.edges.iter().map(|e| e.index).collect(),
+        // Orthgonal routes already encode endpoint intent and should not
+        // be shape-adjusted again in SVG (all path styles).
+        EdgeRouting::OrthogonalRoute => geom.edges.iter().map(|e| e.index).collect(),
+        EdgeRouting::PolylineRoute => HashSet::new(),
+    }
+}
+
+fn inject_orthogonal_route_paths(diagram: &Diagram, geom: &GraphGeometry) -> GraphGeometry {
+    let routed = route_edges_orthogonal(diagram, geom, OrthogonalRoutingOptions::preview());
+    let mut updated = geom.clone();
+    for edge in routed {
+        if let Some(layout_edge) = updated.edges.iter_mut().find(|e| e.index == edge.index) {
+            layout_edge.layout_path_hint = Some(edge.path);
+            layout_edge.label_position = edge.label_position;
+        }
+    }
+    updated
 }
 
 fn render_svg_with_geometry_context(
@@ -161,6 +228,7 @@ fn render_svg_with_geometry_context(
     geom: &GraphGeometry,
     rerouted_edges: &HashSet<usize>,
     override_nodes: &HashMap<String, String>,
+    edge_routing: EdgeRouting,
 ) -> String {
     let svg_options = &options.svg;
     let scale = svg_options.scale;
@@ -190,14 +258,17 @@ fn render_svg_with_geometry_context(
     render_defs(&mut writer, scale);
     writer.start_group_transform(offset_x, offset_y);
     render_subgraphs(&mut writer, diagram, geom, &metrics, scale);
-    render_edges(
+    let rendered_edge_paths = render_edges(
         &mut writer,
         diagram,
         geom,
+        override_nodes,
         &self_edge_paths,
         rerouted_edges,
-        svg_options.edge_curve,
-        svg_options.edge_curve_radius,
+        edge_routing,
+        svg_options.interpolation_style,
+        svg_options.corner_style,
+        svg_options.edge_radius,
         scale,
         options.path_detail,
     );
@@ -206,6 +277,7 @@ fn render_svg_with_geometry_context(
         diagram,
         geom,
         &self_edge_paths,
+        &rendered_edge_paths,
         override_nodes,
         &metrics,
         scale,
@@ -233,17 +305,21 @@ fn apply_subgraph_svg_padding(
         rect.width = (rect.width + pad_x * 2.0).max(0.0);
         rect.height = (rect.height + pad_y * 2.0).max(0.0);
 
-        if let Some(node_rect) = layout.nodes.get_mut(&crate::dagre::NodeId(id.clone())) {
+        if let Some(node_rect) = layout.nodes.get_mut(&crate::layered::NodeId(id.clone())) {
             *node_rect = *rect;
         }
     }
 
     // Ensure all subgraph IDs exist in nodes map for bounds updates.
     for (id, rect) in layout.subgraph_bounds.iter() {
-        if !layout.nodes.contains_key(&crate::dagre::NodeId(id.clone()))
+        if !layout
+            .nodes
+            .contains_key(&crate::layered::NodeId(id.clone()))
             && diagram.subgraphs.contains_key(id)
         {
-            layout.nodes.insert(crate::dagre::NodeId(id.clone()), *rect);
+            layout
+                .nodes
+                .insert(crate::layered::NodeId(id.clone()), *rect);
         }
     }
 }
@@ -300,7 +376,7 @@ fn push_node_from_subgraph(
     min_gap: f64,
     node_is_upstream: bool,
 ) {
-    let node_key = crate::dagre::NodeId(node_id.to_string());
+    let node_key = crate::layered::NodeId(node_id.to_string());
     let sg_rect = match layout.subgraph_bounds.get(sg_id) {
         Some(r) => *r,
         None => return,
@@ -406,7 +482,7 @@ fn push_subgraph_from_subgraph(
 
     // Shift each member node.
     for node_id in &member_nodes {
-        let key = crate::dagre::NodeId(node_id.clone());
+        let key = crate::layered::NodeId(node_id.clone());
         if let Some(rect) = layout.nodes.get_mut(&key) {
             match direction {
                 Direction::TopDown => rect.y += shift,
@@ -437,7 +513,7 @@ fn push_subgraph_from_subgraph(
             }
         }
         // Also update the nodes map entry for the subgraph.
-        let key = crate::dagre::NodeId(sg_id.clone());
+        let key = crate::layered::NodeId(sg_id.clone());
         if let Some(rect) = layout.nodes.get_mut(&key) {
             match direction {
                 Direction::TopDown => rect.y += shift,
@@ -736,13 +812,16 @@ fn render_edges(
     writer: &mut SvgWriter,
     diagram: &Diagram,
     geom: &GraphGeometry,
+    override_nodes: &HashMap<String, String>,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     rerouted_edges: &std::collections::HashSet<usize>,
-    edge_curve: SvgEdgePathStyle,
-    edge_curve_radius: f64,
+    edge_routing: EdgeRouting,
+    interp_style: InterpolationStyle,
+    corner_style: CornerStyle,
+    edge_radius: f64,
     scale: f64,
     path_detail: PathDetail,
-) {
+) -> HashMap<usize, Vec<Point>> {
     let mut edge_paths: Vec<(usize, Vec<Point>)> = geom
         .edges
         .iter()
@@ -752,7 +831,6 @@ fn render_edges(
                 .as_ref()
                 .map(|ps| ps.iter().map(|p| (*p).into()).collect())
                 .unwrap_or_default();
-            let points = path_detail.simplify(&points);
             (edge.index, points)
         })
         .collect();
@@ -765,6 +843,7 @@ fn render_edges(
     }));
     edge_paths.sort_by_key(|(index, _)| *index);
 
+    let mut rendered_paths: HashMap<usize, Vec<Point>> = HashMap::new();
     writer.start_group("edgePaths");
     for (index, points) in edge_paths {
         let Some(edge) = diagram.edges.get(index) else {
@@ -774,6 +853,25 @@ fn render_edges(
             continue;
         }
         let mut points = points;
+        let edge_direction = if matches!(edge_routing, EdgeRouting::OrthogonalRoute) {
+            orthogonal_route_edge_direction(
+                diagram,
+                &geom.node_directions,
+                override_nodes,
+                &edge.from,
+                &edge.to,
+                diagram.direction,
+            )
+        } else {
+            diagram.direction
+        };
+        let is_backward = geom.reversed_edges.contains(&index);
+        // Engine-owned routing topology determines endpoint contract; style does not.
+        // Backward OrthogonalRoute edges use orthogonal approach to preserve path integrity.
+        let preserve_orthogonal_endpoint_contract = matches!(
+            (edge_routing, is_backward),
+            (EdgeRouting::OrthogonalRoute, true)
+        );
         // Clip subgraph-as-node edges to subgraph borders (skip for rerouted
         // edges whose endpoints already land on the subgraph border).
         if !rerouted_edges.contains(&index) {
@@ -789,21 +887,109 @@ fn render_edges(
             }
         }
 
-        // Rerouted edges already have border-snapped endpoints; skip shape
-        // adjustment (which assumes dagre center-to-center paths) but still
-        // apply marker offsets to pull endpoints back for clean arrowheads.
-        let mut points = if rerouted_edges.contains(&index) {
-            points
+        // Preserve prior rerouted-edge behavior for healthy paths, but still
+        // reclip when endpoints detach from expected faces or use non-rect
+        // shapes (diamond/hexagon).
+        let rerouted = rerouted_edges.contains(&index);
+        let should_adjust = !matches!(edge_routing, EdgeRouting::EngineProvided)
+            && (!rerouted
+                || (matches!(edge_routing, EdgeRouting::OrthogonalRoute)
+                    && should_adjust_rerouted_edge_endpoints(
+                        diagram,
+                        geom,
+                        edge,
+                        &points,
+                        edge_direction,
+                    )));
+        let mut points = if should_adjust {
+            adjust_edge_points_for_shapes(
+                diagram,
+                geom,
+                edge,
+                &points,
+                edge_direction,
+                is_backward,
+                edge_routing,
+            )
         } else {
-            adjust_edge_points_for_shapes(diagram, geom, edge, &points)
+            points
         };
-        // Only densify corners for linear edges; basis and rounded
-        // handle smoothing natively from sparse waypoints.
-        if matches!(edge_curve, SvgEdgePathStyle::Linear) {
+        // Derived boolean flags from style model.
+        let is_bezier = matches!(interp_style, InterpolationStyle::Bezier);
+        let is_rounded_corner = matches!(corner_style, CornerStyle::Rounded);
+        let is_sharp = matches!(interp_style, InterpolationStyle::Linear)
+            && matches!(corner_style, CornerStyle::Sharp);
+
+        // Only densify corners for sharp (linear+sharp) edges; bezier and rounded-corner
+        // styles handle smoothing natively from sparse waypoints.
+        if is_sharp && !preserve_orthogonal_endpoint_contract {
             points = fix_corner_points(&points);
         }
-        points = apply_marker_offsets(&points, edge);
-        let d = path_from_points(&points, scale, edge_curve, edge_curve_radius);
+        if matches!(edge_routing, EdgeRouting::OrthogonalRoute)
+            && is_bezier
+            && !is_backward
+            && edge.from != edge.to
+        {
+            points = collapse_primary_face_fan_channel_for_curved(
+                geom,
+                edge,
+                edge_direction,
+                &points,
+                0.5,
+            );
+        }
+        let allow_interior_nudges = !is_sharp;
+        let enforce_primary_axis_no_backtrack =
+            matches!(edge_routing, EdgeRouting::OrthogonalRoute)
+                && !is_rounded_corner
+                && !is_backward
+                && edge.from != edge.to;
+        points = apply_marker_offsets(
+            &points,
+            edge,
+            edge_direction,
+            MarkerOffsetOptions {
+                is_backward,
+                allow_interior_nudges,
+                enforce_primary_axis_no_backtrack,
+                preserve_orthogonal: preserve_orthogonal_endpoint_contract,
+                collapse_terminal_elbows: !is_bezier,
+                is_curved_style: is_bezier,
+            },
+        );
+        // Collapse tiny near-collinear jogs introduced by SVG marker offset
+        // smoothing on orthogonal routing paths.
+        if matches!(edge_routing, EdgeRouting::OrthogonalRoute)
+            && !is_rounded_corner
+            && !is_bezier
+            && !preserve_orthogonal_endpoint_contract
+            && edge.from != edge.to
+        {
+            points = collapse_tiny_straight_smoothing_jogs(&points, 30.0);
+        }
+        // For backward edges with orthogonal contract, use rounded-corner routing
+        // for path topology (preserves endpoint contract), but keep the user's
+        // chosen interpolation/corner style for actual path drawing.
+        let (path_interp, path_corner) = if preserve_orthogonal_endpoint_contract {
+            (InterpolationStyle::Linear, CornerStyle::Rounded)
+        } else {
+            (interp_style, corner_style)
+        };
+        let rendered_points = points_for_svg_path(
+            &points,
+            diagram.direction,
+            edge_routing,
+            path_interp,
+            path_corner,
+            path_detail,
+        );
+        let d = path_from_prepared_points(
+            &rendered_points,
+            scale,
+            interp_style,
+            corner_style,
+            edge_radius,
+        );
         if d.is_empty() {
             continue;
         }
@@ -811,8 +997,10 @@ fn render_edges(
         attrs.push_str(&edge_marker_attrs(edge));
         let line = format!("<path d=\"{d}\"{attrs} />", d = d, attrs = attrs);
         writer.push_line(&line);
+        rendered_paths.insert(index, rendered_points);
     }
     writer.end_group();
+    rendered_paths
 }
 
 fn point_inside_rect(rect: &Rect, point: Point) -> bool {
@@ -821,6 +1009,204 @@ fn point_inside_rect(rect: &Rect, point: Point) -> bool {
         && point.x < rect.x + rect.width - eps
         && point.y > rect.y + eps
         && point.y < rect.y + rect.height - eps
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SegmentAxis {
+    Horizontal,
+    Vertical,
+}
+
+fn segment_axis(start: Point, end: Point) -> Option<SegmentAxis> {
+    const EPS: f64 = 1e-6;
+    let dx = (start.x - end.x).abs();
+    let dy = (start.y - end.y).abs();
+    if dx <= EPS && dy > EPS {
+        Some(SegmentAxis::Vertical)
+    } else if dy <= EPS && dx > EPS {
+        Some(SegmentAxis::Horizontal)
+    } else {
+        None
+    }
+}
+
+fn segment_manhattan_len(start: Point, end: Point) -> f64 {
+    (start.x - end.x).abs() + (start.y - end.y).abs()
+}
+
+fn collapse_primary_face_fan_channel_for_curved(
+    geom: &GraphGeometry,
+    edge: &Edge,
+    direction: Direction,
+    points: &[Point],
+    center_eps: f64,
+) -> Vec<Point> {
+    const MARKER_PULLBACK_TOLERANCE: f64 = 6.0;
+    const MIN_STEM_FOR_COLLAPSE: f64 = 8.0;
+    const MAX_STEM_FOR_COLLAPSE: f64 = 18.0;
+    const MIN_TERMINAL_STEM_FOR_COLLAPSE: f64 = 10.0;
+    const MAX_TERMINAL_STEM_FOR_COLLAPSE: f64 = 22.0;
+    const TERMINAL_STEM_BIAS: f64 = 3.0;
+    const MIN_CHANNEL_SPAN: f64 = 4.0;
+
+    if points.len() != 4 {
+        return points.to_vec();
+    }
+
+    let Some(target_geom) = geom.nodes.get(&edge.to) else {
+        return points.to_vec();
+    };
+    let target_rect: Rect = target_geom.rect.into();
+    let mut out = points.to_vec();
+    match direction {
+        Direction::TopDown | Direction::BottomTop => {
+            let first_vertical = (out[0].x - out[1].x).abs() <= center_eps
+                && (out[0].y - out[1].y).abs() > center_eps;
+            let middle_horizontal = (out[1].y - out[2].y).abs() <= center_eps
+                && (out[1].x - out[2].x).abs() > center_eps;
+            let terminal_vertical = (out[2].x - out[3].x).abs() <= center_eps
+                && (out[2].y - out[3].y).abs() > center_eps;
+            if !(first_vertical && middle_horizontal && terminal_vertical) {
+                return points.to_vec();
+            }
+
+            let has_lateral_offset = (out[0].x - out[3].x).abs() > center_eps;
+            let target_is_primary_face = match direction {
+                Direction::TopDown => out[3].y <= target_rect.y + MARKER_PULLBACK_TOLERANCE,
+                Direction::BottomTop => {
+                    out[3].y >= target_rect.y + target_rect.height - MARKER_PULLBACK_TOLERANCE
+                }
+                _ => false,
+            };
+            if has_lateral_offset && target_is_primary_face {
+                let delta = out[3].y - out[0].y;
+                if delta.abs()
+                    > MIN_STEM_FOR_COLLAPSE + MIN_TERMINAL_STEM_FOR_COLLAPSE + MIN_CHANNEL_SPAN
+                {
+                    let source_stem =
+                        (delta.abs() * 0.28).clamp(MIN_STEM_FOR_COLLAPSE, MAX_STEM_FOR_COLLAPSE);
+                    let max_terminal_stem = delta.abs() - source_stem - MIN_CHANNEL_SPAN;
+                    if max_terminal_stem < MIN_TERMINAL_STEM_FOR_COLLAPSE {
+                        return points.to_vec();
+                    }
+                    let terminal_stem = (delta.abs() * 0.28 + TERMINAL_STEM_BIAS)
+                        .clamp(
+                            MIN_TERMINAL_STEM_FOR_COLLAPSE,
+                            MAX_TERMINAL_STEM_FOR_COLLAPSE,
+                        )
+                        .min(max_terminal_stem);
+                    let dir = if delta >= 0.0 { 1.0 } else { -1.0 };
+                    out[1].y = out[0].y + (dir * source_stem);
+                    out[2].y = out[3].y - (dir * terminal_stem);
+                }
+            }
+        }
+        Direction::LeftRight | Direction::RightLeft => {
+            let first_horizontal = (out[0].y - out[1].y).abs() <= center_eps
+                && (out[0].x - out[1].x).abs() > center_eps;
+            let middle_vertical = (out[1].x - out[2].x).abs() <= center_eps
+                && (out[1].y - out[2].y).abs() > center_eps;
+            let terminal_horizontal = (out[2].y - out[3].y).abs() <= center_eps
+                && (out[2].x - out[3].x).abs() > center_eps;
+            if !(first_horizontal && middle_vertical && terminal_horizontal) {
+                return points.to_vec();
+            }
+
+            let has_lateral_offset = (out[0].y - out[3].y).abs() > center_eps;
+            let target_is_primary_face = match direction {
+                Direction::LeftRight => out[3].x <= target_rect.x + MARKER_PULLBACK_TOLERANCE,
+                Direction::RightLeft => {
+                    out[3].x >= target_rect.x + target_rect.width - MARKER_PULLBACK_TOLERANCE
+                }
+                _ => false,
+            };
+            if has_lateral_offset && target_is_primary_face {
+                let delta = out[3].x - out[0].x;
+                if delta.abs()
+                    > MIN_STEM_FOR_COLLAPSE + MIN_TERMINAL_STEM_FOR_COLLAPSE + MIN_CHANNEL_SPAN
+                {
+                    let source_stem =
+                        (delta.abs() * 0.28).clamp(MIN_STEM_FOR_COLLAPSE, MAX_STEM_FOR_COLLAPSE);
+                    let max_terminal_stem = delta.abs() - source_stem - MIN_CHANNEL_SPAN;
+                    if max_terminal_stem < MIN_TERMINAL_STEM_FOR_COLLAPSE {
+                        return points.to_vec();
+                    }
+                    let terminal_stem = (delta.abs() * 0.28 + TERMINAL_STEM_BIAS)
+                        .clamp(
+                            MIN_TERMINAL_STEM_FOR_COLLAPSE,
+                            MAX_TERMINAL_STEM_FOR_COLLAPSE,
+                        )
+                        .min(max_terminal_stem);
+                    let dir = if delta >= 0.0 { 1.0 } else { -1.0 };
+                    out[1].x = out[0].x + (dir * source_stem);
+                    out[2].x = out[3].x - (dir * terminal_stem);
+                }
+            }
+        }
+    }
+
+    out
+}
+
+fn compact_visual_staircases(points: &[Point], short_tol: f64) -> Vec<Point> {
+    if points.len() < 4 {
+        return points.to_vec();
+    }
+
+    let mut compacted = points.to_vec();
+    let mut i = 0usize;
+    while i + 3 < compacted.len() {
+        // Preserve start/end approach geometry so marker orientation keeps a
+        // clear supporting segment into/out of the endpoint.
+        if i == 0 || i + 3 >= compacted.len() - 1 {
+            i += 1;
+            continue;
+        }
+
+        let p0 = compacted[i];
+        let p1 = compacted[i + 1];
+        let p2 = compacted[i + 2];
+        let p3 = compacted[i + 3];
+
+        let a1 = segment_axis(p0, p1);
+        let a2 = segment_axis(p1, p2);
+        let a3 = segment_axis(p2, p3);
+
+        let Some(first_axis) = a1 else {
+            i += 1;
+            continue;
+        };
+        let Some(middle_axis) = a2 else {
+            i += 1;
+            continue;
+        };
+        let Some(last_axis) = a3 else {
+            i += 1;
+            continue;
+        };
+
+        if first_axis != last_axis || first_axis == middle_axis {
+            i += 1;
+            continue;
+        }
+
+        let l1 = segment_manhattan_len(p0, p1);
+        let l2 = segment_manhattan_len(p1, p2);
+        let l3 = segment_manhattan_len(p2, p3);
+        if l1 > short_tol || l2 > short_tol || l3 > short_tol {
+            i += 1;
+            continue;
+        }
+
+        let replacement = match first_axis {
+            SegmentAxis::Vertical => Point { x: p0.x, y: p3.y },
+            SegmentAxis::Horizontal => Point { x: p3.x, y: p0.y },
+        };
+        compacted.splice(i + 1..=i + 2, [replacement]);
+        i = i.saturating_sub(1);
+    }
+
+    compacted
 }
 
 fn segment_rect_intersection(start: Point, end: Point, rect: &Rect) -> Option<Point> {
@@ -930,11 +1316,99 @@ fn clip_points_to_rect_end(points: &[Point], rect: &Rect) -> Vec<Point> {
     out
 }
 
+const LABEL_ANCHOR_REVALIDATION_MAX_DISTANCE: f64 = 2.0;
+const LABEL_POINT_EPS: f64 = 0.000_001;
+
+fn revalidate_svg_label_anchor(candidate: Point, rendered_path: Option<&[Point]>) -> Point {
+    let Some(path) = rendered_path else {
+        return candidate;
+    };
+    if path.is_empty() {
+        return candidate;
+    }
+
+    let drift = distance_point_to_svg_path(candidate, path);
+    if drift <= LABEL_ANCHOR_REVALIDATION_MAX_DISTANCE {
+        return candidate;
+    }
+    svg_path_midpoint(path).unwrap_or(candidate)
+}
+
+fn point_distance_svg(a: Point, b: Point) -> f64 {
+    ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
+}
+
+fn distance_point_to_svg_segment(point: Point, a: Point, b: Point) -> f64 {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let seg_len_sq = dx * dx + dy * dy;
+    if seg_len_sq <= LABEL_POINT_EPS {
+        return point_distance_svg(point, a);
+    }
+    let projection = ((point.x - a.x) * dx + (point.y - a.y) * dy) / seg_len_sq;
+    let t = projection.clamp(0.0, 1.0);
+    let closest = Point {
+        x: a.x + t * dx,
+        y: a.y + t * dy,
+    };
+    point_distance_svg(point, closest)
+}
+
+fn distance_point_to_svg_path(point: Point, path: &[Point]) -> f64 {
+    if path.is_empty() {
+        return f64::INFINITY;
+    }
+    if path.len() == 1 {
+        return point_distance_svg(point, path[0]);
+    }
+    path.windows(2)
+        .map(|segment| distance_point_to_svg_segment(point, segment[0], segment[1]))
+        .fold(f64::INFINITY, f64::min)
+}
+
+fn svg_path_midpoint(path: &[Point]) -> Option<Point> {
+    if path.is_empty() {
+        return None;
+    }
+    if path.len() == 1 {
+        return path.first().copied();
+    }
+    let total_len: f64 = path
+        .windows(2)
+        .map(|segment| point_distance_svg(segment[0], segment[1]))
+        .sum();
+    if total_len <= LABEL_POINT_EPS {
+        return path.get(path.len() / 2).copied();
+    }
+
+    let target = total_len / 2.0;
+    let mut traversed = 0.0;
+    for segment in path.windows(2) {
+        let a = segment[0];
+        let b = segment[1];
+        let seg_len = point_distance_svg(a, b);
+        if seg_len <= LABEL_POINT_EPS {
+            continue;
+        }
+        if traversed + seg_len >= target {
+            let t = (target - traversed) / seg_len;
+            return Some(Point {
+                x: a.x + (b.x - a.x) * t,
+                y: a.y + (b.y - a.y) * t,
+            });
+        }
+        traversed += seg_len;
+    }
+    path.last().copied()
+}
+
+#[allow(clippy::too_many_arguments)]
 fn render_edge_labels(
     writer: &mut SvgWriter,
     diagram: &Diagram,
     geom: &GraphGeometry,
     self_edge_paths: &HashMap<usize, Vec<Point>>,
+    rendered_edge_paths: &HashMap<usize, Vec<Point>>,
     override_nodes: &HashMap<String, String>,
     metrics: &SvgTextMetrics,
     scale: f64,
@@ -976,7 +1450,15 @@ fn render_edge_labels(
         } else {
             None
         }
-        .or_else(|| fallback_label_position(geom, edge_idx, self_edge_paths));
+        .or_else(|| fallback_label_position(geom, edge_idx, self_edge_paths))
+        .map(|candidate| {
+            revalidate_svg_label_anchor(
+                candidate,
+                rendered_edge_paths
+                    .get(&edge_idx)
+                    .map(|path| path.as_slice()),
+            )
+        });
         let Some(point) = position else {
             continue;
         };
@@ -1303,16 +1785,9 @@ fn render_node_shape(
             writer.push_line(&line);
         }
         Shape::Hexagon => {
-            let indent = rect.width * 0.2;
-            let cy = rect.y + rect.height / 2.0;
-            let points = vec![
-                (rect.x + indent, rect.y),
-                (rect.x + rect.width - indent, rect.y),
-                (rect.x + rect.width, cy),
-                (rect.x + rect.width - indent, rect.y + rect.height),
-                (rect.x + indent, rect.y + rect.height),
-                (rect.x, cy),
-            ];
+            let frect = geometry::FRect::new(rect.x, rect.y, rect.width, rect.height);
+            let verts = hexagon_vertices(frect);
+            let points: Vec<(f64, f64)> = verts.iter().map(|v| (v.x, v.y)).collect();
             let line = format!(
                 "<polygon points=\"{points}\"{style} />",
                 points = polygon_points(&points),
@@ -1855,10 +2330,66 @@ fn edge_marker_attrs(edge: &Edge) -> String {
     attrs
 }
 
-fn path_from_points(
+fn points_for_svg_path(
+    points: &[Point],
+    direction: Direction,
+    edge_routing: EdgeRouting,
+    interp_style: InterpolationStyle,
+    _corner_style: CornerStyle,
+    path_detail: PathDetail,
+) -> Vec<Point> {
+    if points.is_empty() {
+        return Vec::new();
+    }
+    // Orthogonalize when both conditions hold:
+    // 1. Routing is orthogonal (OrthogonalRoute) — right-angle paths are required.
+    // 2. Interpolation is linear — bezier curves handle smoothness from sparse waypoints
+    //    and do not need axis-aligned segments.
+    // Corner style (sharp vs rounded) does not affect whether orthogonalization is needed;
+    // both require axis-aligned points to produce correct 90° paths.
+    // Polyline routing (PolylineRoute) intentionally allows diagonal segments — skip.
+    let needs_orthogonalization = matches!(edge_routing, EdgeRouting::OrthogonalRoute)
+        && matches!(interp_style, InterpolationStyle::Linear);
+    let points: Vec<Point> = if needs_orthogonalization && !points_are_axis_aligned(points) {
+        let start: geometry::FPoint = points[0].into();
+        let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
+        let waypoints: Vec<geometry::FPoint> = points
+            .iter()
+            .copied()
+            .skip(1)
+            .take(points.len().saturating_sub(2))
+            .map(Into::into)
+            .collect();
+        build_orthogonal_path_float(start, end, direction, &waypoints)
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    } else {
+        points.to_vec()
+    };
+    let points = if needs_orthogonalization {
+        collapse_immediate_axis_turnbacks(&points)
+    } else {
+        points
+    };
+    match path_detail {
+        PathDetail::Full => points,
+        PathDetail::Compact => {
+            let compacted = compact_visual_staircases(&points, 12.0);
+            PathDetail::Compact.simplify_with_coords(&compacted, |point| (point.x, point.y))
+        }
+        PathDetail::Simplified if needs_orthogonalization => {
+            simplify_orthogonal_points(&points, direction)
+        }
+        _ => path_detail.simplify_with_coords(&points, |point| (point.x, point.y)),
+    }
+}
+
+fn path_from_prepared_points(
     points: &[Point],
     scale: f64,
-    curve: SvgEdgePathStyle,
+    interp_style: InterpolationStyle,
+    corner_style: CornerStyle,
     curve_radius: f64,
 ) -> String {
     if points.is_empty() {
@@ -1868,10 +2399,315 @@ fn path_from_points(
         .iter()
         .map(|point| (point.x * scale, point.y * scale))
         .collect();
-    match curve {
-        SvgEdgePathStyle::Basis => path_from_points_basis(&scaled),
-        SvgEdgePathStyle::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
-        SvgEdgePathStyle::Linear => path_from_points_linear(&scaled),
+    match (interp_style, corner_style) {
+        (InterpolationStyle::Bezier, _) => path_from_points_curved(&scaled),
+        (InterpolationStyle::Linear, CornerStyle::Rounded) => {
+            path_from_points_rounded(&scaled, curve_radius * scale)
+        }
+        (InterpolationStyle::Linear, CornerStyle::Sharp) => path_from_points_straight(&scaled),
+    }
+}
+
+fn simplify_orthogonal_points(points: &[Point], direction: Direction) -> Vec<Point> {
+    if points.len() <= 2 {
+        return points.to_vec();
+    }
+
+    let start = points[0];
+    let end = points[points.len() - 1];
+    if segment_axis(start, end).is_some() {
+        return vec![start, end];
+    }
+
+    let elbow = match direction {
+        Direction::TopDown | Direction::BottomTop => Point {
+            x: start.x,
+            y: end.y,
+        },
+        Direction::LeftRight | Direction::RightLeft => Point {
+            x: end.x,
+            y: start.y,
+        },
+    };
+    vec![start, elbow, end]
+}
+
+type EndpointShapeRect = (Rect, Shape);
+
+fn edge_endpoint_shape_rects(
+    diagram: &Diagram,
+    geom: &GraphGeometry,
+    edge: &Edge,
+) -> Option<(EndpointShapeRect, EndpointShapeRect)> {
+    let from = if let Some(sg_id) = edge.from_subgraph.as_ref() {
+        let sg_rect: Rect = geom.subgraphs.get(sg_id)?.rect.into();
+        (sg_rect, Shape::Rectangle)
+    } else {
+        let node_rect: Rect = geom.nodes.get(&edge.from)?.rect.into();
+        let node = diagram.nodes.get(&edge.from)?;
+        (node_rect, node.shape)
+    };
+
+    let to = if let Some(sg_id) = edge.to_subgraph.as_ref() {
+        let sg_rect: Rect = geom.subgraphs.get(sg_id)?.rect.into();
+        (sg_rect, Shape::Rectangle)
+    } else {
+        let node_rect: Rect = geom.nodes.get(&edge.to)?.rect.into();
+        let node = diagram.nodes.get(&edge.to)?;
+        (node_rect, node.shape)
+    };
+
+    Some((from, to))
+}
+
+fn orthogonal_route_edge_direction(
+    diagram: &Diagram,
+    node_directions: &HashMap<String, Direction>,
+    override_nodes: &HashMap<String, String>,
+    from: &str,
+    to: &str,
+    fallback: Direction,
+) -> Direction {
+    let from_sg = override_nodes.get(from);
+    let to_sg = override_nodes.get(to);
+
+    match (from_sg, to_sg) {
+        (None, None) => effective_edge_direction(node_directions, from, to, fallback),
+        (Some(sg_a), Some(sg_b)) if sg_a == sg_b => diagram
+            .subgraphs
+            .get(sg_a.as_str())
+            .and_then(|sg| sg.dir)
+            .unwrap_or_else(|| effective_edge_direction(node_directions, from, to, fallback)),
+        _ => orthogonal_route_cross_boundary_direction(
+            diagram,
+            node_directions,
+            from_sg,
+            to_sg,
+            from,
+            to,
+            fallback,
+        ),
+    }
+}
+
+fn orthogonal_route_cross_boundary_direction(
+    diagram: &Diagram,
+    node_directions: &HashMap<String, Direction>,
+    from_sg: Option<&String>,
+    to_sg: Option<&String>,
+    from_node: &str,
+    to_node: &str,
+    fallback: Direction,
+) -> Direction {
+    if let (Some(sg_a), Some(sg_b)) = (from_sg, to_sg) {
+        if is_ancestor_subgraph(diagram, sg_a, sg_b) {
+            return diagram
+                .subgraphs
+                .get(sg_a.as_str())
+                .and_then(|sg| sg.dir)
+                .unwrap_or(fallback);
+        }
+        if is_ancestor_subgraph(diagram, sg_b, sg_a) {
+            return diagram
+                .subgraphs
+                .get(sg_b.as_str())
+                .and_then(|sg| sg.dir)
+                .unwrap_or(fallback);
+        }
+        return fallback;
+    }
+
+    let outside_node = if from_sg.is_some() && to_sg.is_none() {
+        to_node
+    } else {
+        from_node
+    };
+    node_directions
+        .get(outside_node)
+        .copied()
+        .unwrap_or(fallback)
+}
+
+fn is_ancestor_subgraph(diagram: &Diagram, ancestor: &str, descendant: &str) -> bool {
+    let mut current = descendant;
+    while let Some(parent) = diagram
+        .subgraphs
+        .get(current)
+        .and_then(|sg| sg.parent.as_deref())
+    {
+        if parent == ancestor {
+            return true;
+        }
+        current = parent;
+    }
+    false
+}
+
+fn should_adjust_rerouted_edge_endpoints(
+    diagram: &Diagram,
+    geom: &GraphGeometry,
+    edge: &Edge,
+    points: &[Point],
+    direction: Direction,
+) -> bool {
+    const FACE_PROXIMITY: f64 = 6.0;
+    const EPS: f64 = 0.5;
+    if points.len() < 2 {
+        return false;
+    }
+
+    let Some(((from_rect, _), (to_rect, _))) = edge_endpoint_shape_rects(diagram, geom, edge)
+    else {
+        return false;
+    };
+
+    // For orthogonal routing, the router produces authoritative endpoint geometry.
+    // Keep intentional non-flow-face attachments (e.g. fan-in overflow) but
+    // still re-adjust when endpoints drift inside/outside or violate expected
+    // flow faces on the primary axis.
+    if endpoint_drifted_inside_or_outside(points[0], from_rect, EPS)
+        || endpoint_drifted_inside_or_outside(points[points.len() - 1], to_rect, EPS)
+    {
+        return true;
+    }
+
+    let is_backward = geom.reversed_edges.contains(&edge.index);
+    if is_backward {
+        return endpoint_attachment_is_invalid(points[0], from_rect, direction, true, true, EPS)
+            || endpoint_attachment_is_invalid(
+                points[points.len() - 1],
+                to_rect,
+                direction,
+                false,
+                true,
+                EPS,
+            );
+    }
+
+    if !endpoint_on_non_flow_face(points[0], from_rect, direction, FACE_PROXIMITY)
+        && endpoint_attachment_is_invalid(points[0], from_rect, direction, true, false, EPS)
+    {
+        return true;
+    }
+    if !endpoint_on_non_flow_face(points[points.len() - 1], to_rect, direction, FACE_PROXIMITY)
+        && endpoint_attachment_is_invalid(
+            points[points.len() - 1],
+            to_rect,
+            direction,
+            false,
+            false,
+            EPS,
+        )
+    {
+        return true;
+    }
+
+    false
+}
+
+fn endpoint_drifted_inside_or_outside(point: Point, rect: Rect, eps: f64) -> bool {
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+
+    if point.x < left - eps
+        || point.x > right + eps
+        || point.y < top - eps
+        || point.y > bottom + eps
+    {
+        return true;
+    }
+
+    point_inside_rect(&rect, point)
+}
+
+fn endpoint_on_non_flow_face(
+    point: Point,
+    rect: Rect,
+    proximity: Direction,
+    face_tol: f64,
+) -> bool {
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+    let near_left = (point.x - left) <= face_tol;
+    let near_right = (right - point.x) <= face_tol;
+    let near_top = (point.y - top) <= face_tol;
+    let near_bottom = (bottom - point.y) <= face_tol;
+
+    match proximity {
+        Direction::TopDown | Direction::BottomTop => near_left || near_right,
+        Direction::LeftRight | Direction::RightLeft => near_top || near_bottom,
+    }
+}
+
+fn endpoint_attachment_is_invalid(
+    point: Point,
+    rect: Rect,
+    direction: Direction,
+    is_source: bool,
+    is_backward: bool,
+    eps: f64,
+) -> bool {
+    const FACE_PROXIMITY: f64 = 6.0;
+    let left = rect.x;
+    let right = rect.x + rect.width;
+    let top = rect.y;
+    let bottom = rect.y + rect.height;
+    if point.x < left - eps
+        || point.x > right + eps
+        || point.y < top - eps
+        || point.y > bottom + eps
+    {
+        return true;
+    }
+
+    if is_backward {
+        // Backward endpoints can legitimately land on different faces
+        // depending on local routing contracts (e.g. TD parity bottom entry vs
+        // LR/RL right/bottom channels, LR backward source departing from bottom
+        // face). Treat any near-boundary attachment as valid and only reclip
+        // when the endpoint drifts into the interior.
+        let near_left = (point.x - left) <= FACE_PROXIMITY;
+        let near_right = (right - point.x) <= FACE_PROXIMITY;
+        let near_top = (point.y - top) <= FACE_PROXIMITY;
+        let near_bottom = (bottom - point.y) <= FACE_PROXIMITY;
+        return !(near_left || near_right || near_top || near_bottom);
+    }
+
+    let is_forward_source = is_source != is_backward;
+
+    match direction {
+        Direction::TopDown => {
+            if is_forward_source {
+                (bottom - point.y) > FACE_PROXIMITY
+            } else {
+                (point.y - top) > FACE_PROXIMITY
+            }
+        }
+        Direction::BottomTop => {
+            if is_forward_source {
+                (point.y - top) > FACE_PROXIMITY
+            } else {
+                (bottom - point.y) > FACE_PROXIMITY
+            }
+        }
+        Direction::LeftRight => {
+            if is_forward_source {
+                (right - point.x) > FACE_PROXIMITY
+            } else {
+                (point.x - left) > FACE_PROXIMITY
+            }
+        }
+        Direction::RightLeft => {
+            if is_forward_source {
+                (point.x - left) > FACE_PROXIMITY
+            } else {
+                (right - point.x) > FACE_PROXIMITY
+            }
+        }
     }
 }
 
@@ -1880,56 +2716,75 @@ fn adjust_edge_points_for_shapes(
     geom: &GraphGeometry,
     edge: &Edge,
     points: &[Point],
+    direction: Direction,
+    is_backward: bool,
+    edge_routing: EdgeRouting,
 ) -> Vec<Point> {
+    const EPS: f64 = 0.5;
     if points.len() < 2 {
         return points.to_vec();
     }
 
-    let (from_rect, from_shape): (Rect, Shape) = if let Some(sg_id) = edge.from_subgraph.as_ref() {
-        match geom.subgraphs.get(sg_id) {
-            Some(sg_geom) => (sg_geom.rect.into(), Shape::Rectangle),
-            None => return points.to_vec(),
-        }
-    } else {
-        let Some(pos_node) = geom.nodes.get(&edge.from) else {
-            return points.to_vec();
-        };
-        let Some(node) = diagram.nodes.get(&edge.from) else {
-            return points.to_vec();
-        };
-        (pos_node.rect.into(), node.shape)
-    };
-
-    let (to_rect, to_shape): (Rect, Shape) = if let Some(sg_id) = edge.to_subgraph.as_ref() {
-        match geom.subgraphs.get(sg_id) {
-            Some(sg_geom) => (sg_geom.rect.into(), Shape::Rectangle),
-            None => return points.to_vec(),
-        }
-    } else {
-        let Some(pos_node) = geom.nodes.get(&edge.to) else {
-            return points.to_vec();
-        };
-        let Some(node) = diagram.nodes.get(&edge.to) else {
-            return points.to_vec();
-        };
-        (pos_node.rect.into(), node.shape)
+    let Some(((from_rect, from_shape), (to_rect, to_shape))) =
+        edge_endpoint_shape_rects(diagram, geom, edge)
+    else {
+        return points.to_vec();
     };
 
     let mut adjusted = points.to_vec();
-    let from_target = if points.len() > 1 {
-        points[1]
-    } else {
-        from_rect.center()
-    };
-    let to_target = if points.len() > 1 {
-        points[points.len() - 2]
-    } else {
-        to_rect.center()
-    };
+    let is_self_loop = edge.from == edge.to;
+    // In orthogonal routing mode the router already places forward non-rect shape
+    // endpoints on the actual shape boundary — these are authoritative and must
+    // not be re-projected (different approach angles would shift them).
+    // In polyline routing mode dagre only clips to the bounding rect, so non-rect
+    // shapes always need re-projection to the actual shape boundary.
+    let router_placed_source = matches!(edge_routing, EdgeRouting::OrthogonalRoute)
+        && !is_self_loop
+        && !is_backward
+        && matches!(from_shape, Shape::Diamond | Shape::Hexagon);
+    let router_placed_target = matches!(edge_routing, EdgeRouting::OrthogonalRoute)
+        && !is_self_loop
+        && !is_backward
+        && matches!(to_shape, Shape::Diamond | Shape::Hexagon);
+    let source_needs_adjustment = !router_placed_source
+        && (matches!(from_shape, Shape::Diamond | Shape::Hexagon)
+            || endpoint_attachment_is_invalid(
+                points[0],
+                from_rect,
+                direction,
+                true,
+                is_backward,
+                EPS,
+            ));
+    let target_needs_adjustment = !router_placed_target
+        && (matches!(to_shape, Shape::Diamond | Shape::Hexagon)
+            || endpoint_attachment_is_invalid(
+                points[points.len() - 1],
+                to_rect,
+                direction,
+                false,
+                is_backward,
+                EPS,
+            ));
 
-    adjusted[0] = intersect_svg_node(&from_rect, from_target, from_shape);
-    let last = adjusted.len() - 1;
-    adjusted[last] = intersect_svg_node(&to_rect, to_target, to_shape);
+    if source_needs_adjustment {
+        let from_target = if points.len() > 1 {
+            points[1]
+        } else {
+            from_rect.center()
+        };
+        adjusted[0] = intersect_svg_node(&from_rect, from_target, from_shape);
+    }
+
+    if target_needs_adjustment {
+        let to_target = if points.len() > 1 {
+            points[points.len() - 2]
+        } else {
+            to_rect.center()
+        };
+        let last = adjusted.len() - 1;
+        adjusted[last] = intersect_svg_node(&to_rect, to_target, to_shape);
+    }
 
     adjusted
 }
@@ -2023,6 +2878,107 @@ fn fix_corner_points(points: &[Point]) -> Vec<Point> {
     out
 }
 
+fn collapse_tiny_straight_smoothing_jogs(points: &[Point], short_tol: f64) -> Vec<Point> {
+    if points.len() < 4 || short_tol <= 0.0 {
+        return points.to_vec();
+    }
+
+    let mut collapsed = points.to_vec();
+    let mut idx = 1usize;
+    while idx + 1 < collapsed.len() {
+        let prev = collapsed[idx - 1];
+        let curr = collapsed[idx];
+        let next = collapsed[idx + 1];
+
+        let prev_axis = segment_axis(prev, curr);
+        let next_axis = segment_axis(curr, next);
+        let prev_len = ((curr.x - prev.x).powi(2) + (curr.y - prev.y).powi(2)).sqrt();
+        let next_len = ((next.x - curr.x).powi(2) + (next.y - curr.y).powi(2)).sqrt();
+        let both_diagonal = prev_axis.is_none() && next_axis.is_none();
+        let axis_then_diagonal = prev_axis.is_some() && next_axis.is_none();
+        let diagonal_then_axis = prev_axis.is_none() && next_axis.is_some();
+
+        let v1x = curr.x - prev.x;
+        let v1y = curr.y - prev.y;
+        let v2x = next.x - curr.x;
+        let v2y = next.y - curr.y;
+        let dot = v1x * v2x + v1y * v2y;
+
+        let should_collapse = (both_diagonal && (prev_len < short_tol || next_len < short_tol))
+            || (axis_then_diagonal && prev_len < short_tol)
+            || (diagonal_then_axis && next_len < short_tol);
+        if should_collapse && dot > 0.0 {
+            collapsed.remove(idx);
+            idx = idx.saturating_sub(1).max(1);
+            continue;
+        }
+
+        idx += 1;
+    }
+
+    collapsed
+}
+
+fn collapse_immediate_axis_turnbacks(points: &[Point]) -> Vec<Point> {
+    const EPS: f64 = 1e-6;
+    if points.len() <= 2 {
+        return points.to_vec();
+    }
+
+    let mut current = points.to_vec();
+    loop {
+        let mut changed = false;
+        let mut reduced = Vec::with_capacity(current.len());
+        reduced.push(current[0]);
+
+        for idx in 1..(current.len() - 1) {
+            let prev = *reduced.last().expect("reduced is non-empty");
+            let curr = current[idx];
+            let next = current[idx + 1];
+
+            let should_drop = match (segment_axis(prev, curr), segment_axis(curr, next)) {
+                (Some(SegmentAxis::Vertical), Some(SegmentAxis::Vertical)) => {
+                    let d1 = curr.y - prev.y;
+                    let d2 = next.y - curr.y;
+                    d1.abs() > EPS && d2.abs() > EPS && d1.signum() != d2.signum()
+                }
+                (Some(SegmentAxis::Horizontal), Some(SegmentAxis::Horizontal)) => {
+                    let d1 = curr.x - prev.x;
+                    let d2 = next.x - curr.x;
+                    d1.abs() > EPS && d2.abs() > EPS && d1.signum() != d2.signum()
+                }
+                _ => false,
+            };
+
+            if should_drop {
+                changed = true;
+                continue;
+            }
+            reduced.push(curr);
+        }
+
+        reduced.push(*current.last().expect("points has at least two elements"));
+        reduced.dedup_by(|a, b| (a.x - b.x).abs() <= EPS && (a.y - b.y).abs() <= EPS);
+
+        if !changed {
+            return reduced;
+        }
+        current = reduced;
+        if current.len() <= 2 {
+            return current;
+        }
+    }
+}
+
+fn points_are_axis_aligned(points: &[Point]) -> bool {
+    if points.len() < 2 {
+        return true;
+    }
+    points
+        .windows(2)
+        .all(|seg| segment_axis(seg[0], seg[1]).is_some())
+}
+
 fn find_adjacent_point(point_a: Point, point_b: Point, distance: f64) -> Point {
     let x_diff = point_b.x - point_a.x;
     let y_diff = point_b.y - point_a.y;
@@ -2037,30 +2993,112 @@ fn find_adjacent_point(point_a: Point, point_b: Point, distance: f64) -> Point {
     }
 }
 
-fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
+#[derive(Debug, Clone, Copy)]
+struct MarkerOffsetOptions {
+    is_backward: bool,
+    allow_interior_nudges: bool,
+    enforce_primary_axis_no_backtrack: bool,
+    preserve_orthogonal: bool,
+    collapse_terminal_elbows: bool,
+    is_curved_style: bool,
+}
+
+fn apply_marker_offsets(
+    points: &[Point],
+    edge: &Edge,
+    direction: Direction,
+    options: MarkerOffsetOptions,
+) -> Vec<Point> {
     if points.len() < 2 {
         return points.to_vec();
     }
 
-    let start_offset = match edge.arrow_start {
+    let MarkerOffsetOptions {
+        is_backward,
+        allow_interior_nudges,
+        enforce_primary_axis_no_backtrack,
+        preserve_orthogonal,
+        collapse_terminal_elbows,
+        is_curved_style,
+    } = options;
+
+    let mut start_offset: f64 = match edge.arrow_start {
         Arrow::Normal | Arrow::OpenTriangle => 4.0,
         Arrow::Diamond | Arrow::OpenDiamond => 5.0,
         // Cross and circle markers have refX past the visible shape,
         // so the marker already sits before the endpoint — no pullback needed.
         Arrow::Cross | Arrow::Circle | Arrow::None => 0.0,
     };
-    let end_offset = match edge.arrow_end {
+    let mut end_offset: f64 = match edge.arrow_end {
         Arrow::Normal | Arrow::OpenTriangle => 4.0,
         Arrow::Diamond | Arrow::OpenDiamond => 5.0,
         Arrow::Cross | Arrow::Circle | Arrow::None => 0.0,
     };
 
+    let mut points = points.to_vec();
+    if preserve_orthogonal {
+        // When endpoint support is still diagonal at this stage, orthogonal
+        // post-processing may shorten the visible terminal stem significantly
+        // after marker pullback. In that case, skip endpoint pullback so the
+        // final arrow keeps a clear supporting segment.
+        if segment_axis(points[0], points[1]).is_none() {
+            start_offset = 0.0;
+        }
+        if segment_axis(points[points.len() - 2], points[points.len() - 1]).is_none() {
+            end_offset = 0.0;
+        }
+    }
+    if !preserve_orthogonal && collapse_terminal_elbows {
+        // Non-orth styles (straight/rounded/curved) can look visually cramped when
+        // an orthogonal route ends with a short final elbow immediately before
+        // the marker. Collapse that elbow into a direct terminal approach.
+        points = collapse_narrow_terminal_elbows_for_non_orth(&points, 14.0);
+    }
+    if !preserve_orthogonal && is_backward {
+        // Backward edges in non-orth styles can still end up visually cramped
+        // after marker pullback. Keep a minimum visible support at both ends.
+        const MIN_NON_ORTH_BACKWARD_ENDPOINT_SUPPORT: f64 = 10.0;
+        points = enforce_min_orthogonal_endpoint_support(
+            &points,
+            start_offset + MIN_NON_ORTH_BACKWARD_ENDPOINT_SUPPORT,
+            end_offset + MIN_NON_ORTH_BACKWARD_ENDPOINT_SUPPORT,
+        );
+        let start_support = segment_manhattan_len(points[0], points[1]);
+        let end_support = segment_manhattan_len(points[points.len() - 2], points[points.len() - 1]);
+        start_offset =
+            start_offset.min((start_support - MIN_NON_ORTH_BACKWARD_ENDPOINT_SUPPORT).max(0.0));
+        end_offset =
+            end_offset.min((end_support - MIN_NON_ORTH_BACKWARD_ENDPOINT_SUPPORT).max(0.0));
+    }
+    if preserve_orthogonal {
+        // Keep endpoint support visibly longer than marker pullback so the
+        // terminal stem remains readable in orthogonal mode.
+        const MIN_ENDPOINT_SUPPORT: f64 = 12.0;
+        const MIN_BACKWARD_CURVED_ENDPOINT_SUPPORT: f64 = 20.0;
+        let min_endpoint_support = if is_backward && is_curved_style {
+            MIN_BACKWARD_CURVED_ENDPOINT_SUPPORT
+        } else {
+            MIN_ENDPOINT_SUPPORT
+        };
+        points = enforce_min_orthogonal_endpoint_support(
+            &points,
+            start_offset + min_endpoint_support,
+            end_offset + min_endpoint_support,
+        );
+
+        // Keep a visible endpoint stem in orthogonal mode so marker pullback
+        // cannot invert the terminal segment direction.
+        let start_support = segment_manhattan_len(points[0], points[1]);
+        let end_support = segment_manhattan_len(points[points.len() - 2], points[points.len() - 1]);
+        start_offset = start_offset.min((start_support - min_endpoint_support).max(0.0));
+        end_offset = end_offset.min((end_support - min_endpoint_support).max(0.0));
+    }
+
+    let mut out = Vec::with_capacity(points.len());
     let start = points[0];
     let end = points[points.len() - 1];
     let direction_x = if start.x < end.x { "left" } else { "right" };
     let direction_y = if start.y < end.y { "down" } else { "up" };
-
-    let mut out = Vec::with_capacity(points.len());
     for (i, point) in points.iter().enumerate() {
         let mut offset_x = 0.0;
         if i == 0 && start_offset > 0.0 {
@@ -2080,25 +3118,30 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
         let diff_in_y_start = (point.y - start.y).abs();
         let extra_room = 1.0;
 
-        if end_offset > 0.0 && diff_end < end_offset && diff_end > 0.0 && diff_in_y_end < end_offset
-        {
-            let mut adjustment = end_offset + extra_room - diff_end;
-            if direction_x == "right" {
-                adjustment *= -1.0;
+        if allow_interior_nudges && !preserve_orthogonal {
+            if end_offset > 0.0
+                && diff_end < end_offset
+                && diff_end > 0.0
+                && diff_in_y_end < end_offset
+            {
+                let mut adjustment = end_offset + extra_room - diff_end;
+                if direction_x == "right" {
+                    adjustment *= -1.0;
+                }
+                offset_x -= adjustment;
             }
-            offset_x -= adjustment;
-        }
 
-        if start_offset > 0.0
-            && diff_start < start_offset
-            && diff_start > 0.0
-            && diff_in_y_start < start_offset
-        {
-            let mut adjustment = start_offset + extra_room - diff_start;
-            if direction_x == "right" {
-                adjustment *= -1.0;
+            if start_offset > 0.0
+                && diff_start < start_offset
+                && diff_start > 0.0
+                && diff_in_y_start < start_offset
+            {
+                let mut adjustment = start_offset + extra_room - diff_start;
+                if direction_x == "right" {
+                    adjustment *= -1.0;
+                }
+                offset_x += adjustment;
             }
-            offset_x += adjustment;
         }
 
         let mut offset_y = 0.0;
@@ -2118,28 +3161,30 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
         let diff_start_y = (point.y - start.y).abs();
         let diff_in_x_start = (point.x - start.x).abs();
 
-        if end_offset > 0.0
-            && diff_end_y < end_offset
-            && diff_end_y > 0.0
-            && diff_in_x_end < end_offset
-        {
-            let mut adjustment = end_offset + extra_room - diff_end_y;
-            if direction_y == "up" {
-                adjustment *= -1.0;
+        if allow_interior_nudges && !preserve_orthogonal {
+            if end_offset > 0.0
+                && diff_end_y < end_offset
+                && diff_end_y > 0.0
+                && diff_in_x_end < end_offset
+            {
+                let mut adjustment = end_offset + extra_room - diff_end_y;
+                if direction_y == "up" {
+                    adjustment *= -1.0;
+                }
+                offset_y -= adjustment;
             }
-            offset_y -= adjustment;
-        }
 
-        if start_offset > 0.0
-            && diff_start_y < start_offset
-            && diff_start_y > 0.0
-            && diff_in_x_start < start_offset
-        {
-            let mut adjustment = start_offset + extra_room - diff_start_y;
-            if direction_y == "up" {
-                adjustment *= -1.0;
+            if start_offset > 0.0
+                && diff_start_y < start_offset
+                && diff_start_y > 0.0
+                && diff_in_x_start < start_offset
+            {
+                let mut adjustment = start_offset + extra_room - diff_start_y;
+                if direction_y == "up" {
+                    adjustment *= -1.0;
+                }
+                offset_y += adjustment;
             }
-            offset_y += adjustment;
         }
 
         out.push(Point {
@@ -2148,7 +3193,344 @@ fn apply_marker_offsets(points: &[Point], edge: &Edge) -> Vec<Point> {
         });
     }
 
+    if enforce_primary_axis_no_backtrack && !preserve_orthogonal {
+        enforce_primary_axis_tail_contracts(&mut out, direction, 8.0);
+    }
+
     out
+}
+
+fn collapse_narrow_terminal_elbows_for_non_orth(
+    points: &[Point],
+    min_terminal_leg: f64,
+) -> Vec<Point> {
+    if points.len() < 4 || min_terminal_leg <= 0.0 {
+        return points.to_vec();
+    }
+
+    let mut collapsed = points.to_vec();
+
+    if collapsed.len() >= 4 {
+        let n = collapsed.len();
+        let pre = collapsed[n - 3];
+        let elbow = collapsed[n - 2];
+        let end = collapsed[n - 1];
+        let pre_axis = segment_axis(pre, elbow);
+        let end_axis = segment_axis(elbow, end);
+        if let (Some(a), Some(b)) = (pre_axis, end_axis)
+            && a != b
+            && segment_manhattan_len(elbow, end) < min_terminal_leg
+            && segment_manhattan_len(pre, end) > 0.001
+        {
+            let mut replacement_pre = pre;
+            match b {
+                SegmentAxis::Horizontal => replacement_pre.y = end.y,
+                SegmentAxis::Vertical => replacement_pre.x = end.x,
+            }
+            if segment_axis(replacement_pre, end).is_some()
+                && segment_manhattan_len(replacement_pre, end) > 0.001
+            {
+                collapsed[n - 3] = replacement_pre;
+            }
+            collapsed.remove(n - 2);
+        }
+    }
+
+    if collapsed.len() >= 4 {
+        let start = collapsed[0];
+        let elbow = collapsed[1];
+        let post = collapsed[2];
+        let start_axis = segment_axis(start, elbow);
+        let post_axis = segment_axis(elbow, post);
+        if let (Some(a), Some(b)) = (start_axis, post_axis)
+            && a != b
+            && segment_manhattan_len(start, elbow) < min_terminal_leg
+            && segment_manhattan_len(start, post) > 0.001
+        {
+            collapsed.remove(1);
+        }
+    }
+
+    collapsed
+}
+
+fn enforce_primary_axis_tail_contracts(
+    points: &mut [Point],
+    direction: Direction,
+    min_terminal_support: f64,
+) {
+    if points.len() < 2 || min_terminal_support <= 0.0 {
+        return;
+    }
+
+    let n = points.len();
+    let end_idx = n - 1;
+    let penult_idx = n - 2;
+
+    match direction {
+        Direction::TopDown => {
+            let target_penult_y = points[end_idx].y - min_terminal_support;
+            if points[penult_idx].y > target_penult_y {
+                points[penult_idx].y = target_penult_y;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].y > points[penult_idx].y {
+                    points[pre_idx].y = points[penult_idx].y;
+                }
+            }
+        }
+        Direction::BottomTop => {
+            let target_penult_y = points[end_idx].y + min_terminal_support;
+            if points[penult_idx].y < target_penult_y {
+                points[penult_idx].y = target_penult_y;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].y < points[penult_idx].y {
+                    points[pre_idx].y = points[penult_idx].y;
+                }
+            }
+        }
+        Direction::LeftRight => {
+            let target_penult_x = points[end_idx].x - min_terminal_support;
+            if points[penult_idx].x > target_penult_x {
+                points[penult_idx].x = target_penult_x;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].x > points[penult_idx].x {
+                    points[pre_idx].x = points[penult_idx].x;
+                }
+            }
+        }
+        Direction::RightLeft => {
+            let target_penult_x = points[end_idx].x + min_terminal_support;
+            if points[penult_idx].x < target_penult_x {
+                points[penult_idx].x = target_penult_x;
+            }
+            if n >= 3 {
+                let pre_idx = n - 3;
+                if points[pre_idx].x < points[penult_idx].x {
+                    points[pre_idx].x = points[penult_idx].x;
+                }
+            }
+        }
+    }
+}
+
+fn enforce_min_orthogonal_endpoint_support(
+    points: &[Point],
+    min_start_support: f64,
+    min_end_support: f64,
+) -> Vec<Point> {
+    let mut adjusted = points.to_vec();
+    extend_endpoint_support(&mut adjusted, true, min_start_support);
+    extend_endpoint_support(&mut adjusted, false, min_end_support);
+    adjusted
+}
+
+fn extend_endpoint_support(points: &mut Vec<Point>, at_start: bool, min_support: f64) {
+    const EPS: f64 = 1e-6;
+    if points.len() < 2 || min_support <= 0.0 {
+        return;
+    }
+
+    let (anchor_idx, adjacent_idx, before_adjacent_idx, before_before_adjacent_idx) = if at_start {
+        (
+            0usize,
+            1usize,
+            (points.len() > 2).then_some(2usize),
+            (points.len() > 3).then_some(3usize),
+        )
+    } else {
+        let n = points.len();
+        (n - 1, n - 2, n.checked_sub(3), n.checked_sub(4))
+    };
+
+    let anchor = points[anchor_idx];
+    let adjacent = points[adjacent_idx];
+    let Some(axis) = segment_axis(adjacent, anchor) else {
+        return;
+    };
+    let current_support = segment_manhattan_len(adjacent, anchor);
+    if current_support >= min_support {
+        return;
+    }
+
+    let new_adjacent = match axis {
+        SegmentAxis::Vertical => {
+            let sign = if anchor.y >= adjacent.y { 1.0 } else { -1.0 };
+            Point {
+                x: anchor.x,
+                y: anchor.y - sign * min_support,
+            }
+        }
+        SegmentAxis::Horizontal => {
+            let sign = if anchor.x >= adjacent.x { 1.0 } else { -1.0 };
+            Point {
+                x: anchor.x - sign * min_support,
+                y: anchor.y,
+            }
+        }
+    };
+
+    points[adjacent_idx] = new_adjacent;
+    let Some(before_adjacent_idx) = before_adjacent_idx else {
+        return;
+    };
+
+    let before_adjacent = points[before_adjacent_idx];
+    if segment_axis(before_adjacent, new_adjacent).is_some() {
+        collapse_endpoint_axis_backtrack(points, at_start);
+        return;
+    }
+
+    // Prefer shifting the elbow coordinate (when possible) over inserting a
+    // new jog segment; this avoids tiny backtracks near turns.
+    let mut shifted_before = before_adjacent;
+    match axis {
+        SegmentAxis::Vertical => shifted_before.y = new_adjacent.y,
+        SegmentAxis::Horizontal => shifted_before.x = new_adjacent.x,
+    }
+    let keeps_adjacent_axis = segment_axis(shifted_before, new_adjacent).is_some();
+    let keeps_prev_axis = before_before_adjacent_idx
+        .and_then(|idx| points.get(idx).copied())
+        .is_none_or(|prev| segment_axis(prev, shifted_before).is_some());
+    if keeps_adjacent_axis {
+        // Prefer coordinate shifting over elbow insertion. If the direct shift
+        // breaks the previous segment, try shifting that previous point onto the
+        // same axis first.
+        if !keeps_prev_axis {
+            if let Some(prev_idx) = before_before_adjacent_idx
+                && let Some(prev) = points.get(prev_idx).copied()
+            {
+                let shifted_prev = match axis {
+                    SegmentAxis::Vertical => Point {
+                        x: prev.x,
+                        y: shifted_before.y,
+                    },
+                    SegmentAxis::Horizontal => Point {
+                        x: shifted_before.x,
+                        y: prev.y,
+                    },
+                };
+                let keeps_next_axis = segment_axis(shifted_prev, shifted_before).is_some();
+                let keeps_prev_axis = prev_idx
+                    .checked_sub(1)
+                    .and_then(|idx| points.get(idx).copied())
+                    .is_none_or(|pprev| segment_axis(pprev, shifted_prev).is_some());
+                if keeps_next_axis && keeps_prev_axis {
+                    points[before_adjacent_idx] = shifted_before;
+                    points[prev_idx] = shifted_prev;
+                    collapse_endpoint_axis_backtrack(points, at_start);
+                    return;
+                }
+            }
+        } else {
+            points[before_adjacent_idx] = shifted_before;
+            // If this shift introduced a tiny stair-step just before the endpoint,
+            // propagate the same coordinate shift backward through the contiguous
+            // collinear run so orthogonal tails stay visually clean.
+            let mut propagate_idx = before_before_adjacent_idx;
+            while let Some(idx) = propagate_idx {
+                let Some(current) = points.get(idx).copied() else {
+                    break;
+                };
+                let should_shift = match axis {
+                    SegmentAxis::Vertical => (current.y - before_adjacent.y).abs() <= EPS,
+                    SegmentAxis::Horizontal => (current.x - before_adjacent.x).abs() <= EPS,
+                };
+                if !should_shift {
+                    break;
+                }
+
+                let candidate = match axis {
+                    SegmentAxis::Vertical => Point {
+                        x: current.x,
+                        y: shifted_before.y,
+                    },
+                    SegmentAxis::Horizontal => Point {
+                        x: shifted_before.x,
+                        y: current.y,
+                    },
+                };
+                let keeps_next_axis = points
+                    .get(idx + 1)
+                    .copied()
+                    .is_some_and(|next| segment_axis(candidate, next).is_some());
+                let keeps_prev_axis = idx
+                    .checked_sub(1)
+                    .and_then(|prev_idx| points.get(prev_idx).copied())
+                    .is_none_or(|prev| segment_axis(prev, candidate).is_some());
+                if !keeps_next_axis || !keeps_prev_axis {
+                    break;
+                }
+
+                points[idx] = candidate;
+                propagate_idx = idx.checked_sub(1);
+            }
+            collapse_endpoint_axis_backtrack(points, at_start);
+            return;
+        }
+    }
+
+    let elbow = match axis {
+        SegmentAxis::Vertical => Point {
+            x: before_adjacent.x,
+            y: new_adjacent.y,
+        },
+        SegmentAxis::Horizontal => Point {
+            x: new_adjacent.x,
+            y: before_adjacent.y,
+        },
+    };
+
+    if at_start {
+        points.insert(2, elbow);
+    } else {
+        let insert_at = points.len() - 2;
+        points.insert(insert_at, elbow);
+    }
+    collapse_endpoint_axis_backtrack(points, at_start);
+}
+
+fn collapse_endpoint_axis_backtrack(points: &mut Vec<Point>, at_start: bool) {
+    const EPS: f64 = 1e-6;
+    if points.len() < 4 {
+        return;
+    }
+
+    let (outer_idx, middle_idx, inner_idx) = if at_start {
+        (3usize, 2usize, 1usize)
+    } else {
+        let n = points.len();
+        (n - 4, n - 3, n - 2)
+    };
+
+    let outer = points[outer_idx];
+    let middle = points[middle_idx];
+    let inner = points[inner_idx];
+    let Some(first_axis) = segment_axis(outer, middle) else {
+        return;
+    };
+    let Some(second_axis) = segment_axis(middle, inner) else {
+        return;
+    };
+    if first_axis != second_axis {
+        return;
+    }
+
+    let (delta1, delta2) = match first_axis {
+        SegmentAxis::Vertical => (middle.y - outer.y, inner.y - middle.y),
+        SegmentAxis::Horizontal => (middle.x - outer.x, inner.x - middle.x),
+    };
+    if delta1.abs() <= EPS || delta2.abs() <= EPS {
+        return;
+    }
+    if delta1.signum() != delta2.signum() {
+        points.remove(middle_idx);
+    }
 }
 
 fn marker_offset_component(point_a: Point, point_b: Point, offset: f64, use_x: bool) -> f64 {
@@ -2173,8 +3555,23 @@ fn marker_offset_component(point_a: Point, point_b: Point, offset: f64, use_x: b
 
 fn intersect_svg_node(rect: &Rect, point: Point, shape: Shape) -> Point {
     match shape {
-        Shape::Diamond | Shape::Hexagon => intersect_svg_diamond(rect, point),
+        Shape::Diamond => intersect_svg_diamond(rect, point),
+        Shape::Hexagon => intersect_svg_hexagon(rect, point),
         _ => intersect_svg_rect(rect, point),
+    }
+}
+
+/// Hexagon boundary intersection using polygon-ray from the shared kernel.
+fn intersect_svg_hexagon(rect: &Rect, point: Point) -> Point {
+    use crate::diagrams::flowchart::geometry::{FPoint, FRect};
+    let frect = FRect::new(rect.x, rect.y, rect.width, rect.height);
+    let verts = hexagon_vertices(frect);
+    let center = FPoint::new(rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+    let approach = FPoint::new(point.x, point.y);
+    let result = intersect_convex_polygon(&verts, approach, center);
+    Point {
+        x: result.x,
+        y: result.y,
     }
 }
 
@@ -2223,7 +3620,7 @@ fn intersect_svg_diamond(rect: &Rect, point: Point) -> Point {
     }
 }
 
-fn path_from_points_linear(points: &[(f64, f64)]) -> String {
+fn path_from_points_straight(points: &[(f64, f64)]) -> String {
     if points.is_empty() {
         return String::new();
     }
@@ -2238,7 +3635,7 @@ fn path_from_points_linear(points: &[(f64, f64)]) -> String {
     d
 }
 
-fn path_from_points_basis(points: &[(f64, f64)]) -> String {
+fn path_from_points_curved(points: &[(f64, f64)]) -> String {
     if points.is_empty() {
         return String::new();
     }
@@ -2268,10 +3665,10 @@ fn path_from_points_basis(points: &[(f64, f64)]) -> String {
                 let px = (5.0 * x0 + x1) / 6.0;
                 let py = (5.0 * y0 + y1) / 6.0;
                 let _ = write!(d, " L{},{}", fmt_f64(px), fmt_f64(py));
-                basis_bezier(&mut d, x0, y0, x1, y1, x, y);
+                curved_bezier(&mut d, x0, y0, x1, y1, x, y);
             }
             _ => {
-                basis_bezier(&mut d, x0, y0, x1, y1, x, y);
+                curved_bezier(&mut d, x0, y0, x1, y1, x, y);
             }
         }
         x0 = x1;
@@ -2282,7 +3679,7 @@ fn path_from_points_basis(points: &[(f64, f64)]) -> String {
 
     match point {
         3 => {
-            basis_bezier(&mut d, x0, y0, x1, y1, x1, y1);
+            curved_bezier(&mut d, x0, y0, x1, y1, x1, y1);
             let _ = write!(d, " L{},{}", fmt_f64(x1), fmt_f64(y1));
         }
         2 => {
@@ -2294,7 +3691,7 @@ fn path_from_points_basis(points: &[(f64, f64)]) -> String {
     d
 }
 
-fn basis_bezier(d: &mut String, x0: f64, y0: f64, x1: f64, y1: f64, x: f64, y: f64) {
+fn curved_bezier(d: &mut String, x0: f64, y0: f64, x1: f64, y1: f64, x: f64, y: f64) {
     let c1x = (2.0 * x0 + x1) / 3.0;
     let c1y = (2.0 * y0 + y1) / 3.0;
     let c2x = (x0 + 2.0 * x1) / 3.0;
@@ -2318,7 +3715,7 @@ fn path_from_points_rounded(points: &[(f64, f64)], radius: f64) -> String {
         return String::new();
     }
     if points.len() < 3 || radius <= 0.0 {
-        return path_from_points_linear(points);
+        return path_from_points_straight(points);
     }
 
     let mut d = String::new();

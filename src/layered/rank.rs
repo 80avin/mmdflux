@@ -183,7 +183,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::graph::DiGraph;
+    use crate::layered::graph::DiGraph;
 
     #[test]
     fn test_run_with_longest_path_config() {

@@ -6,7 +6,7 @@
 
 use std::path::Path;
 
-use mmdflux::diagram::{GeometryLevel, OutputFormat, RenderConfig};
+use mmdflux::diagram::{EngineAlgorithmId, GeometryLevel, OutputFormat, PathDetail, RenderConfig};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::mmds::MmdsOutput;
 use mmdflux::registry::DiagramInstance;
@@ -38,6 +38,21 @@ fn render_json_with_level(input: &str, level: GeometryLevel) -> String {
         ..RenderConfig::default()
     };
     instance.render(OutputFormat::Mmds, &config).unwrap()
+}
+
+fn render_routed_mmds_with_engine(input: &str, engine: &str) -> String {
+    let mut instance = FlowchartInstance::new();
+    instance.parse(input).unwrap();
+    instance
+        .render(
+            OutputFormat::Mmds,
+            &RenderConfig {
+                geometry_level: GeometryLevel::Routed,
+                layout_engine: EngineAlgorithmId::parse(engine).ok(),
+                ..RenderConfig::default()
+            },
+        )
+        .unwrap()
 }
 
 fn mmds_fixture(path: &str) -> Value {
@@ -157,6 +172,174 @@ fn mmds_layout_node_shapes() {
     assert_eq!(shapes["B"], "round");
     assert_eq!(shapes["C"], "diamond");
     assert_eq!(shapes["D"], "stadium");
+}
+
+#[test]
+fn mmds_compact_path_detail_sits_between_full_and_simplified() {
+    let input = flowchart_fixture("multi_subgraph_direction_override.mmd");
+    let render_for = |path_detail: PathDetail| {
+        let mut instance = FlowchartInstance::new();
+        instance.parse(&input).unwrap();
+        instance
+            .render(
+                OutputFormat::Mmds,
+                &RenderConfig {
+                    geometry_level: GeometryLevel::Routed,
+                    path_detail,
+                    layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+                    ..RenderConfig::default()
+                },
+            )
+            .unwrap()
+    };
+
+    let full = render_for(PathDetail::Full);
+    let compact = render_for(PathDetail::Compact);
+    let simplified = render_for(PathDetail::Simplified);
+
+    let full: MmdsOutput = serde_json::from_str(&full).unwrap();
+    let compact: MmdsOutput = serde_json::from_str(&compact).unwrap();
+    let simplified: MmdsOutput = serde_json::from_str(&simplified).unwrap();
+
+    let full_len = full
+        .edges
+        .iter()
+        .find(|edge| edge.source == "Bmid" && edge.target == "F")
+        .and_then(|edge| edge.path.as_ref())
+        .map(std::vec::Vec::len)
+        .unwrap();
+    let compact_len = compact
+        .edges
+        .iter()
+        .find(|edge| edge.source == "Bmid" && edge.target == "F")
+        .and_then(|edge| edge.path.as_ref())
+        .map(std::vec::Vec::len)
+        .unwrap();
+    let simplified_len = simplified
+        .edges
+        .iter()
+        .find(|edge| edge.source == "Bmid" && edge.target == "F")
+        .and_then(|edge| edge.path.as_ref())
+        .map(std::vec::Vec::len)
+        .unwrap();
+
+    assert!(
+        full_len >= compact_len,
+        "compact should not increase waypoints: full={full_len}, compact={compact_len}"
+    );
+    assert!(
+        compact_len >= simplified_len,
+        "compact should preserve more structure than simplified: compact={compact_len}, simplified={simplified_len}"
+    );
+    assert_eq!(simplified_len, 3);
+}
+
+#[test]
+fn routed_mmds_defaults_to_full_path_detail() {
+    let input = flowchart_fixture("multi_subgraph_direction_override.mmd");
+    let render_for = |path_detail: Option<PathDetail>| {
+        let mut instance = FlowchartInstance::new();
+        instance.parse(&input).unwrap();
+        let mut config = RenderConfig {
+            geometry_level: GeometryLevel::Routed,
+            layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+            ..RenderConfig::default()
+        };
+        if let Some(path_detail) = path_detail {
+            config.path_detail = path_detail;
+        }
+        instance.render(OutputFormat::Mmds, &config).unwrap()
+    };
+    let edge_len = |json: &str| {
+        let output: MmdsOutput = serde_json::from_str(json).unwrap();
+        output
+            .edges
+            .iter()
+            .find(|edge| edge.source == "Bmid" && edge.target == "F")
+            .and_then(|edge| edge.path.as_ref())
+            .map(std::vec::Vec::len)
+            .unwrap()
+    };
+
+    let default = render_for(None);
+    let full = render_for(Some(PathDetail::Full));
+    let simplified = render_for(Some(PathDetail::Simplified));
+    let default_len = edge_len(&default);
+    let full_len = edge_len(&full);
+    let simplified_len = edge_len(&simplified);
+
+    assert_eq!(
+        default_len, full_len,
+        "default routed MMDS path detail should match full output"
+    );
+    assert!(
+        default_len >= simplified_len,
+        "default full detail should not have fewer points than simplified: default={default_len}, simplified={simplified_len}"
+    );
+    if default_len == simplified_len {
+        assert!(
+            default_len <= 3,
+            "default/simplified point counts should only match when the routed path is already minimal: default={default_len}, simplified={simplified_len}"
+        );
+    }
+}
+
+#[test]
+fn path_detail_monotonicity_holds_full_compact_simplified() {
+    let input = flowchart_fixture("multi_subgraph_direction_override.mmd");
+    let render_for = |path_detail: PathDetail| {
+        let mut instance = FlowchartInstance::new();
+        instance.parse(&input).unwrap();
+        instance
+            .render(
+                OutputFormat::Mmds,
+                &RenderConfig {
+                    geometry_level: GeometryLevel::Routed,
+                    path_detail,
+                    layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+                    ..RenderConfig::default()
+                },
+            )
+            .unwrap()
+    };
+    let edge_len = |json: &str| {
+        let output: MmdsOutput = serde_json::from_str(json).unwrap();
+        output
+            .edges
+            .iter()
+            .find(|edge| edge.source == "Bmid" && edge.target == "F")
+            .and_then(|edge| edge.path.as_ref())
+            .map(std::vec::Vec::len)
+            .unwrap()
+    };
+
+    let full = edge_len(&render_for(PathDetail::Full));
+    let compact = edge_len(&render_for(PathDetail::Compact));
+    let simplified = edge_len(&render_for(PathDetail::Simplified));
+
+    assert!(
+        full >= compact && compact >= simplified,
+        "path-detail monotonicity violated: full={full}, compact={compact}, simplified={simplified}"
+    );
+}
+
+#[test]
+fn orthogonal_route_mmds_routed_output_is_deterministic_for_fixture_subset() {
+    for fixture in [
+        "simple.mmd",
+        "decision.mmd",
+        "fan_out.mmd",
+        "subgraph_direction_cross_boundary.mmd",
+        "multi_subgraph_direction_override.mmd",
+    ] {
+        let input = flowchart_fixture(fixture);
+        let first = render_routed_mmds_with_engine(&input, "flux-layered");
+        let second = render_routed_mmds_with_engine(&input, "flux-layered");
+        assert_eq!(
+            second, first,
+            "orthogonal MMDS routed output is nondeterministic for fixture {fixture}"
+        );
+    }
 }
 
 // -----------------------------------------------------------------------
@@ -601,4 +784,42 @@ fn docs_reference_initial_profile_set() {
     assert!(docs.contains("mmds-core-v1"));
     assert!(docs.contains("mmdflux-svg-v1"));
     assert!(docs.contains("mmdflux-text-v1"));
+}
+
+// --- Task 4.5: MMDS engine metadata ---
+
+#[test]
+fn mmds_routed_output_includes_engine_metadata() {
+    let input = "graph TD\nA-->B";
+    let mut instance = FlowchartInstance::new();
+    instance.parse(input).unwrap();
+
+    let config = RenderConfig {
+        geometry_level: GeometryLevel::Routed,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+    assert_eq!(json["metadata"]["engine"], "flux-layered");
+}
+
+#[test]
+fn mmds_layout_output_omits_edge_paths_regardless_of_engine() {
+    let input = "graph TD\nA-->B";
+    let mut instance = FlowchartInstance::new();
+    instance.parse(input).unwrap();
+
+    let config = RenderConfig {
+        geometry_level: GeometryLevel::Layout,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+
+    // Layout level should not have edge paths
+    assert!(
+        json["edges"][0]["path"].is_null()
+            || !json["edges"][0].as_object().unwrap().contains_key("path")
+    );
 }

@@ -3,11 +3,11 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
-use mmdflux::dagre::Ranker;
 use mmdflux::diagram::{
-    GeometryLevel, LayoutConfig, LayoutEngineId, OutputFormat, PathDetail, RenderConfig,
-    SvgEdgePathStyle,
+    CornerStyle, EdgePreset, EngineAlgorithmId, GeometryLevel, InterpolationStyle, LayoutConfig,
+    OutputFormat, PathDetail, RenderConfig, RoutingStyle,
 };
+use mmdflux::layered::Ranker;
 use mmdflux::registry::default_registry;
 
 #[derive(Parser)]
@@ -33,19 +33,19 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = RankerArg::NetworkSimplex)]
     ranker: RankerArg,
 
-    /// Dagre nodesep (node spacing)
+    /// Layout nodesep (node spacing)
     #[arg(long)]
     node_spacing: Option<f64>,
 
-    /// Dagre ranksep (rank spacing)
+    /// Layout ranksep (rank spacing)
     #[arg(long)]
     rank_spacing: Option<f64>,
 
-    /// Dagre edgesep (edge segment spacing)
+    /// Layout edgesep (edge segment spacing)
     #[arg(long)]
     edge_spacing: Option<f64>,
 
-    /// Dagre margin (translateGraph margin)
+    /// Layout margin (translateGraph margin)
     #[arg(long)]
     margin: Option<f64>,
 
@@ -77,20 +77,37 @@ struct Cli {
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
 
-    /// SVG edge curve style (basis, linear, or rounded)
-    #[arg(long, value_enum)]
-    svg_edge_curve: Option<EdgeCurveArg>,
+    /// Edge style preset (straight, step, smoothstep, or bezier).
+    /// Expands to routing + interpolation + corner defaults.
+    /// Explicit --routing-style / --interpolation-style / --corner-style take precedence.
+    #[arg(long)]
+    edge_preset: Option<String>,
 
-    /// SVG edge curve radius (px) for rounded corners.
+    /// SVG routing style (polyline or orthogonal).
+    /// Overrides the routing component of --edge-preset when both are set.
+    #[arg(long)]
+    routing_style: Option<String>,
+
+    /// SVG interpolation style (linear or bezier).
+    /// Overrides the interpolation component of --edge-preset when both are set.
+    #[arg(long)]
+    interpolation_style: Option<String>,
+
+    /// SVG corner style (sharp or rounded).
+    /// Overrides the corner component of --edge-preset when both are set.
+    #[arg(long)]
+    corner_style: Option<String>,
+
+    /// SVG corner arc radius (px) for rounded corners.
     /// Clamped to half the shortest adjacent segment length.
     #[arg(long)]
-    svg_edge_curve_radius: Option<f64>,
+    edge_radius: Option<f64>,
 
     /// SVG diagram padding (px)
     #[arg(long)]
     svg_diagram_padding: Option<f64>,
 
-    /// Layout engine (dagre, elk)
+    /// Layout engine (flux-layered, mermaid-layered, elk-layered, elk-mrtree)
     #[arg(long)]
     layout_engine: Option<String>,
 
@@ -147,23 +164,6 @@ impl From<RankerArg> for Ranker {
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
-enum EdgeCurveArg {
-    Basis,
-    Linear,
-    Rounded,
-}
-
-impl From<EdgeCurveArg> for SvgEdgePathStyle {
-    fn from(arg: EdgeCurveArg) -> Self {
-        match arg {
-            EdgeCurveArg::Basis => SvgEdgePathStyle::Basis,
-            EdgeCurveArg::Linear => SvgEdgePathStyle::Linear,
-            EdgeCurveArg::Rounded => SvgEdgePathStyle::Rounded,
-        }
-    }
-}
-
-#[derive(Clone, Copy, ValueEnum, Debug)]
 enum GeometryLevelArg {
     /// Node geometry + edge topology only (default)
     Layout,
@@ -184,6 +184,8 @@ impl From<GeometryLevelArg> for GeometryLevel {
 enum PathDetailArg {
     /// All routed waypoints (default)
     Full,
+    /// Remove redundant interior points while preserving path shape
+    Compact,
     /// Start, midpoint, and end only
     Simplified,
     /// Start and end only
@@ -194,6 +196,7 @@ impl From<PathDetailArg> for PathDetail {
     fn from(arg: PathDetailArg) -> Self {
         match arg {
             PathDetailArg::Full => PathDetail::Full,
+            PathDetailArg::Compact => PathDetail::Compact,
             PathDetailArg::Simplified => PathDetail::Simplified,
             PathDetailArg::Endpoints => PathDetail::Endpoints,
         }
@@ -232,14 +235,65 @@ fn main() -> io::Result<()> {
         std::process::exit(result.exit_code());
     }
 
+    // Parse new style flags.
+    let edge_preset: Option<EdgePreset> = match cli.edge_preset.as_deref() {
+        Some(s) => match EdgePreset::parse(s) {
+            Ok(p) => Some(p),
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
+    let routing_style: Option<RoutingStyle> = match cli.routing_style.as_deref() {
+        Some(s) => match RoutingStyle::parse(s) {
+            Ok(rs) => Some(rs),
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
+    let interpolation_style: Option<InterpolationStyle> = match cli.interpolation_style.as_deref() {
+        Some(s) => match InterpolationStyle::parse(s) {
+            Ok(is) => Some(is),
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
+    let corner_style: Option<CornerStyle> = match cli.corner_style.as_deref() {
+        Some(s) => match CornerStyle::parse(s) {
+            Ok(cs) => Some(cs),
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
     // Build render config from CLI options
-    let layout_engine = match cli
+    let engine_algo: Option<EngineAlgorithmId> = match cli
         .layout_engine
         .as_deref()
         .filter(|s| !s.trim().is_empty())
     {
-        Some(raw) => match LayoutEngineId::parse(raw) {
-            Ok(id) => Some(id),
+        Some(raw) => match EngineAlgorithmId::parse(raw) {
+            Ok(id) => {
+                if let Err(err) = id.check_available() {
+                    eprintln!("Error: {}", err);
+                    std::process::exit(1);
+                }
+                Some(id)
+            }
             Err(err) => {
                 eprintln!("Error: {}", err);
                 std::process::exit(1);
@@ -257,14 +311,17 @@ fn main() -> io::Result<()> {
             ranker: cli.ranker.into(),
             ..LayoutConfig::default()
         },
-        layout_engine,
+        layout_engine: engine_algo,
         cluster_ranksep: cli.cluster_ranksep,
         padding: cli.padding,
         svg_scale: cli.svg_scale,
         svg_node_padding_x: cli.svg_node_padding_x,
         svg_node_padding_y: cli.svg_node_padding_y,
-        svg_edge_curve: cli.svg_edge_curve.map(Into::into),
-        svg_edge_curve_radius: cli.svg_edge_curve_radius,
+        edge_preset,
+        routing_style,
+        interpolation_style,
+        corner_style,
+        edge_radius: cli.edge_radius,
         svg_diagram_padding: cli.svg_diagram_padding,
         show_ids: cli.show_ids,
         geometry_level: cli.geometry_level.map(Into::into).unwrap_or_default(),

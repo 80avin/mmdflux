@@ -216,8 +216,8 @@ pub fn cleanup(lg: &mut LayoutGraph) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::LayoutConfig;
-    use crate::dagre::graph::{DiGraph, LayoutGraph};
+    use crate::layered::LayoutConfig;
+    use crate::layered::graph::{DiGraph, LayoutGraph};
 
     fn build_test_compound_layout_graph() -> LayoutGraph {
         let mut g: DiGraph<(f64, f64)> = DiGraph::new();
@@ -575,7 +575,7 @@ mod tests {
 
     #[test]
     fn test_titled_compound_gets_title_node_after_insert() {
-        use crate::dagre::rank;
+        use crate::layered::rank;
 
         let mut lg = build_test_titled_compound_layout_graph();
         let sg1_idx = lg.node_index[&"sg1".into()];
@@ -603,7 +603,7 @@ mod tests {
 
     #[test]
     fn test_assign_rank_minmax() {
-        use crate::dagre::rank;
+        use crate::layered::rank;
 
         let mut lg = build_test_compound_layout_graph();
         let sg1_idx = lg.node_index[&"sg1".into()];
@@ -626,7 +626,7 @@ mod tests {
 
     #[test]
     fn test_assign_rank_minmax_uses_border_top_for_min() {
-        use crate::dagre::rank;
+        use crate::layered::rank;
 
         let mut lg = build_test_titled_compound_layout_graph();
         let sg1_idx = lg.node_index[&"sg1".into()];
@@ -649,7 +649,7 @@ mod tests {
 
     #[test]
     fn test_insert_title_nodes_sets_correct_rank() {
-        use crate::dagre::rank;
+        use crate::layered::rank;
 
         let mut lg = build_test_titled_compound_layout_graph();
         let sg1_idx = lg.node_index[&"sg1".into()];
@@ -676,7 +676,7 @@ mod tests {
 
     #[test]
     fn test_insert_title_nodes_multi_subgraph_no_collision() {
-        use crate::dagre::rank;
+        use crate::layered::rank;
 
         let mut g: DiGraph<(f64, f64)> = DiGraph::new();
         g.add_node("A", (10.0, 10.0));
@@ -720,7 +720,7 @@ mod tests {
 
     #[test]
     fn test_insert_title_nodes_skips_untitled() {
-        use crate::dagre::rank;
+        use crate::layered::rank;
 
         let mut lg = build_test_compound_layout_graph();
         let sg1_idx = lg.node_index[&"sg1".into()];
@@ -736,7 +736,7 @@ mod tests {
 
     #[test]
     fn test_assign_rank_minmax_noop_simple() {
-        use crate::dagre::rank;
+        use crate::layered::rank;
 
         let mut lg = build_test_simple_layout_graph();
         rank::run(&mut lg, &LayoutConfig::default());

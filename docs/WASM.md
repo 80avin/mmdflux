@@ -29,6 +29,59 @@ just wasm-test
 - `just wasm-test` runs browser-executed wasm-bindgen contract tests for
   `crates/mmdflux-wasm`.
 
+## Runtime Config Contract
+
+`mmdflux-wasm` exports:
+
+- `render(input, format, configJson)`
+- `detect(input)`
+- `version()`
+
+`configJson` uses a **strict** camelCase schema. Unknown or legacy keys are
+rejected.
+
+Supported top-level keys:
+
+- `layoutEngine` (`flux-layered`, `mermaid-layered`, ...)
+- `clusterRanksep`
+- `padding`
+- `svgScale`
+- `edgePreset` (`straight`, `step`, `smoothstep`, `bezier`)
+- `routingStyle` (`polyline`, `orthogonal`)
+- `interpolationStyle` (`linear`, `bezier`)
+- `cornerStyle` (`sharp`, `rounded`)
+- `edgeRadius`
+- `svgDiagramPadding`
+- `svgNodePaddingX`
+- `svgNodePaddingY`
+- `showIds`
+- `geometryLevel` (`layout`, `routed`)
+- `pathDetail` (`full`, `compact`, `simplified`, `endpoints`)
+- `layout` object:
+  - `nodeSep`, `edgeSep`, `rankSep`, `margin`, `ranker`
+
+Notes:
+
+- For SVG output, if `layoutEngine` is omitted, WASM defaults to `flux-layered`.
+- Legacy keys such as `edgeRouting`, `edgeStyle`, `svgEdgeCurve`, and
+  `svgEdgeCurveRadius` are rejected.
+
+Example:
+
+```json
+{
+  "layoutEngine": "flux-layered",
+  "edgePreset": "smoothstep",
+  "edgeRadius": 6,
+  "geometryLevel": "routed",
+  "pathDetail": "compact",
+  "layout": {
+    "nodeSep": 40,
+    "rankSep": 50
+  }
+}
+```
+
 ## npm Release Contract
 
 WASM publishing is tag-driven via:

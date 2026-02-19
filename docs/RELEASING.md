@@ -67,4 +67,3 @@ cat checksums.txt
 
 3. Update `Formula/mmdflux.rb` with new version, URLs, and SHA256 values.
 4. Commit and push the formula update.
-

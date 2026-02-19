@@ -21,8 +21,8 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M42.45,66.00 L42.45,69.50 C42.45,73.00 42.45,80.00 42.45,87.00 C42.45,94.00 42.45,101.00 42.45,104.50 L42.45,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#open-arrowhead)" marker-end="url(#open-arrowhead)" />
-      <path d="M42.45,171.00 L42.45,174.33 C42.45,177.67 42.45,184.33 42.45,191.00 C42.45,197.67 42.45,204.33 42.45,207.67 L42.45,211.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#open-diamondhead)" marker-end="url(#open-diamondhead)" />
+      <path d="M42.45,66.00 L42.45,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#open-arrowhead)" marker-end="url(#open-arrowhead)" />
+      <path d="M42.45,171.00 L42.45,211.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#open-diamondhead)" marker-end="url(#open-diamondhead)" />
     </g>
     <g class="edgeLabels">
     </g>

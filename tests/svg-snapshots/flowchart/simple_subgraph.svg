@@ -25,8 +25,8 @@
       <text x="96.94" y="-3.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Process</text>
     </g>
     <g class="edgePaths">
-      <path d="M96.94,87.00 L96.94,91.17 C96.94,95.33 96.94,103.67 96.94,111.33 C96.94,119.00 96.94,126.00 96.94,129.50 L96.94,133.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M96.94,191.00 L96.94,195.17 C96.94,199.33 96.94,207.67 96.94,216.00 C96.94,224.33 96.94,232.67 96.94,240.33 C96.94,248.00 96.94,255.00 96.94,258.50 L96.94,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M96.94,87.00 L96.94,133.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M96.94,191.00 L96.94,262.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

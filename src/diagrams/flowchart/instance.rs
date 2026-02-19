@@ -1,12 +1,16 @@
 //! Flowchart diagram instance implementation.
 
-use super::routing;
-use crate::diagram::{GeometryLevel, LayoutEngineId, OutputFormat, RenderConfig, RenderError};
+use crate::diagram::{
+    AlgorithmId, EdgeRouting, EngineAlgorithmId, EngineConfig, EngineId, GraphSolveRequest,
+    OutputFormat, RenderConfig, RenderError,
+};
+use crate::diagrams::flowchart::render::svg::render_svg_from_geometry;
+use crate::engines::graph::GraphEngineRegistry;
 use crate::graph::{Diagram, build_diagram};
 use crate::mmds::to_mmds_json;
 use crate::parser::parse_flowchart;
 use crate::registry::DiagramInstance;
-use crate::render::{RenderOptions, render, render_svg_from_geometry};
+use crate::render::{RenderOptions, render};
 
 /// Flowchart diagram instance.
 ///
@@ -50,57 +54,67 @@ impl DiagramInstance for FlowchartInstance {
             diagram
         };
 
-        // Route runtime selection through the engine abstraction.
-        let engine_result = super::engine::layout_with_selected_engine(diagram, config, format)?;
+        // Resolve engine (default: flux-layered).
+        let engine_id = config
+            .layout_engine
+            .unwrap_or_else(|| EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered));
+        engine_id.check_available()?;
+        engine_id.check_routing_style(config)?;
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;
 
-        if matches!(format, OutputFormat::Mmds) {
-            let routed = if matches!(config.geometry_level, GeometryLevel::Routed) {
-                Some(routing::route_graph_geometry(
+        match format {
+            OutputFormat::Mmds => {
+                // MMDS: use solve() to obtain geometry and optionally routed paths.
+                let request = GraphSolveRequest::from_config(config, format);
+                let registry = GraphEngineRegistry::default();
+                let engine = registry.get_solver(engine_id).ok_or_else(|| RenderError {
+                    message: format!("no engine registered for: {engine_id}"),
+                })?;
+                let result = engine.solve(
                     diagram,
-                    &engine_result.geometry,
-                    engine_result.routing_mode,
+                    &EngineConfig::Layered(config.layout.clone()),
+                    &request,
+                )?;
+                to_mmds_json(
+                    diagram,
+                    &result.geometry,
+                    result.routed.as_ref(),
+                    config.geometry_level,
+                    config.path_detail,
+                    Some(engine_id),
+                )
+            }
+            OutputFormat::Svg => {
+                // SVG: solve() produces GraphGeometry; render_svg_from_geometry() renders it.
+                // This dispatches layout through the engine registry so --layout-engine
+                // is respected. Edge routing mode is derived from engine capabilities +
+                // the resolved routing style (already in options.edge_routing).
+                let request = GraphSolveRequest::from_config(config, format);
+                let registry = GraphEngineRegistry::default();
+                let engine = registry.get_solver(engine_id).ok_or_else(|| RenderError {
+                    message: format!("no engine registered for: {engine_id}"),
+                })?;
+                let result = engine.solve(
+                    diagram,
+                    &EngineConfig::Layered(config.layout.clone()),
+                    &request,
+                )?;
+                let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::OrthogonalRoute);
+                Ok(render_svg_from_geometry(
+                    diagram,
+                    &options,
+                    &result.geometry,
+                    edge_routing,
                 ))
-            } else {
-                None
-            };
-            return to_mmds_json(
-                diagram,
-                &engine_result.geometry,
-                routed.as_ref(),
-                config.geometry_level,
-                config.path_detail,
-            );
+            }
+            // Text/Ascii: render() handles layout internally using character-grid
+            // coordinates. The solve result uses float pixel coordinates —
+            // a different coordinate system that requires a mapping layer not yet
+            // implemented (task 4.2 decision).
+            _ => Ok(render(diagram, &options)),
         }
-
-        if matches!(format, OutputFormat::Svg) && engine_result.engine_id != LayoutEngineId::Dagre {
-            let routed = routing::route_graph_geometry(
-                diagram,
-                &engine_result.geometry,
-                engine_result.routing_mode,
-            );
-            // Non-dagre SVG: inject routed paths into geometry for rendering.
-            let geom = inject_routed_paths(&engine_result.geometry, &routed);
-            return Ok(render_svg_from_geometry(
-                diagram,
-                &options,
-                &geom,
-                engine_result.routing_mode,
-            ));
-        }
-
-        if engine_result.engine_id != LayoutEngineId::Dagre {
-            return Err(RenderError {
-                message: format!(
-                    "{} engine is currently supported only for svg output",
-                    engine_result.engine_id
-                ),
-            });
-        }
-
-        Ok(render(diagram, &options))
     }
 
     fn supports_format(&self, format: OutputFormat) -> bool {
@@ -109,26 +123,6 @@ impl DiagramInstance for FlowchartInstance {
             OutputFormat::Text | OutputFormat::Ascii | OutputFormat::Svg | OutputFormat::Mmds
         )
     }
-}
-
-/// Inject routed edge paths from `RoutedGraphGeometry` into `GraphGeometry`.
-///
-/// Ensures the rendering pipeline uses paths produced by the routing stage.
-fn inject_routed_paths(
-    geom: &super::geometry::GraphGeometry,
-    routed: &super::geometry::RoutedGraphGeometry,
-) -> super::geometry::GraphGeometry {
-    let mut result = geom.clone();
-    for routed_edge in &routed.edges {
-        if let Some(layout_edge) = result
-            .edges
-            .iter_mut()
-            .find(|e| e.index == routed_edge.index)
-        {
-            layout_edge.layout_path_hint = Some(routed_edge.path.clone());
-        }
-    }
-    result
 }
 
 /// Create a copy of the diagram with node labels annotated as "ID: Label".

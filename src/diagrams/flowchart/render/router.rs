@@ -5,15 +5,16 @@
 use std::collections::HashMap;
 
 use super::layout::{Layout, SelfEdgeDrawData, SubgraphBounds};
+use super::routing_core::{
+    Face as SharedFace,
+    LARGE_HORIZONTAL_OFFSET_THRESHOLD as SHARED_LARGE_HORIZONTAL_OFFSET_THRESHOLD,
+    edge_faces as shared_edge_faces, plan_attachments as shared_plan_attachments,
+};
 use super::shape::NodeBounds;
 use crate::graph::{Arrow, Direction, Edge, Shape, Stroke};
 use crate::render::intersect::{
     NodeFace, calculate_attachment_points, classify_face, spread_points_on_face,
 };
-
-/// Map from (node_id, face) to the edges attached at that face.
-/// Each entry is `(edge_index, is_source_side, approach_cross_axis)`.
-type FaceGroupMap = HashMap<(String, NodeFace), Vec<(usize, bool, usize, bool)>>;
 
 /// Grouped endpoint parameters for edge routing functions.
 struct EdgeEndpoints {
@@ -296,17 +297,6 @@ pub fn generate_backward_waypoints(
                 (left_edge.saturating_sub(BACKWARD_ROUTE_GAP), route_y),
             ]
         }
-    }
-}
-
-/// Return the faces used by synthetic backward-edge routing.
-///
-/// Synthetic waypoints route around the right side (TD/BT) or bottom side
-/// (LR/RL) of nodes, so both source and target attach on the same face.
-fn backward_routing_faces(direction: Direction) -> (NodeFace, NodeFace) {
-    match direction {
-        Direction::TopDown | Direction::BottomTop => (NodeFace::Right, NodeFace::Right),
-        Direction::LeftRight | Direction::RightLeft => (NodeFace::Bottom, NodeFace::Bottom),
     }
 }
 
@@ -907,17 +897,8 @@ fn clamp_to_boundary(point: (usize, usize), bounds: &NodeBounds) -> Point {
 /// Forward edges exit the "downstream" face and enter the "upstream" face.
 /// Backward edges reverse these faces.
 fn edge_faces(direction: Direction, is_backward: bool) -> (NodeFace, NodeFace) {
-    let (forward_src, forward_tgt) = match direction {
-        Direction::TopDown => (NodeFace::Bottom, NodeFace::Top),
-        Direction::BottomTop => (NodeFace::Top, NodeFace::Bottom),
-        Direction::LeftRight => (NodeFace::Right, NodeFace::Left),
-        Direction::RightLeft => (NodeFace::Left, NodeFace::Right),
-    };
-    if is_backward {
-        (forward_tgt, forward_src)
-    } else {
-        (forward_src, forward_tgt)
-    }
+    let (src, tgt) = shared_edge_faces(direction, is_backward);
+    (src.to_node_face(), tgt.to_node_face())
 }
 
 /// Offset an attachment point by 1 cell in the direction of the given face.
@@ -975,11 +956,6 @@ fn entry_direction_from_segments(segments: &[Segment]) -> AttachDirection {
         None => AttachDirection::Top,
     }
 }
-
-/// Minimum horizontal offset (in characters) to trigger side-preference routing.
-/// When an edge has horizontal offset greater than this threshold, we use
-/// asymmetric routing to avoid the congested middle region of the diagram.
-const LARGE_HORIZONTAL_OFFSET_THRESHOLD: usize = 15;
 
 /// Build an orthogonal path that ends with a segment matching the approach direction.
 ///
@@ -1085,7 +1061,7 @@ fn compute_mid_y_for_vertical_layout(start: Point, end: Point, direction: Direct
     let horizontal_offset = start.x.abs_diff(end.x);
 
     // Check if this edge has a large horizontal offset
-    let mut mid_y = if horizontal_offset > LARGE_HORIZONTAL_OFFSET_THRESHOLD {
+    let mut mid_y = if horizontal_offset > SHARED_LARGE_HORIZONTAL_OFFSET_THRESHOLD {
         // Determine if source is to the right of target (right-to-left routing)
         let is_right_to_left = start.x > end.x;
 
@@ -1403,273 +1379,186 @@ pub fn compute_attachment_plan(
     layout: &Layout,
     direction: Direction,
 ) -> HashMap<usize, AttachmentOverride> {
-    // Step 1: Classify faces and build groups
-    // The approach_cross_axis is the cross-axis coordinate of the approach point,
-    // used for sorting to minimize visual crossings.
-    let mut face_groups: FaceGroupMap = HashMap::new();
+    compute_attachment_plan_from_shared_planner(edges, layout, direction)
+}
 
-    for (i, edge) in edges.iter().enumerate() {
-        // Skip self-edges — they are routed separately
-        if edge.from == edge.to {
+fn compute_attachment_plan_from_shared_planner(
+    edges: &[Edge],
+    layout: &Layout,
+    direction: Direction,
+) -> HashMap<usize, AttachmentOverride> {
+    let shared = shared_plan_attachments(edges, layout, direction);
+    let mut overrides: HashMap<usize, AttachmentOverride> = HashMap::new();
+
+    for edge in edges {
+        if edge.from == edge.to || edge.stroke == Stroke::Invisible {
             continue;
         }
-        // Skip invisible edges — they affect layout but are not rendered
-        if edge.stroke == Stroke::Invisible {
-            continue;
-        }
-        let (src_bounds, tgt_bounds) = match resolve_edge_bounds(layout, edge) {
-            Some(bounds) => bounds,
-            None => continue,
-        };
-
-        let src_shape = if edge.from_subgraph.is_some() {
-            Shape::Rectangle
-        } else {
-            layout
-                .node_shapes
-                .get(&edge.from)
-                .copied()
-                .unwrap_or(Shape::Rectangle)
-        };
-        let tgt_shape = if edge.to_subgraph.is_some() {
-            Shape::Rectangle
-        } else {
-            layout
-                .node_shapes
-                .get(&edge.to)
-                .copied()
-                .unwrap_or(Shape::Rectangle)
-        };
-
-        // Determine approach points using waypoints if available
-        let allow_waypoints = edge.from_subgraph.is_none() && edge.to_subgraph.is_none();
-        let waypoints = if allow_waypoints {
-            layout.edge_waypoints.get(&edge.index)
-        } else {
-            None
-        };
-
-        // For source: approach point is first waypoint or target center
-        let src_approach = waypoints
-            .and_then(|wps| wps.first().copied())
-            .unwrap_or((tgt_bounds.center_x(), tgt_bounds.center_y()));
-
-        // For target: approach point is last waypoint or source center
-        let tgt_approach = waypoints
-            .and_then(|wps| wps.last().copied())
-            .unwrap_or((src_bounds.center_x(), src_bounds.center_y()));
-
-        // Determine the effective direction for this edge.
-        // Internal edges within a direction-override subgraph use that
-        // subgraph's direction; cross-boundary edges use the diagram direction.
-        let edge_dir = layout.effective_edge_direction(&edge.from, &edge.to, direction);
-
-        let is_subgraph_edge = edge.from_subgraph.is_some() || edge.to_subgraph.is_some();
-
-        // Determine faces for this edge.
-        // Backward edges without dagre waypoints use synthetic routing (around
-        // the right/bottom of nodes), so they must be classified on the face
-        // that matches the synthetic path — not the geometric approach angle.
-        let is_backward = is_backward_edge(&src_bounds, &tgt_bounds, edge_dir);
-        let has_dagre_waypoints = waypoints.is_some_and(|wps| !wps.is_empty());
-        let (mut src_face, mut tgt_face) = if is_backward && !has_dagre_waypoints {
-            backward_routing_faces(edge_dir)
-        } else if matches!(edge_dir, Direction::TopDown | Direction::BottomTop)
-            && !is_backward
-            && !is_subgraph_edge
-        {
-            // For forward edges in vertical layouts, stick to canonical faces to
-            // keep fan-in/out attachment spreading stable.
-            edge_faces(edge_dir, false)
-        } else {
-            match edge_dir {
-                Direction::LeftRight | Direction::RightLeft => edge_faces(edge_dir, is_backward),
-                _ => (
-                    classify_face(&src_bounds, src_approach, src_shape),
-                    classify_face(&tgt_bounds, tgt_approach, tgt_shape),
-                ),
-            }
-        };
-
-        if edge.from_subgraph.is_some() {
-            src_face = subgraph_edge_face(&src_bounds, &tgt_bounds, edge_dir);
-        }
-        if edge.to_subgraph.is_some() {
-            tgt_face = subgraph_edge_face(&tgt_bounds, &src_bounds, edge_dir);
-        }
-
-        // Extract cross-axis coordinate from approach point for sorting.
-        //
-        // For cross-boundary edges entering a direction-override subgraph,
-        // waypoint-based approach points cluster near the source (the
-        // waypoints were shifted/clipped at the subgraph border). Use the
-        // actual target node's draw position instead so that source ports
-        // are ordered to match the target positions and avoid crossovers.
-        let tgt_in_override = layout
-            .node_directions
-            .get(&edge.to)
-            .is_some_and(|d| *d != direction);
-        let src_cross = if tgt_in_override {
-            // Use actual target position for sorting on the source face.
-            match src_face {
-                NodeFace::Top | NodeFace::Bottom => tgt_bounds.center_x(),
-                NodeFace::Left | NodeFace::Right => tgt_bounds.center_y(),
-            }
-        } else {
-            match src_face {
-                NodeFace::Top | NodeFace::Bottom => src_approach.0,
-                NodeFace::Left | NodeFace::Right => src_approach.1,
-            }
-        };
-        let tgt_cross = match tgt_face {
-            NodeFace::Top | NodeFace::Bottom => tgt_approach.0,
-            NodeFace::Left | NodeFace::Right => tgt_approach.1,
-        };
 
         let src_id = edge.from_subgraph.as_deref().unwrap_or(edge.from.as_str());
         let tgt_id = edge.to_subgraph.as_deref().unwrap_or(edge.to.as_str());
 
-        face_groups
-            .entry((src_id.to_string(), src_face))
-            .or_default()
-            .push((i, true, src_cross, has_dagre_waypoints));
-        face_groups
-            .entry((tgt_id.to_string(), tgt_face))
-            .or_default()
-            .push((i, false, tgt_cross, has_dagre_waypoints));
+        let Some(attachments) = shared.edge(edge.index) else {
+            continue;
+        };
+
+        let entry = overrides.entry(edge.index).or_insert(AttachmentOverride {
+            source: None,
+            target: None,
+            source_first_vertical: false,
+        });
+
+        if let Some(source_attachment) = attachments.source
+            && shared.group_size(src_id, source_attachment.face) > 1
+            && let Some(src_bounds) = bounds_for_node_id(layout, src_id)
+        {
+            let group_size = shared.group_size(src_id, source_attachment.face);
+            entry.source = Some(point_on_face_grid(
+                &src_bounds,
+                source_attachment.face.to_node_face(),
+                source_attachment.fraction,
+                group_size,
+            ));
+        }
+
+        if let Some(target_attachment) = attachments.target
+            && shared.group_size(tgt_id, target_attachment.face) > 1
+            && let Some(tgt_bounds) = bounds_for_node_id(layout, tgt_id)
+        {
+            let group_size = shared.group_size(tgt_id, target_attachment.face);
+            entry.target = Some(point_on_face_grid(
+                &tgt_bounds,
+                target_attachment.face.to_node_face(),
+                target_attachment.fraction,
+                group_size,
+            ));
+        }
     }
 
-    // Step 2: For faces with >1 edge, compute spread positions
-    let mut overrides: HashMap<usize, AttachmentOverride> = HashMap::new();
-
-    for ((node_id, face), group) in &face_groups {
-        if group.len() <= 1 {
-            continue;
-        }
-
-        let bounds = match bounds_for_node_id(layout, node_id) {
-            Some(b) => b,
-            None => continue,
-        };
-
-        // Sort edges by approach point's cross-axis coordinate
-        let mut sorted = group.clone();
-        sorted.sort_by_key(|&(_, _, approach_cross, _)| approach_cross);
-
-        let extent = bounds.face_extent(face);
-        let fixed = bounds.face_fixed_coord(face);
-        let points = spread_points_on_face(*face, fixed, extent, sorted.len());
-
-        let flow_face = match direction {
-            Direction::TopDown => Some(NodeFace::Bottom),
-            Direction::BottomTop => Some(NodeFace::Top),
-            _ => None,
-        };
-        let center_cross = match face {
-            NodeFace::Top | NodeFace::Bottom => bounds.center_x(),
-            NodeFace::Left | NodeFace::Right => bounds.center_y(),
-        } as isize;
-        let mut left_count = 0usize;
-        let mut right_count = 0usize;
-        for (_, is_source, cross, has_wps) in &sorted {
-            if *is_source && *has_wps {
-                if *cross as isize >= center_cross {
-                    right_count += 1;
-                } else {
-                    left_count += 1;
-                }
+    // Preserve existing TD/BT source-lane staggering behavior for long edges.
+    let flow_face = match direction {
+        Direction::TopDown => Some(SharedFace::Bottom),
+        Direction::BottomTop => Some(SharedFace::Top),
+        _ => None,
+    };
+    if let Some(flow_face) = flow_face {
+        let mut side_lanes: HashMap<(String, i8), Vec<(usize, f64)>> = HashMap::new();
+        let mut override_side_lanes: HashMap<(String, i8), Vec<(usize, f64)>> = HashMap::new();
+        for edge in edges {
+            if edge.from == edge.to || edge.stroke == Stroke::Invisible {
+                continue;
             }
-        }
-        let should_consider = flow_face.is_some_and(|face_match| *face == face_match);
-        let mut left_lane = 0usize;
-        let mut right_lane = 0usize;
-
-        // Count override-targeting edges (no waypoints) for separate lane staggering.
-        let mut override_left_count = 0usize;
-        let mut override_right_count = 0usize;
-        for &(i, is_source, cross, has_wps) in &sorted {
-            if is_source && !has_wps {
-                let tgt_in_override = layout
-                    .node_directions
-                    .get(&edges[i].to)
-                    .is_some_and(|d| *d != direction);
-                if tgt_in_override {
-                    if cross as isize >= center_cross {
-                        override_right_count += 1;
-                    } else {
-                        override_left_count += 1;
-                    }
-                }
+            let has_waypoints = edge.from_subgraph.is_none()
+                && edge.to_subgraph.is_none()
+                && layout
+                    .edge_waypoints
+                    .get(&edge.index)
+                    .is_some_and(|wps| !wps.is_empty());
+            let Some(source_attachment) = shared.edge(edge.index).and_then(|a| a.source) else {
+                continue;
+            };
+            if source_attachment.face != flow_face {
+                continue;
             }
-        }
-        let mut override_left_lane = 0usize;
-        let mut override_right_lane = 0usize;
-
-        for (idx, &(edge_i, is_source, cross, has_wps)) in sorted.iter().enumerate() {
-            let point = points[idx];
-            let entry = overrides.entry(edge_i).or_insert(AttachmentOverride {
-                source: None,
-                target: None,
-                source_first_vertical: false,
-            });
-            if is_source {
-                entry.source = Some(point);
-                if should_consider && has_wps {
-                    let side = if cross as isize >= center_cross {
-                        1
-                    } else {
-                        -1
-                    };
-                    let side_count = if side > 0 { right_count } else { left_count };
-                    if side_count > 1 {
-                        if side > 0 {
-                            entry.source_first_vertical = right_lane % 2 == 1;
-                            right_lane += 1;
-                        } else {
-                            entry.source_first_vertical = left_lane % 2 == 1;
-                            left_lane += 1;
-                        }
-                    }
-                } else if should_consider && !has_wps {
-                    // For edges targeting direction-override subgraphs
-                    // (waypoints removed), stagger so the farther edge
-                    // turns horizontal first to avoid overlap.
-                    let tgt_in_override = layout
-                        .node_directions
-                        .get(&edges[edge_i].to)
-                        .is_some_and(|d| *d != direction);
-                    if tgt_in_override {
-                        let side = if cross as isize >= center_cross {
-                            1
-                        } else {
-                            -1
-                        };
-                        let side_count = if side > 0 {
-                            override_right_count
-                        } else {
-                            override_left_count
-                        };
-                        if side_count > 1 {
-                            // Reversed alternation: first in sort (closer)
-                            // goes vertical-first (late), second (farther)
-                            // goes horizontal-first (early).
-                            if side > 0 {
-                                entry.source_first_vertical = override_right_lane.is_multiple_of(2);
-                                override_right_lane += 1;
-                            } else {
-                                entry.source_first_vertical = override_left_lane.is_multiple_of(2);
-                                override_left_lane += 1;
-                            }
-                        }
-                    }
+            let Some((src_bounds, tgt_bounds)) = resolve_edge_bounds(layout, edge) else {
+                continue;
+            };
+            let cross = if has_waypoints {
+                let Some(first_wp) = layout
+                    .edge_waypoints
+                    .get(&edge.index)
+                    .and_then(|wps| wps.first())
+                    .copied()
+                else {
+                    continue;
+                };
+                match source_attachment.face {
+                    SharedFace::Top | SharedFace::Bottom => first_wp.0 as f64,
+                    SharedFace::Left | SharedFace::Right => first_wp.1 as f64,
                 }
             } else {
-                entry.target = Some(point);
+                match source_attachment.face {
+                    SharedFace::Top | SharedFace::Bottom => tgt_bounds.center_x() as f64,
+                    SharedFace::Left | SharedFace::Right => tgt_bounds.center_y() as f64,
+                }
+            };
+            let center_cross = match source_attachment.face {
+                SharedFace::Top | SharedFace::Bottom => src_bounds.center_x() as f64,
+                SharedFace::Left | SharedFace::Right => src_bounds.center_y() as f64,
+            };
+            let src_id = edge.from_subgraph.as_deref().unwrap_or(edge.from.as_str());
+            let side = if cross >= center_cross { 1 } else { -1 };
+            if has_waypoints {
+                side_lanes
+                    .entry((src_id.to_string(), side))
+                    .or_default()
+                    .push((edge.index, cross));
+            } else {
+                let target_in_override = layout
+                    .node_directions
+                    .get(&edge.to)
+                    .is_some_and(|d| *d != direction);
+                if target_in_override {
+                    override_side_lanes
+                        .entry((src_id.to_string(), side))
+                        .or_default()
+                        .push((edge.index, cross));
+                }
+            }
+        }
+
+        for ((_node_id, _side), mut lanes) in side_lanes {
+            if lanes.len() <= 1 {
+                continue;
+            }
+            lanes.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+            for (idx, (edge_index, _)) in lanes.into_iter().enumerate() {
+                if let Some(entry) = overrides.get_mut(&edge_index) {
+                    entry.source_first_vertical = idx % 2 == 1;
+                }
+            }
+        }
+
+        for ((_node_id, _side), mut lanes) in override_side_lanes {
+            if lanes.len() <= 1 {
+                continue;
+            }
+            lanes.sort_by(|a, b| a.1.total_cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
+            for (idx, (edge_index, _)) in lanes.into_iter().enumerate() {
+                if let Some(entry) = overrides.get_mut(&edge_index) {
+                    entry.source_first_vertical = idx % 2 == 0;
+                }
             }
         }
     }
 
+    overrides.retain(|_, ov| ov.source.is_some() || ov.target.is_some());
     overrides
+}
+
+fn point_on_face_grid(
+    bounds: &NodeBounds,
+    face: NodeFace,
+    fraction: f64,
+    group_size: usize,
+) -> (usize, usize) {
+    if group_size == 0 {
+        return (bounds.center_x(), bounds.center_y());
+    }
+
+    let points = spread_points_on_face(
+        face,
+        bounds.face_fixed_coord(&face),
+        bounds.face_extent(&face),
+        group_size,
+    );
+    if group_size == 1 {
+        return points[0];
+    }
+
+    let fraction = fraction.clamp(0.0, 1.0);
+    let rank = ((group_size - 1) as f64 * fraction).round() as usize;
+    points[rank.min(group_size - 1)]
 }
 
 /// Route a self-edge as orthogonal segments from pre-computed draw-coordinate points.
@@ -1746,8 +1635,7 @@ pub fn route_all_edges(
 
     let mut routed: Vec<RoutedEdge> = edges
         .iter()
-        .enumerate()
-        .filter_map(|(i, edge)| {
+        .filter_map(|edge| {
             // Skip self-edges in normal routing
             if edge.from == edge.to {
                 return None;
@@ -1757,7 +1645,7 @@ pub fn route_all_edges(
                 return None;
             }
             let (src_override, tgt_override, src_first_vertical) = plan
-                .get(&i)
+                .get(&edge.index)
                 .map(|ov| (ov.source, ov.target, ov.source_first_vertical))
                 .unwrap_or((None, None, false));
             let edge_dir = layout.effective_edge_direction(&edge.from, &edge.to, diagram_direction);

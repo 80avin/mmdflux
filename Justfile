@@ -25,7 +25,7 @@ release *args:
 # Run clippy and fmt check
 lint:
     cargo +nightly fmt -- --check
-    cargo clippy -- -D warnings
+    cargo clippy --locked --all-targets --all-features -- -D warnings
 
 # Run clippy with auto-fix
 fix *args:

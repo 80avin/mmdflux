@@ -1041,8 +1041,8 @@ fn count_crossings_between(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::graph::DiGraph;
-    use crate::dagre::{LayoutConfig, NodeId};
+    use crate::layered::graph::DiGraph;
+    use crate::layered::{LayoutConfig, NodeId};
 
     fn setup_graph_and_run(
         nodes: &[&str],
@@ -1523,7 +1523,7 @@ mod tests {
 
     // --- Compound ordering constraint tests ---
 
-    use crate::dagre::{border, nesting};
+    use crate::layered::{border, nesting};
 
     /// Build a compound graph with border segments, ready for ordering.
     ///
@@ -1724,7 +1724,7 @@ mod tests {
     #[test]
     #[ignore = "title rank underflow — will be fixed by BK parity work (plan 0040)"]
     fn test_compound_ordering_single_child_rank_has_borders() {
-        use crate::dagre::{border, nesting};
+        use crate::layered::{border, nesting};
 
         let mut g: DiGraph<(f64, f64)> = DiGraph::new();
         g.add_node("X", (10.0, 10.0));

@@ -121,6 +121,38 @@ body {
   max-width: 16rem;
 }
 
+.render-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid var(--button-border);
+  border-radius: 999px;
+  background: var(--button-bg);
+}
+
+.render-control span {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.render-control select {
+  border: 0;
+  background: transparent;
+  color: var(--button-text);
+  font-size: 0.85rem;
+  padding: 0.2rem 0.3rem;
+  max-width: 10rem;
+}
+
+.render-control select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .format-tabs {
   display: inline-flex;
   padding: 0.25rem;
@@ -260,6 +292,18 @@ body {
   .format-tabs {
     width: 100%;
     justify-content: center;
+  }
+
+  .render-control {
+    width: 100%;
+    justify-content: space-between;
+    border-radius: 12px;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .render-control select {
+    max-width: none;
+    width: 100%;
   }
 
   .editor-input,

@@ -13,36 +13,23 @@ pub use super::route_policy::build_node_directions as build_node_directions_svg;
 pub use super::route_policy::{
     build_override_node_map, effective_edge_direction as effective_edge_direction_svg,
 };
-use crate::dagre::{LayoutResult, NodeId, Point, Rect};
+use super::routing_core::{
+    AttachmentCandidate, AttachmentSide, Face, build_orthogonal_path_float,
+    edge_faces as shared_edge_faces, plan_attachment_candidates,
+    point_on_face_float as shared_point_on_face_float,
+};
+use crate::diagrams::flowchart::geometry::FRect;
 use crate::graph::{Diagram, Direction};
-
-/// Which side of a rectangle an edge attaches to.
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-enum Face {
-    Top,
-    Bottom,
-    Left,
-    Right,
-}
+use crate::layered::{LayoutResult, NodeId, Point, Rect};
 
 /// The face an edge exits from in the given flow direction.
 fn exit_face(direction: Direction) -> Face {
-    match direction {
-        Direction::TopDown => Face::Bottom,
-        Direction::BottomTop => Face::Top,
-        Direction::LeftRight => Face::Right,
-        Direction::RightLeft => Face::Left,
-    }
+    shared_edge_faces(direction, false).0
 }
 
 /// The face an edge enters through in the given flow direction.
 fn entry_face(direction: Direction) -> Face {
-    match direction {
-        Direction::TopDown => Face::Top,
-        Direction::BottomTop => Face::Bottom,
-        Direction::LeftRight => Face::Left,
-        Direction::RightLeft => Face::Right,
-    }
+    shared_edge_faces(direction, false).1
 }
 
 /// Compute a point on a face at the given fraction (0.0 = start, 0.5 = center, 1.0 = end).
@@ -50,24 +37,8 @@ fn entry_face(direction: Direction) -> Face {
 /// For horizontal faces (Top/Bottom), fraction runs left-to-right.
 /// For vertical faces (Left/Right), fraction runs top-to-bottom.
 fn point_on_face(rect: &Rect, face: Face, fraction: f64) -> Point {
-    match face {
-        Face::Top => Point {
-            x: rect.x + rect.width * fraction,
-            y: rect.y,
-        },
-        Face::Bottom => Point {
-            x: rect.x + rect.width * fraction,
-            y: rect.y + rect.height,
-        },
-        Face::Left => Point {
-            x: rect.x,
-            y: rect.y + rect.height * fraction,
-        },
-        Face::Right => Point {
-            x: rect.x + rect.width,
-            y: rect.y + rect.height * fraction,
-        },
-    }
+    let rect = FRect::from(*rect);
+    shared_point_on_face_float(rect, face, fraction).into()
 }
 
 /// Compute the exit point from a rectangular node along a given direction (center of face).
@@ -89,42 +60,10 @@ fn entry_point(rect: &Rect, direction: Direction) -> Point {
 pub fn route_svg_edge_direct(from_rect: &Rect, to_rect: &Rect, direction: Direction) -> Vec<Point> {
     let start = exit_point(from_rect, direction);
     let end = entry_point(to_rect, direction);
-
-    let is_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
-    let aligned = if is_vertical {
-        (start.x - end.x).abs() < 0.5
-    } else {
-        (start.y - end.y).abs() < 0.5
-    };
-
-    if aligned {
-        vec![start, end]
-    } else {
-        // L-shaped elbow: go along primary axis to midpoint, then turn
-        if is_vertical {
-            let mid_y = (start.y + end.y) / 2.0;
-            vec![
-                start,
-                Point {
-                    x: start.x,
-                    y: mid_y,
-                },
-                Point { x: end.x, y: mid_y },
-                end,
-            ]
-        } else {
-            let mid_x = (start.x + end.x) / 2.0;
-            vec![
-                start,
-                Point {
-                    x: mid_x,
-                    y: start.y,
-                },
-                Point { x: mid_x, y: end.y },
-                end,
-            ]
-        }
-    }
+    build_orthogonal_path_float(start.into(), end.into(), direction, &[])
+        .into_iter()
+        .map(Into::into)
+        .collect()
 }
 
 /// Route an edge with explicit port fractions for exit and entry faces.
@@ -141,38 +80,18 @@ fn route_svg_edge_ported(
 ) -> Vec<Point> {
     let start = point_on_face(from_rect, exit_face(direction), from_port);
     let end = point_on_face(to_rect, entry_face(direction), to_port);
+    build_orthogonal_path_float(start.into(), end.into(), direction, &[])
+        .into_iter()
+        .map(Into::into)
+        .collect()
+}
 
-    let is_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
-    let aligned = if is_vertical {
-        (start.x - end.x).abs() < 0.5
+fn svg_spread_fraction_from_plan(fraction: f64, group_size: usize) -> f64 {
+    if group_size <= 1 {
+        0.5
     } else {
-        (start.y - end.y).abs() < 0.5
-    };
-
-    if aligned {
-        vec![start, end]
-    } else if is_vertical {
-        let mid_y = (start.y + end.y) / 2.0;
-        vec![
-            start,
-            Point {
-                x: start.x,
-                y: mid_y,
-            },
-            Point { x: end.x, y: mid_y },
-            end,
-        ]
-    } else {
-        let mid_x = (start.x + end.x) / 2.0;
-        vec![
-            start,
-            Point {
-                x: mid_x,
-                y: start.y,
-            },
-            Point { x: mid_x, y: end.y },
-            end,
-        ]
+        let margin = 0.25; // keep away from corners, matching prior SVG behavior
+        margin + (1.0 - 2.0 * margin) * fraction
     }
 }
 
@@ -341,66 +260,59 @@ pub fn reroute_override_edges(
         }
     }
 
-    // --- Pass 2: Compute port fractions for shared faces ---
-    // Group edges by (node_id, face). Each entry records the pending index
-    // and the cross-axis coordinate of the "other end" node (for sort order).
-    let mut face_edges: HashMap<(String, Face), Vec<(usize, f64)>> = HashMap::new();
-
+    // --- Pass 2: Compute port fractions for shared faces via shared planner ---
+    let mut planner_inputs: Vec<AttachmentCandidate> = Vec::with_capacity(pending.len() * 2);
     for (pi, pr) in pending.iter().enumerate() {
         let from_rect = layout.nodes.get(&NodeId(pr.from_id.clone()));
         let to_rect = layout.nodes.get(&NodeId(pr.to_id.clone()));
         if let (Some(fr), Some(tr)) = (from_rect, to_rect) {
             let horizontal_face = matches!(pr.direction, Direction::TopDown | Direction::BottomTop);
-
-            // Exit face of from-node: sort by target's cross-axis position
-            let ef = exit_face(pr.direction);
             let exit_sort = if horizontal_face {
                 tr.x + tr.width / 2.0
             } else {
                 tr.y + tr.height / 2.0
             };
-            face_edges
-                .entry((pr.from_id.clone(), ef))
-                .or_default()
-                .push((pi, exit_sort));
-
-            // Entry face of to-node: sort by source's cross-axis position
-            let enf = entry_face(pr.direction);
             let entry_sort = if horizontal_face {
                 fr.x + fr.width / 2.0
             } else {
                 fr.y + fr.height / 2.0
             };
-            face_edges
-                .entry((pr.to_id.clone(), enf))
-                .or_default()
-                .push((pi, entry_sort));
+
+            planner_inputs.push(AttachmentCandidate {
+                edge_index: pi,
+                node_id: pr.from_id.clone(),
+                side: AttachmentSide::Source,
+                face: exit_face(pr.direction),
+                cross_axis: exit_sort,
+            });
+            planner_inputs.push(AttachmentCandidate {
+                edge_index: pi,
+                node_id: pr.to_id.clone(),
+                side: AttachmentSide::Target,
+                face: entry_face(pr.direction),
+                cross_axis: entry_sort,
+            });
         }
     }
+
+    let attachment_plan = plan_attachment_candidates(planner_inputs);
 
     let mut from_fractions: Vec<f64> = vec![0.5; pending.len()];
     let mut to_fractions: Vec<f64> = vec![0.5; pending.len()];
 
-    for ((node_id, face), mut entries) in face_edges {
-        if entries.len() <= 1 {
-            continue; // single edge on face: keep center (0.5)
-        }
-
-        // Sort by cross-axis position of the other endpoint node
-        entries.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-
-        let n = entries.len();
-        let margin = 0.25; // keep 25% away from corners
-
-        for (rank, &(pi, _)) in entries.iter().enumerate() {
-            let frac = margin + (1.0 - 2.0 * margin) * (rank as f64) / ((n - 1) as f64);
-
-            let pr = &pending[pi];
-            let is_exit = pr.from_id == node_id && exit_face(pr.direction) == face;
-            if is_exit {
-                from_fractions[pi] = frac;
-            } else {
-                to_fractions[pi] = frac;
+    for (pi, pr) in pending.iter().enumerate() {
+        if let Some(edge_plan) = attachment_plan.edge(pi) {
+            if let Some(source) = edge_plan.source {
+                from_fractions[pi] = svg_spread_fraction_from_plan(
+                    source.fraction,
+                    attachment_plan.group_size(&pr.from_id, source.face),
+                );
+            }
+            if let Some(target) = edge_plan.target {
+                to_fractions[pi] = svg_spread_fraction_from_plan(
+                    target.fraction,
+                    attachment_plan.group_size(&pr.to_id, target.face),
+                );
             }
         }
     }
@@ -1030,6 +942,24 @@ mod tests {
         let right_mid = point_on_face(&rect, Face::Right, 0.5);
         assert!((right_mid.x - 130.0).abs() < 0.01);
         assert!((right_mid.y - 120.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_point_on_face_clamps_fraction_bounds() {
+        let rect = Rect {
+            x: 50.0,
+            y: 100.0,
+            width: 80.0,
+            height: 40.0,
+        };
+
+        let below_zero = point_on_face(&rect, Face::Top, -1.0);
+        assert!((below_zero.x - 50.0).abs() < 0.01);
+        assert!((below_zero.y - 100.0).abs() < 0.01);
+
+        let above_one = point_on_face(&rect, Face::Left, 2.0);
+        assert!((above_one.x - 50.0).abs() < 0.01);
+        assert!((above_one.y - 140.0).abs() < 0.01);
     }
 
     #[test]

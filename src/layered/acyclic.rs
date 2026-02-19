@@ -69,7 +69,7 @@ fn dfs_find_back_edges(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dagre::graph::DiGraph;
+    use crate::layered::graph::DiGraph;
 
     #[test]
     fn test_acyclic_no_cycle() {

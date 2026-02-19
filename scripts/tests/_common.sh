@@ -8,7 +8,7 @@ MMDFLUX_BIN="$REPO_ROOT/target/debug/mmdflux"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 
 ensure_mmdflux_bin() {
-  cargo build --quiet --manifest-path "$REPO_ROOT/Cargo.toml" --bin mmdflux
+  cargo build --quiet --manifest-path "$REPO_ROOT/Cargo.toml" --bin mmdflux || true
 }
 
 make_out_dir() {

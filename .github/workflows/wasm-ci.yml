@@ -62,6 +62,9 @@ jobs:
       - name: Build WASM package (bundler target)
         run: wasm-pack build crates/mmdflux-wasm --target bundler --release --out-dir ../../${{ env.WASM_BUNDLER_OUT_DIR }}
 
+      - name: Run host wasm contract tests
+        run: cargo test -p mmdflux-wasm --locked
+
       - name: Run browser tests
         run: wasm-pack test --headless --chrome crates/mmdflux-wasm
 

@@ -36,11 +36,11 @@
 //! ```
 
 // Core modules
-pub mod dagre;
 pub mod diagram;
 pub mod diagrams;
 pub mod engines;
 pub mod graph;
+pub mod layered;
 pub mod lint;
 pub mod mmds;
 pub mod parser;
@@ -49,8 +49,9 @@ pub mod render;
 
 // Re-export commonly used types for convenience
 pub use diagram::{
-    EngineCapabilities, EngineConfig, GeometryLevel, GraphLayoutEngine, LayoutEngineId,
-    OutputFormat, RenderConfig, RenderError, RoutingMode,
+    AlgorithmId, EdgeRouting, EngineAlgorithmCapabilities, EngineAlgorithmId, EngineConfig,
+    EngineId, GeometryLevel, GraphEngine, GraphSolveRequest, GraphSolveResult, OutputFormat,
+    PathDetail, RenderConfig, RenderError, RouteOwnership,
 };
 pub use graph::{Diagram, Direction, Edge, Node, Shape, build_diagram};
 pub use mmds::{MmdsGenerationError, generate_mermaid_from_mmds, generate_mermaid_from_mmds_str};

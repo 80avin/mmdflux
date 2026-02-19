@@ -1,4 +1,7 @@
-use mmdflux::diagram::{LayoutEngineId, OutputFormat, RenderConfig};
+use std::fs;
+use std::path::Path;
+
+use mmdflux::diagram::{EngineAlgorithmId, GeometryLevel, OutputFormat, RenderConfig};
 use mmdflux::diagrams::class::ClassInstance;
 use mmdflux::registry::DiagramInstance;
 
@@ -154,10 +157,11 @@ fn class_instance_via_registry() {
 
 #[test]
 fn class_instance_unknown_engine_rejected_at_parse_boundary() {
-    let err = LayoutEngineId::parse("nonexistent").unwrap_err();
-    assert!(err.message.contains("unknown layout engine"));
+    let err = EngineAlgorithmId::parse("nonexistent").unwrap_err();
+    assert!(err.message.contains("unknown engine"));
 }
 
+#[cfg(not(feature = "engine-elk"))]
 #[test]
 fn class_instance_known_non_dagre_engine_errors_cleanly() {
     let mut instance = ClassInstance::new();
@@ -165,11 +169,184 @@ fn class_instance_known_non_dagre_engine_errors_cleanly() {
     let result = instance.render(
         OutputFormat::Text,
         &RenderConfig {
-            layout_engine: Some(LayoutEngineId::Cose),
+            layout_engine: Some(EngineAlgorithmId::parse("elk-layered").unwrap()),
             ..RenderConfig::default()
         },
     );
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert!(err.message.contains("not yet implemented"));
+    assert!(
+        err.message.contains("engine-elk") || err.message.contains("not available"),
+        "error should be actionable: {}",
+        err.message
+    );
+}
+
+#[test]
+fn class_routed_mmds_honors_edge_routing_override() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join("class")
+        .join("animal_hierarchy.mmd");
+    let input = fs::read_to_string(&fixture).expect("class fixture should read");
+
+    let mut instance = ClassInstance::new();
+    instance.parse(&input).expect("fixture should parse");
+
+    let full = instance
+        .render(
+            OutputFormat::Mmds,
+            &RenderConfig {
+                geometry_level: GeometryLevel::Routed,
+                layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("mermaid-layered mmds should render");
+    let orthogonal = instance
+        .render(
+            OutputFormat::Mmds,
+            &RenderConfig {
+                geometry_level: GeometryLevel::Routed,
+                layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("flux-layered mmds should render");
+
+    assert_ne!(
+        full, orthogonal,
+        "class routed MMDS should differ between mermaid-layered and flux-layered engines"
+    );
+}
+
+#[test]
+fn class_routed_mmds_honors_edge_routing_override_on_cycle() {
+    let input = "classDiagram\nA --> B\nB --> C\nC --> A\n";
+    let mut instance = ClassInstance::new();
+    instance.parse(input).expect("class cycle should parse");
+
+    let full = instance
+        .render(
+            OutputFormat::Mmds,
+            &RenderConfig {
+                geometry_level: GeometryLevel::Routed,
+                layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("mermaid-layered mmds should render");
+    let orthogonal = instance
+        .render(
+            OutputFormat::Mmds,
+            &RenderConfig {
+                geometry_level: GeometryLevel::Routed,
+                layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("flux-layered mmds should render");
+
+    assert_ne!(
+        full, orthogonal,
+        "class routed MMDS cycle output should differ between mermaid-layered and flux-layered"
+    );
+}
+
+#[test]
+fn class_svg_honors_edge_routing_override_on_cycle() {
+    let input = "classDiagram\nA --> B\nB --> C\nC --> A\n";
+    let mut instance = ClassInstance::new();
+    instance.parse(input).expect("class cycle should parse");
+
+    let full = instance
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("mermaid-layered svg should render");
+    let orthogonal = instance
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+                ..RenderConfig::default()
+            },
+        )
+        .expect("flux-layered svg should render");
+
+    assert!(full.starts_with("<svg"));
+    assert!(orthogonal.starts_with("<svg"));
+    assert_ne!(
+        full, orthogonal,
+        "class SVG cycle output should differ between mermaid-layered and flux-layered engines"
+    );
+}
+
+// --- Task 4.4: Class diagram solve-path enablement ---
+
+#[test]
+fn class_render_text_through_solve_path() {
+    let mut instance = ClassInstance::new();
+    instance.parse("classDiagram\nAnimal <|-- Dog").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(output.contains("Animal"));
+    assert!(output.contains("Dog"));
+}
+
+#[test]
+fn class_render_mmds_through_solve_path() {
+    let mut instance = ClassInstance::new();
+    instance.parse("classDiagram\nAnimal <|-- Dog").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        geometry_level: GeometryLevel::Routed,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert!(json["edges"].is_array());
+}
+
+#[test]
+fn class_default_engine_is_flux_layered() {
+    let mut instance = ClassInstance::new();
+    instance.parse("classDiagram\nA <|-- B").unwrap();
+
+    let default_out = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+
+    let explicit_config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        ..Default::default()
+    };
+    let explicit_out = instance
+        .render(OutputFormat::Text, &explicit_config)
+        .unwrap();
+
+    assert_eq!(default_out, explicit_out);
+}
+
+#[test]
+fn class_mermaid_layered_compatibility() {
+    let mut instance = ClassInstance::new();
+    instance.parse("classDiagram\nA <|-- B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(output.contains('A'));
 }

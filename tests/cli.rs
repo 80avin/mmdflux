@@ -69,6 +69,250 @@ fn cli_svg_format_renders_flowchart() {
 }
 
 #[test]
+fn cli_svg_defaults_to_flux_layered_behavior() {
+    let input = "graph TD\nA[Start] --> B{Check}\nB --> C[Yes]\nB --> D[No]\nD --> A\n";
+
+    let default = mmdflux()
+        .args(["--format", "svg", "--edge-preset", "straight"])
+        .write_stdin(input)
+        .output()
+        .expect("default render should execute");
+    assert!(
+        default.status.success(),
+        "default render failed: stderr={}",
+        String::from_utf8_lossy(&default.stderr)
+    );
+
+    let explicit = mmdflux()
+        .args([
+            "--format",
+            "svg",
+            "--edge-preset",
+            "straight",
+            "--layout-engine",
+            "flux-layered",
+        ])
+        .write_stdin(input)
+        .output()
+        .expect("flux-layered render should execute");
+    assert!(
+        explicit.status.success(),
+        "flux-layered render failed: stderr={}",
+        String::from_utf8_lossy(&explicit.stderr)
+    );
+
+    assert_eq!(
+        default.stdout, explicit.stdout,
+        "default svg render should match explicit flux-layered"
+    );
+}
+
+#[test]
+fn cli_rejects_removed_routing_mode_flag() {
+    mmdflux()
+        .args(["--format", "svg", "--routing-mode", "polyline"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "unexpected argument '--routing-mode' found",
+        ));
+}
+
+#[test]
+fn cli_rejects_removed_svg_edge_path_style_flag() {
+    mmdflux()
+        .args(["--format", "svg", "--svg-edge-path-style", "orthogonal"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "unexpected argument '--svg-edge-path-style' found",
+        ));
+}
+
+// =============================================================================
+// Phase 7: Style Taxonomy Tests (7.2 — new flags and types)
+// =============================================================================
+
+// --- --edge-preset flag ---
+
+#[test]
+fn cli_accepts_edge_preset_straight() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-preset", "straight"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_edge_preset_step() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-preset", "step"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_edge_preset_smoothstep() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-preset", "smoothstep"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_edge_preset_bezier() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-preset", "bezier"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_rejects_edge_preset_direct_as_deferred() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-preset", "direct"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("not yet implemented")
+                .or(predicate::str::contains("not implemented"))
+                .or(predicate::str::contains("deferred")),
+        );
+}
+
+// --- --routing-style flag ---
+
+#[test]
+fn cli_accepts_routing_style_polyline() {
+    mmdflux()
+        .args(["--format", "svg", "--routing-style", "polyline"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_routing_style_orthogonal() {
+    mmdflux()
+        .args(["--format", "svg", "--routing-style", "orthogonal"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_rejects_routing_style_direct_as_deferred() {
+    mmdflux()
+        .args(["--format", "svg", "--routing-style", "direct"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("not yet implemented")
+                .or(predicate::str::contains("not implemented"))
+                .or(predicate::str::contains("deferred")),
+        );
+}
+
+// --- --interpolation-style flag ---
+
+#[test]
+fn cli_accepts_interpolation_style_linear() {
+    mmdflux()
+        .args(["--format", "svg", "--interpolation-style", "linear"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_interpolation_style_bezier() {
+    mmdflux()
+        .args(["--format", "svg", "--interpolation-style", "bezier"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_rejects_interpolation_catmull_rom_as_deferred() {
+    mmdflux()
+        .args(["--format", "svg", "--interpolation-style", "catmull-rom"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("not yet implemented")
+                .or(predicate::str::contains("not implemented"))
+                .or(predicate::str::contains("deferred")),
+        );
+}
+
+// --- --corner-style flag ---
+
+#[test]
+fn cli_accepts_corner_style_sharp() {
+    mmdflux()
+        .args(["--format", "svg", "--corner-style", "sharp"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_corner_style_rounded() {
+    mmdflux()
+        .args(["--format", "svg", "--corner-style", "rounded"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+// --- precedence: explicit low-level > preset ---
+
+#[test]
+fn cli_explicit_routing_style_overrides_preset() {
+    // --routing-style polyline + --edge-preset step (which expands to orthogonal)
+    // should produce polyline routing (explicit wins over preset).
+    // We can't directly observe the routing style in output, so just check it doesn't error.
+    mmdflux()
+        .args([
+            "--format",
+            "svg",
+            "--edge-preset",
+            "step",
+            "--routing-style",
+            "polyline",
+        ])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+// =============================================================================
+// Phase 7: Terminology Tests (7.1)
+// =============================================================================
+
+#[test]
+fn cli_rejects_legacy_svg_edge_curve_flag() {
+    mmdflux()
+        .args(["--format", "svg", "--svg-edge-curve", "orthogonal"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "unexpected argument '--svg-edge-curve' found",
+        ));
+}
+
+#[test]
 fn cli_svg_format_errors_for_pie() {
     mmdflux()
         .args(["--format", "svg"])
@@ -195,18 +439,82 @@ fn cli_packet_renders_with_header() {
 // =============================================================================
 
 #[test]
-fn cli_layout_engine_dagre_matches_default() {
+fn cli_accepts_flux_layered_engine() {
+    mmdflux()
+        .args([
+            "--layout-engine",
+            "flux-layered",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_mermaid_layered_engine() {
+    mmdflux()
+        .args([
+            "--layout-engine",
+            "mermaid-layered",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_rejects_legacy_dagre_with_migration() {
+    let output = mmdflux()
+        .args([
+            "--layout-engine",
+            "dagre",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .output()
+        .expect("command should run");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("flux-layered"),
+        "error should suggest flux-layered: {stderr}"
+    );
+}
+
+#[test]
+fn cli_default_engine_is_flux_layered() {
+    let default_out = mmdflux()
+        .arg("tests/fixtures/flowchart/simple.mmd")
+        .output()
+        .expect("default render should execute");
+    let explicit_out = mmdflux()
+        .args([
+            "--layout-engine",
+            "flux-layered",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .output()
+        .expect("flux-layered render should execute");
+    assert!(default_out.status.success(), "default render failed");
+    assert!(explicit_out.status.success(), "flux-layered render failed");
+    assert_eq!(
+        default_out.stdout, explicit_out.stdout,
+        "default should match explicit flux-layered"
+    );
+}
+
+#[test]
+fn cli_layout_engine_flux_layered_matches_default() {
     let default_assert = mmdflux().write_stdin("graph TD\nA-->B").assert().success();
     let default_out = String::from_utf8_lossy(&default_assert.get_output().stdout).to_string();
 
-    let dagre_assert = mmdflux()
-        .args(["--layout-engine", "dagre"])
+    let explicit_assert = mmdflux()
+        .args(["--layout-engine", "flux-layered"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success();
-    let dagre_out = String::from_utf8_lossy(&dagre_assert.get_output().stdout).to_string();
+    let explicit_out = String::from_utf8_lossy(&explicit_assert.get_output().stdout).to_string();
 
-    assert_eq!(default_out, dagre_out);
+    assert_eq!(default_out, explicit_out);
 }
 
 #[test]
@@ -216,7 +524,7 @@ fn cli_layout_engine_unknown_fails_cleanly() {
         .write_stdin("graph TD\nA-->B")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("unknown layout engine"));
+        .stderr(predicate::str::contains("unknown engine"));
 }
 
 #[test]
@@ -226,13 +534,13 @@ fn cli_layout_engine_unknown_fails_for_class() {
         .write_stdin("classDiagram\nA --> B")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("unknown layout engine"));
+        .stderr(predicate::str::contains("unknown engine"));
 }
 
 #[test]
 fn cli_layout_engine_rejected_for_sequence() {
     mmdflux()
-        .args(["--layout-engine", "dagre"])
+        .args(["--layout-engine", "flux-layered"])
         .write_stdin("sequenceDiagram\nA->>B: hello")
         .assert()
         .failure()
@@ -246,7 +554,7 @@ fn cli_layout_engine_unavailable_fails_cleanly() {
     // Without engine-elk feature compiled, this should fail with actionable error
     #[cfg(not(feature = "engine-elk"))]
     mmdflux()
-        .args(["--layout-engine", "elk"])
+        .args(["--layout-engine", "elk-layered"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .failure()
@@ -254,13 +562,13 @@ fn cli_layout_engine_unavailable_fails_cleanly() {
 }
 
 #[test]
-fn cli_layout_engine_cose_not_implemented() {
+fn cli_rejects_legacy_cose_with_migration() {
     mmdflux()
         .args(["--layout-engine", "cose"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("not yet implemented"));
+        .stderr(predicate::str::contains("flux-layered"));
 }
 
 // =============================================================================
@@ -295,6 +603,24 @@ fn cli_json_routed_level_includes_paths() {
         .stdout(predicate::str::contains("\"geometry_level\": \"routed\""))
         .stdout(predicate::str::contains("\"path\""))
         .stdout(predicate::str::contains("\"is_backward\""));
+}
+
+#[test]
+fn cli_json_routed_level_accepts_path_detail_compact() {
+    mmdflux()
+        .args([
+            "--format",
+            "mmds",
+            "--geometry-level",
+            "routed",
+            "--path-detail",
+            "compact",
+        ])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"geometry_level\": \"routed\""))
+        .stdout(predicate::str::contains("\"path\""));
 }
 
 #[test]
@@ -494,4 +820,41 @@ fn cli_mermaid_format_errors_for_non_mmds_input() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("do not support mermaid"));
+}
+
+// --- Task 5.3: Lineage naming policy ---
+
+#[test]
+fn cli_help_spacing_flags_do_not_say_dagre() {
+    mmdflux()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Dagre").not());
+}
+
+#[test]
+fn cli_help_layout_engine_does_not_suggest_bare_dagre() {
+    mmdflux()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--layout-engine dagre").not());
+}
+
+// --- Task 4.5: MMDS engine metadata ---
+
+#[test]
+fn cli_mmds_routed_default_engine_is_flux_layered() {
+    mmdflux()
+        .args([
+            "--format",
+            "mmds",
+            "--geometry-level",
+            "routed",
+            "tests/fixtures/flowchart/simple.mmd",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"engine\": \"flux-layered\""));
 }

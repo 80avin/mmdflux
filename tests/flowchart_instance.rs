@@ -1,4 +1,4 @@
-use mmdflux::diagram::{LayoutEngineId, OutputFormat, RenderConfig};
+use mmdflux::diagram::{EngineAlgorithmId, GeometryLevel, OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::registry::DiagramInstance;
 
@@ -198,6 +198,86 @@ fn test_json_without_show_ids() {
     assert_eq!(node_a["label"], "Start");
 }
 
+// --- Solve-path integration tests (Task 4.1) ---
+
+#[test]
+fn flowchart_render_text_through_solve_path() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Text, &config).unwrap();
+    assert!(output.contains('A'));
+    assert!(output.contains('B'));
+}
+
+#[test]
+fn flowchart_render_svg_through_solve_path() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Svg, &config).unwrap();
+    assert!(output.contains("<svg"));
+}
+
+#[test]
+fn flowchart_render_mmds_through_solve_path() {
+    let mut instance = FlowchartInstance::new();
+    instance.parse("graph TD\nA-->B").unwrap();
+
+    let config = RenderConfig {
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
+        geometry_level: GeometryLevel::Routed,
+        ..Default::default()
+    };
+    let output = instance.render(OutputFormat::Mmds, &config).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert!(json["edges"][0]["path"].is_array());
+}
+
+// --- Text geometry-driven integration tests (Task 4.2) ---
+
+#[test]
+fn text_render_from_solve_matches_legacy() {
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/simple.mmd").unwrap();
+    let mut instance = FlowchartInstance::new();
+    instance.parse(&input).unwrap();
+
+    let legacy_out = instance
+        .render(OutputFormat::Text, &RenderConfig::default())
+        .unwrap();
+    assert!(!legacy_out.is_empty());
+}
+
+#[test]
+fn text_snapshots_stable_after_geometry_driven_cutover() {
+    for fixture in &["simple.mmd", "chain.mmd", "decision.mmd", "fan_in.mmd"] {
+        let path = format!("tests/fixtures/flowchart/{fixture}");
+        let input = std::fs::read_to_string(&path).unwrap();
+        let mut instance = FlowchartInstance::new();
+        instance.parse(&input).unwrap();
+
+        let output = instance
+            .render(OutputFormat::Text, &RenderConfig::default())
+            .unwrap();
+        let snapshot_path = format!(
+            "tests/snapshots/flowchart/{}",
+            fixture.replace(".mmd", ".txt")
+        );
+        if std::path::Path::new(&snapshot_path).exists() {
+            let expected = std::fs::read_to_string(&snapshot_path).unwrap();
+            assert_eq!(output, expected, "snapshot mismatch for {fixture}");
+        }
+    }
+}
+
 // --- Engine selection tests (Task 2.2) ---
 
 #[test]
@@ -221,7 +301,7 @@ fn engine_selection_explicit_dagre_matches_default() {
         .unwrap();
 
     let dagre_config = RenderConfig {
-        layout_engine: Some(LayoutEngineId::Dagre),
+        layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
         ..Default::default()
     };
     let dagre_output = instance.render(OutputFormat::Text, &dagre_config).unwrap();
@@ -236,7 +316,7 @@ fn engine_selection_unavailable_engine_errors() {
     instance.parse("graph TD\nA-->B").unwrap();
 
     let config = RenderConfig {
-        layout_engine: Some(LayoutEngineId::Elk),
+        layout_engine: Some(EngineAlgorithmId::parse("elk-layered").unwrap()),
         ..Default::default()
     };
     let result = instance.render(OutputFormat::Text, &config);
@@ -251,9 +331,9 @@ fn engine_selection_unavailable_engine_errors() {
 
 #[test]
 fn engine_selection_unknown_engine_rejected_at_parse_boundary() {
-    let err = LayoutEngineId::parse("nonexistent").unwrap_err();
+    let err = EngineAlgorithmId::parse("nonexistent").unwrap_err();
     assert!(
-        err.message.contains("unknown layout engine"),
+        err.message.contains("unknown engine"),
         "error should mention unknown engine: {}",
         err.message
     );

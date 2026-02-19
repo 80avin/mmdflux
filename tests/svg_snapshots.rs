@@ -1,7 +1,11 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use mmdflux::diagram::{OutputFormat, RenderConfig};
+use mmdflux::diagram::{
+    CornerStyle, EngineAlgorithmId, InterpolationStyle, OutputFormat, PathDetail, RenderConfig,
+    RoutingStyle,
+};
+use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::registry::DiagramInstance;
 use mmdflux::render::{RenderOptions, render_svg};
@@ -40,7 +44,40 @@ fn render_svg_fixture(name: &str) -> String {
     let input = load_fixture(name);
     let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
     let diagram = build_diagram(&flowchart);
-    render_svg(&diagram, &RenderOptions::default_svg())
+    let mut options = RenderOptions::default_svg();
+    options.path_detail = PathDetail::Full;
+    render_svg(&diagram, &options)
+}
+
+fn render_svg_fixture_with_curve(
+    name: &str,
+    routing: RoutingStyle,
+    interp: InterpolationStyle,
+    corner: CornerStyle,
+) -> String {
+    let input = load_fixture(name);
+    let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
+    let diagram = build_diagram(&flowchart);
+    let mut options = RenderOptions::default_svg();
+    options.svg.routing_style = routing;
+    options.svg.interpolation_style = interp;
+    options.svg.corner_style = corner;
+    options.path_detail = PathDetail::Full;
+    render_svg(&diagram, &options)
+}
+
+fn render_svg_fixture_with_engine(name: &str, engine: &str) -> String {
+    let input = load_fixture(name);
+    let mut instance = FlowchartInstance::new();
+    instance.parse(&input).expect("Failed to parse fixture");
+    let config = RenderConfig {
+        path_detail: PathDetail::Full,
+        layout_engine: Some(EngineAlgorithmId::parse(engine).unwrap()),
+        ..RenderConfig::default()
+    };
+    instance
+        .render(OutputFormat::Svg, &config)
+        .expect("Failed to render SVG fixture")
 }
 
 fn render_svg_mmds_fixture(name: &str) -> String {
@@ -52,7 +89,9 @@ fn render_svg_mmds_fixture(name: &str) -> String {
     let payload = fs::read_to_string(&path)
         .unwrap_or_else(|e| panic!("Failed to read MMDS fixture {}: {e}", path.display()));
     let diagram = from_mmds_str(&payload).expect("MMDS fixture should hydrate");
-    render_svg(&diagram, &RenderOptions::default_svg())
+    let mut options = RenderOptions::default_svg();
+    options.path_detail = PathDetail::Full;
+    render_svg(&diagram, &options)
 }
 
 fn render_svg_positioned_mmds_fixture(name: &str) -> String {
@@ -66,7 +105,13 @@ fn render_svg_positioned_mmds_fixture(name: &str) -> String {
     let mut instance = mmdflux::diagrams::mmds::MmdsInstance::default();
     instance.parse(&payload).expect("MMDS fixture should parse");
     instance
-        .render(OutputFormat::Svg, &RenderConfig::default())
+        .render(
+            OutputFormat::Svg,
+            &RenderConfig {
+                path_detail: PathDetail::Full,
+                ..RenderConfig::default()
+            },
+        )
         .expect("positioned MMDS should render SVG")
 }
 
@@ -84,6 +129,14 @@ fn snapshot_path(stem: &str) -> PathBuf {
         .join("tests")
         .join("svg-snapshots")
         .join("flowchart")
+        .join(format!("{stem}.svg"))
+}
+
+fn orthogonal_snapshot_path(stem: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("svg-snapshots")
+        .join("flowchart-orthogonal")
         .join(format!("{stem}.svg"))
 }
 
@@ -110,6 +163,31 @@ fn assert_snapshot(fixture: &str) {
     let expected = fs::read_to_string(&path)
         .unwrap_or_else(|_| panic!("Missing snapshot: {}", path.display()));
     assert_eq!(output, expected, "Snapshot mismatch for {fixture}");
+}
+
+fn assert_orthogonal_snapshot(fixture: &str) {
+    let stem = fixture.trim_end_matches(".mmd");
+    let output = render_svg_fixture_with_curve(
+        fixture,
+        RoutingStyle::Orthogonal,
+        InterpolationStyle::Linear,
+        CornerStyle::Rounded,
+    );
+    let path = orthogonal_snapshot_path(stem);
+
+    if std::env::var("GENERATE_SVG_SNAPSHOTS").is_ok() {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(&path, &output).unwrap();
+    }
+
+    let expected = fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("Missing snapshot: {}", path.display()));
+    assert_eq!(
+        output, expected,
+        "Orthogonal snapshot mismatch for {fixture}"
+    );
 }
 
 fn assert_mmds_snapshot(fixture: &str, snapshot_stem: &str) {
@@ -188,4 +266,27 @@ fn direct_and_mmds_replay_match_for_subgraph_endpoint_fixture_set() {
 #[test]
 fn positioned_mmds_svg_snapshot_routed_basic() {
     assert_mmds_snapshot("positioned/routed-basic.json", "routed-basic");
+}
+
+#[test]
+fn svg_snapshot_orthogonal_fixture_subset() {
+    for fixture in [
+        "simple.mmd",
+        "fan_out.mmd",
+        "subgraph_direction_cross_boundary.mmd",
+    ] {
+        assert_orthogonal_snapshot(fixture);
+    }
+}
+
+#[test]
+fn svg_polyline_route_rollback_is_stable_across_repeated_renders() {
+    for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
+        let baseline = render_svg_fixture_with_engine(fixture, "mermaid-layered");
+        let output = render_svg_fixture_with_engine(fixture, "mermaid-layered");
+        assert_eq!(
+            output, baseline,
+            "polyline rollback should be stable for fixture {fixture}"
+        );
+    }
 }

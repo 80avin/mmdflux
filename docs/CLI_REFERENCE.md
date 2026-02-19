@@ -50,6 +50,42 @@ mmdflux --format mermaid diagram.mmds.json
 
 Note: SVG output is currently supported for flowcharts. For MMDS geometry-level constraints, see [mmds.md](mmds.md).
 
+## SVG Routing Controls
+
+```bash
+# Edge preset (high-level)
+mmdflux --format svg --edge-preset straight diagram.mmd
+mmdflux --format svg --edge-preset step diagram.mmd
+mmdflux --format svg --edge-preset smoothstep --edge-radius 6 diagram.mmd
+mmdflux --format svg --edge-preset bezier diagram.mmd
+
+# Fine-grained style controls
+mmdflux --format svg --routing-style orthogonal --interpolation-style linear --corner-style sharp diagram.mmd
+mmdflux --format svg --routing-style polyline --interpolation-style bezier diagram.mmd
+
+# Engine selection (routing behavior is engine-owned)
+mmdflux --format svg --layout-engine flux-layered diagram.mmd
+mmdflux --format svg --layout-engine mermaid-layered diagram.mmd
+```
+
+`--edge-preset` values:
+
+| Value        | Expansion                                                   |
+| ------------ | ----------------------------------------------------------- |
+| `straight`   | `routing=polyline`, `interpolation=linear`, `corner=sharp` |
+| `step`       | `routing=orthogonal`, `interpolation=linear`, `corner=sharp` |
+| `smoothstep` | `routing=orthogonal`, `interpolation=linear`, `corner=rounded` |
+| `bezier`     | `routing=polyline`, `interpolation=bezier`                 |
+
+Low-level style overrides:
+
+| Flag                    | Values                         |
+| ----------------------- | ------------------------------ |
+| `--routing-style`       | `polyline`, `orthogonal`       |
+| `--interpolation-style` | `linear`, `bezier`             |
+| `--corner-style`        | `sharp`, `rounded`             |
+| `--edge-radius`         | Numeric corner radius in pixels |
+
 ## Supported Mermaid Syntax (Flowchart)
 
 ### Directions
@@ -74,8 +110,8 @@ Note: SVG output is currently supported for flowcharts. For MMDS geometry-level 
 | `A((text))`     | Circle                  |
 | `A(((text)))`   | Double circle           |
 | `A>text]`       | Asymmetric (flag)       |
-| `A[/text\\]`   | Trapezoid               |
-| `A[\\text/]`   | Inverse trapezoid       |
+| `A[/text\\]`    | Trapezoid               |
+| `A[\\text/]`    | Inverse trapezoid       |
 | `@{shape: ...}` | Extended shape notation |
 
 ### Edge Types
@@ -126,6 +162,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 # Reduce edge path detail for compact payloads
 mmdflux --format mmds --geometry-level routed --path-detail simplified diagram.mmd
 mmdflux --format mmds --geometry-level routed --path-detail endpoints diagram.mmd
+mmdflux --format mmds --geometry-level routed --path-detail compact diagram.mmd
 ```
 
 `--path-detail` values:
@@ -133,6 +170,7 @@ mmdflux --format mmds --geometry-level routed --path-detail endpoints diagram.mm
 | Value        | Waypoints kept                 |
 | ------------ | ------------------------------ |
 | `full`       | All routed waypoints (default) |
+| `compact`    | Shape-preserving reduced path  |
 | `simplified` | Start, midpoint, and end only  |
 | `endpoints`  | Start and end only             |
 

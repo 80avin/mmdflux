@@ -34,10 +34,21 @@ function isThemePreference(value: string): value is ThemePreference {
   return value === "system" || value === "light" || value === "dark";
 }
 
+function hasStorageApi(
+  storage: Storage | undefined,
+): storage is Storage {
+  return (
+    typeof storage === "object" &&
+    storage !== null &&
+    typeof storage.getItem === "function" &&
+    typeof storage.setItem === "function"
+  );
+}
+
 export function createThemeController(
   options: ThemeControllerOptions,
 ): ThemeController {
-  const storage = options.storage;
+  const storage = hasStorageApi(options.storage) ? options.storage : undefined;
   const mediaQuery = options.matchMedia?.("(prefers-color-scheme: dark)");
 
   const storedPreference = storage?.getItem(THEME_STORAGE_KEY);

@@ -21,6 +21,17 @@ fn renders_flowchart_svg() {
 }
 
 #[wasm_bindgen_test]
+fn rejects_legacy_edge_routing_config_key() {
+    let error = render(
+        "graph TD\nA-->B",
+        "svg",
+        r#"{"edgeRouting":"orthogonal-preview"}"#,
+    )
+    .expect_err("legacy edgeRouting should be rejected");
+    assert!(error_debug(error).contains("unknown field"));
+}
+
+#[wasm_bindgen_test]
 fn detect_returns_flowchart_id() {
     assert_eq!(detect("graph TD\nA-->B"), Some("flowchart".to_string()));
 }
@@ -46,6 +57,24 @@ fn rejects_unknown_diagram_type() {
 fn rejects_invalid_config_json() {
     let error = render("graph TD\nA-->B", "text", "{").expect_err("invalid config must fail");
     assert!(error_debug(error).contains("invalid config_json"));
+}
+
+#[wasm_bindgen_test]
+fn rejects_legacy_edge_style_config_key() {
+    let error = render("graph TD\nA-->B", "svg", r#"{"edgeStyle":"straight"}"#)
+        .expect_err("legacy edgeStyle should be rejected");
+    assert!(error_debug(error).contains("unknown field"));
+}
+
+#[wasm_bindgen_test]
+fn applies_geometry_level_and_path_detail_for_mmds() {
+    let output = render(
+        "graph TD\nA-->B",
+        "mmds",
+        r#"{"geometryLevel":"routed","pathDetail":"endpoints"}"#,
+    )
+    .expect("mmds render with geometry/path config should succeed");
+    assert!(output.contains("\"path\""));
 }
 
 #[wasm_bindgen_test]
