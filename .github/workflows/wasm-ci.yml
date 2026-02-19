@@ -27,6 +27,10 @@ permissions:
 env:
   WASM_WEB_OUT_DIR: target/wasm-pkg-web
   WASM_BUNDLER_OUT_DIR: target/wasm-pkg-bundler
+  # Size budgets are regression guardrails, not "match Mermaid.js" targets.
+  # Mermaid's minified bundle is ~2.7 MB; mmdflux release wasm is currently
+  # about ~1.9 MB raw / ~0.6 MB gzip. Keep headroom to catch accidental bloat,
+  # then tighten as size work lands.
   WASM_MAX_BYTES: 2097152
   WASM_GZIP_MAX_BYTES: 700000
 

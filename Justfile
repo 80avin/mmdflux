@@ -55,3 +55,7 @@ wasm-build:
 wasm-test:
     just wasm-build
     ./scripts/run-wasm-browser-tests.sh
+
+# Build release wasm artifacts and enforce CI-equivalent size budgets
+wasm-size *args:
+    ./scripts/check-wasm-size.sh {{ args }}
