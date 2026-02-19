@@ -1,5 +1,6 @@
 use mmdflux::diagram::{
-    AlgorithmId, EdgeStyle, EngineAlgorithmId, EngineId, OutputFormat, RenderConfig, RenderError,
+    AlgorithmId, CornerStyle, EdgePreset, EngineAlgorithmId, EngineId, InterpolationStyle,
+    OutputFormat, RenderConfig, RenderError, RoutingStyle,
 };
 use mmdflux::layered::Ranker;
 use mmdflux::registry::default_registry;
@@ -16,8 +17,16 @@ struct WasmRenderConfig {
     padding: Option<usize>,
     #[serde(alias = "svgScale")]
     svg_scale: Option<f64>,
-    #[serde(alias = "edgeStyle")]
-    edge_style: Option<String>,
+    /// Edge style preset (straight, step, smoothstep, bezier).
+    /// Also accepted as "edgeStyle" for backward compatibility.
+    #[serde(alias = "edgePreset", alias = "edgeStyle")]
+    edge_preset: Option<String>,
+    #[serde(alias = "routingStyle")]
+    routing_style: Option<String>,
+    #[serde(alias = "interpolationStyle")]
+    interpolation_style: Option<String>,
+    #[serde(alias = "cornerStyle")]
+    corner_style: Option<String>,
     #[serde(alias = "svgEdgeRadius")]
     edge_radius: Option<f64>,
     #[serde(alias = "svgDiagramPadding")]
@@ -125,8 +134,19 @@ impl WasmRenderConfig {
         if let Some(show_ids) = self.show_ids {
             config.show_ids = show_ids;
         }
-        if let Some(edge_style) = self.edge_style {
-            config.edge_style = Some(parse_edge_style(&edge_style)?);
+        if let Some(edge_preset) = self.edge_preset {
+            config.edge_preset = Some(parse_edge_preset(&edge_preset)?);
+        }
+        if let Some(routing_style) = self.routing_style {
+            config.routing_style = Some(parse_via_render_error::<RoutingStyle>(&routing_style)?);
+        }
+        if let Some(interpolation_style) = self.interpolation_style {
+            config.interpolation_style = Some(parse_via_render_error::<InterpolationStyle>(
+                &interpolation_style,
+            )?);
+        }
+        if let Some(corner_style) = self.corner_style {
+            config.corner_style = Some(parse_via_render_error::<CornerStyle>(&corner_style)?);
         }
         if let Some(layout) = self.layout {
             if let Some(node_sep) = layout.node_sep {
@@ -154,8 +174,8 @@ fn parse_output_format(value: &str) -> Result<OutputFormat, JsError> {
     parse_via_render_error(value)
 }
 
-fn parse_edge_style(value: &str) -> Result<EdgeStyle, JsError> {
-    EdgeStyle::parse(value).map_err(|err| js_error(err.message))
+fn parse_edge_preset(value: &str) -> Result<EdgePreset, JsError> {
+    EdgePreset::parse(value).map_err(|err| js_error(err.message))
 }
 
 fn parse_ranker(value: &str) -> Result<Ranker, JsError> {

@@ -60,10 +60,11 @@ fn rejects_invalid_config_json() {
 }
 
 #[wasm_bindgen_test]
-fn rejects_unknown_edge_routing_value() {
-    let error = render("graph TD\nA-->B", "svg", r#"{"edgeRouting":"nope"}"#)
-        .expect_err("unknown edge routing must fail");
-    assert!(error_debug(error).contains("unknown edge routing"));
+fn accepts_unknown_edge_routing_value_silently() {
+    // edgeRouting is a deprecated no-op field; any value is silently ignored.
+    let output = render("graph TD\nA-->B", "svg", r#"{"edgeRouting":"nope"}"#)
+        .expect("deprecated edgeRouting field should be silently ignored");
+    assert!(output.contains("<svg"));
 }
 
 #[wasm_bindgen_test]
