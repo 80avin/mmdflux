@@ -2,12 +2,12 @@
 # Usage: scripts/view [file.mmd] [-- extra cargo run args...]
 #        cat file.mmd | scripts/view [-- extra cargo run args...]
 #
-# Defaults: -f svg --edge-style sharp
+# Defaults: -f svg --edge-preset straight
 # Override any default by passing it explicitly after --
 #
 # Examples:
 #   scripts/view tests/fixtures/flowchart/simple.mmd
-#   scripts/view tests/fixtures/flowchart/simple.mmd -- --edge-style curved
+#   scripts/view tests/fixtures/flowchart/simple.mmd -- --edge-preset bezier
 #   cat file.mmd | scripts/view
 
 set -euo pipefail
@@ -53,7 +53,7 @@ if (( lum < 128 )); then
 fi
 
 # Default mmdflux flags (can be overridden by passing them explicitly)
-MMDFLUX_DEFAULTS=(-f svg --edge-style sharp)
+MMDFLUX_DEFAULTS=(-f svg --edge-preset straight)
 
 # Split args: optional file, then optional -- extra-flags
 FILE=""

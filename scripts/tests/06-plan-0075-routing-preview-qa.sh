@@ -29,10 +29,19 @@ render_mmds() {
   local mode="$1"
   local fixture="$2"
   local out_file="$3"
+  # Map legacy mode names to --routing-style values.
+  # full-compute → polyline (FullCompute on flux-layered)
+  # unified-preview → orthogonal (UnifiedPreview on flux-layered)
+  local routing_style
+  case "$mode" in
+    full-compute) routing_style="polyline" ;;
+    unified-preview) routing_style="orthogonal" ;;
+    *) routing_style="$mode" ;;
+  esac
   "$MMDFLUX_BIN" \
     --format mmds \
     --geometry-level routed \
-    --edge-routing "$mode" \
+    --routing-style "$routing_style" \
     "$REPO_ROOT/tests/fixtures/flowchart/$fixture" >"$out_file"
 }
 
@@ -98,13 +107,11 @@ assert_diff "simple_cycle.mmd"
 print_section "Determinism checks"
 "$MMDFLUX_BIN" \
   --format svg \
-  --edge-style straight \
-  --edge-routing unified-preview \
+  --routing-style orthogonal \
   "$REPO_ROOT/tests/fixtures/flowchart/simple_cycle.mmd" >"$OUT_DIR/simple_cycle.unified-preview.run1.svg"
 "$MMDFLUX_BIN" \
   --format svg \
-  --edge-style straight \
-  --edge-routing unified-preview \
+  --routing-style orthogonal \
   "$REPO_ROOT/tests/fixtures/flowchart/simple_cycle.mmd" >"$OUT_DIR/simple_cycle.unified-preview.run2.svg"
 cmp -s "$OUT_DIR/simple_cycle.unified-preview.run1.svg" "$OUT_DIR/simple_cycle.unified-preview.run2.svg"
 echo "OK deterministic SVG unified-preview"

@@ -10,8 +10,8 @@ SWEEP_RUN_ID="${RUN_ID}-unified-vs-full-sweep"
 OUT_DIR="$REPO_ROOT/scripts/tests/out/$SWEEP_RUN_ID"
 mkdir -p "$OUT_DIR"
 
-FLOW_STYLES_DEFAULT=("smooth" "sharp" "rounded")
-CLASS_STYLES_DEFAULT=("smooth")
+FLOW_STYLES_DEFAULT=("bezier" "straight" "smoothstep")
+CLASS_STYLES_DEFAULT=("bezier")
 UNIFIED_FEEDBACK_BASELINE_HEADER=$'fixture\tstyle\tstatus\tdiff_lines\tfull_viewbox_width\tfull_viewbox_height\tunified_viewbox_width\tunified_viewbox_height\tviewbox_width_delta\tviewbox_height_delta\tfull_route_envelope_width\tfull_route_envelope_height\tunified_route_envelope_width\tunified_route_envelope_height\troute_envelope_width_delta\troute_envelope_height_delta\tfull_edge_label_count\tunified_edge_label_count\tedge_label_count_delta\tlabel_position_max_drift\tlabel_position_mean_drift'
 
 ROUTE_ENVELOPE_ABS_DELTA_WARN_PX="${ROUTE_ENVELOPE_ABS_DELTA_WARN_PX:-24}"
@@ -80,7 +80,7 @@ render_svg() {
     --format svg \
     --geometry-level routed \
     --layout-engine "$mode" \
-    --edge-style "$style" \
+    --edge-preset "$style" \
     "$fixture_path" >"$out_file"
 }
 
@@ -391,10 +391,10 @@ summarize_non_viewbox_metrics() {
 
 style_badge_class() {
   case "$1" in
-    smooth) printf 'style-smooth' ;;
-    sharp) printf 'style-sharp' ;;
-    rounded) printf 'style-rounded' ;;
-    *) printf 'style-smooth' ;;
+    bezier) printf 'style-bezier' ;;
+    straight) printf 'style-straight' ;;
+    smoothstep) printf 'style-smoothstep' ;;
+    *) printf 'style-bezier' ;;
   esac
 }
 
@@ -438,9 +438,9 @@ generate_gallery() {
     .family-flowchart { border-color:#0ea5e9; color:#bae6fd; background:#0c4a6e55; }
     .family-class { border-color:#f97316; color:#fed7aa; background:#7c2d1255; }
     .style-badge { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; border-radius:999px; padding:2px 7px; }
-    .style-smooth { background:#1e3a8a55; color:#bfdbfe; border:1px solid #1e40af; }
-    .style-sharp { background:#36531455; color:#d9f99d; border:1px solid #4d7c0f; }
-    .style-rounded { background:#78350f55; color:#fde68a; border:1px solid #a16207; }
+    .style-bezier { background:#1e3a8a55; color:#bfdbfe; border:1px solid #1e40af; }
+    .style-straight { background:#36531455; color:#d9f99d; border:1px solid #4d7c0f; }
+    .style-smoothstep { background:#78350f55; color:#fde68a; border:1px solid #a16207; }
     details.fixture { margin:8px 0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
     details.fixture > summary { list-style:none; cursor:pointer; display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:#10172a; padding:8px 10px; }
     details.fixture > summary::-webkit-details-marker { display:none; }
@@ -467,12 +467,12 @@ generate_gallery() {
       <button onclick="openShown(true)">Open shown</button>
       <button onclick="openShown(false)">Close shown</button>
       <label><input id="hideSame" type="checkbox" checked onchange="applyFilters()"> Hide same</label>
-      <label><input id="smoothOnly" type="checkbox" onchange="applyFilters()"> Smooth only</label>
+      <label><input id="bezierOnly" type="checkbox" onchange="applyFilters()"> Bezier only</label>
       <label><input id="familyFlowchart" type="checkbox" checked onchange="applyFilters()"> flowchart</label>
       <label><input id="familyClass" type="checkbox" checked onchange="applyFilters()"> class</label>
-      <label><input id="styleSmooth" type="checkbox" checked onchange="applyFilters()"> smooth</label>
-      <label><input id="styleSharp" type="checkbox" checked onchange="applyFilters()"> sharp</label>
-      <label><input id="styleRounded" type="checkbox" checked onchange="applyFilters()"> rounded</label>
+      <label><input id="styleBezier" type="checkbox" checked onchange="applyFilters()"> bezier</label>
+      <label><input id="styleStraight" type="checkbox" checked onchange="applyFilters()"> straight</label>
+      <label><input id="styleSmoothstep" type="checkbox" checked onchange="applyFilters()"> smoothstep</label>
       <input id="search" type="text" placeholder="Filter fixture name (e.g. multi_subgraph)" oninput="applyFilters()" />
     </div>
 HTML_HEADER
@@ -563,7 +563,7 @@ HTML_FIXTURE
 
     function applyFilters() {
       const hideSame = document.getElementById('hideSame').checked;
-      const smoothOnly = document.getElementById('smoothOnly').checked;
+      const bezierOnly = document.getElementById('bezierOnly').checked;
       const search = document.getElementById('search').value.trim().toLowerCase();
 
       const allowedFamilies = new Set();
@@ -571,12 +571,12 @@ HTML_FIXTURE
       if (document.getElementById('familyClass').checked) allowedFamilies.add('class');
 
       const allowedStyles = new Set();
-      if (document.getElementById('styleSmooth').checked) allowedStyles.add('smooth');
-      if (document.getElementById('styleSharp').checked) allowedStyles.add('sharp');
-      if (document.getElementById('styleRounded').checked) allowedStyles.add('rounded');
-      if (smoothOnly) {
+      if (document.getElementById('styleBezier').checked) allowedStyles.add('bezier');
+      if (document.getElementById('styleStraight').checked) allowedStyles.add('straight');
+      if (document.getElementById('styleSmoothstep').checked) allowedStyles.add('smoothstep');
+      if (bezierOnly) {
         allowedStyles.clear();
-        allowedStyles.add('smooth');
+        allowedStyles.add('bezier');
       }
 
       document.querySelectorAll('details.fixture').forEach(d => {
