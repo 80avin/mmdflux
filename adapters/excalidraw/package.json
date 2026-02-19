@@ -4,6 +4,9 @@
   "type": "module",
   "description": "Convert MMDS JSON to Excalidraw format with polyline edge routing",
   "main": "dist/index.js",
+  "bin": {
+    "mmds-to-excalidraw": "dist/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "check": "biome check",

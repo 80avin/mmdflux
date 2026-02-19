@@ -20,10 +20,28 @@ Pipe MMDS JSON from mmdflux into the adapter:
 
 ```bash
 # Layout-level (straight center-to-center arrows)
-mmdflux --format mmds diagram.mmd | node dist/index.js > out.excalidraw
+mmdflux --format mmds diagram.mmd | npx mmds-to-excalidraw > out.excalidraw
 
 # Routed-level (polyline edge paths from mmdflux's router)
-mmdflux --format mmds --geometry-level routed diagram.mmd | node dist/index.js > out.excalidraw
+mmdflux --format mmds --geometry-level routed diagram.mmd | npx mmds-to-excalidraw > out.excalidraw
+```
+
+### Options
+
+| Flag | Short | Values | Default | Description |
+|------|-------|--------|---------|-------------|
+| `--output` | `-o` | `json`, `url` | `json` | Output format — Excalidraw JSON or a shareable excalidraw.com URL |
+| `--open` | | | `false` | Upload and open the diagram in your browser |
+
+```bash
+# Get a shareable URL instead of JSON
+mmdflux --format mmds --geometry-level routed diagram.mmd | npx mmds-to-excalidraw -o url
+
+# Open directly in browser (also prints JSON to stdout)
+mmdflux --format mmds --geometry-level routed diagram.mmd | npx mmds-to-excalidraw --open
+
+# Open in browser, only print the URL
+mmdflux --format mmds --geometry-level routed diagram.mmd | npx mmds-to-excalidraw -o url --open
 ```
 
 Open the resulting `.excalidraw` file in [excalidraw.com](https://excalidraw.com) or the Excalidraw VS Code extension.
@@ -38,7 +56,7 @@ Open the resulting `.excalidraw` file in [excalidraw.com](https://excalidraw.com
 Node and edge coordinates are scaled from dagre layout units to pixel space. The default scale factor is 3. Override it with the `SCALE` environment variable:
 
 ```bash
-mmdflux --format mmds diagram.mmd | SCALE=5 node dist/index.js > out.excalidraw
+mmdflux --format mmds diagram.mmd | SCALE=5 npx mmds-to-excalidraw > out.excalidraw
 ```
 
 ## How it works
@@ -47,4 +65,4 @@ mmdflux --format mmds diagram.mmd | SCALE=5 node dist/index.js > out.excalidraw
 2. Maps MMDS node shapes to Excalidraw types (rectangle, diamond, ellipse) with text-aware sizing
 3. Converts edges to Excalidraw arrows, snapping endpoints to node boundaries
 4. Computes viewport zoom/scroll to fit the diagram
-5. Writes a complete `.excalidraw` JSON document to stdout
+5. Writes a complete `.excalidraw` JSON document to stdout (or uploads to excalidraw.com with `--output url` / `--open`)
