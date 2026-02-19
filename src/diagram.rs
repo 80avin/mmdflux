@@ -37,17 +37,25 @@ pub enum OutputFormat {
     Mermaid,
 }
 
-/// SVG edge interpolation style.
+/// SVG edge interpolation and corner treatment.
 ///
 /// Controls how path segments between waypoints are drawn.
-/// Routing topology (orthogonal vs. free-form) is engine-owned, not style-controlled.
+/// **Deprecated:** This enum will be replaced by the Phase 7 style model consisting of:
+/// - `RoutingStyle` (`Polyline`, `Orthogonal`) — path generation topology (engine-level)
+/// - `InterpolationStyle` (`Linear`, `Bezier`) — segment drawing treatment (render-level)
+/// - `CornerStyle` (`Sharp`, `Rounded`) — corner arc treatment (render-level)
+/// - `EdgePreset` (`Straight`, `Step`, `SmoothStep`, `Bezier`) — user-facing presets
+///
+/// The `Rounded` variant currently entangles `RoutingStyle::Orthogonal` and
+/// `CornerStyle::Rounded`. The new model separates these concerns explicitly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdgeStyle {
-    /// Polyline with hard corners (was `straight`).
+    /// Linear segments with hard corners. Maps to `Straight` preset.
     Sharp,
-    /// Cubic Bézier curves (was `curved`).
+    /// Cubic Bézier curves. Maps to `Bezier` preset.
     Smooth,
-    /// Straight segments with rounded arc corners, using orthogonal path geometry.
+    /// Linear segments with rounded arc corners, using orthogonal path geometry.
+    /// Maps to `SmoothStep` preset.
     Rounded,
 }
 
@@ -116,8 +124,9 @@ impl EdgeStyle {
                 message: "\"straight\" is now \"sharp\". Use --edge-style sharp.".into(),
             }),
             "orthogonal" => Err(RenderError {
-                message: "\"orthogonal\" is no longer a style option. Orthogonal routing is \
-                          engine-owned. Use --edge-style sharp for straight-line edges."
+                message: "\"orthogonal\" is not a style option. Routing topology is \
+                          engine-owned; use --layout-engine to select the engine. \
+                          For orthogonal path rendering, use --edge-style rounded."
                     .into(),
             }),
             _ => Err(RenderError {
@@ -404,6 +413,25 @@ pub enum EdgeRouting {
 /// Request parameters for a `GraphEngine::solve()` call.
 ///
 /// Engines use this to determine measurement mode and output detail level.
+///
+/// ## Style model vocabulary (Phase 7 taxonomy)
+///
+/// Graph-level:
+/// - `RoutingStyle` (`Polyline`, `Orthogonal`) — path topology requested by caller.
+///   `Direct` routing (source→target straight line) is deferred and not yet supported.
+///
+/// Render-level (applied after routing, does not affect path topology):
+/// - `InterpolationStyle` (`Linear`, `Bezier`) — segment drawing treatment.
+///   `CatmullRom` interpolation is deferred and not yet supported.
+/// - `CornerStyle` (`Sharp`, `Rounded`) — corner arc treatment (only meaningful for `Linear`).
+///
+/// User-facing presets (expand to routing + render defaults):
+/// - `Straight` → `Polyline + Linear + Sharp`
+/// - `Step` → `Orthogonal + Linear + Sharp`
+/// - `SmoothStep` → `Orthogonal + Linear + Rounded`
+/// - `Bezier` → `Polyline + Bezier` (corner treatment ignored)
+///
+/// Precedence: explicit low-level fields > preset defaults > engine defaults.
 #[derive(Debug, Clone)]
 pub struct GraphSolveRequest {
     /// Target output format (affects node measurement: text-grid vs pixel).

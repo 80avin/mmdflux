@@ -77,7 +77,8 @@ struct Cli {
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
 
-    /// SVG edge style (curved, straight, rounded, or orthogonal)
+    /// SVG edge interpolation and corner treatment (sharp, smooth, or rounded).
+    /// Deprecated: will be superseded by --edge-preset, --interpolation-style, and --corner-style.
     #[arg(long, value_enum)]
     edge_style: Option<EdgeStyleArg>,
 

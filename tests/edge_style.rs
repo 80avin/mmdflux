@@ -31,9 +31,15 @@ fn edge_style_parse_rejects_legacy_straight_with_migration() {
 fn edge_style_parse_rejects_legacy_orthogonal_with_explanation() {
     let err = EdgeStyle::parse("orthogonal").unwrap_err();
     let message = err.to_string();
+    // Message should clarify that routing topology is engine-owned and
+    // point to --edge-style rounded for orthogonal-looking paths.
     assert!(
-        message.contains("sharp") || message.contains("no longer"),
-        "error should explain removal: {message}"
+        message.contains("engine-owned") || message.contains("engine"),
+        "error should explain routing ownership: {message}"
+    );
+    assert!(
+        message.contains("rounded"),
+        "error should suggest --edge-style rounded for orthogonal paths: {message}"
     );
 }
 

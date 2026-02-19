@@ -340,9 +340,10 @@ fn edge_style_rejects_straight_with_migration() {
 #[test]
 fn edge_style_rejects_orthogonal_with_migration() {
     let err = EdgeStyle::parse("orthogonal").unwrap_err();
+    // Message should clarify routing is engine-owned and point to rounded for visual orthogonal paths.
     assert!(
-        err.message.contains("sharp") || err.message.contains("no longer"),
-        "should explain removal: {}",
+        err.message.contains("engine") && err.message.contains("rounded"),
+        "should explain routing ownership and suggest rounded: {}",
         err
     );
 }

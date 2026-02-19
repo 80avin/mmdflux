@@ -221,6 +221,27 @@ fn cli_rejects_removed_svg_edge_path_style_flag() {
         ));
 }
 
+// =============================================================================
+// Phase 7: Style Taxonomy Terminology Tests
+// =============================================================================
+
+#[test]
+fn cli_edge_style_help_text_does_not_list_removed_tokens() {
+    // The --edge-style description must not list "orthogonal" or "curved"
+    // as valid options. These tokens are rejected; listing them is misleading.
+    // After Phase 7, --edge-style itself will be removed in favour of
+    // --edge-preset / --interpolation-style / --corner-style.
+    let output = mmdflux()
+        .args(["--help"])
+        .output()
+        .expect("--help should succeed");
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !help.contains("or orthogonal"),
+        "--help should not list 'orthogonal' as an edge-style option:\n{help}"
+    );
+}
+
 #[test]
 fn cli_rejects_legacy_svg_edge_curve_flag() {
     mmdflux()
