@@ -752,7 +752,7 @@ fn routed_edges_preserve_subgraph_references() {
 }
 
 // -----------------------------------------------------------------------
-// Task 4.1: Unified preview routing contracts
+// Task 4.1: Orthogonal routing contracts
 // -----------------------------------------------------------------------
 
 #[test]
