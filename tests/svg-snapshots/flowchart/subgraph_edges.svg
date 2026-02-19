@@ -27,8 +27,8 @@
       <text x="165.03" y="151.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Output</text>
     </g>
     <g class="edgePaths">
-      <path d="M95.55,87.00 L95.55,91.17 C95.55,95.33 95.55,103.67 95.55,112.00 C95.55,120.33 95.55,128.67 95.55,137.00 C95.55,145.33 95.55,153.67 95.55,161.33 C95.55,169.00 95.55,176.00 95.55,179.50 L95.55,183.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M244.06,87.00 L244.06,91.17 C244.06,95.33 244.06,103.67 244.06,112.00 C244.06,120.33 244.06,128.67 244.06,137.00 C244.06,145.33 244.06,153.67 244.06,161.33 C244.06,169.00 244.06,176.00 244.06,179.50 L244.06,183.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M95.55,87.00 L95.55,183.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M244.06,87.00 L244.06,183.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

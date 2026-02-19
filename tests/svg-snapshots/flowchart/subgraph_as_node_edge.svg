@@ -25,7 +25,7 @@
       <text x="113.83" y="101.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Backend</text>
     </g>
     <g class="edgePaths">
-      <path d="M113.83,191.00 L113.83,195.17 C113.83,199.33 113.83,207.67 113.83,215.33 C113.83,223.00 113.83,230.00 113.83,233.50 L113.83,237.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M113.83,191.00 L113.83,237.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M113.83,47.00 L113.83,93.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
       <path d="M113.83,335.00 L113.83,381.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>

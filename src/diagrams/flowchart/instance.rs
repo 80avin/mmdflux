@@ -1,9 +1,10 @@
 //! Flowchart diagram instance implementation.
 
 use crate::diagram::{
-    AlgorithmId, EngineAlgorithmId, EngineConfig, EngineId, GraphSolveRequest, OutputFormat,
-    RenderConfig, RenderError,
+    AlgorithmId, EdgeRouting, EngineAlgorithmId, EngineConfig, EngineId, GraphSolveRequest,
+    OutputFormat, RenderConfig, RenderError,
 };
+use crate::diagrams::flowchart::render::svg::render_svg_from_geometry;
 use crate::engines::graph::GraphEngineRegistry;
 use crate::graph::{Diagram, build_diagram};
 use crate::mmds::to_mmds_json;
@@ -85,16 +86,33 @@ impl DiagramInstance for FlowchartInstance {
                     Some(engine_id),
                 )
             }
-            // SVG and Text/Ascii: render() handles layout and routing internally.
-            //
-            // Text uses character-grid coordinates (integer positions) while the
-            // solve result uses float pixel coordinates — fundamentally different
-            // coordinate systems. Bridging them requires a float-to-grid mapping
-            // layer that is out of scope for the taxonomy refactor (task 4.2 decision).
-            //
-            // SVG uses render_svg() which includes subgraph post-processing steps
-            // (sublayout direction overrides, padding, edge spacing) that cannot be
-            // replaced by run_dagre_layout() alone (task 4.3 will decouple).
+            OutputFormat::Svg => {
+                // SVG: solve() produces GraphGeometry; render_svg_from_geometry() renders it.
+                // This dispatches layout through the engine registry so --layout-engine
+                // is respected. Edge routing mode is derived from engine capabilities +
+                // the resolved routing style (already in options.edge_routing).
+                let request = GraphSolveRequest::from_config(config, format);
+                let registry = GraphEngineRegistry::default();
+                let engine = registry.get_solver(engine_id).ok_or_else(|| RenderError {
+                    message: format!("no engine registered for: {engine_id}"),
+                })?;
+                let result = engine.solve(
+                    diagram,
+                    &EngineConfig::Layered(config.layout.clone()),
+                    &request,
+                )?;
+                let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::UnifiedPreview);
+                Ok(render_svg_from_geometry(
+                    diagram,
+                    &options,
+                    &result.geometry,
+                    edge_routing,
+                ))
+            }
+            // Text/Ascii: render() handles layout internally using character-grid
+            // coordinates. The solve result uses float pixel coordinates —
+            // a different coordinate system that requires a mapping layer not yet
+            // implemented (task 4.2 decision).
             _ => Ok(render(diagram, &options)),
         }
     }

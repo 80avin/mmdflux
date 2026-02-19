@@ -25,10 +25,10 @@
       <text x="109.93" y="101.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Data Processing Pipeline</text>
     </g>
     <g class="edgePaths">
-      <path d="M109.93,191.00 L109.93,195.17 C109.93,199.33 109.93,207.67 109.93,215.33 C109.93,223.00 109.93,230.00 109.93,233.50 L109.93,237.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M109.93,295.00 L109.93,299.17 C109.93,303.33 109.93,311.67 109.93,319.33 C109.93,327.00 109.93,334.00 109.93,337.50 L109.93,341.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M109.93,62.00 L109.93,66.17 C109.93,70.33 109.93,78.67 109.93,87.00 C109.93,95.33 109.93,103.67 109.93,111.33 C109.93,119.00 109.93,126.00 109.93,129.50 L109.93,133.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M109.93,399.00 L109.93,403.17 C109.93,407.33 109.93,415.67 109.93,424.00 C109.93,432.33 109.93,440.67 109.93,448.33 C109.93,456.00 109.93,463.00 109.93,466.50 L109.93,470.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M109.93,191.00 L109.93,237.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M109.93,295.00 L109.93,341.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M109.93,62.00 L109.93,133.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M109.93,399.00 L109.93,470.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

@@ -29,9 +29,9 @@
       <text x="439.73" y="17.00" text-anchor="middle" dominant-baseline="hanging" fill="#333">Right</text>
     </g>
     <g class="edgePaths">
-      <path d="M126.91,90.00 L131.08,90.00 C135.24,90.00 143.58,90.00 151.24,90.00 C158.91,90.00 165.91,90.00 169.41,90.00 L172.91,90.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M414.73,90.00 L418.89,90.00 C423.06,90.00 431.39,90.00 439.06,90.00 C446.73,90.00 453.73,90.00 457.23,90.00 L460.73,90.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
-      <path d="M245.82,90.00 L249.98,90.00 C254.15,90.00 262.48,90.00 270.82,90.00 C279.15,90.00 287.48,90.00 295.82,90.00 C304.15,90.00 312.48,90.00 320.15,90.00 C327.82,90.00 334.82,90.00 338.32,90.00 L341.82,90.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M126.91,90.00 L172.91,90.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M414.73,90.00 L460.73,90.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
+      <path d="M245.82,90.00 L341.82,90.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

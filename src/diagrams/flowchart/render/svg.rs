@@ -41,11 +41,42 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         config.dagre_cluster_rank_sep = 0.0;
     }
 
+    let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::UnifiedPreview);
+    let geom = build_svg_layout(diagram, &config, &metrics, edge_routing);
+    let rerouted_edges = geom.rerouted_edges.clone();
+    let override_nodes = svg_router::build_override_node_map(diagram);
+    render_svg_with_geometry_context(
+        diagram,
+        options,
+        &geom,
+        &rerouted_edges,
+        &override_nodes,
+        edge_routing,
+    )
+}
+
+/// Build fully post-processed SVG layout geometry.
+///
+/// Runs the dagre layout with SVG pixel metrics, applies all subgraph
+/// post-processing (direction overrides, sublayout reconciliation, padding,
+/// edge rerouting), and converts to `GraphGeometry`. The result's
+/// `rerouted_edges` field carries edge indices rerouted by the subgraph
+/// pipeline. For `EdgeRouting::UnifiedPreview`, also injects orthogonal paths
+/// and extends `rerouted_edges` to cover all edges.
+///
+/// This is the canonical SVG layout pipeline for both `FluxLayeredEngine::solve()`
+/// (via `instance.rs`) and the legacy `render_svg()` path.
+pub(crate) fn build_svg_layout(
+    diagram: &Diagram,
+    config: &super::layout::LayoutConfig,
+    metrics: &SvgTextMetrics,
+    edge_routing: EdgeRouting,
+) -> GraphGeometry {
     let direction = diagram.direction;
     let mut layout = build_dagre_layout(
         diagram,
-        &config,
-        |node| svg_node_dimensions(&metrics, node, direction),
+        config,
+        |node| svg_node_dimensions(metrics, node, direction),
         |edge| {
             edge.label
                 .as_ref()
@@ -53,11 +84,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         },
     );
 
-    let dagre_config = dagre_config_for_layout(diagram, &config);
+    let dagre_config = dagre_config_for_layout(diagram, config);
     let sublayouts = compute_sublayouts(
         diagram,
         &dagre_config,
-        |node| svg_node_dimensions(&metrics, node, direction),
+        |node| svg_node_dimensions(metrics, node, direction),
         |edge| {
             edge.label
                 .as_ref()
@@ -80,15 +111,11 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     center_override_subgraphs(diagram, &mut layout);
 
     // Expand parent subgraph bounds to encompass repositioned children.
-    // Use node_padding as margin so parent borders don't overlap child borders
-    // after apply_subgraph_svg_padding adds equal padding to both.
-    // Title margin adds extra top space so child borders clear the parent's title.
     let child_margin = metrics.node_padding_x.max(metrics.node_padding_y);
     let title_margin = metrics.font_size;
     expand_parent_bounds_dagre(diagram, &mut layout, child_margin, title_margin);
 
     // Push external nodes that now overlap with reconciled subgraph bounds.
-    // The gap must account for subgraph padding (added later) plus breathing room.
     let overlap_gap = metrics.node_padding_y + metrics.font_size;
     resolve_sublayout_overlaps(diagram, &mut layout, overlap_gap);
 
@@ -116,15 +143,16 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         svg_router::reroute_override_edges(diagram, &mut layout, &node_directions);
 
     // Add padding to subgraph bounds for breathing room around nodes.
-    let subgraph_pad_x = metrics.node_padding_x;
-    let subgraph_pad_y = metrics.node_padding_y;
-    apply_subgraph_svg_padding(diagram, &mut layout, subgraph_pad_x, subgraph_pad_y);
+    apply_subgraph_svg_padding(
+        diagram,
+        &mut layout,
+        metrics.node_padding_x,
+        metrics.node_padding_y,
+    );
 
     // Push external nodes away from subgraph borders so that subgraph-as-node
-    // edges have visible length comparable to normal edges.  Without this,
-    // the subgraph padding eats into the gap dagre allocated.
-    let min_edge_gap = config.dagre_rank_sep;
-    ensure_subgraph_edge_spacing(diagram, &mut layout, min_edge_gap);
+    // edges have visible length comparable to normal edges.
+    ensure_subgraph_edge_spacing(diagram, &mut layout, config.dagre_rank_sep);
 
     // Reroute subgraph-as-node edges with fresh orthogonal paths computed from
     // padded subgraph bounds.  Must run after padding so endpoints land on the
@@ -134,28 +162,13 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     rerouted_edges.extend(sg_node_rerouted);
 
     // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
-    // From this point on, rendering reads from `geom` instead of `layout`.
-    let geom = geometry::from_dagre_layout(&layout, diagram);
-    let geom = if options.edge_routing == Some(EdgeRouting::UnifiedPreview) {
-        inject_unified_preview_paths(diagram, &geom)
-    } else {
-        geom
-    };
-    if options.edge_routing == Some(EdgeRouting::UnifiedPreview) {
-        rerouted_edges.extend(geom.edges.iter().map(|edge| edge.index));
+    let mut geom = geometry::from_dagre_layout(&layout, diagram);
+    if matches!(edge_routing, EdgeRouting::UnifiedPreview) {
+        geom = inject_unified_preview_paths(diagram, &geom);
+        rerouted_edges.extend(geom.edges.iter().map(|e| e.index));
     }
-
-    let override_nodes = svg_router::build_override_node_map(diagram);
-
-    let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::UnifiedPreview);
-    render_svg_with_geometry_context(
-        diagram,
-        options,
-        &geom,
-        &rerouted_edges,
-        &override_nodes,
-        edge_routing,
-    )
+    geom.rerouted_edges = rerouted_edges;
+    geom
 }
 
 /// Render SVG directly from precomputed graph geometry.
@@ -167,7 +180,10 @@ pub fn render_svg_from_geometry(
     geom: &GraphGeometry,
     edge_routing: EdgeRouting,
 ) -> String {
-    let rerouted_edges = rerouted_edge_indexes_for_mode(geom, edge_routing);
+    // Merge mode-derived rerouted edges with any engine-provided rerouted edges
+    // (e.g., direction-override subgraph edges set by build_svg_layout).
+    let mut rerouted_edges = rerouted_edge_indexes_for_mode(geom, edge_routing);
+    rerouted_edges.extend(geom.rerouted_edges.iter().copied());
     let override_nodes = svg_router::build_override_node_map(diagram);
     render_svg_with_geometry_context(
         diagram,

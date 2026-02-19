@@ -4,7 +4,7 @@
 //! consumed by routing and rendering. Engine-agnostic core with optional
 //! engine-specific hint channels.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::graph::{Diagram, Direction, Shape};
 use crate::layered;
@@ -82,6 +82,10 @@ pub struct GraphGeometry {
     pub reversed_edges: Vec<usize>,
     /// Optional engine-specific metadata for migration-sensitive behavior.
     pub engine_hints: Option<EngineHints>,
+    /// Edge indices rerouted by the layout engine (e.g., direction-override subgraph edges).
+    /// Populated by engines that perform SVG-specific subgraph post-processing.
+    /// Used by the SVG renderer to skip shape-clipping on explicitly routed edges.
+    pub rerouted_edges: HashSet<usize>,
 }
 
 /// A positioned node with its bounding rect and shape.
@@ -350,6 +354,7 @@ pub fn from_dagre_layout(result: &layered::LayoutResult, diagram: &Diagram) -> G
             edge_waypoints: hint_edge_waypoints,
             label_positions: hint_label_positions,
         })),
+        rerouted_edges: HashSet::new(),
     }
 }
 
@@ -718,6 +723,7 @@ mod tests {
             bounds: FRect::new(0.0, 0.0, 0.0, 0.0),
             reversed_edges: Vec::new(),
             engine_hints: None,
+            rerouted_edges: HashSet::new(),
         };
         assert!(geo.nodes.is_empty());
         assert!(geo.edges.is_empty());

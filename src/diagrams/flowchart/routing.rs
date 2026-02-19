@@ -136,6 +136,7 @@ mod tests {
             bounds: FRect::new(0.0, 0.0, 100.0, 100.0),
             reversed_edges: vec![],
             engine_hints: None,
+            rerouted_edges: std::collections::HashSet::new(),
         };
 
         (diagram, geom)

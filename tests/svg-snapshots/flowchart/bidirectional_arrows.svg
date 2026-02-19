@@ -21,9 +21,9 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M42.45,66.00 L42.45,69.50 C42.45,73.00 42.45,80.00 42.45,87.00 C42.45,94.00 42.45,101.00 42.45,104.50 L42.45,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#arrowhead)" marker-end="url(#arrowhead)" />
-      <path d="M42.45,170.00 L42.45,173.50 C42.45,177.00 42.45,184.00 42.45,191.00 C42.45,198.00 42.45,205.00 42.45,208.50 L42.45,212.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-start="url(#arrowhead)" marker-end="url(#arrowhead)" />
-      <path d="M42.45,274.00 L42.45,277.50 C42.45,281.00 42.45,288.00 42.45,295.00 C42.45,302.00 42.45,309.00 42.45,312.50 L42.45,316.00" stroke="#333" stroke-width="2.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#arrowhead)" marker-end="url(#arrowhead)" />
+      <path d="M42.45,66.00 L42.45,108.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#arrowhead)" marker-end="url(#arrowhead)" />
+      <path d="M42.45,170.00 L42.45,212.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2.00,4.00" marker-start="url(#arrowhead)" marker-end="url(#arrowhead)" />
+      <path d="M42.45,274.00 L42.45,316.00" stroke="#333" stroke-width="2.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#arrowhead)" marker-end="url(#arrowhead)" />
     </g>
     <g class="edgeLabels">
     </g>

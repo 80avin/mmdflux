@@ -21,9 +21,9 @@
   </defs>
   <g transform="translate(0.00,0.00)">
     <g class="edgePaths">
-      <path d="M212.99,262.00 L212.99,266.17 C212.99,270.33 212.99,278.67 212.99,287.00 C212.99,295.33 212.99,303.67 212.99,307.83 L212.99,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
-      <path d="M66.12,62.00 L66.12,66.17 C66.12,70.33 66.12,78.67 66.12,87.00 C66.12,95.33 66.12,103.67 66.12,107.83 L66.12,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
-      <path d="M212.99,62.00 L212.99,66.17 C212.99,70.33 212.99,78.67 212.99,87.00 C212.99,95.33 212.99,103.67 212.99,107.83 L212.99,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#circlehead)" />
+      <path d="M212.99,262.00 L212.99,312.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
+      <path d="M66.12,62.00 L66.12,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#circlehead)" />
+      <path d="M212.99,62.00 L212.99,112.00" stroke="#333" stroke-width="1.00" fill="none" stroke-linecap="round" stroke-linejoin="round" marker-start="url(#circlehead)" />
     </g>
     <g class="edgeLabels">
     </g>

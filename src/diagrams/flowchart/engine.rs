@@ -157,6 +157,34 @@ impl GraphEngine for FluxLayeredEngine {
             _ => self.mode.clone(),
         };
 
+        // SVG output: use the full SVG layout pipeline (subgraph post-processing,
+        // direction overrides, padding, edge rerouting). This is what makes
+        // FluxLayeredEngine an independent algorithm — it owns the SVG geometry
+        // production end-to-end, not just the raw dagre layout step.
+        if matches!(request.output_format, OutputFormat::Svg) {
+            let MeasurementMode::Svg(ref metrics) = mode else {
+                return Err(RenderError {
+                    message: "internal: SVG output requires SVG measurement mode".to_string(),
+                });
+            };
+            let EngineConfig::Layered(ref dagre_cfg) = *config;
+            let mut layout_config = layout_config_from_dagre(dagre_cfg, diagram);
+            // SVG does not add extra rank separation for clusters (matches Mermaid).
+            layout_config.dagre_cluster_rank_sep = 0.0;
+            let edge_routing = self.id().edge_routing_for_style(request.routing_style);
+            let geometry = super::render::svg::build_svg_layout(
+                diagram,
+                &layout_config,
+                metrics,
+                edge_routing,
+            );
+            return Ok(GraphSolveResult {
+                engine_id: self.id(),
+                geometry,
+                routed: None,
+            });
+        }
+
         let geometry = run_dagre_layout(&mode, diagram, config)?;
 
         // Route when routed geometry is requested (Native ownership).
@@ -243,6 +271,32 @@ impl GraphEngine for MermaidLayeredEngine {
             },
             _ => self.mode.clone(),
         };
+
+        // SVG output: run the full SVG layout pipeline (subgraph post-processing,
+        // direction overrides, padding, edge rerouting) via build_svg_layout().
+        // MermaidLayeredEngine uses FullCompute routing (no unified-preview path
+        // injection), preserving the legacy render_svg() behavior for this engine.
+        if matches!(request.output_format, OutputFormat::Svg) {
+            let MeasurementMode::Svg(ref metrics) = mode else {
+                return Err(RenderError {
+                    message: "internal: SVG output requires SVG measurement mode".to_string(),
+                });
+            };
+            let EngineConfig::Layered(ref dagre_cfg) = *config;
+            let mut layout_config = layout_config_from_dagre(dagre_cfg, diagram);
+            layout_config.dagre_cluster_rank_sep = 0.0;
+            let geometry = super::render::svg::build_svg_layout(
+                diagram,
+                &layout_config,
+                metrics,
+                EdgeRouting::FullCompute,
+            );
+            return Ok(GraphSolveResult {
+                engine_id: self.id(),
+                geometry,
+                routed: None,
+            });
+        }
 
         let geometry = run_dagre_layout(&mode, diagram, config)?;
 

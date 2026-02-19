@@ -385,6 +385,7 @@ fn build_graph_geometry(
         ),
         reversed_edges,
         engine_hints: None,
+        rerouted_edges: std::collections::HashSet::new(),
     })
 }
 
