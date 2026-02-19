@@ -77,12 +77,6 @@ struct Cli {
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
 
-    /// [REMOVED] Use --edge-preset (straight, step, smoothstep, bezier) or
-    /// --interpolation-style + --corner-style for low-level control.
-    /// Migration: sharp→straight, smooth→bezier, rounded→smoothstep.
-    #[arg(long, hide = true)]
-    edge_style: Option<String>,
-
     /// Edge style preset (straight, step, smoothstep, or bezier).
     /// Expands to routing + interpolation + corner defaults.
     /// Explicit --routing-style / --interpolation-style / --corner-style take precedence.
@@ -125,10 +119,6 @@ struct Cli {
     /// Ignored for text/ASCII.
     #[arg(long, value_enum)]
     path_detail: Option<PathDetailArg>,
-
-    /// [REMOVED] Edge routing is now engine-owned. Use --layout-engine instead.
-    #[arg(long, hide = true)]
-    edge_routing: Option<String>,
 }
 
 #[derive(Clone, Copy, ValueEnum, Debug)]
@@ -243,31 +233,6 @@ fn main() -> io::Result<()> {
         }
 
         std::process::exit(result.exit_code());
-    }
-
-    // --edge-routing has been removed; reject it with a helpful message.
-    if cli.edge_routing.is_some() {
-        eprintln!(
-            "Error: --edge-routing has been removed. \
-             Edge routing is now determined by the layout engine. \
-             Use --layout-engine flux-layered for unified routing \
-             or --layout-engine mermaid-layered for legacy compute."
-        );
-        std::process::exit(1);
-    }
-
-    // --edge-style has been removed; reject it with a migration guide.
-    if cli.edge_style.is_some() {
-        eprintln!(
-            "Error: --edge-style has been removed. \
-             Use --edge-preset for presets or explicit style flags for low-level control.\n\
-             Migration guide:\n\
-               --edge-style sharp   → --edge-preset straight\n\
-               --edge-style smooth  → --edge-preset bezier\n\
-               --edge-style rounded → --edge-preset smoothstep\n\
-             Or use --interpolation-style and --corner-style directly."
-        );
-        std::process::exit(1);
     }
 
     // Parse new style flags.

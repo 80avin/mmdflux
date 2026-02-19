@@ -69,73 +69,6 @@ fn cli_svg_format_renders_flowchart() {
 }
 
 #[test]
-fn cli_accepts_edge_style_sharp() {
-    // --edge-style sharp is removed; use --edge-preset straight instead.
-    mmdflux()
-        .args(["--format", "svg", "--edge-preset", "straight"])
-        .write_stdin("graph TD\nA-->B")
-        .assert()
-        .success();
-}
-
-#[test]
-fn cli_accepts_edge_style_smooth() {
-    // --edge-style smooth is removed; use --edge-preset bezier instead.
-    mmdflux()
-        .args(["--format", "svg", "--edge-preset", "bezier"])
-        .write_stdin("graph TD\nA-->B")
-        .assert()
-        .success();
-}
-
-#[test]
-fn cli_accepts_edge_style_rounded() {
-    // --edge-style rounded is removed; use --edge-preset smoothstep instead.
-    mmdflux()
-        .args(["--format", "svg", "--edge-preset", "smoothstep"])
-        .write_stdin("graph TD\nA-->B")
-        .assert()
-        .success();
-}
-
-#[test]
-fn cli_rejects_edge_style_curved() {
-    mmdflux()
-        .args(["--format", "svg", "--edge-style", "curved"])
-        .write_stdin("graph TD\nA-->B")
-        .assert()
-        .failure();
-}
-
-#[test]
-fn cli_rejects_edge_style_straight() {
-    mmdflux()
-        .args(["--format", "svg", "--edge-style", "straight"])
-        .write_stdin("graph TD\nA-->B")
-        .assert()
-        .failure();
-}
-
-#[test]
-fn cli_rejects_edge_style_orthogonal() {
-    mmdflux()
-        .args(["--format", "svg", "--edge-style", "orthogonal"])
-        .write_stdin("graph TD\nA-->B")
-        .assert()
-        .failure();
-}
-
-#[test]
-fn cli_rejects_removed_edge_routing_flag() {
-    mmdflux()
-        .args(["--format", "svg", "--edge-routing", "full-compute"])
-        .write_stdin("graph TD\nA-->B")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("removed").or(predicate::str::contains("no longer")));
-}
-
-#[test]
 fn cli_svg_defaults_to_flux_layered_behavior() {
     let input = "graph TD\nA[Start] --> B{Check}\nB --> C[Yes]\nB --> D[No]\nD --> A\n";
 
@@ -172,28 +105,6 @@ fn cli_svg_defaults_to_flux_layered_behavior() {
         default.stdout, explicit.stdout,
         "default svg render should match explicit flux-layered"
     );
-}
-
-#[test]
-fn cli_rejects_legacy_edge_style_basis() {
-    // --edge-style is fully removed; any value (including legacy ones) gets migration guidance.
-    mmdflux()
-        .args(["--format", "svg", "--edge-style", "basis"])
-        .write_stdin("graph TD\nA-->B")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("--edge-style has been removed"));
-}
-
-#[test]
-fn cli_rejects_legacy_edge_style_linear() {
-    // --edge-style is fully removed; any value (including legacy ones) gets migration guidance.
-    mmdflux()
-        .args(["--format", "svg", "--edge-style", "linear"])
-        .write_stdin("graph TD\nA-->B")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("--edge-style has been removed"));
 }
 
 #[test]
@@ -364,19 +275,6 @@ fn cli_accepts_corner_style_rounded() {
         .success();
 }
 
-// --- --edge-style removed with migration error ---
-
-#[test]
-fn cli_rejects_removed_edge_style_flag_with_migration_guidance() {
-    // --edge-style is removed in Phase 7.2; users should get a clear migration error.
-    mmdflux()
-        .args(["--format", "svg", "--edge-style", "smooth"])
-        .write_stdin("graph TD\nA-->B")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("--edge-preset").or(predicate::str::contains("removed")));
-}
-
 // --- precedence: explicit low-level > preset ---
 
 #[test]
@@ -401,21 +299,6 @@ fn cli_explicit_routing_style_overrides_preset() {
 // =============================================================================
 // Phase 7: Terminology Tests (7.1)
 // =============================================================================
-
-#[test]
-fn cli_edge_style_help_text_does_not_list_removed_tokens() {
-    // --edge-style is fully removed in Phase 7.2 (hidden arg).
-    // Users should not see it listed in --help at all.
-    let output = mmdflux()
-        .args(["--help"])
-        .output()
-        .expect("--help should succeed");
-    let help = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        !help.contains("--edge-style"),
-        "--help should not list removed --edge-style flag:\n{help}"
-    );
-}
 
 #[test]
 fn cli_rejects_legacy_svg_edge_curve_flag() {
@@ -594,24 +477,6 @@ fn cli_rejects_legacy_dagre_with_migration() {
     assert!(
         stderr.contains("flux-layered"),
         "error should suggest flux-layered: {stderr}"
-    );
-}
-
-#[test]
-fn cli_rejects_edge_routing_flag() {
-    let output = mmdflux()
-        .args([
-            "--edge-routing",
-            "unified-preview",
-            "tests/fixtures/flowchart/simple.mmd",
-        ])
-        .output()
-        .expect("command should run");
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("removed") || stderr.contains("no longer"),
-        "error should explain flag removal: {stderr}"
     );
 }
 
