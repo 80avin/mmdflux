@@ -4,7 +4,7 @@ Render diagrams as Unicode text, ASCII text, SVG, or JSON. Supports Mermaid synt
 
 `mmdflux` is built for diagram-as-code pipelines: fast rendering, terminal-friendly output, linting, and machine-readable graph data for tooling and agents.
 
-[Playground](https://kevinswiber.github.io/mmdflux/) • [Releases](https://github.com/kevinswiber/mmdflux/releases) • [MMDS Spec](docs/mmds.md)
+[Playground](https://play.mmdflux.com) • [Releases](https://github.com/kevinswiber/mmdflux/releases) • [MMDS Spec](docs/mmds.md)
 
 ## At a glance
 
