@@ -1,4 +1,4 @@
-//! Float-first unified routing preview helpers.
+//! Float-first orthogonal routing preview helpers.
 //!
 //! This module routes edges in float space first, then optionally applies a
 //! deterministic grid snap adapter for text-oriented consumption.
@@ -17,7 +17,7 @@ use crate::diagrams::flowchart::geometry::{
 };
 use crate::graph::{Diagram, Direction, Shape};
 
-/// Preview options for unified float-first routing.
+/// Preview options for orthogonal float-first routing.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct UnifiedRoutingOptions {
     /// Keep existing behavior for backward edges while previewing forward routing.
@@ -27,7 +27,7 @@ pub(crate) struct UnifiedRoutingOptions {
 }
 
 impl UnifiedRoutingOptions {
-    /// Conservative preview: unified routing for forward edges only.
+    /// Conservative preview: orthogonal routing for forward edges only.
     pub(crate) fn preview() -> Self {
         Self {
             backward_fallback_to_hints: true,
@@ -37,7 +37,7 @@ impl UnifiedRoutingOptions {
 }
 
 /// Route all edges using float-first orthogonal routing.
-pub(crate) fn route_edges_unified(
+pub(crate) fn route_edges_orthogonal(
     diagram: &Diagram,
     geometry: &GraphGeometry,
     options: UnifiedRoutingOptions,
@@ -52,7 +52,7 @@ pub(crate) fn route_edges_unified(
         .iter()
         .map(|edge| {
             let is_backward = geometry.reversed_edges.contains(&edge.index);
-            let edge_direction = unified_edge_direction(
+            let edge_direction = orthogonal_edge_direction(
                 diagram,
                 &geometry.node_directions,
                 &override_nodes,
@@ -90,7 +90,7 @@ pub(crate) fn route_edges_unified(
                 .targets_with_backward_inbound
                 .contains(&edge.to);
             let rank_span = edge_rank_span(geometry, edge).unwrap_or(0);
-            let mut path = build_unified_path(
+            let mut path = build_orthogonal_path(
                 edge,
                 geometry,
                 route_direction,
@@ -124,7 +124,7 @@ pub(crate) fn route_edges_unified(
         .collect()
 }
 
-fn unified_edge_direction(
+fn orthogonal_edge_direction(
     diagram: &Diagram,
     node_directions: &HashMap<String, Direction>,
     override_nodes: &HashMap<String, String>,
@@ -307,7 +307,7 @@ fn distance_point_to_path(point: FPoint, path: &[FPoint]) -> f64 {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn build_unified_path(
+fn build_orthogonal_path(
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
     geometry: &GraphGeometry,
     direction: Direction,
@@ -1133,6 +1133,18 @@ fn backward_td_bt_face_overrides(
     let target_override = hint_face_for_td_bt_parity(target_hint, target_rect)
         .filter(|face| matches!(face, Face::Top | Face::Bottom));
     if target_override.is_none() {
+        return (None, None);
+    }
+
+    // Skip parity when the source node is significantly to the right of the
+    // target node. In that topology there is a forward target→source edge
+    // running rightward; the backward path's leftward approach to the target's
+    // bottom/top face (via the outer right channel) would cross that edge.
+    // Fall back to canonical side-channel routing to avoid the crossing.
+    let source_center_x = source_rect.x + source_rect.width / 2.0;
+    let target_center_x = target_rect.x + target_rect.width / 2.0;
+    let cross_threshold = (target_rect.width * 0.25).max(10.0);
+    if source_center_x > target_center_x + cross_threshold {
         return (None, None);
     }
 

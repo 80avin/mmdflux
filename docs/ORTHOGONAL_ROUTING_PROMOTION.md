@@ -147,7 +147,7 @@ This is the decision record for known output differences when unified routing is
 - [x] Run the full plan-0076 QA script:
 
 ```bash
-./scripts/tests/07-plan-0076-unified-routing-quality-qa.sh
+./scripts/tests/07-plan-0076-orthogonal-routing-quality-qa.sh
 ```
 
 - [x] Expanded parity audit beyond core trio and classified fixture deltas:
@@ -207,7 +207,7 @@ Use this playbook if rollout metrics or fixture gates regress.
 1. Run the QA gate script and capture artifacts:
 
 ```bash
-./scripts/tests/07-plan-0076-unified-routing-quality-qa.sh
+./scripts/tests/07-plan-0076-orthogonal-routing-quality-qa.sh
 ```
 
 2. Force legacy routing behavior for immediate rollback validation:

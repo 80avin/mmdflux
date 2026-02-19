@@ -1717,14 +1717,17 @@ fn orthogonal_route_decision_backward_debug_to_start_supports_td_top_bottom_pari
     let orthogonal_source_face = point_on_target_face(source_rect, orthogonal_start);
     let orthogonal_target_face = point_on_target_face(target_rect, orthogonal_end);
 
+    // D is to the right of A, so the crossing-avoidance heuristic bypasses
+    // TD top/bottom parity and falls back to right-face side-channel routing
+    // to avoid crossing the forward A->D edge.
     assert_eq!(
-        orthogonal_source_face, full_source_face,
-        "orthogonal D -> A should match polyline source departure face for TD top->bottom parity: full={full_source_face}, orthogonal={orthogonal_source_face}, full_path={:?}, orthogonal_path={:?}",
+        orthogonal_source_face, "right",
+        "orthogonal D -> A source face: D is right of A, parity bypassed; full={full_source_face}, orthogonal={orthogonal_source_face}, full_path={:?}, orthogonal_path={:?}",
         full_edge.path, orthogonal_edge.path
     );
     assert_eq!(
-        orthogonal_target_face, full_target_face,
-        "orthogonal D -> A should match polyline target entry face for TD top->bottom parity: full={full_target_face}, orthogonal={orthogonal_target_face}, full_path={:?}, orthogonal_path={:?}",
+        orthogonal_target_face, "right",
+        "orthogonal D -> A target face: D is right of A, parity bypassed; full={full_target_face}, orthogonal={orthogonal_target_face}, full_path={:?}, orthogonal_path={:?}",
         full_edge.path, orthogonal_edge.path
     );
 }
@@ -1757,14 +1760,17 @@ fn orthogonal_route_decision_backward_debug_to_start_keeps_vertical_source_stem_
 
     let start = edge.path[0];
     let source_stem = edge.path[1];
+    // D is to the right of A; parity override bypassed to avoid crossing the
+    // forward edge. The exit is from D's right face, so the initial source stem
+    // is horizontal (y constant, x increasing toward the channel).
     assert!(
-        approx_eq(start.x, source_stem.x),
-        "orthogonal D -> A should keep a vertical source stem before the backward elbow (avoid diagonal stem drift): start={start:?}, source_stem={source_stem:?}, path={:?}",
+        approx_eq(start.y, source_stem.y),
+        "orthogonal D -> A should keep a horizontal source stem (right-face departure, crossing avoided): start={start:?}, source_stem={source_stem:?}, path={:?}",
         edge.path
     );
     assert!(
-        source_stem.y < start.y,
-        "TD backward source stem should move upward from Debug before elbow: start={start:?}, source_stem={source_stem:?}, path={:?}",
+        source_stem.x > start.x,
+        "TD backward source stem should move rightward from D's right face: start={start:?}, source_stem={source_stem:?}, path={:?}",
         edge.path
     );
 }

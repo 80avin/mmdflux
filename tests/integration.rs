@@ -3317,7 +3317,9 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
     // from polyline routing.
     type BackwardFaceCase<'a> = (&'a str, &'a str, &'a str, Option<&'a str>, &'a str, &'a str);
     let cases: [BackwardFaceCase<'_>; 2] = [
-        ("decision.mmd", "D", "A", Some("top"), "bottom", "bottom"),
+        // D is to the right of A; parity override is bypassed to avoid crossing
+        // the forward A->D edge, so orthogonal uses side-channel (right-face) routing.
+        ("decision.mmd", "D", "A", None, "bottom", "right"),
         ("complex.mmd", "E", "A", None, "bottom", "right"),
     ];
 

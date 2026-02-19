@@ -2172,7 +2172,10 @@ fn svg_orthogonal_orthogonal_route_decision_backward_edge_avoids_source_elbow_ax
 }
 
 #[test]
-fn svg_orthogonal_orthogonal_route_decision_backward_edge_keeps_bottom_target_face_parity() {
+fn svg_orthogonal_orthogonal_route_decision_backward_edge_uses_right_face_to_avoid_crossing() {
+    // D is to the right of A; the crossing-avoidance heuristic bypasses TD
+    // top/bottom parity so the backward edge uses side-channel (right-face)
+    // routing instead, avoiding a crossing with the forward A->D edge.
     let diagram = load_flowchart_fixture_diagram("decision.mmd");
     let edge_idx = edge_index(&diagram, "D", "A");
 
@@ -2189,8 +2192,8 @@ fn svg_orthogonal_orthogonal_route_decision_backward_edge_keeps_bottom_target_fa
     let target_face = svg_terminal_approach_face_relaxed(start_rect, &points);
 
     assert_eq!(
-        target_face, "bottom",
-        "decision D->A orthogonal backward edge should keep TD backward target-entry parity on Start bottom face; face={target_face}, points={points:?}"
+        target_face, "right",
+        "decision D->A orthogonal backward edge should enter Start from the right face (crossing avoided); face={target_face}, points={points:?}"
     );
 }
 
