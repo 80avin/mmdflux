@@ -1,6 +1,6 @@
 use mmdflux::diagram::{
-    AlgorithmId, CornerStyle, EdgePreset, EngineAlgorithmId, EngineId, InterpolationStyle,
-    OutputFormat, RenderConfig, RenderError, RoutingStyle,
+    AlgorithmId, CornerStyle, EdgePreset, EngineAlgorithmId, EngineId, GeometryLevel,
+    InterpolationStyle, OutputFormat, PathDetail, RenderConfig, RenderError, RoutingStyle,
 };
 use mmdflux::layered::Ranker;
 use mmdflux::registry::default_registry;
@@ -8,54 +8,32 @@ use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 struct WasmRenderConfig {
-    #[serde(alias = "layoutEngine")]
     layout_engine: Option<String>,
-    #[serde(alias = "clusterRanksep")]
     cluster_ranksep: Option<f64>,
     padding: Option<usize>,
-    #[serde(alias = "svgScale")]
     svg_scale: Option<f64>,
-    /// Edge style preset (straight, step, smoothstep, bezier).
-    /// Also accepted as "edgeStyle" for backward compatibility.
-    #[serde(alias = "edgePreset", alias = "edgeStyle")]
+    /// Edge style preset (straight, step, smoothstep, or bezier).
     edge_preset: Option<String>,
-    #[serde(alias = "routingStyle")]
     routing_style: Option<String>,
-    #[serde(alias = "interpolationStyle")]
     interpolation_style: Option<String>,
-    #[serde(alias = "cornerStyle")]
     corner_style: Option<String>,
-    #[serde(alias = "svgEdgeRadius")]
     edge_radius: Option<f64>,
-    #[serde(alias = "svgDiagramPadding")]
     svg_diagram_padding: Option<f64>,
-    #[serde(alias = "svgNodePaddingX")]
     svg_node_padding_x: Option<f64>,
-    #[serde(alias = "svgNodePaddingY")]
     svg_node_padding_y: Option<f64>,
-    #[serde(alias = "showIds")]
     show_ids: Option<bool>,
-    /// Accepted for backward compatibility but has no effect.
-    /// Edge routing is now engine-owned; use `layoutEngine` instead.
-    #[serde(alias = "edgeRouting")]
-    _edge_routing: Option<String>,
-    #[serde(alias = "geometryLevel")]
     geometry_level: Option<String>,
-    #[serde(alias = "pathDetail")]
     path_detail: Option<String>,
     layout: Option<WasmLayoutConfig>,
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, rename_all = "camelCase", deny_unknown_fields)]
 struct WasmLayoutConfig {
-    #[serde(alias = "nodeSep", alias = "nodeSpacing")]
     node_sep: Option<f64>,
-    #[serde(alias = "edgeSep", alias = "edgeSpacing")]
     edge_sep: Option<f64>,
-    #[serde(alias = "rankSep", alias = "rankSpacing")]
     rank_sep: Option<f64>,
     margin: Option<f64>,
     ranker: Option<String>,
@@ -148,6 +126,12 @@ impl WasmRenderConfig {
         if let Some(corner_style) = self.corner_style {
             config.corner_style = Some(parse_via_render_error::<CornerStyle>(&corner_style)?);
         }
+        if let Some(geometry_level) = self.geometry_level {
+            config.geometry_level = parse_geometry_level(&geometry_level)?;
+        }
+        if let Some(path_detail) = self.path_detail {
+            config.path_detail = parse_path_detail(&path_detail)?;
+        }
         if let Some(layout) = self.layout {
             if let Some(node_sep) = layout.node_sep {
                 config.layout.node_sep = node_sep;
@@ -176,6 +160,14 @@ fn parse_output_format(value: &str) -> Result<OutputFormat, JsError> {
 
 fn parse_edge_preset(value: &str) -> Result<EdgePreset, JsError> {
     EdgePreset::parse(value).map_err(|err| js_error(err.message))
+}
+
+fn parse_geometry_level(value: &str) -> Result<GeometryLevel, JsError> {
+    parse_via_render_error(value)
+}
+
+fn parse_path_detail(value: &str) -> Result<PathDetail, JsError> {
+    parse_via_render_error(value)
 }
 
 fn parse_ranker(value: &str) -> Result<Ranker, JsError> {
@@ -281,11 +273,21 @@ mod tests {
     }
 
     #[test]
-    fn parse_render_config_accepts_legacy_edge_routing_without_error() {
-        // edgeRouting is accepted for backward compat but silently ignored
-        let config = parse_render_config(OutputFormat::Svg, r#"{"edgeRouting":"full-compute"}"#)
-            .expect("legacy edgeRouting should parse without error");
-        // SVG default (flux-layered) is applied regardless
+    fn parse_render_config_applies_mmds_geometry_and_path_fields() {
+        let config = parse_render_config(
+            OutputFormat::Mmds,
+            r#"{"geometryLevel":"routed","pathDetail":"endpoints"}"#,
+        )
+        .expect("mmds config parsing should succeed");
+
+        assert_eq!(config.geometry_level, GeometryLevel::Routed);
+        assert_eq!(config.path_detail, PathDetail::Endpoints);
+    }
+
+    #[test]
+    fn parse_render_config_defaults_svg_to_flux_layered_when_empty() {
+        let config =
+            parse_render_config(OutputFormat::Svg, "{}").expect("empty config should parse");
         assert_eq!(
             config.layout_engine,
             Some(EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered))

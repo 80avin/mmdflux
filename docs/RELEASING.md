@@ -9,8 +9,6 @@ This project publishes:
 ## Release Checklist
 
 1. Ensure `main` is green in CI.
-   - For routing-default promotion, run the dedicated checklist:
-   - `docs/ORTHOGONAL_ROUTING_PROMOTION.md`
 2. Bump version in `Cargo.toml` and `Cargo.lock`.
 3. Commit and push the version bump.
 4. Publish crate:

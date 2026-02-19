@@ -90,4 +90,55 @@ describe("playground examples", () => {
       format: "svg",
     });
   });
+
+  it("sends render settings in configJson", async () => {
+    vi.useFakeTimers();
+    const root = document.createElement("div");
+    const renderClient = createFakeRenderClient();
+
+    renderApp(root, {
+      renderClientFactory: () => renderClient,
+      debounceMs: 50,
+    });
+
+    const svgTab = root.querySelector<HTMLButtonElement>(
+      'button[data-format="svg"]',
+    );
+    const layoutEngineSelect = root.querySelector<HTMLSelectElement>(
+      "[data-layout-engine]",
+    );
+    const edgePresetSelect = root.querySelector<HTMLSelectElement>(
+      "[data-edge-preset]",
+    );
+    const pathDetailSelect = root.querySelector<HTMLSelectElement>(
+      "[data-path-detail]",
+    );
+
+    if (!svgTab || !layoutEngineSelect || !edgePresetSelect || !pathDetailSelect) {
+      throw new Error("expected render setting controls");
+    }
+
+    renderClient.render.mockClear();
+
+    svgTab.click();
+    layoutEngineSelect.value = "mermaid-layered";
+    layoutEngineSelect.dispatchEvent(new Event("change"));
+    edgePresetSelect.value = "bezier";
+    edgePresetSelect.dispatchEvent(new Event("change"));
+    pathDetailSelect.value = "endpoints";
+    pathDetailSelect.dispatchEvent(new Event("change"));
+
+    vi.advanceTimersByTime(50);
+    await Promise.resolve();
+
+    const callCount = renderClient.render.mock.calls.length;
+    expect(callCount).toBeGreaterThan(0);
+    const payload = renderClient.render.mock.calls[callCount - 1]?.[0];
+    expect(payload?.format).toBe("svg");
+    expect(JSON.parse(payload?.configJson ?? "{}")).toEqual({
+      layoutEngine: "mermaid-layered",
+      edgePreset: "bezier",
+      pathDetail: "endpoints",
+    });
+  });
 });

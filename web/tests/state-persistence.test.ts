@@ -70,20 +70,46 @@ describe("playground state persistence", () => {
     const mmdsTab = root.querySelector<HTMLButtonElement>(
       '.format-tabs button[data-format="mmds"]',
     );
+    const layoutEngineSelect = root.querySelector<HTMLSelectElement>(
+      "[data-layout-engine]",
+    );
+    const geometryLevelSelect = root.querySelector<HTMLSelectElement>(
+      "[data-geometry-level]",
+    );
+    const pathDetailSelect = root.querySelector<HTMLSelectElement>(
+      "[data-path-detail]",
+    );
 
-    if (!editorInput || !mmdsTab) {
-      throw new Error("expected editor input and mmds tab");
+    if (
+      !editorInput ||
+      !mmdsTab ||
+      !layoutEngineSelect ||
+      !geometryLevelSelect ||
+      !pathDetailSelect
+    ) {
+      throw new Error("expected editor input, format tab, and render controls");
     }
 
     editorInput.value = "graph TD\nA-->Saved";
     editorInput.dispatchEvent(new Event("input"));
     mmdsTab.click();
+    layoutEngineSelect.value = "mermaid-layered";
+    layoutEngineSelect.dispatchEvent(new Event("change"));
+    geometryLevelSelect.value = "routed";
+    geometryLevelSelect.dispatchEvent(new Event("change"));
+    pathDetailSelect.value = "compact";
+    pathDetailSelect.dispatchEvent(new Event("change"));
 
     const persisted = JSON.parse(
       storage.getItem("mmdflux-playground-state") ?? "{}",
-    ) as { input?: string; format?: string };
+    ) as { input?: string; format?: string; renderSettings?: Record<string, string> };
 
     expect(persisted.input).toBe("graph TD\nA-->Saved");
     expect(persisted.format).toBe("mmds");
+    expect(persisted.renderSettings).toMatchObject({
+      layoutEngine: "mermaid-layered",
+      geometryLevel: "routed",
+      pathDetail: "compact",
+    });
   });
 });

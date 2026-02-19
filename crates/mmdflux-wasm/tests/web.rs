@@ -21,14 +21,14 @@ fn renders_flowchart_svg() {
 }
 
 #[wasm_bindgen_test]
-fn accepts_edge_routing_config_key() {
-    let output = render(
+fn rejects_legacy_edge_routing_config_key() {
+    let error = render(
         "graph TD\nA-->B",
         "svg",
-        r#"{"edgeRouting":"unified-preview"}"#,
+        r#"{"edgeRouting":"orthogonal-preview"}"#,
     )
-    .expect("svg render with edgeRouting should succeed");
-    assert!(output.contains("<svg"));
+    .expect_err("legacy edgeRouting should be rejected");
+    assert!(error_debug(error).contains("unknown field"));
 }
 
 #[wasm_bindgen_test]
@@ -60,11 +60,21 @@ fn rejects_invalid_config_json() {
 }
 
 #[wasm_bindgen_test]
-fn accepts_unknown_edge_routing_value_silently() {
-    // edgeRouting is a deprecated no-op field; any value is silently ignored.
-    let output = render("graph TD\nA-->B", "svg", r#"{"edgeRouting":"nope"}"#)
-        .expect("deprecated edgeRouting field should be silently ignored");
-    assert!(output.contains("<svg"));
+fn rejects_legacy_edge_style_config_key() {
+    let error = render("graph TD\nA-->B", "svg", r#"{"edgeStyle":"straight"}"#)
+        .expect_err("legacy edgeStyle should be rejected");
+    assert!(error_debug(error).contains("unknown field"));
+}
+
+#[wasm_bindgen_test]
+fn applies_geometry_level_and_path_detail_for_mmds() {
+    let output = render(
+        "graph TD\nA-->B",
+        "mmds",
+        r#"{"geometryLevel":"routed","pathDetail":"endpoints"}"#,
+    )
+    .expect("mmds render with geometry/path config should succeed");
+    assert!(output.contains("\"path\""));
 }
 
 #[wasm_bindgen_test]

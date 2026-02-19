@@ -63,7 +63,6 @@ mmdflux --lint diagram.mmd
 - [Library usage](docs/LIBRARY.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Debugging and parity tools](docs/DEBUG.md)
-- [Orthogonal routing promotion checklist](docs/ORTHOGONAL_ROUTING_PROMOTION.md)
 - [Releasing](docs/RELEASING.md)
 - [WASM build/test commands](docs/WASM.md)
 

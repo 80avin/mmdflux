@@ -53,34 +53,38 @@ Note: SVG output is currently supported for flowcharts. For MMDS geometry-level 
 ## SVG Routing Controls
 
 ```bash
-# Select SVG edge style
-mmdflux --format svg --edge-style curved diagram.mmd
-mmdflux --format svg --edge-style straight diagram.mmd
-mmdflux --format svg --edge-style rounded --edge-radius 6 diagram.mmd
-mmdflux --format svg --edge-style orthogonal diagram.mmd
+# Edge preset (high-level)
+mmdflux --format svg --edge-preset straight diagram.mmd
+mmdflux --format svg --edge-preset step diagram.mmd
+mmdflux --format svg --edge-preset smoothstep --edge-radius 6 diagram.mmd
+mmdflux --format svg --edge-preset bezier diagram.mmd
 
-# Edge routing override (flowchart graph-family routing stage)
-mmdflux --format svg --edge-routing full-compute diagram.mmd
-mmdflux --format svg --edge-routing pass-through-clip diagram.mmd
-mmdflux --format svg --edge-routing orthogonal-preview diagram.mmd
+# Fine-grained style controls
+mmdflux --format svg --routing-style orthogonal --interpolation-style linear --corner-style sharp diagram.mmd
+mmdflux --format svg --routing-style polyline --interpolation-style bezier diagram.mmd
+
+# Engine selection (routing behavior is engine-owned)
+mmdflux --format svg --layout-engine flux-layered diagram.mmd
+mmdflux --format svg --layout-engine mermaid-layered diagram.mmd
 ```
 
-`--edge-style` values:
+`--edge-preset` values:
 
-| Value        | Description                                                          |
-| ------------ | -------------------------------------------------------------------- |
-| `curved`     | Smooth curved spline path (default)                                  |
-| `straight`   | Straight polyline segments                                           |
-| `rounded`    | Orthogonal routing with rounded corners (radius via `--edge-radius`) |
-| `orthogonal` | Axis-aligned path construction                                       |
+| Value        | Expansion                                                   |
+| ------------ | ----------------------------------------------------------- |
+| `straight`   | `routing=polyline`, `interpolation=linear`, `corner=sharp` |
+| `step`       | `routing=orthogonal`, `interpolation=linear`, `corner=sharp` |
+| `smoothstep` | `routing=orthogonal`, `interpolation=linear`, `corner=rounded` |
+| `bezier`     | `routing=polyline`, `interpolation=bezier`                 |
 
-`--edge-routing` values:
+Low-level style overrides:
 
-| Value                | Description                                                         |
-| -------------------- | ------------------------------------------------------------------- |
-| `full-compute`       | Compute paths from layout hints and node geometry (legacy baseline) |
-| `pass-through-clip`  | Use engine-provided paths with clipping adjustments                 |
-| `orthogonal-preview` | Use orthogonal float-first preview routing where supported          |
+| Flag                    | Values                         |
+| ----------------------- | ------------------------------ |
+| `--routing-style`       | `polyline`, `orthogonal`       |
+| `--interpolation-style` | `linear`, `bezier`             |
+| `--corner-style`        | `sharp`, `rounded`             |
+| `--edge-radius`         | Numeric corner radius in pixels |
 
 ## Supported Mermaid Syntax (Flowchart)
 

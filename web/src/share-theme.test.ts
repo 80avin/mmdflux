@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { decodeShareState, encodeShareState } from "./share";
+import {
+  DEFAULT_SHARE_RENDER_SETTINGS,
+  decodeShareState,
+  encodeShareState,
+} from "./share";
 import { resolveTheme } from "./theme";
 
 describe("share state", () => {
@@ -7,12 +11,35 @@ describe("share state", () => {
     const original = {
       input: "graph LR\nA-->B\nB-->C",
       format: "svg" as const,
+      renderSettings: {
+        ...DEFAULT_SHARE_RENDER_SETTINGS,
+        layoutEngine: "mermaid-layered" as const,
+        edgePreset: "bezier" as const,
+      },
     };
 
     const encoded = encodeShareState(original);
     const decoded = decodeShareState(encoded);
 
     expect(decoded).toEqual(original);
+  });
+
+  it("decodes legacy v1 payloads with default render settings", () => {
+    const legacy = {
+      v: 1,
+      input: "graph TD\nA-->B",
+      format: "text" as const,
+    };
+    const hash = btoa(JSON.stringify(legacy))
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replaceAll("=", "");
+    const decoded = decodeShareState(hash);
+    expect(decoded).toEqual({
+      input: legacy.input,
+      format: legacy.format,
+      renderSettings: DEFAULT_SHARE_RENDER_SETTINGS,
+    });
   });
 });
 

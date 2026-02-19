@@ -372,17 +372,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn elk_engine_name() {
-        let engine = ElkLayoutEngine;
-        assert_eq!(engine.name(), "elk");
+    fn elk_command_defaults_to_mmdflux_elk() {
+        // SAFETY: test runs single-threaded; no other thread reads this env var
+        unsafe {
+            std::env::remove_var("MMDFLUX_ELK_CMD");
+        }
+        assert_eq!(ElkLayoutEngine::elk_command(), "mmdflux-elk");
     }
 
     #[test]
-    fn elk_engine_capabilities() {
-        let engine = ElkLayoutEngine;
-        let caps = engine.capabilities();
-        assert!(caps.routes_edges);
-        assert!(caps.supports_subgraphs);
+    fn elk_command_respects_env_override() {
+        // SAFETY: test runs single-threaded; no other thread reads this env var
+        unsafe {
+            std::env::set_var("MMDFLUX_ELK_CMD", "elk-custom");
+        }
+        assert_eq!(ElkLayoutEngine::elk_command(), "elk-custom");
+        unsafe {
+            std::env::remove_var("MMDFLUX_ELK_CMD");
+        }
     }
 
     #[test]

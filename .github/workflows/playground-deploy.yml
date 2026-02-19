@@ -50,6 +50,10 @@ jobs:
         working-directory: web
         run: npm ci
 
+      - name: Run playground tests
+        working-directory: web
+        run: npm run test
+
       - name: Build playground
         working-directory: web
         run: npm run build:release
