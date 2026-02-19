@@ -31,7 +31,7 @@ readStdin((mmds) => {
     });
   }
 
-  for (const sg of mmds.subgraphs) {
+  for (const sg of mmds.subgraphs || []) {
     elements.push({
       data: { id: sg.id, label: sg.title, parent: sg.parent || undefined },
     });
