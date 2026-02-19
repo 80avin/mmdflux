@@ -218,7 +218,10 @@ mod tests {
     fn parse_render_config_defaults_svg_to_flux_layered_engine() {
         let config = parse_render_config(OutputFormat::Svg, "{}")
             .expect("svg config parsing should succeed");
-        assert_eq!(config.layout_engine, Some(EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered)));
+        assert_eq!(
+            config.layout_engine,
+            Some(EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered))
+        );
     }
 
     #[test]
@@ -235,7 +238,10 @@ mod tests {
                 .expect("explicit layout engine should parse");
         assert_eq!(
             config.layout_engine,
-            Some(EngineAlgorithmId::new(EngineId::Mermaid, AlgorithmId::Layered))
+            Some(EngineAlgorithmId::new(
+                EngineId::Mermaid,
+                AlgorithmId::Layered
+            ))
         );
     }
 
@@ -247,7 +253,10 @@ mod tests {
         // When an explicit engine is set, no additional default is forced
         assert_eq!(
             config.layout_engine,
-            Some(EngineAlgorithmId::new(EngineId::Mermaid, AlgorithmId::Layered))
+            Some(EngineAlgorithmId::new(
+                EngineId::Mermaid,
+                AlgorithmId::Layered
+            ))
         );
     }
 
@@ -257,6 +266,9 @@ mod tests {
         let config = parse_render_config(OutputFormat::Svg, r#"{"edgeRouting":"full-compute"}"#)
             .expect("legacy edgeRouting should parse without error");
         // SVG default (flux-layered) is applied regardless
-        assert_eq!(config.layout_engine, Some(EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered)));
+        assert_eq!(
+            config.layout_engine,
+            Some(EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered))
+        );
     }
 }

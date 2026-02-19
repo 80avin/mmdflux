@@ -1,8 +1,9 @@
 //! Engine registry tests: typed engine IDs, parsing, availability, and registry lookup.
 
 use mmdflux::diagram::{
-    AlgorithmId, EdgeStyle, EngineAlgorithmId, EngineConfig, EngineId, GeometryLevel, GraphEngine,
-    GraphSolveRequest, OutputFormat, PathDetail, RenderConfig, RenderError, RouteOwnership,
+    AlgorithmId, CornerStyle, EdgePreset, EngineAlgorithmId, EngineConfig, EngineId, GeometryLevel,
+    GraphEngine, GraphSolveRequest, InterpolationStyle, OutputFormat, PathDetail, RenderConfig,
+    RenderError, RouteOwnership, RoutingStyle,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::flowchart::engine::{FluxLayeredEngine, MermaidLayeredEngine};
@@ -299,53 +300,68 @@ fn elk_mrtree_unavailable_without_feature() {
 }
 
 // =============================================================================
-// EdgeStyle taxonomy (plan-0081 Phase 1.4)
+// Style model taxonomy (plan-0081 Phase 7.2)
 // =============================================================================
 
 #[test]
-fn edge_style_parses_sharp() {
-    assert_eq!(EdgeStyle::parse("sharp").unwrap(), EdgeStyle::Sharp);
-}
-
-#[test]
-fn edge_style_parses_smooth() {
-    assert_eq!(EdgeStyle::parse("smooth").unwrap(), EdgeStyle::Smooth);
-}
-
-#[test]
-fn edge_style_parses_rounded() {
-    assert_eq!(EdgeStyle::parse("rounded").unwrap(), EdgeStyle::Rounded);
-}
-
-#[test]
-fn edge_style_rejects_curved_with_migration() {
-    let err = EdgeStyle::parse("curved").unwrap_err();
-    assert!(
-        err.message.contains("smooth"),
-        "should suggest replacement: {}",
-        err
+fn routing_style_parses_polyline() {
+    assert_eq!(
+        RoutingStyle::parse("polyline").unwrap(),
+        RoutingStyle::Polyline
     );
 }
 
 #[test]
-fn edge_style_rejects_straight_with_migration() {
-    let err = EdgeStyle::parse("straight").unwrap_err();
-    assert!(
-        err.message.contains("sharp"),
-        "should suggest replacement: {}",
-        err
+fn routing_style_parses_orthogonal() {
+    assert_eq!(
+        RoutingStyle::parse("orthogonal").unwrap(),
+        RoutingStyle::Orthogonal
     );
 }
 
 #[test]
-fn edge_style_rejects_orthogonal_with_migration() {
-    let err = EdgeStyle::parse("orthogonal").unwrap_err();
-    // Message should clarify routing is engine-owned and point to rounded for visual orthogonal paths.
-    assert!(
-        err.message.contains("engine") && err.message.contains("rounded"),
-        "should explain routing ownership and suggest rounded: {}",
-        err
+fn interpolation_style_parses_linear() {
+    assert_eq!(
+        InterpolationStyle::parse("linear").unwrap(),
+        InterpolationStyle::Linear
     );
+}
+
+#[test]
+fn interpolation_style_parses_bezier() {
+    assert_eq!(
+        InterpolationStyle::parse("bezier").unwrap(),
+        InterpolationStyle::Bezier
+    );
+}
+
+#[test]
+fn corner_style_parses_sharp() {
+    assert_eq!(CornerStyle::parse("sharp").unwrap(), CornerStyle::Sharp);
+}
+
+#[test]
+fn corner_style_parses_rounded() {
+    assert_eq!(CornerStyle::parse("rounded").unwrap(), CornerStyle::Rounded);
+}
+
+#[test]
+fn edge_preset_parses_all_values() {
+    assert_eq!(EdgePreset::parse("straight").unwrap(), EdgePreset::Straight);
+    assert_eq!(EdgePreset::parse("step").unwrap(), EdgePreset::Step);
+    assert_eq!(
+        EdgePreset::parse("smoothstep").unwrap(),
+        EdgePreset::SmoothStep
+    );
+    assert_eq!(EdgePreset::parse("bezier").unwrap(), EdgePreset::Bezier);
+}
+
+#[test]
+fn edge_preset_expand_is_deterministic() {
+    let (r, i, c) = EdgePreset::Straight.expand();
+    assert_eq!(r, RoutingStyle::Polyline);
+    assert_eq!(i, InterpolationStyle::Linear);
+    assert_eq!(c, CornerStyle::Sharp);
 }
 
 // =============================================================================
@@ -358,6 +374,7 @@ fn solve_request_fields_round_trip() {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Layout,
         path_detail: PathDetail::Full,
+        routing_style: None,
     };
     assert_eq!(req.output_format, OutputFormat::Text);
     assert_eq!(req.geometry_level, GeometryLevel::Layout);
@@ -409,6 +426,7 @@ fn flux_layered_solve_layout_level_has_no_routed_geometry() {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Layout,
         path_detail: PathDetail::Full,
+        routing_style: None,
     };
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let result = engine.solve(&diagram, &config, &request).unwrap();
@@ -429,6 +447,7 @@ fn flux_layered_solve_routed_level_has_routed_geometry() {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Routed,
         path_detail: PathDetail::Full,
+        routing_style: None,
     };
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let result = engine.solve(&diagram, &config, &request).unwrap();
@@ -470,6 +489,7 @@ fn mermaid_layered_solve_layout_level_has_no_routed_geometry() {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Layout,
         path_detail: PathDetail::Full,
+        routing_style: None,
     };
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let result = engine.solve(&diagram, &config, &request).unwrap();
@@ -490,6 +510,7 @@ fn mermaid_layered_layout_matches_flux_layered_layout() {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Layout,
         path_detail: PathDetail::Full,
+        routing_style: None,
     };
 
     let flux = FluxLayeredEngine::text()
@@ -521,6 +542,7 @@ fn mermaid_layered_solve_routed_level_has_routed_geometry() {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Routed,
         path_detail: PathDetail::Full,
+        routing_style: None,
     };
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
     let result = engine.solve(&diagram, &config, &request).unwrap();

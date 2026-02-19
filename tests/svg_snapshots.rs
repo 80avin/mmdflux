@@ -1,7 +1,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use mmdflux::diagram::{EdgeStyle, EngineAlgorithmId, OutputFormat, PathDetail, RenderConfig};
+use mmdflux::diagram::{
+    CornerStyle, EdgePreset, EngineAlgorithmId, InterpolationStyle, OutputFormat, PathDetail,
+    RenderConfig, RoutingStyle,
+};
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::mmds::from_mmds_str;
 use mmdflux::registry::DiagramInstance;
@@ -105,12 +108,19 @@ fn render_svg_fixture(name: &str) -> String {
     render_svg(&diagram, &options)
 }
 
-fn render_svg_fixture_with_curve(name: &str, curve: EdgeStyle) -> String {
+fn render_svg_fixture_with_curve(
+    name: &str,
+    routing: RoutingStyle,
+    interp: InterpolationStyle,
+    corner: CornerStyle,
+) -> String {
     let input = load_fixture(name);
     let flowchart = parse_flowchart(&input).expect("Failed to parse fixture");
     let diagram = build_diagram(&flowchart);
     let mut options = RenderOptions::default_svg();
-    options.svg.edge_style = curve;
+    options.svg.routing_style = routing;
+    options.svg.interpolation_style = interp;
+    options.svg.corner_style = corner;
     options.path_detail = PathDetail::Full;
     render_svg(&diagram, &options)
 }
@@ -120,7 +130,7 @@ fn render_svg_fixture_with_engine(name: &str, engine: &str) -> String {
     let mut instance = FlowchartInstance::new();
     instance.parse(&input).expect("Failed to parse fixture");
     let config = RenderConfig {
-        edge_style: Some(EdgeStyle::Sharp),
+        edge_preset: Some(EdgePreset::Straight),
         path_detail: PathDetail::Full,
         layout_engine: Some(EngineAlgorithmId::parse(engine).unwrap()),
         ..RenderConfig::default()
@@ -268,7 +278,12 @@ fn assert_snapshot(fixture: &str) {
 
 fn assert_orthogonal_snapshot(fixture: &str) {
     let stem = fixture.trim_end_matches(".mmd");
-    let output = render_svg_fixture_with_curve(fixture, EdgeStyle::Rounded);
+    let output = render_svg_fixture_with_curve(
+        fixture,
+        RoutingStyle::Orthogonal,
+        InterpolationStyle::Linear,
+        CornerStyle::Rounded,
+    );
     let path = orthogonal_snapshot_path(stem);
 
     if std::env::var("GENERATE_SVG_SNAPSHOTS").is_ok() {

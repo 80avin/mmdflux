@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use mmdflux::diagram::{EdgeStyle, EngineAlgorithmId, OutputFormat, RenderConfig};
+use mmdflux::diagram::{EdgePreset, EngineAlgorithmId, OutputFormat, RenderConfig};
 use mmdflux::diagrams::flowchart::engine::{MeasurementMode, run_dagre_layout};
 use mmdflux::diagrams::flowchart::routing::route_graph_geometry;
 use mmdflux::diagrams::mmds::from_mmds_str;
@@ -2646,7 +2646,7 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                edge_style: Some(EdgeStyle::Sharp),
+                edge_preset: Some(EdgePreset::Straight),
                 layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
                 ..RenderConfig::default()
             },
@@ -2661,7 +2661,7 @@ fn test_svg_unified_preview_differs_from_legacy_for_cycle_fixture() {
         .render(
             OutputFormat::Svg,
             &RenderConfig {
-                edge_style: Some(EdgeStyle::Sharp),
+                edge_preset: Some(EdgePreset::Straight),
                 layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
                 ..RenderConfig::default()
             },
@@ -3112,7 +3112,7 @@ fn fan_in_backward_channel_interaction_fixture_matrix_matches_documented_policy_
                 format,
                 &RenderConfig {
                     layout_engine: Some(EngineAlgorithmId::parse("flux-layered").unwrap()),
-                    edge_style: Some(EdgeStyle::Sharp),
+                    edge_preset: Some(EdgePreset::Straight),
                     ..RenderConfig::default()
                 },
             )
@@ -3664,7 +3664,7 @@ fn full_compute_rollback_is_stable_for_text_and_svg() {
                 format,
                 &RenderConfig {
                     layout_engine: Some(EngineAlgorithmId::parse("mermaid-layered").unwrap()),
-                    edge_style: Some(EdgeStyle::Sharp),
+                    edge_preset: Some(EdgePreset::Straight),
                     ..RenderConfig::default()
                 },
             )

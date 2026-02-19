@@ -70,8 +70,9 @@ fn cli_svg_format_renders_flowchart() {
 
 #[test]
 fn cli_accepts_edge_style_sharp() {
+    // --edge-style sharp is removed; use --edge-preset straight instead.
     mmdflux()
-        .args(["--format", "svg", "--edge-style", "sharp"])
+        .args(["--format", "svg", "--edge-preset", "straight"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success();
@@ -79,8 +80,9 @@ fn cli_accepts_edge_style_sharp() {
 
 #[test]
 fn cli_accepts_edge_style_smooth() {
+    // --edge-style smooth is removed; use --edge-preset bezier instead.
     mmdflux()
-        .args(["--format", "svg", "--edge-style", "smooth"])
+        .args(["--format", "svg", "--edge-preset", "bezier"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success();
@@ -88,8 +90,9 @@ fn cli_accepts_edge_style_smooth() {
 
 #[test]
 fn cli_accepts_edge_style_rounded() {
+    // --edge-style rounded is removed; use --edge-preset smoothstep instead.
     mmdflux()
-        .args(["--format", "svg", "--edge-style", "rounded"])
+        .args(["--format", "svg", "--edge-preset", "smoothstep"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .success();
@@ -137,7 +140,7 @@ fn cli_svg_defaults_to_flux_layered_behavior() {
     let input = "graph TD\nA[Start] --> B{Check}\nB --> C[Yes]\nB --> D[No]\nD --> A\n";
 
     let default = mmdflux()
-        .args(["--format", "svg", "--edge-style", "sharp"])
+        .args(["--format", "svg", "--edge-preset", "straight"])
         .write_stdin(input)
         .output()
         .expect("default render should execute");
@@ -151,8 +154,8 @@ fn cli_svg_defaults_to_flux_layered_behavior() {
         .args([
             "--format",
             "svg",
-            "--edge-style",
-            "sharp",
+            "--edge-preset",
+            "straight",
             "--layout-engine",
             "flux-layered",
         ])
@@ -173,28 +176,24 @@ fn cli_svg_defaults_to_flux_layered_behavior() {
 
 #[test]
 fn cli_rejects_legacy_edge_style_basis() {
+    // --edge-style is fully removed; any value (including legacy ones) gets migration guidance.
     mmdflux()
         .args(["--format", "svg", "--edge-style", "basis"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("invalid value 'basis'"))
-        .stderr(predicate::str::contains(
-            "possible values: sharp, smooth, rounded",
-        ));
+        .stderr(predicate::str::contains("--edge-style has been removed"));
 }
 
 #[test]
 fn cli_rejects_legacy_edge_style_linear() {
+    // --edge-style is fully removed; any value (including legacy ones) gets migration guidance.
     mmdflux()
         .args(["--format", "svg", "--edge-style", "linear"])
         .write_stdin("graph TD\nA-->B")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("invalid value 'linear'"))
-        .stderr(predicate::str::contains(
-            "possible values: sharp, smooth, rounded",
-        ));
+        .stderr(predicate::str::contains("--edge-style has been removed"));
 }
 
 #[test]
@@ -222,23 +221,199 @@ fn cli_rejects_removed_svg_edge_path_style_flag() {
 }
 
 // =============================================================================
-// Phase 7: Style Taxonomy Terminology Tests
+// Phase 7: Style Taxonomy Tests (7.2 — new flags and types)
+// =============================================================================
+
+// --- --edge-preset flag ---
+
+#[test]
+fn cli_accepts_edge_preset_straight() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-preset", "straight"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_edge_preset_step() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-preset", "step"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_edge_preset_smoothstep() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-preset", "smoothstep"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_edge_preset_bezier() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-preset", "bezier"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_rejects_edge_preset_direct_as_deferred() {
+    mmdflux()
+        .args(["--format", "svg", "--edge-preset", "direct"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("not yet implemented")
+                .or(predicate::str::contains("not implemented"))
+                .or(predicate::str::contains("deferred")),
+        );
+}
+
+// --- --routing-style flag ---
+
+#[test]
+fn cli_accepts_routing_style_polyline() {
+    mmdflux()
+        .args(["--format", "svg", "--routing-style", "polyline"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_routing_style_orthogonal() {
+    mmdflux()
+        .args(["--format", "svg", "--routing-style", "orthogonal"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_rejects_routing_style_direct_as_deferred() {
+    mmdflux()
+        .args(["--format", "svg", "--routing-style", "direct"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("not yet implemented")
+                .or(predicate::str::contains("not implemented"))
+                .or(predicate::str::contains("deferred")),
+        );
+}
+
+// --- --interpolation-style flag ---
+
+#[test]
+fn cli_accepts_interpolation_style_linear() {
+    mmdflux()
+        .args(["--format", "svg", "--interpolation-style", "linear"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_interpolation_style_bezier() {
+    mmdflux()
+        .args(["--format", "svg", "--interpolation-style", "bezier"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_rejects_interpolation_catmull_rom_as_deferred() {
+    mmdflux()
+        .args(["--format", "svg", "--interpolation-style", "catmull-rom"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("not yet implemented")
+                .or(predicate::str::contains("not implemented"))
+                .or(predicate::str::contains("deferred")),
+        );
+}
+
+// --- --corner-style flag ---
+
+#[test]
+fn cli_accepts_corner_style_sharp() {
+    mmdflux()
+        .args(["--format", "svg", "--corner-style", "sharp"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+#[test]
+fn cli_accepts_corner_style_rounded() {
+    mmdflux()
+        .args(["--format", "svg", "--corner-style", "rounded"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+// --- --edge-style removed with migration error ---
+
+#[test]
+fn cli_rejects_removed_edge_style_flag_with_migration_guidance() {
+    // --edge-style is removed in Phase 7.2; users should get a clear migration error.
+    mmdflux()
+        .args(["--format", "svg", "--edge-style", "smooth"])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--edge-preset").or(predicate::str::contains("removed")));
+}
+
+// --- precedence: explicit low-level > preset ---
+
+#[test]
+fn cli_explicit_routing_style_overrides_preset() {
+    // --routing-style polyline + --edge-preset step (which expands to orthogonal)
+    // should produce polyline routing (explicit wins over preset).
+    // We can't directly observe the routing style in output, so just check it doesn't error.
+    mmdflux()
+        .args([
+            "--format",
+            "svg",
+            "--edge-preset",
+            "step",
+            "--routing-style",
+            "polyline",
+        ])
+        .write_stdin("graph TD\nA-->B")
+        .assert()
+        .success();
+}
+
+// =============================================================================
+// Phase 7: Terminology Tests (7.1)
 // =============================================================================
 
 #[test]
 fn cli_edge_style_help_text_does_not_list_removed_tokens() {
-    // The --edge-style description must not list "orthogonal" or "curved"
-    // as valid options. These tokens are rejected; listing them is misleading.
-    // After Phase 7, --edge-style itself will be removed in favour of
-    // --edge-preset / --interpolation-style / --corner-style.
+    // --edge-style is fully removed in Phase 7.2 (hidden arg).
+    // Users should not see it listed in --help at all.
     let output = mmdflux()
         .args(["--help"])
         .output()
         .expect("--help should succeed");
     let help = String::from_utf8_lossy(&output.stdout);
     assert!(
-        !help.contains("or orthogonal"),
-        "--help should not list 'orthogonal' as an edge-style option:\n{help}"
+        !help.contains("--edge-style"),
+        "--help should not list removed --edge-style flag:\n{help}"
     );
 }
 

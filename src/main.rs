@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use mmdflux::diagram::{
-    EdgeStyle, EngineAlgorithmId, GeometryLevel, LayoutConfig, OutputFormat, PathDetail,
-    RenderConfig,
+    CornerStyle, EdgePreset, EngineAlgorithmId, GeometryLevel, InterpolationStyle, LayoutConfig,
+    OutputFormat, PathDetail, RenderConfig, RoutingStyle,
 };
 use mmdflux::layered::Ranker;
 use mmdflux::registry::default_registry;
@@ -77,12 +77,34 @@ struct Cli {
     #[arg(long)]
     svg_node_padding_y: Option<f64>,
 
-    /// SVG edge interpolation and corner treatment (sharp, smooth, or rounded).
-    /// Deprecated: will be superseded by --edge-preset, --interpolation-style, and --corner-style.
-    #[arg(long, value_enum)]
-    edge_style: Option<EdgeStyleArg>,
+    /// [REMOVED] Use --edge-preset (straight, step, smoothstep, bezier) or
+    /// --interpolation-style + --corner-style for low-level control.
+    /// Migration: sharp→straight, smooth→bezier, rounded→smoothstep.
+    #[arg(long, hide = true)]
+    edge_style: Option<String>,
 
-    /// SVG edge radius (px) for rounded corners.
+    /// Edge style preset (straight, step, smoothstep, or bezier).
+    /// Expands to routing + interpolation + corner defaults.
+    /// Explicit --routing-style / --interpolation-style / --corner-style take precedence.
+    #[arg(long)]
+    edge_preset: Option<String>,
+
+    /// SVG routing style (polyline or orthogonal).
+    /// Overrides the routing component of --edge-preset when both are set.
+    #[arg(long)]
+    routing_style: Option<String>,
+
+    /// SVG interpolation style (linear or bezier).
+    /// Overrides the interpolation component of --edge-preset when both are set.
+    #[arg(long)]
+    interpolation_style: Option<String>,
+
+    /// SVG corner style (sharp or rounded).
+    /// Overrides the corner component of --edge-preset when both are set.
+    #[arg(long)]
+    corner_style: Option<String>,
+
+    /// SVG corner arc radius (px) for rounded corners.
     /// Clamped to half the shortest adjacent segment length.
     #[arg(long)]
     edge_radius: Option<f64>,
@@ -147,23 +169,6 @@ impl From<RankerArg> for Ranker {
         match arg {
             RankerArg::NetworkSimplex => Ranker::NetworkSimplex,
             RankerArg::LongestPath => Ranker::LongestPath,
-        }
-    }
-}
-
-#[derive(Clone, Copy, ValueEnum, Debug)]
-enum EdgeStyleArg {
-    Sharp,
-    Smooth,
-    Rounded,
-}
-
-impl From<EdgeStyleArg> for EdgeStyle {
-    fn from(arg: EdgeStyleArg) -> Self {
-        match arg {
-            EdgeStyleArg::Sharp => EdgeStyle::Sharp,
-            EdgeStyleArg::Smooth => EdgeStyle::Smooth,
-            EdgeStyleArg::Rounded => EdgeStyle::Rounded,
         }
     }
 }
@@ -251,6 +256,65 @@ fn main() -> io::Result<()> {
         std::process::exit(1);
     }
 
+    // --edge-style has been removed; reject it with a migration guide.
+    if cli.edge_style.is_some() {
+        eprintln!(
+            "Error: --edge-style has been removed. \
+             Use --edge-preset for presets or explicit style flags for low-level control.\n\
+             Migration guide:\n\
+               --edge-style sharp   → --edge-preset straight\n\
+               --edge-style smooth  → --edge-preset bezier\n\
+               --edge-style rounded → --edge-preset smoothstep\n\
+             Or use --interpolation-style and --corner-style directly."
+        );
+        std::process::exit(1);
+    }
+
+    // Parse new style flags.
+    let edge_preset: Option<EdgePreset> = match cli.edge_preset.as_deref() {
+        Some(s) => match EdgePreset::parse(s) {
+            Ok(p) => Some(p),
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
+    let routing_style: Option<RoutingStyle> = match cli.routing_style.as_deref() {
+        Some(s) => match RoutingStyle::parse(s) {
+            Ok(rs) => Some(rs),
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
+    let interpolation_style: Option<InterpolationStyle> = match cli.interpolation_style.as_deref() {
+        Some(s) => match InterpolationStyle::parse(s) {
+            Ok(is) => Some(is),
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
+    let corner_style: Option<CornerStyle> = match cli.corner_style.as_deref() {
+        Some(s) => match CornerStyle::parse(s) {
+            Ok(cs) => Some(cs),
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            }
+        },
+        None => None,
+    };
+
     // Build render config from CLI options
     let engine_algo: Option<EngineAlgorithmId> = match cli
         .layout_engine
@@ -288,7 +352,10 @@ fn main() -> io::Result<()> {
         svg_scale: cli.svg_scale,
         svg_node_padding_x: cli.svg_node_padding_x,
         svg_node_padding_y: cli.svg_node_padding_y,
-        edge_style: cli.edge_style.map(Into::into),
+        edge_preset,
+        routing_style,
+        interpolation_style,
+        corner_style,
         edge_radius: cli.edge_radius,
         svg_diagram_padding: cli.svg_diagram_padding,
         show_ids: cli.show_ids,

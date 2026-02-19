@@ -8,7 +8,10 @@ fn render_config_default() {
     assert!(config.svg_scale.is_none());
     assert!(config.svg_node_padding_x.is_none());
     assert!(config.svg_node_padding_y.is_none());
-    assert!(config.edge_style.is_none());
+    assert!(config.edge_preset.is_none());
+    assert!(config.routing_style.is_none());
+    assert!(config.interpolation_style.is_none());
+    assert!(config.corner_style.is_none());
     assert!(config.edge_radius.is_none());
     assert!(config.svg_diagram_padding.is_none());
     assert!(!config.show_ids);

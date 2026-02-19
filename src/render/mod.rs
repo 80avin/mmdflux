@@ -13,7 +13,8 @@ use canvas::{Cell, Connections};
 pub use chars::CharSet;
 
 use crate::diagram::{
-    EdgeRouting, EdgeStyle, OutputFormat, PathDetail, RenderConfig, RouteOwnership,
+    CornerStyle, EdgePreset, EdgeRouting, EngineId, InterpolationStyle, OutputFormat, PathDetail,
+    RenderConfig, RouteOwnership, RoutingStyle,
 };
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
@@ -30,6 +31,29 @@ pub use crate::diagrams::flowchart::render::svg::{render_svg, render_svg_from_ge
 use crate::diagrams::flowchart::render::svg_metrics::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
 use crate::graph::{Diagram, Direction};
 
+/// Engine defaults for SVG style (routing + interpolation + corner).
+///
+/// When no preset or explicit style is specified, these engine-specific defaults
+/// preserve the pre-Phase-7 rendering behaviour.
+fn engine_style_defaults(
+    engine: Option<EngineId>,
+) -> (RoutingStyle, InterpolationStyle, CornerStyle) {
+    match engine {
+        // mermaid-layered: polyline routing (FullCompute), bezier interpolation (Mermaid default)
+        Some(EngineId::Mermaid) => (
+            RoutingStyle::Polyline,
+            InterpolationStyle::Bezier,
+            CornerStyle::Sharp,
+        ),
+        // flux-layered (default) and ELK: orthogonal routing, bezier interpolation
+        _ => (
+            RoutingStyle::Orthogonal,
+            InterpolationStyle::Bezier,
+            CornerStyle::Sharp,
+        ),
+    }
+}
+
 impl From<&RenderConfig> for RenderOptions {
     fn from(config: &RenderConfig) -> Self {
         let mut svg = SvgOptions::default();
@@ -42,15 +66,23 @@ impl From<&RenderConfig> for RenderOptions {
         if let Some(padding_y) = config.svg_node_padding_y {
             svg.node_padding_y = padding_y;
         }
-        if let Some(path_style) = config.edge_style {
-            svg.edge_style = path_style;
-        }
         if let Some(radius) = config.edge_radius {
             svg.edge_radius = radius;
         }
         if let Some(padding) = config.svg_diagram_padding {
             svg.diagram_padding = padding;
         }
+
+        // Resolve style model: explicit low-level > preset defaults > engine defaults.
+        let engine_id = config.layout_engine.map(|id| id.engine());
+        let (def_routing, def_interp, def_corner) = engine_style_defaults(engine_id);
+        let (preset_routing, preset_interp, preset_corner) = config
+            .edge_preset
+            .map(EdgePreset::expand)
+            .unwrap_or((def_routing, def_interp, def_corner));
+        svg.routing_style = config.routing_style.unwrap_or(preset_routing);
+        svg.interpolation_style = config.interpolation_style.unwrap_or(preset_interp);
+        svg.corner_style = config.corner_style.unwrap_or(preset_corner);
 
         // Derive routing from engine capabilities. Default (None) is flux-layered behavior.
         let edge_routing = config
@@ -86,7 +118,14 @@ pub struct SvgOptions {
     pub font_size: f64,
     pub node_padding_x: f64,
     pub node_padding_y: f64,
-    pub edge_style: EdgeStyle,
+    /// Path routing topology for SVG edge rendering.
+    /// Drives orthogonalization post-processing in the SVG path builder.
+    pub routing_style: RoutingStyle,
+    /// Path interpolation treatment for SVG edge rendering.
+    pub interpolation_style: InterpolationStyle,
+    /// Corner arc treatment for SVG edge rendering (only for `InterpolationStyle::Linear`).
+    pub corner_style: CornerStyle,
+    /// Corner arc radius in pixels (for `CornerStyle::Rounded`).
     pub edge_radius: f64,
     pub diagram_padding: f64,
 }
@@ -100,7 +139,11 @@ impl Default for SvgOptions {
             font_size,
             node_padding_x: 15.0,
             node_padding_y: 15.0,
-            edge_style: EdgeStyle::Smooth,
+            // Default matches flux-layered engine: orthogonal routing + bezier interpolation
+            // (equivalent to the former EdgeStyle::Smooth default).
+            routing_style: RoutingStyle::Orthogonal,
+            interpolation_style: InterpolationStyle::Bezier,
+            corner_style: CornerStyle::Sharp,
             edge_radius: 5.0,
             diagram_padding: 8.0,
         }

@@ -15,7 +15,7 @@ use super::routing_core::{
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
 use super::unified_router::{UnifiedRoutingOptions, route_edges_unified};
-use crate::diagram::{EdgeRouting, EdgeStyle, PathDetail};
+use crate::diagram::{CornerStyle, EdgeRouting, InterpolationStyle, PathDetail};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 use crate::layered::{LayoutResult, Point, Rect};
 use crate::render::{RenderOptions, layout_config_for_diagram};
@@ -250,7 +250,8 @@ fn render_svg_with_geometry_context(
         &self_edge_paths,
         rerouted_edges,
         edge_routing,
-        svg_options.edge_style,
+        svg_options.interpolation_style,
+        svg_options.corner_style,
         svg_options.edge_radius,
         scale,
         options.path_detail,
@@ -799,7 +800,8 @@ fn render_edges(
     self_edge_paths: &HashMap<usize, Vec<Point>>,
     rerouted_edges: &std::collections::HashSet<usize>,
     edge_routing: EdgeRouting,
-    edge_style: EdgeStyle,
+    interp_style: InterpolationStyle,
+    corner_style: CornerStyle,
     edge_radius: f64,
     scale: f64,
     path_detail: PathDetail,
@@ -896,15 +898,20 @@ fn render_edges(
         } else {
             points
         };
-        // Only densify corners for straight edges; curved and rounded
-        // handle smoothing natively from sparse waypoints.
-        if matches!(edge_style, EdgeStyle::Sharp) && !preserve_orthogonal_endpoint_contract {
+        // Derived boolean flags from style model.
+        let is_bezier = matches!(interp_style, InterpolationStyle::Bezier);
+        let is_rounded_corner = matches!(corner_style, CornerStyle::Rounded);
+        let is_sharp = matches!(interp_style, InterpolationStyle::Linear)
+            && matches!(corner_style, CornerStyle::Sharp);
+
+        // Only densify corners for sharp (linear+sharp) edges; bezier and rounded-corner
+        // styles handle smoothing natively from sparse waypoints.
+        if is_sharp && !preserve_orthogonal_endpoint_contract {
             points = fix_corner_points(&points);
         }
-        if matches!(
-            (edge_routing, edge_style),
-            (EdgeRouting::UnifiedPreview, EdgeStyle::Smooth)
-        ) && !is_backward
+        if matches!(edge_routing, EdgeRouting::UnifiedPreview)
+            && is_bezier
+            && !is_backward
             && edge.from != edge.to
         {
             points = collapse_primary_face_fan_channel_for_curved(
@@ -915,9 +922,9 @@ fn render_edges(
                 0.5,
             );
         }
-        let allow_interior_nudges = !matches!(edge_style, EdgeStyle::Sharp);
+        let allow_interior_nudges = !is_sharp;
         let enforce_primary_axis_no_backtrack = matches!(edge_routing, EdgeRouting::UnifiedPreview)
-            && !matches!(edge_style, EdgeStyle::Rounded)
+            && !is_rounded_corner
             && !is_backward
             && edge.from != edge.to;
         points = apply_marker_offsets(
@@ -929,28 +936,42 @@ fn render_edges(
                 allow_interior_nudges,
                 enforce_primary_axis_no_backtrack,
                 preserve_orthogonal: preserve_orthogonal_endpoint_contract,
-                collapse_terminal_elbows: !matches!(edge_style, EdgeStyle::Smooth),
-                is_curved_style: matches!(edge_style, EdgeStyle::Smooth),
+                collapse_terminal_elbows: !is_bezier,
+                is_curved_style: is_bezier,
             },
         );
         // Collapse tiny near-collinear jogs introduced by SVG marker offset
         // smoothing on unified-preview paths.
         if matches!(edge_routing, EdgeRouting::UnifiedPreview)
-            && !matches!(edge_style, EdgeStyle::Rounded)
-            && !matches!(edge_style, EdgeStyle::Smooth)
+            && !is_rounded_corner
+            && !is_bezier
             && !preserve_orthogonal_endpoint_contract
             && edge.from != edge.to
         {
             points = collapse_tiny_straight_smoothing_jogs(&points, 30.0);
         }
-        let point_prep_style = if preserve_orthogonal_endpoint_contract {
-            EdgeStyle::Rounded
+        // For backward edges with orthogonal contract, use rounded-corner routing
+        // for path topology (preserves endpoint contract), but keep the user's
+        // chosen interpolation/corner style for actual path drawing.
+        let (path_interp, path_corner) = if preserve_orthogonal_endpoint_contract {
+            (InterpolationStyle::Linear, CornerStyle::Rounded)
         } else {
-            edge_style
+            (interp_style, corner_style)
         };
-        let rendered_points =
-            points_for_svg_path(&points, diagram.direction, point_prep_style, path_detail);
-        let d = path_from_prepared_points(&rendered_points, scale, edge_style, edge_radius);
+        let rendered_points = points_for_svg_path(
+            &points,
+            diagram.direction,
+            path_interp,
+            path_corner,
+            path_detail,
+        );
+        let d = path_from_prepared_points(
+            &rendered_points,
+            scale,
+            interp_style,
+            corner_style,
+            edge_radius,
+        );
         if d.is_empty() {
             continue;
         }
@@ -2294,14 +2315,22 @@ fn edge_marker_attrs(edge: &Edge) -> String {
 fn points_for_svg_path(
     points: &[Point],
     direction: Direction,
-    curve: EdgeStyle,
+    interp_style: InterpolationStyle,
+    corner_style: CornerStyle,
     path_detail: PathDetail,
 ) -> Vec<Point> {
     if points.is_empty() {
         return Vec::new();
     }
-    let orthogonalized_curve = matches!(curve, EdgeStyle::Rounded);
-    let points: Vec<Point> = if orthogonalized_curve && !points_are_axis_aligned(points) {
+    // Only orthogonalize for linear+rounded corners. The arc corner algorithm
+    // requires axis-aligned segments to produce correct 90° arcs.
+    // Bezier interpolation (orthogonal+bezier+sharp) does NOT need orthogonalization
+    // because bezier curves handle smoothness natively from sparse waypoints.
+    let needs_orthogonalization = matches!(
+        (interp_style, corner_style),
+        (InterpolationStyle::Linear, CornerStyle::Rounded)
+    );
+    let points: Vec<Point> = if needs_orthogonalization && !points_are_axis_aligned(points) {
         let start: geometry::FPoint = points[0].into();
         let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
         let waypoints: Vec<geometry::FPoint> = points
@@ -2318,7 +2347,7 @@ fn points_for_svg_path(
     } else {
         points.to_vec()
     };
-    let points = if orthogonalized_curve {
+    let points = if needs_orthogonalization {
         collapse_immediate_axis_turnbacks(&points)
     } else {
         points
@@ -2329,7 +2358,7 @@ fn points_for_svg_path(
             let compacted = compact_visual_staircases(&points, 12.0);
             PathDetail::Compact.simplify_with_coords(&compacted, |point| (point.x, point.y))
         }
-        PathDetail::Simplified if orthogonalized_curve => {
+        PathDetail::Simplified if needs_orthogonalization => {
             simplify_orthogonal_points(&points, direction)
         }
         _ => path_detail.simplify_with_coords(&points, |point| (point.x, point.y)),
@@ -2339,7 +2368,8 @@ fn points_for_svg_path(
 fn path_from_prepared_points(
     points: &[Point],
     scale: f64,
-    curve: EdgeStyle,
+    interp_style: InterpolationStyle,
+    corner_style: CornerStyle,
     curve_radius: f64,
 ) -> String {
     if points.is_empty() {
@@ -2349,10 +2379,12 @@ fn path_from_prepared_points(
         .iter()
         .map(|point| (point.x * scale, point.y * scale))
         .collect();
-    match curve {
-        EdgeStyle::Smooth => path_from_points_curved(&scaled),
-        EdgeStyle::Rounded => path_from_points_rounded(&scaled, curve_radius * scale),
-        EdgeStyle::Sharp => path_from_points_straight(&scaled),
+    match (interp_style, corner_style) {
+        (InterpolationStyle::Bezier, _) => path_from_points_curved(&scaled),
+        (InterpolationStyle::Linear, CornerStyle::Rounded) => {
+            path_from_points_rounded(&scaled, curve_radius * scale)
+        }
+        (InterpolationStyle::Linear, CornerStyle::Sharp) => path_from_points_straight(&scaled),
     }
 }
 
