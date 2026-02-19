@@ -6,6 +6,8 @@
 
 **Owner:** Kevin Swiber
 
+**Note:** This Product Requirements Document is included alongside the mmdflux codebase for posterity. It describes the heuristics of the Layered algorithm of the Flux engine without having to delve through the code, though the code should be considered the ultimate source of truth. This document may become out-of-sync with the implementation. It represents the efforts of a lot of research and builds on the work of many sources, for which this project is grateful. References are listed below.
+
 ---
 
 ## 1. Purpose

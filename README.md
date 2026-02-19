@@ -2,7 +2,43 @@
 
 Render Mermaid diagrams as Unicode text, ASCII, SVG, or MMDS JSON.
 
-`mmdflux` is built for terminal-first diagram workflows: quick local rendering, linting, and machine-readable graph output for tooling.
+`mmdflux` is built for diagram-as-code pipelines: fast rendering, terminal-friendly output, linting, and machine-readable graph data for tooling and agents.
+
+[Playground](https://kevinswiber.github.io/mmdflux/) • [Releases](https://github.com/kevinswiber/mmdflux/releases) • [CLI Reference](docs/CLI_REFERENCE.md) • [MMDS Spec](docs/mmds.md)
+
+## Why mmdflux
+
+- Terminal-native output that still preserves structure and readability
+- SVG and MMDS output for web tooling, automation, and data pipelines
+- Native `flux-layered` engine with deterministic routing policies
+- Compatibility `mermaid-layered` engine when Mermaid-style behavior is preferred
+
+## Flux Layered (Native Engine)
+
+`flux-layered` is the default graph engine for flowchart/class SVG and MMDS output.
+It keeps the layered (Sugiyama) foundation but adds a native routing contract and
+policy-driven geometry decisions that are hard to get from layout-only engines.
+
+### What makes it distinct
+
+- Layered layout + routing are treated as one solve contract (not disconnected phases)
+- Rank-annotated waypoint metadata is preserved for downstream routing decisions
+- Float-space orthogonal routing with deterministic fan-in/fan-out overflow policies
+- Explicit backward-edge channel/face precedence rules
+- Per-node effective direction in subgraphs and cross-boundary routing behavior
+- Shape-aware attachment and clipping for non-rectangular nodes (for example, diamond/hexagon)
+- Self-edge loops are emitted as explicit multi-point orthogonal paths
+- The same graph model feeds text, SVG, and MMDS pipelines
+
+### Engine snapshot
+
+| Capability           | `flux-layered`                             | `mermaid-layered`                    |
+| -------------------- | ------------------------------------------ | ------------------------------------ |
+| Route ownership      | Native                                     | Hint-driven                          |
+| Routing styles       | `orthogonal`, `polyline`                   | `polyline`                           |
+| Default SVG behavior | Orthogonal topology + smooth interpolation | Mermaid-compatible polyline defaults |
+| Subgraph support     | Yes                                        | Yes                                  |
+| Best fit             | Deterministic routed SVG/MMDS output       | Mermaid-style compatibility output   |
 
 ## Install
 
@@ -32,14 +68,17 @@ mmdflux diagram.mmd
 # Read Mermaid from stdin
 printf 'graph LR\nA-->B\n' | mmdflux
 
-# ASCII output
-mmdflux --format ascii diagram.mmd
+# Text output (default)
+mmdflux --format text diagram.mmd
 
-# SVG output (flowchart only)
+# SVG output (flowchart/class)
 mmdflux --format svg diagram.mmd -o diagram.svg
 
-# MMDS JSON output
-mmdflux --format mmds diagram.mmd
+# Native flux layered (default) SVG with explicit style preset
+mmdflux --format svg --layout-engine flux-layered --edge-preset smoothstep diagram.mmd -o diagram.svg
+
+# MMDS JSON output with routed geometry detail
+mmdflux --format mmds --layout-engine flux-layered --geometry-level routed --path-detail compact diagram.mmd
 
 # Lint mode (validate input and print diagnostics)
 mmdflux --lint diagram.mmd
@@ -47,11 +86,12 @@ mmdflux --lint diagram.mmd
 
 ## What It Supports
 
-- Flowchart rendering in text/ASCII/SVG/MMDS
-- Class diagram rendering in text/ASCII/SVG/MMDS
+- Flowchart rendering in Unicode/ASCII/SVG/MMDS
+- Class diagram rendering in Unicode/ASCII/SVG/MMDS
 - Mermaid-to-MMDS and MMDS-to-Mermaid conversion
 - Layout directions: `TD`, `BT`, `LR`, `RL`
 - Edge styles: solid, dotted, thick, invisible, cross-arrow, circle-arrow
+- Engine selection: `flux-layered`, `mermaid-layered` (ELK engines available when built with `engine-elk`)
 
 ## Documentation
 
@@ -61,10 +101,11 @@ mmdflux --lint diagram.mmd
 - [MMDS JSON schema](docs/mmds.schema.json)
 - [Gallery](docs/gallery.md)
 - [Library usage](docs/LIBRARY.md)
+- [Edge routing design](docs/edge-routing-heuristics.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Debugging and parity tools](docs/DEBUG.md)
-- [Releasing](docs/RELEASING.md)
 - [WASM build/test commands](docs/WASM.md)
+- [Releasing](docs/RELEASING.md)
 
 ## License
 
