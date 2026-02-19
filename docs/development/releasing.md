@@ -9,7 +9,7 @@ This project publishes:
 ## Release Checklist
 
 1. Ensure `main` is green in CI.
-2. Bump version in `Cargo.toml` and `Cargo.lock`.
+2. Bump version in `Cargo.toml`, `crates/mmdflux-wasm/Cargo.toml`, and `Cargo.lock`.
 3. Commit and push the version bump.
 4. Publish crate:
 
