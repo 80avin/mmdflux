@@ -125,7 +125,10 @@
             "none",
             "normal",
             "cross",
-            "circle"
+            "circle",
+            "open_triangle",
+            "diamond",
+            "open_diamond"
           ],
           "description": "Default source-end marker used when an edge omits arrow_start."
         },
@@ -134,7 +137,10 @@
             "none",
             "normal",
             "cross",
-            "circle"
+            "circle",
+            "open_triangle",
+            "diamond",
+            "open_diamond"
           ],
           "description": "Default target-end marker used when an edge omits arrow_end."
         },
@@ -167,7 +173,7 @@
         },
         "bounds": {
           "$ref": "#/$defs/Bounds",
-          "description": "Overall diagram canvas extents in MMDS layout space. Not guaranteed to be a tight content bounding box."
+          "description": "Overall diagram canvas extents in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned. Not guaranteed to be a tight content bounding box."
         },
         "engine": {
           "type": "string",
@@ -203,11 +209,11 @@
         },
         "position": {
           "$ref": "#/$defs/Position",
-          "description": "Node center position in unitless MMDS layout space (not top-left anchor)."
+          "description": "Node center position in unitless MMDS coordinate space, not top-left anchor. In current mmdflux output, values are SVG-pixel-aligned."
         },
         "size": {
           "$ref": "#/$defs/Size",
-          "description": "Node bounding box dimensions in unitless MMDS layout space."
+          "description": "Node bounding box dimensions in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned."
         }
       }
     },
@@ -258,7 +264,10 @@
             "none",
             "normal",
             "cross",
-            "circle"
+            "circle",
+            "open_triangle",
+            "diamond",
+            "open_diamond"
           ],
           "default": "none",
           "description": "Arrow at source end. If omitted, consumers should use defaults.edge.arrow_start."
@@ -268,7 +277,10 @@
             "none",
             "normal",
             "cross",
-            "circle"
+            "circle",
+            "open_triangle",
+            "diamond",
+            "open_diamond"
           ],
           "default": "normal",
           "description": "Arrow at target end. If omitted, consumers should use defaults.edge.arrow_end."
@@ -288,11 +300,11 @@
             "minItems": 2,
             "maxItems": 2
           },
-          "description": "Routed edge path as [x, y] coordinate pairs in unitless MMDS layout space. Routed level only."
+          "description": "Routed edge path as [x, y] coordinate pairs in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned. Routed level only."
         },
         "label_position": {
           "$ref": "#/$defs/Position",
-          "description": "Label center position in unitless MMDS layout space. Routed level only."
+          "description": "Label center position in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned. Routed level only."
         },
         "is_backward": {
           "type": "boolean",
@@ -351,11 +363,11 @@
       "properties": {
         "x": {
           "type": "number",
-          "description": "X coordinate in unitless MMDS layout space."
+          "description": "X coordinate in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned."
         },
         "y": {
           "type": "number",
-          "description": "Y coordinate in unitless MMDS layout space."
+          "description": "Y coordinate in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned."
         }
       }
     },
@@ -368,11 +380,11 @@
       "properties": {
         "width": {
           "type": "number",
-          "description": "Width in unitless MMDS layout space."
+          "description": "Width in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned."
         },
         "height": {
           "type": "number",
-          "description": "Height in unitless MMDS layout space."
+          "description": "Height in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned."
         }
       }
     },
@@ -385,11 +397,11 @@
       "properties": {
         "width": {
           "type": "number",
-          "description": "Overall width in unitless MMDS layout space."
+          "description": "Overall width in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned."
         },
         "height": {
           "type": "number",
-          "description": "Overall height in unitless MMDS layout space. Consumers should preserve width/height aspect ratio when scaling."
+          "description": "Overall height in unitless MMDS coordinate space. In current mmdflux output, values are SVG-pixel-aligned. Consumers should preserve width/height aspect ratio when scaling."
         }
       }
     }

@@ -16,11 +16,9 @@ MMDS input support is active:
 | `geometry_level` | text | ascii | svg | mmds/json |
 |------------------|------|-------|-----|-----------|
 | `layout` | ✅ | ✅ | ✅ | ✅ |
-| `routed` (positioned) | ❌ | ❌ | ✅ | ✅ |
+| `routed` (positioned) | ✅* | ✅* | ✅ | ✅ |
 
-For routed/positioned payloads, text/ascii requests fail with actionable guidance:
-
-`positioned MMDS text output is unsupported; use --format svg for positioned MMDS payloads`
+\* For text/ascii, routed path fields are currently ignored and output is re-routed on the text grid from core topology.
 
 ## MMDS -> Mermaid Generation Contract
 
@@ -112,9 +110,9 @@ MMDS supports two geometry levels that control how much spatial detail is includ
 
 The default `--format mmds` output. (`--format json` is an alias.) Includes:
 
-- **Node geometry**: position (center x, y) and size (width, height) in unitless layout space
+- **Node geometry**: position (center x, y) and size (width, height) in unitless MMDS coordinate space (currently SVG-pixel-aligned in mmdflux output)
 - **Edge topology**: source, target, label, stroke style, arrow types
-- **Diagram bounds**: overall width and height in the same layout coordinate space
+- **Diagram bounds**: overall width and height in the same coordinate space
 - **Subgraph structure**: id, title, direct children, parent, direction override
 
 Does **not** include edge paths, waypoints, ports, or routing metadata.
@@ -174,7 +172,7 @@ mmdflux --format mmds --geometry-level routed diagram.mmd
 | `geometry_level` | `"layout"` or `"routed"` | Geometry detail level |
 | `metadata.diagram_type` | string | `"flowchart"` or `"class"` |
 | `metadata.direction` | string | `"TD"`, `"BT"`, `"LR"`, or `"RL"` |
-| `metadata.bounds` | object | Overall diagram canvas extents (`width`, `height`) in MMDS layout space |
+| `metadata.bounds` | object | Overall diagram canvas extents (`width`, `height`) in unitless MMDS coordinate space (currently SVG-pixel-aligned in mmdflux output) |
 | `metadata.engine` | string? | Engine+algorithm that produced this output (e.g., `"flux-layered"`). Omitted when not produced via the solve pipeline. |
 | `subgraphs` | array | Subgraph inventory (omitted when empty) |
 
@@ -231,8 +229,8 @@ MMDS keeps core graph semantics compact while allowing renderer- or adapter-spec
 | `from_subgraph` | string? | both | Optional source subgraph endpoint intent (for subgraph-as-source edges) |
 | `to_subgraph` | string? | both | Optional target subgraph endpoint intent (for subgraph-as-target edges) |
 | `stroke` | string | both | `"solid"`, `"dotted"`, `"thick"`, `"invisible"`; omitted when equal to `defaults.edge.stroke` |
-| `arrow_start` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"`; omitted when equal to `defaults.edge.arrow_start` |
-| `arrow_end` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"`; omitted when equal to `defaults.edge.arrow_end` |
+| `arrow_start` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"`, `"open_triangle"`, `"diamond"`, `"open_diamond"`; omitted when equal to `defaults.edge.arrow_start` |
+| `arrow_end` | string | both | `"none"`, `"normal"`, `"cross"`, `"circle"`, `"open_triangle"`, `"diamond"`, `"open_diamond"`; omitted when equal to `defaults.edge.arrow_end` |
 | `minlen` | integer | both | Minimum rank separation; omitted when equal to `defaults.edge.minlen` |
 | `path` | `[[x,y],...]` | routed | Polyline path coordinates |
 | `label_position` | `{x, y}` | routed | Label center |
@@ -255,10 +253,12 @@ The formal JSON Schema is available at [`docs/mmds.schema.json`](./mmds.schema.j
 
 ## Coordinate System
 
-MMDS coordinates are unitless layout-space values.
+MMDS coordinates are unitless coordinate-space values.
 
-- `position.x` and `position.y` are node centers in layout space (not top-left anchors).
-- `size.width` and `size.height` use the same layout-space units.
+In current mmdflux output, these values are SVG-pixel-aligned.
+
+- `position.x` and `position.y` are node centers (not top-left anchors).
+- `size.width` and `size.height` are node dimensions in the same coordinate space.
 - `metadata.bounds.width` and `metadata.bounds.height` define full document extents in the same space.
 - `metadata.bounds` is a canvas extent, not guaranteed to be a tight content bounding box.
 - Current graph-family engines may include outer margin in `metadata.bounds`.
