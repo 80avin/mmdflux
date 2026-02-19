@@ -1,22 +1,22 @@
-# @mmdflux/excalidraw-adapter
+# @mmds/excalidraw
 
-Converts [MMDS](../../docs/mmds.md) JSON (mmdflux's intermediate format) into Excalidraw `.excalidraw` files. Nodes become rectangles, diamonds, or ellipses; edges become polyline arrows with labels. Subgraph membership is preserved as Excalidraw groups.
+Converts [MMDS](https://github.com/mmdflux/mmdflux/blob/main/docs/mmds.md) JSON (mmdflux's intermediate format) into Excalidraw `.excalidraw` files. Nodes become rectangles, diamonds, or ellipses; edges become polyline arrows with labels. Subgraph membership is preserved as Excalidraw groups.
 
-## Prerequisites
-
-- [mmdflux](../../) built and on your PATH (or use `cargo run` from the repo root)
-- Node.js >= 18
-
-## Setup
+## Install
 
 ```bash
-npm install
-npm run build
+npm install -g @mmds/excalidraw
+```
+
+Or use directly with npx (no install needed):
+
+```bash
+mmdflux --format mmds diagram.mmd | npx @mmds/excalidraw > out.excalidraw
 ```
 
 ## Usage
 
-Pipe MMDS JSON from mmdflux into the adapter:
+Pipe MMDS JSON from [mmdflux](https://github.com/mmdflux/mmdflux) into the adapter:
 
 ```bash
 # Layout-level (straight center-to-center arrows)

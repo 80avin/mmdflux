@@ -1,17 +1,39 @@
 {
-  "name": "@mmdflux/excalidraw-adapter",
+  "name": "@mmds/excalidraw",
   "version": "0.1.0",
   "type": "module",
   "description": "Convert MMDS JSON to Excalidraw format with polyline edge routing",
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "mmds-to-excalidraw": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "check": "biome check",
     "fmt": "biome check --write",
+    "prepublishOnly": "npm run build",
     "start": "node dist/index.js"
+  },
+  "keywords": [
+    "mermaid",
+    "excalidraw",
+    "mmds",
+    "mmdflux",
+    "diagram",
+    "flowchart"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mmdflux/mmdflux",
+    "directory": "adapters/excalidraw"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.14",
