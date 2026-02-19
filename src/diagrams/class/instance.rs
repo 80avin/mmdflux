@@ -51,6 +51,7 @@ impl DiagramInstance for ClassInstance {
             .layout_engine
             .unwrap_or_else(|| EngineAlgorithmId::new(EngineId::Flux, AlgorithmId::Layered));
         engine_id.check_available()?;
+        engine_id.check_routing_style(config)?;
 
         let mut options: RenderOptions = config.into();
         options.output_format = format;

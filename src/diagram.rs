@@ -501,6 +501,12 @@ impl RouteOwnership {
 pub struct EngineAlgorithmCapabilities {
     pub route_ownership: RouteOwnership,
     pub supports_subgraphs: bool,
+    /// Routing styles this engine supports.
+    ///
+    /// `None` routing in a solve request means "use engine default". Engines
+    /// validate explicit routing style requests against this slice and return
+    /// an actionable error for unsupported combinations.
+    pub supported_routing_styles: &'static [RoutingStyle],
 }
 
 impl EngineAlgorithmId {
@@ -534,23 +540,60 @@ impl EngineAlgorithmId {
             (EngineId::Flux, AlgorithmId::Layered) => EngineAlgorithmCapabilities {
                 route_ownership: RouteOwnership::Native,
                 supports_subgraphs: true,
+                supported_routing_styles: &[RoutingStyle::Polyline, RoutingStyle::Orthogonal],
             },
             (EngineId::Mermaid, AlgorithmId::Layered) => EngineAlgorithmCapabilities {
                 route_ownership: RouteOwnership::HintDriven,
                 supports_subgraphs: true,
+                supported_routing_styles: &[RoutingStyle::Polyline],
             },
             (EngineId::Elk, AlgorithmId::Layered) => EngineAlgorithmCapabilities {
                 route_ownership: RouteOwnership::EngineProvided,
                 supports_subgraphs: true,
+                supported_routing_styles: &[RoutingStyle::Polyline, RoutingStyle::Orthogonal],
             },
             (EngineId::Elk, AlgorithmId::MrTree) => EngineAlgorithmCapabilities {
                 route_ownership: RouteOwnership::EngineProvided,
                 supports_subgraphs: false,
+                supported_routing_styles: &[RoutingStyle::Polyline],
             },
             _ => EngineAlgorithmCapabilities {
                 route_ownership: RouteOwnership::HintDriven,
                 supports_subgraphs: false,
+                supported_routing_styles: &[RoutingStyle::Polyline],
             },
+        }
+    }
+
+    /// Validate that the requested routing style is supported by this engine.
+    ///
+    /// Resolves the effective routing style from the config (explicit > preset > none),
+    /// then checks it against `capabilities().supported_routing_styles`.
+    /// Returns `Ok(())` if supported or if no routing is explicitly requested.
+    pub fn check_routing_style(&self, config: &RenderConfig) -> Result<(), RenderError> {
+        // Resolve effective routing style (explicit beats preset; None means engine default).
+        let effective = config
+            .routing_style
+            .or_else(|| config.edge_preset.map(|p| p.expand().0));
+        let Some(style) = effective else {
+            return Ok(());
+        };
+        let caps = self.capabilities();
+        if caps.supported_routing_styles.contains(&style) {
+            Ok(())
+        } else {
+            Err(RenderError {
+                message: format!(
+                    "{} does not support {style} routing. \
+                     Supported: {}",
+                    self,
+                    caps.supported_routing_styles
+                        .iter()
+                        .map(|s| format!("{s}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            })
         }
     }
 }

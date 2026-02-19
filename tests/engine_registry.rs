@@ -1,9 +1,9 @@
 //! Engine registry tests: typed engine IDs, parsing, availability, and registry lookup.
 
 use mmdflux::diagram::{
-    AlgorithmId, CornerStyle, EdgePreset, EngineAlgorithmId, EngineConfig, EngineId, GeometryLevel,
-    GraphEngine, GraphSolveRequest, InterpolationStyle, OutputFormat, PathDetail, RenderConfig,
-    RenderError, RouteOwnership, RoutingStyle,
+    AlgorithmId, CornerStyle, EdgePreset, EngineAlgorithmCapabilities, EngineAlgorithmId,
+    EngineConfig, EngineId, GeometryLevel, GraphEngine, GraphSolveRequest, InterpolationStyle,
+    OutputFormat, PathDetail, RenderConfig, RenderError, RouteOwnership, RoutingStyle,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::flowchart::engine::{FluxLayeredEngine, MermaidLayeredEngine};
@@ -594,4 +594,178 @@ fn registry_get_solver_unknown_id_returns_none() {
     // flux-layered is always registered — verify the lookup succeeds (not None)
     let id = EngineAlgorithmId::parse("flux-layered").unwrap();
     assert!(registry.get_solver(id).is_some());
+}
+
+// =============================================================================
+// Engine routing style capabilities and validation (plan-0081 Phase 7.3)
+// =============================================================================
+
+/// Helper: render with a specific engine, optional explicit routing style and/or preset.
+fn render_with_engine_routing(
+    input: &str,
+    engine: &str,
+    routing: Option<RoutingStyle>,
+    preset: Option<EdgePreset>,
+) -> Result<String, RenderError> {
+    let mut instance = FlowchartInstance::new();
+    instance.parse(input).expect("parse should succeed");
+    let engine_id = EngineAlgorithmId::parse(engine)?;
+    let config = RenderConfig {
+        layout_engine: Some(engine_id),
+        routing_style: routing,
+        edge_preset: preset,
+        ..Default::default()
+    };
+    instance.render(OutputFormat::Svg, &config)
+}
+
+#[test]
+fn flux_layered_capabilities_include_routing_styles() {
+    let caps = EngineAlgorithmId::parse("flux-layered")
+        .unwrap()
+        .capabilities();
+    assert!(
+        caps.supported_routing_styles
+            .contains(&RoutingStyle::Polyline),
+        "flux-layered should support Polyline"
+    );
+    assert!(
+        caps.supported_routing_styles
+            .contains(&RoutingStyle::Orthogonal),
+        "flux-layered should support Orthogonal"
+    );
+}
+
+#[test]
+fn mermaid_layered_capabilities_supports_only_polyline() {
+    let caps = EngineAlgorithmId::parse("mermaid-layered")
+        .unwrap()
+        .capabilities();
+    assert!(
+        caps.supported_routing_styles
+            .contains(&RoutingStyle::Polyline),
+        "mermaid-layered should support Polyline"
+    );
+    assert!(
+        !caps
+            .supported_routing_styles
+            .contains(&RoutingStyle::Orthogonal),
+        "mermaid-layered should not support Orthogonal"
+    );
+}
+
+#[test]
+fn mermaid_layered_rejects_orthogonal_routing_style() {
+    let err = render_with_engine_routing(
+        "graph TD\nA-->B",
+        "mermaid-layered",
+        Some(RoutingStyle::Orthogonal),
+        None,
+    )
+    .unwrap_err();
+    assert!(
+        err.message.contains("mermaid-layered") || err.message.contains("orthogonal"),
+        "error should name engine or routing style: {err}"
+    );
+}
+
+#[test]
+fn mermaid_layered_rejects_step_preset() {
+    // step expands to Orthogonal+Linear+Sharp — unsupported on mermaid-layered
+    let err = render_with_engine_routing(
+        "graph TD\nA-->B",
+        "mermaid-layered",
+        None,
+        Some(EdgePreset::Step),
+    )
+    .unwrap_err();
+    assert!(
+        !err.message.is_empty(),
+        "step preset should be rejected on mermaid-layered: {err}"
+    );
+}
+
+#[test]
+fn mermaid_layered_rejects_smoothstep_preset() {
+    // smoothstep expands to Orthogonal+Linear+Rounded — unsupported on mermaid-layered
+    let err = render_with_engine_routing(
+        "graph TD\nA-->B",
+        "mermaid-layered",
+        None,
+        Some(EdgePreset::SmoothStep),
+    )
+    .unwrap_err();
+    assert!(
+        !err.message.is_empty(),
+        "smoothstep preset should be rejected on mermaid-layered: {err}"
+    );
+}
+
+#[test]
+fn mermaid_layered_accepts_bezier_preset() {
+    // bezier expands to Polyline+Bezier+Sharp — supported on mermaid-layered
+    assert!(
+        render_with_engine_routing(
+            "graph TD\nA-->B",
+            "mermaid-layered",
+            None,
+            Some(EdgePreset::Bezier),
+        )
+        .is_ok(),
+        "bezier preset should be accepted on mermaid-layered"
+    );
+}
+
+#[test]
+fn mermaid_layered_accepts_straight_preset() {
+    // straight expands to Polyline+Linear+Sharp — supported on mermaid-layered
+    assert!(
+        render_with_engine_routing(
+            "graph TD\nA-->B",
+            "mermaid-layered",
+            None,
+            Some(EdgePreset::Straight),
+        )
+        .is_ok(),
+        "straight preset should be accepted on mermaid-layered"
+    );
+}
+
+#[test]
+fn flux_layered_accepts_orthogonal_routing_style() {
+    assert!(
+        render_with_engine_routing(
+            "graph TD\nA-->B",
+            "flux-layered",
+            Some(RoutingStyle::Orthogonal),
+            None,
+        )
+        .is_ok(),
+        "orthogonal routing should be accepted on flux-layered"
+    );
+}
+
+#[test]
+fn flux_layered_accepts_step_preset() {
+    // step expands to Orthogonal — supported on flux-layered
+    assert!(
+        render_with_engine_routing(
+            "graph TD\nA-->B",
+            "flux-layered",
+            None,
+            Some(EdgePreset::Step),
+        )
+        .is_ok(),
+        "step preset should be accepted on flux-layered"
+    );
+}
+
+#[test]
+fn capabilities_struct_exposes_supported_routing_styles() {
+    // EngineAlgorithmCapabilities.supported_routing_styles is a slice of RoutingStyle
+    let caps: EngineAlgorithmCapabilities = EngineAlgorithmId::parse("flux-layered")
+        .unwrap()
+        .capabilities();
+    let _styles: &[RoutingStyle] = caps.supported_routing_styles;
+    assert!(!_styles.is_empty());
 }

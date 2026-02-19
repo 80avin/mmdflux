@@ -10,7 +10,7 @@ use super::render::svg_metrics::SvgTextMetrics;
 use crate::diagram::{
     AlgorithmId, EngineAlgorithmCapabilities, EngineAlgorithmId, EngineConfig, EngineId,
     GeometryLevel, GraphEngine, GraphSolveRequest, GraphSolveResult, OutputFormat, RenderConfig,
-    RenderError, RouteOwnership,
+    RenderError, RouteOwnership, RoutingStyle,
 };
 use crate::diagrams::flowchart::geometry::RoutedGraphGeometry;
 use crate::graph::Diagram;
@@ -127,6 +127,7 @@ impl GraphEngine for FluxLayeredEngine {
         EngineAlgorithmCapabilities {
             route_ownership: RouteOwnership::Native,
             supports_subgraphs: true,
+            supported_routing_styles: &[RoutingStyle::Polyline, RoutingStyle::Orthogonal],
         }
     }
 
@@ -211,6 +212,7 @@ impl GraphEngine for MermaidLayeredEngine {
         EngineAlgorithmCapabilities {
             route_ownership: RouteOwnership::HintDriven,
             supports_subgraphs: true,
+            supported_routing_styles: &[RoutingStyle::Polyline],
         }
     }
 
