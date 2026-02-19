@@ -19,14 +19,14 @@ use crate::graph::{Diagram, Direction, Shape};
 
 /// Preview options for orthogonal float-first routing.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct UnifiedRoutingOptions {
+pub(crate) struct OrthogonalRoutingOptions {
     /// Keep existing behavior for backward edges while previewing forward routing.
     pub backward_fallback_to_hints: bool,
     /// Optional grid snap `(scale_x, scale_y)` applied after routing.
     pub grid_snap: Option<(f64, f64)>,
 }
 
-impl UnifiedRoutingOptions {
+impl OrthogonalRoutingOptions {
     /// Conservative preview: orthogonal routing for forward edges only.
     pub(crate) fn preview() -> Self {
         Self {
@@ -40,7 +40,7 @@ impl UnifiedRoutingOptions {
 pub(crate) fn route_edges_orthogonal(
     diagram: &Diagram,
     geometry: &GraphGeometry,
-    options: UnifiedRoutingOptions,
+    options: OrthogonalRoutingOptions,
 ) -> Vec<RoutedEdgeGeometry> {
     let fan_in_target_conflict =
         fan_in_target_overflow_context(geometry, geometry.direction, diagram.edges.len());

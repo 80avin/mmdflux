@@ -2,6 +2,7 @@
 
 pub mod edge;
 pub mod layout;
+pub(crate) mod orthogonal_router;
 pub mod route_policy;
 pub mod router;
 pub(crate) mod routing_core;
@@ -10,4 +11,3 @@ pub mod subgraph;
 pub mod svg;
 pub(crate) mod svg_metrics;
 pub(crate) mod svg_router;
-pub(crate) mod unified_router;

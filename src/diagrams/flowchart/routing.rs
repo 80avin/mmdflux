@@ -7,8 +7,8 @@
 //! - `OrthogonalRoute`: Produce axis-aligned (right-angle) edge paths.
 
 use super::geometry::*;
-use super::render::unified_router::{
-    UnifiedRoutingOptions, build_path_from_hints, route_edges_orthogonal, snap_path_to_grid,
+use super::render::orthogonal_router::{
+    OrthogonalRoutingOptions, build_path_from_hints, route_edges_orthogonal, snap_path_to_grid,
 };
 use crate::diagram::EdgeRouting;
 use crate::graph::Diagram;
@@ -24,7 +24,7 @@ pub fn route_graph_geometry(
 ) -> RoutedGraphGeometry {
     let edges: Vec<RoutedEdgeGeometry> = match edge_routing {
         EdgeRouting::OrthogonalRoute => {
-            route_edges_orthogonal(diagram, geometry, UnifiedRoutingOptions::preview())
+            route_edges_orthogonal(diagram, geometry, OrthogonalRoutingOptions::preview())
         }
         EdgeRouting::EngineProvided | EdgeRouting::PolylineRoute => geometry
             .edges
@@ -249,7 +249,8 @@ mod tests {
     #[test]
     fn orthogonal_router_preview_paths_are_axis_aligned() {
         let (diagram, geom) = simple_geometry();
-        let orthogonal = route_edges_orthogonal(&diagram, &geom, UnifiedRoutingOptions::preview());
+        let orthogonal =
+            route_edges_orthogonal(&diagram, &geom, OrthogonalRoutingOptions::preview());
 
         assert!(!orthogonal.is_empty());
         for edge in orthogonal.iter().filter(|edge| !edge.is_backward) {

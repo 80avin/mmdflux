@@ -62,25 +62,25 @@ mmdflux --format svg --edge-style orthogonal diagram.mmd
 # Edge routing override (flowchart graph-family routing stage)
 mmdflux --format svg --edge-routing full-compute diagram.mmd
 mmdflux --format svg --edge-routing pass-through-clip diagram.mmd
-mmdflux --format svg --edge-routing unified-preview diagram.mmd
+mmdflux --format svg --edge-routing orthogonal-preview diagram.mmd
 ```
 
 `--edge-style` values:
 
-| Value | Description |
-| ----- | ----------- |
-| `curved` | Smooth curved spline path (default) |
-| `straight` | Straight polyline segments |
-| `rounded` | Orthogonal routing with rounded corners (radius via `--edge-radius`) |
-| `orthogonal` | Axis-aligned path construction |
+| Value        | Description                                                          |
+| ------------ | -------------------------------------------------------------------- |
+| `curved`     | Smooth curved spline path (default)                                  |
+| `straight`   | Straight polyline segments                                           |
+| `rounded`    | Orthogonal routing with rounded corners (radius via `--edge-radius`) |
+| `orthogonal` | Axis-aligned path construction                                       |
 
 `--edge-routing` values:
 
-| Value | Description |
-| ----- | ----------- |
-| `full-compute` | Compute paths from layout hints and node geometry (legacy baseline) |
-| `pass-through-clip` | Use engine-provided paths with clipping adjustments |
-| `unified-preview` | Use unified float-first preview routing where supported |
+| Value                | Description                                                         |
+| -------------------- | ------------------------------------------------------------------- |
+| `full-compute`       | Compute paths from layout hints and node geometry (legacy baseline) |
+| `pass-through-clip`  | Use engine-provided paths with clipping adjustments                 |
+| `orthogonal-preview` | Use orthogonal float-first preview routing where supported          |
 
 ## Supported Mermaid Syntax (Flowchart)
 
@@ -106,8 +106,8 @@ mmdflux --format svg --edge-routing unified-preview diagram.mmd
 | `A((text))`     | Circle                  |
 | `A(((text)))`   | Double circle           |
 | `A>text]`       | Asymmetric (flag)       |
-| `A[/text\\]`   | Trapezoid               |
-| `A[\\text/]`   | Inverse trapezoid       |
+| `A[/text\\]`    | Trapezoid               |
+| `A[\\text/]`    | Inverse trapezoid       |
 | `@{shape: ...}` | Extended shape notation |
 
 ### Edge Types

@@ -130,31 +130,31 @@ node scripts/dump-dagre-order.js input.json
 | `MMDFLUX_DEBUG_ORDER=1`         | Enable order debug tracing               |
 | `MMDFLUX_DEBUG_BK_TRACE=1`      | Trace Brandes-Köpf coordinate assignment |
 
-## Unified Routing Preview
+## Orthogonal Routing Preview
 
-Phase 4 of plan 0075 adds an explicit unified-routing preview path for flowchart
+Phase 4 of plan 0075 adds an explicit orthogonal-routing preview path for flowchart
 SVG and routed MMDS outputs:
 
 ```bash
-# Preview unified float-first routing (SVG)
-cargo run -- -f svg --edge-routing unified-preview --edge-style straight diagram.mmd
+# Preview orthogonal float-first routing (SVG)
+cargo run -- -f svg --edge-routing orthogonal-preview --edge-style straight diagram.mmd
 
 # Roll back to legacy routing behavior (default)
 cargo run -- -f svg --edge-style straight diagram.mmd
 ```
 
 Notes:
-- Default rendering remains legacy unless `--edge-routing unified-preview` is set.
+- Default rendering remains legacy unless `--edge-routing orthogonal-preview` is set.
 - `--edge-routing full-compute` is the explicit legacy override.
 - The parity harness currently tracks a known straight-SVG delta on
-  `simple_cycle.mmd` for unified preview.
+  `simple_cycle.mmd` for orthogonal preview.
 
 ### Preview Parity Gates
 
 ```bash
-cargo test svg_unified_preview_parity_core_fixture_subset_has_expected_deltas --test svg_snapshots
+cargo test svg_orthogonal_preview_parity_core_fixture_subset_has_expected_deltas --test svg_snapshots
 cargo test svg_full_compute_override_matches_legacy_straight_core_subset --test svg_snapshots
-cargo test unified_preview_preserves_core_routed_geometry_contracts --test routed_geometry
+cargo test orthogonal_preview_preserves_core_routed_geometry_contracts --test routed_geometry
 ```
 
 ## Troubleshooting

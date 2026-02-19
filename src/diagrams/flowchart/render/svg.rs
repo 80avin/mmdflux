@@ -8,13 +8,13 @@ use super::layout::{
     build_dagre_layout, center_override_subgraphs, compute_sublayouts, dagre_config_for_layout,
     expand_parent_bounds_dagre, reconcile_sublayouts_dagre, resolve_sublayout_overlaps,
 };
+use super::orthogonal_router::{OrthogonalRoutingOptions, route_edges_orthogonal};
 use super::route_policy::effective_edge_direction;
 use super::routing_core::{
     build_orthogonal_path_float, hexagon_vertices, intersect_convex_polygon,
 };
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
-use super::unified_router::{UnifiedRoutingOptions, route_edges_orthogonal};
 use crate::diagram::{CornerStyle, EdgeRouting, InterpolationStyle, PathDetail};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 use crate::layered::{LayoutResult, Point, Rect};
@@ -211,7 +211,7 @@ fn rerouted_edge_indexes_for_mode(
 }
 
 fn inject_orthogonal_route_paths(diagram: &Diagram, geom: &GraphGeometry) -> GraphGeometry {
-    let routed = route_edges_orthogonal(diagram, geom, UnifiedRoutingOptions::preview());
+    let routed = route_edges_orthogonal(diagram, geom, OrthogonalRoutingOptions::preview());
     let mut updated = geom.clone();
     for edge in routed {
         if let Some(layout_edge) = updated.edges.iter_mut().find(|e| e.index == edge.index) {

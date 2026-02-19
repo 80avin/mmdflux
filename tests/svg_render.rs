@@ -1013,19 +1013,19 @@ fn svg_orthogonal_orthogonal_route_inline_label_flowchart_avoids_known_node_intr
 
     assert!(
         !path_crosses_rect_interior(&cache_to_validate_points, serve_cached_rect, 1.0),
-        "Lookup Cache -> Valid? should not pass through Serve Cached interior in unified orthogonal mode; path={cache_to_validate_points:?}, serve_cached_rect={serve_cached_rect:?}"
+        "Lookup Cache -> Valid? should not pass through Serve Cached interior in orthogonal mode; path={cache_to_validate_points:?}, serve_cached_rect={serve_cached_rect:?}"
     );
     assert!(
         !path_crosses_rect_interior(&reject_to_metrics_points, notify_user_rect, 1.0),
-        "Reject -> Emit Metrics should not pass through Notify User interior in unified orthogonal mode; path={reject_to_metrics_points:?}, notify_user_rect={notify_user_rect:?}"
+        "Reject -> Emit Metrics should not pass through Notify User interior in orthogonal mode; path={reject_to_metrics_points:?}, notify_user_rect={notify_user_rect:?}"
     );
     assert!(
         !path_crosses_rect_interior(&reject_to_metrics_points, page_on_call_rect, 1.0),
-        "Reject -> Emit Metrics should not pass through Page On-call interior in unified orthogonal mode; path={reject_to_metrics_points:?}, page_on_call_rect={page_on_call_rect:?}"
+        "Reject -> Emit Metrics should not pass through Page On-call interior in orthogonal mode; path={reject_to_metrics_points:?}, page_on_call_rect={page_on_call_rect:?}"
     );
     assert!(
         !path_crosses_rect_interior(&retry_to_queue_points, page_on_call_rect, 1.0),
-        "Retry -> Enqueue Job should not pass through Page On-call interior in unified orthogonal mode; path={retry_to_queue_points:?}, page_on_call_rect={page_on_call_rect:?}"
+        "Retry -> Enqueue Job should not pass through Page On-call interior in orthogonal mode; path={retry_to_queue_points:?}, page_on_call_rect={page_on_call_rect:?}"
     );
 
     let fast_support = *fastpath_to_metrics_points
@@ -1175,7 +1175,7 @@ fn svg_orthogonal_orthogonal_route_does_not_add_short_staircase_jogs_after_adjus
         .edges
         .iter()
         .find(|edge| edge.index == edge_index)
-        .expect("unified routed edge should exist");
+        .expect("orthogonal routed edge should exist");
     let routed_segments = routed_edge.path.len().saturating_sub(1);
 
     let mut options = RenderOptions::default_svg();
@@ -1275,7 +1275,7 @@ fn svg_orthogonal_orthogonal_route_double_skip_avoids_tiny_leading_lateral_jog()
             let jog = manhattan_segment_len(p1, p2);
             assert!(
                 jog >= 3.0,
-                "double_skip A -> C should not keep a tiny leading lateral shim in unified orthogonal mode; jog={jog}, points={points:?}"
+                "double_skip A -> C should not keep a tiny leading lateral shim in orthogonal mode; jog={jog}, points={points:?}"
             );
         }
     }
@@ -1306,12 +1306,12 @@ fn svg_orthogonal_orthogonal_route_decision_diamond_outbound_prefers_horizontal_
         assert_eq!(
             segment_axis(points[0], points[1]),
             Some('H'),
-            "decision branch should depart diamond horizontally in TD orthogonal unified mode: {points:?}"
+            "decision branch should depart diamond horizontally in TD orthogonal orthogonal mode: {points:?}"
         );
         assert_eq!(
             segment_axis(points[points.len() - 2], points[points.len() - 1]),
             Some('V'),
-            "decision branch should arrive at target with vertical support in TD orthogonal unified mode: {points:?}"
+            "decision branch should arrive at target with vertical support in TD orthogonal orthogonal mode: {points:?}"
         );
     }
 }
@@ -1352,7 +1352,7 @@ fn svg_orthogonal_orthogonal_route_hexagon_outbound_departure_insets_from_bottom
         assert_eq!(
             segment_axis(points[0], points[1]),
             Some('H'),
-            "hexagon outbound edge should depart laterally first in TD orthogonal unified mode: {points:?}"
+            "hexagon outbound edge should depart laterally first in TD orthogonal orthogonal mode: {points:?}"
         );
         assert!(
             points[0].1 <= source_bottom - 2.0,
@@ -1419,7 +1419,7 @@ fn svg_curved_orthogonal_route_ampersand_avoids_tiny_terminal_hook_before_arrow(
         let terminal = terminal_collinear_run_len(&points);
         assert!(
             terminal >= 3.5,
-            "curved unified terminal approach should avoid tiny hook before marker; collinear_terminal_run={terminal}, points={points:?}"
+            "curved orthogonal terminal approach should avoid tiny hook before marker; collinear_terminal_run={terminal}, points={points:?}"
         );
     }
 }
@@ -1842,7 +1842,7 @@ fn svg_orthogonal_route_complex_top_diamond_loop_avoids_single_edge_micro_jogs()
         let min_segment = min_svg_segment_len(&points);
         assert!(
             min_segment >= MIN_SEGMENT_LEN,
-            "complex {from}->{to} should avoid tiny elbow jog segments in unified straight mode (min {MIN_SEGMENT_LEN}): min_segment={min_segment}, points={points:?}"
+            "complex {from}->{to} should avoid tiny elbow jog segments in orthogonal straight mode (min {MIN_SEGMENT_LEN}): min_segment={min_segment}, points={points:?}"
         );
     }
 
@@ -1857,7 +1857,7 @@ fn svg_orthogonal_route_complex_top_diamond_loop_avoids_single_edge_micro_jogs()
     let backward_points = edge_path_for_svg_order(&diagram, &orth_svg, backward_idx);
     assert!(
         !has_immediate_axis_backtrack(&backward_points),
-        "complex E->A should not include an immediate axis backtrack in orthogonal unified mode: {backward_points:?}"
+        "complex E->A should not include an immediate axis backtrack in orthogonal orthogonal mode: {backward_points:?}"
     );
 }
 
@@ -1926,7 +1926,7 @@ fn svg_straight_orthogonal_route_ci_pipeline_diamond_exits_avoid_extra_elbow_jog
             let third_axis = segment_axis(third, fourth);
             assert!(
                 !(first_axis.is_none() && second_axis.is_some() && third_axis.is_some()),
-                "ci_pipeline {from}->{to} should avoid extra elbow jogs right after Deploy? in unified straight mode (prefer direct diagonal-to-lane): points={points:?}"
+                "ci_pipeline {from}->{to} should avoid extra elbow jogs right after Deploy? in orthogonal straight mode (prefer direct diagonal-to-lane): points={points:?}"
             );
         }
     }
@@ -2007,7 +2007,7 @@ fn svg_orthogonal_orthogonal_route_label_spacing_keeps_td_departure_stems_from_s
         let next = points[1];
         assert!(
             (next.0 - start.0).abs() <= 0.5 && (next.1 - start.1).abs() > 0.5,
-            "label_spacing {from}->{to} unified orthogonal route should depart A along TD primary axis (vertical stem first), not lateral-first: start={start:?}, next={next:?}, points={points:?}"
+            "label_spacing {from}->{to} orthogonal route should depart A along TD primary axis (vertical stem first), not lateral-first: start={start:?}, next={next:?}, points={points:?}"
         );
     }
 }
@@ -2087,7 +2087,7 @@ fn svg_curved_orthogonal_route_fan_in_backward_channel_conflict_avoids_tiny_term
     let trailing_run = trailing_segment_run_len(&points, 4);
     assert!(
         terminal >= 1.0 && trailing_run >= 6.0,
-        "curved unified backward terminal hook should avoid tiny elbow before marker; terminal={terminal}, trailing_run={trailing_run}, points={points:?}"
+        "curved orthogonal backward terminal hook should avoid tiny elbow before marker; terminal={terminal}, trailing_run={trailing_run}, points={points:?}"
     );
 }
 
@@ -2506,23 +2506,23 @@ fn svg_straight_orthogonal_route_self_loop_tail_does_not_collapse_upward_before_
     let edge_idx = edge_index(&diagram, "B", "B");
 
     let full_svg = render_fixture_svg(&diagram, EdgeRouting::PolylineRoute, SHARP);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SHARP);
+    let orthogonal_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SHARP);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_idx);
-    let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_idx);
+    let orthogonal_points = edge_path_for_svg_order(&diagram, &orthogonal_svg, edge_idx);
 
     assert!(
-        full_points.len() >= 5 && unified_points.len() >= 5,
-        "expected self-loop to contain at least 5 points; full={full_points:?}, unified={unified_points:?}"
+        full_points.len() >= 5 && orthogonal_points.len() >= 5,
+        "expected self-loop to contain at least 5 points; full={full_points:?}, orthogonal={orthogonal_points:?}"
     );
 
     let full_tail_elbow = full_points[full_points.len() - 3];
-    let unified_tail_elbow = unified_points[unified_points.len() - 3];
-    let delta_y = (full_tail_elbow.1 - unified_tail_elbow.1).abs();
+    let orthogonal_tail_elbow = orthogonal_points[orthogonal_points.len() - 3];
+    let delta_y = (full_tail_elbow.1 - orthogonal_tail_elbow.1).abs();
 
     assert!(
         delta_y <= 12.0,
-        "self-loop tail elbow should remain near polyline routing in orthogonal straight mode (avoid upward collapse); full_tail_elbow={full_tail_elbow:?}, unified_tail_elbow={unified_tail_elbow:?}, delta_y={delta_y}, full_points={full_points:?}, unified_points={unified_points:?}"
+        "self-loop tail elbow should remain near polyline routing in orthogonal straight mode (avoid upward collapse); full_tail_elbow={full_tail_elbow:?}, orthogonal_tail_elbow={orthogonal_tail_elbow:?}, delta_y={delta_y}, full_points={full_points:?}, orthogonal_points={orthogonal_points:?}"
     );
 }
 
@@ -2564,18 +2564,19 @@ fn orthogonal_route_subgraph_to_subgraph_edge_keeps_terminal_attachment() {
     let edge_index = edge_index(&diagram, "API", "DB");
 
     let full_svg = render_fixture_svg(&diagram, EdgeRouting::PolylineRoute, SMOOTH);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SMOOTH);
+    let orthogonal_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SMOOTH);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
-    let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
+    let orthogonal_points = edge_path_for_svg_order(&diagram, &orthogonal_svg, edge_index);
     let full_start = full_points[0];
-    let unified_start = unified_points[0];
+    let orthogonal_start = orthogonal_points[0];
     let full_end = full_points[full_points.len() - 1];
-    let unified_end = unified_points[unified_points.len() - 1];
+    let orthogonal_end = orthogonal_points[orthogonal_points.len() - 1];
 
     assert!(
-        (full_start.1 - unified_start.1).abs() <= 1.0 && (full_end.1 - unified_end.1).abs() <= 1.0,
-        "API -> DB should keep vertical attachment parity with polyline routing; full_points={full_points:?}, unified_points={unified_points:?}"
+        (full_start.1 - orthogonal_start.1).abs() <= 1.0
+            && (full_end.1 - orthogonal_end.1).abs() <= 1.0,
+        "API -> DB should keep vertical attachment parity with polyline routing; full_points={full_points:?}, orthogonal_points={orthogonal_points:?}"
     );
 }
 
@@ -2585,22 +2586,22 @@ fn orthogonal_route_inner_bt_subgraph_edge_does_not_collapse() {
     let edge_index = edge_index(&diagram, "A", "B");
 
     let full_svg = render_fixture_svg(&diagram, EdgeRouting::PolylineRoute, SMOOTH);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SMOOTH);
+    let orthogonal_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, SMOOTH);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
-    let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
+    let orthogonal_points = edge_path_for_svg_order(&diagram, &orthogonal_svg, edge_index);
     let full_start = full_points[0];
-    let unified_start = unified_points[0];
+    let orthogonal_start = orthogonal_points[0];
     let full_end = full_points[full_points.len() - 1];
-    let unified_end = unified_points[unified_points.len() - 1];
+    let orthogonal_end = orthogonal_points[orthogonal_points.len() - 1];
     let full_span = (full_start.1 - full_end.1).abs();
-    let unified_span = (unified_start.1 - unified_end.1).abs();
+    let orthogonal_span = (orthogonal_start.1 - orthogonal_end.1).abs();
 
     assert!(
-        (full_start.1 - unified_start.1).abs() <= 1.0
-            && (full_end.1 - unified_end.1).abs() <= 1.0
-            && unified_span >= full_span - 1.0,
-        "A -> B in inner BT subgraph should preserve polyline span; full_points={full_points:?}, unified_points={unified_points:?}, full_span={full_span}, unified_span={unified_span}"
+        (full_start.1 - orthogonal_start.1).abs() <= 1.0
+            && (full_end.1 - orthogonal_end.1).abs() <= 1.0
+            && orthogonal_span >= full_span - 1.0,
+        "A -> B in inner BT subgraph should preserve polyline span; full_points={full_points:?}, orthogonal_points={orthogonal_points:?}, full_span={full_span}, orthogonal_span={orthogonal_span}"
     );
 }
 
@@ -2610,10 +2611,10 @@ fn orthogonal_route_nested_override_cross_boundary_edge_keeps_lr_side_faces() {
     let edge_index = edge_index(&diagram, "C", "A");
 
     let full_svg = render_fixture_svg(&diagram, EdgeRouting::PolylineRoute, ROUNDED);
-    let unified_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, ROUNDED);
+    let orthogonal_svg = render_fixture_svg(&diagram, EdgeRouting::OrthogonalRoute, ROUNDED);
 
     let full_points = edge_path_for_svg_order(&diagram, &full_svg, edge_index);
-    let unified_points = edge_path_for_svg_order(&diagram, &unified_svg, edge_index);
+    let orthogonal_points = edge_path_for_svg_order(&diagram, &orthogonal_svg, edge_index);
 
     let source_rect = node_rect_for_label(&full_svg, "C")
         .expect("subgraph_direction_nested_both should render node rect for C");
@@ -2622,8 +2623,9 @@ fn orthogonal_route_nested_override_cross_boundary_edge_keeps_lr_side_faces() {
 
     let full_source_face = svg_source_departure_face(source_rect, &full_points);
     let full_target_face = svg_terminal_approach_face_relaxed(target_rect, &full_points);
-    let unified_source_face = svg_source_departure_face(source_rect, &unified_points);
-    let unified_target_face = svg_terminal_approach_face_relaxed(target_rect, &unified_points);
+    let orthogonal_source_face = svg_source_departure_face(source_rect, &orthogonal_points);
+    let orthogonal_target_face =
+        svg_terminal_approach_face_relaxed(target_rect, &orthogonal_points);
 
     assert_eq!(
         full_source_face, "right",
@@ -2634,12 +2636,12 @@ fn orthogonal_route_nested_override_cross_boundary_edge_keeps_lr_side_faces() {
         "fixture contract invalid: polyline C->A should enter A from west/left face: points={full_points:?}"
     );
     assert_eq!(
-        unified_source_face, full_source_face,
-        "orthogonal C->A should preserve source face parity with polyline in nested override cross-boundary routing: full={full_source_face}, unified={unified_source_face}, full_points={full_points:?}, unified_points={unified_points:?}"
+        orthogonal_source_face, full_source_face,
+        "orthogonal C->A should preserve source face parity with polyline in nested override cross-boundary routing: full={full_source_face}, orthogonal={orthogonal_source_face}, full_points={full_points:?}, orthogonal_points={orthogonal_points:?}"
     );
     assert_eq!(
-        unified_target_face, full_target_face,
-        "orthogonal C->A should preserve target face parity with polyline in nested override cross-boundary routing: full={full_target_face}, unified={unified_target_face}, full_points={full_points:?}, unified_points={unified_points:?}"
+        orthogonal_target_face, full_target_face,
+        "orthogonal C->A should preserve target face parity with polyline in nested override cross-boundary routing: full={full_target_face}, orthogonal={orthogonal_target_face}, full_points={full_points:?}, orthogonal_points={orthogonal_points:?}"
     );
 }
 

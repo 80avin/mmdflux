@@ -46,9 +46,9 @@ RUN_ID=local-check-1 ./scripts/tests/run-all.sh
 - `06-plan-0075-routing-preview-qa.sh`
   - focused QA sweep for orthogonal routing unification preview
   - parity/rollback gates, MMDS mode diffs, determinism checks, full regression gates
-- `07-plan-0076-unified-routing-quality-qa.sh`
-  - plan-level QA sweep for unified routing promotion hardening
+- `07-plan-0076-orthogonal-routing-quality-qa.sh`
+  - plan-level QA sweep for orthogonal routing promotion hardening
   - expanded parity classification, determinism, routed path-detail defaults, and validation matrix
-- `08-unified-vs-full-svg-diff-sweep.sh`
+- `08-orthogonal-vs-full-svg-diff-sweep.sh`
   - reusable polyline vs orthogonal routing SVG sweep
   - renders fixture/style matrices, writes per-style TSV reports, and generates `routing-svg-diff-gallery-v2.html`
