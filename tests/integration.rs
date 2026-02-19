@@ -2652,11 +2652,11 @@ fn test_svg_orthogonal_route_differs_from_legacy_for_cycle_fixture() {
         )
         .expect("mermaid-layered render should succeed");
 
-    let mut unified = registry
+    let mut orthogonal = registry
         .create("flowchart")
         .expect("flowchart instance should exist");
-    unified.parse(&input).expect("fixture should parse");
-    let unified_output = unified
+    orthogonal.parse(&input).expect("fixture should parse");
+    let orthogonal_output = orthogonal
         .render(
             OutputFormat::Svg,
             &RenderConfig {
@@ -2667,7 +2667,7 @@ fn test_svg_orthogonal_route_differs_from_legacy_for_cycle_fixture() {
         .expect("flux-layered render should succeed");
 
     assert_ne!(
-        legacy_output, unified_output,
+        legacy_output, orthogonal_output,
         "orthogonal routing should route cycle fixture through a distinct path set"
     );
 }
@@ -3311,9 +3311,9 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             .expect("text render should succeed")
     };
 
-    // (fixture, from, to, expected_source_face, full_target_face, unified_target_face)
+    // (fixture, from, to, expected_source_face, full_target_face, orthogonal_target_face)
     // Long backward edges (rank_span >= 6) use side-face channel routing in
-    // orthogonal routing (R-BACK-7 Heuristic 4), so unified target face may differ
+    // orthogonal routing (R-BACK-7 Heuristic 4), so orthogonal target face may differ
     // from polyline routing.
     type BackwardFaceCase<'a> = (&'a str, &'a str, &'a str, Option<&'a str>, &'a str, &'a str);
     let cases: [BackwardFaceCase<'_>; 2] = [
@@ -3321,8 +3321,14 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
         ("complex.mmd", "E", "A", None, "bottom", "right"),
     ];
 
-    for (fixture, from, to, expected_source_face, expected_full_target, expected_unified_target) in
-        cases
+    for (
+        fixture,
+        from,
+        to,
+        expected_source_face,
+        expected_full_target,
+        expected_orthogonal_target,
+    ) in cases
     {
         let input = load_fixture(fixture);
         let flowchart = parse_flowchart(&input).expect("fixture should parse");
@@ -3343,13 +3349,13 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             .rect;
 
         let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
-        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+        let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
         let full_edge = full
             .edges
             .iter()
             .find(|edge| edge.from == from && edge.to == to)
             .unwrap_or_else(|| panic!("fixture {fixture} should contain edge {from}->{to}"));
-        let unified_edge = unified
+        let orthogonal_edge = orthogonal
             .edges
             .iter()
             .find(|edge| edge.from == from && edge.to == to)
@@ -3365,12 +3371,12 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
             .last()
             .copied()
             .expect("polyline edge should have target endpoint");
-        let unified_start = unified_edge
+        let orthogonal_start = orthogonal_edge
             .path
             .first()
             .copied()
             .expect("orthogonal edge should have source endpoint");
-        let unified_end = unified_edge
+        let orthogonal_end = orthogonal_edge
             .path
             .last()
             .copied()
@@ -3378,8 +3384,8 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
 
         let full_source_face = point_face(source_rect, full_start);
         let full_target_face = point_face(target_rect, full_end);
-        let unified_source_face = point_face(source_rect, unified_start);
-        let unified_target_face = point_face(target_rect, unified_end);
+        let orthogonal_source_face = point_face(source_rect, orthogonal_start);
+        let orthogonal_target_face = point_face(target_rect, orthogonal_end);
 
         if let Some(expected_source_face) = expected_source_face {
             assert_eq!(
@@ -3396,23 +3402,23 @@ fn td_backward_entry_face_followup_parity_matches_text_for_decision_and_complex(
 
         if let Some(expected_source_face) = expected_source_face {
             assert_eq!(
-                unified_source_face, expected_source_face,
-                "orthogonal {from}->{to} should match TD source-face parity with text/polyline ({expected_source_face}) for fixture {fixture}; full_path={:?}, unified_path={:?}",
-                full_edge.path, unified_edge.path
+                orthogonal_source_face, expected_source_face,
+                "orthogonal {from}->{to} should match TD source-face parity with text/polyline ({expected_source_face}) for fixture {fixture}; full_path={:?}, orthogonal_path={:?}",
+                full_edge.path, orthogonal_edge.path
             );
         }
         assert_eq!(
-            unified_target_face, expected_unified_target,
-            "orthogonal {from}->{to} target face should be {expected_unified_target} for fixture {fixture}; full_path={:?}, unified_path={:?}",
-            full_edge.path, unified_edge.path
+            orthogonal_target_face, expected_orthogonal_target,
+            "orthogonal {from}->{to} target face should be {expected_orthogonal_target} for fixture {fixture}; full_path={:?}, orthogonal_path={:?}",
+            full_edge.path, orthogonal_edge.path
         );
 
         // Text output should still match between edge routings (backward edge
         // face differences only affect SVG path geometry, not text grid).
         let full_text = render_text_with_engine(&input, "mermaid-layered");
-        let unified_text = render_text_with_engine(&input, "flux-layered");
+        let orthogonal_text = render_text_with_engine(&input, "flux-layered");
         assert_eq!(
-            unified_text, full_text,
+            orthogonal_text, full_text,
             "fixture {fixture} orthogonal text should match polyline text"
         );
     }
@@ -3498,14 +3504,14 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .rect;
 
         let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
-        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+        let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
         let full_edge = full
             .edges
             .iter()
             .find(|edge| edge.from == "Remote" && edge.to == "Working")
             .expect("fixture should contain edge Remote -> Working");
-        let unified_edge = unified
+        let orthogonal_edge = orthogonal
             .edges
             .iter()
             .find(|edge| edge.from == "Remote" && edge.to == "Working")
@@ -3516,46 +3522,46 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .path
             .last()
             .expect("full edge should have endpoint");
-        let unified_start = unified_edge.path[0];
-        let unified_end = *unified_edge
+        let orthogonal_start = orthogonal_edge.path[0];
+        let orthogonal_end = *orthogonal_edge
             .path
             .last()
-            .expect("unified edge should have endpoint");
+            .expect("orthogonal edge should have endpoint");
         let _full_source_face = point_face(source_rect, full_start);
         assert_eq!(
-            point_face(source_rect, unified_start),
+            point_face(source_rect, orthogonal_start),
             "bottom",
-            "orthogonal Remote -> Working should preserve canonical bottom source face while matching spacing parity; full_path={:?}, unified_path={:?}",
+            "orthogonal Remote -> Working should preserve canonical bottom source face while matching spacing parity; full_path={:?}, orthogonal_path={:?}",
             full_edge.path,
-            unified_edge.path
+            orthogonal_edge.path
         );
         assert_eq!(
-            point_face(target_rect, unified_end),
+            point_face(target_rect, orthogonal_end),
             "bottom",
-            "orthogonal Remote -> Working should preserve canonical bottom target face while matching spacing parity; full_path={:?}, unified_path={:?}",
+            "orthogonal Remote -> Working should preserve canonical bottom target face while matching spacing parity; full_path={:?}, orthogonal_path={:?}",
             full_edge.path,
-            unified_edge.path
+            orthogonal_edge.path
         );
 
         let node_envelope_bottom =
             (source_rect.y + source_rect.height).max(target_rect.y + target_rect.height);
-        let unified_lane_y = unified_edge
+        let orthogonal_lane_y = orthogonal_edge
             .path
             .iter()
             .map(|point| point.y)
             .fold(f64::NEG_INFINITY, f64::max);
         assert!(
-            unified_lane_y >= node_envelope_bottom + MIN_GIT_CHANNEL_CLEARANCE - 0.001,
-            "orthogonal Remote -> Working channel lane should have >= {MIN_GIT_CHANNEL_CLEARANCE}px clearance from node envelope (R-BACK-8): node_envelope_bottom={node_envelope_bottom}, unified_lane_y={unified_lane_y}, clearance={}, full_path={:?}, unified_path={:?}",
-            unified_lane_y - node_envelope_bottom,
+            orthogonal_lane_y >= node_envelope_bottom + MIN_GIT_CHANNEL_CLEARANCE - 0.001,
+            "orthogonal Remote -> Working channel lane should have >= {MIN_GIT_CHANNEL_CLEARANCE}px clearance from node envelope (R-BACK-8): node_envelope_bottom={node_envelope_bottom}, orthogonal_lane_y={orthogonal_lane_y}, clearance={}, full_path={:?}, orthogonal_path={:?}",
+            orthogonal_lane_y - node_envelope_bottom,
             full_edge.path,
-            unified_edge.path
+            orthogonal_edge.path
         );
 
         let full_text = render_text_with_engine(&input, "mermaid-layered");
-        let unified_text = render_text_with_engine(&input, "flux-layered");
+        let orthogonal_text = render_text_with_engine(&input, "flux-layered");
         assert_eq!(
-            unified_text, full_text,
+            orthogonal_text, full_text,
             "fixture {fixture} orthogonal text should match polyline text once LR backward channel spacing parity is satisfied"
         );
     }
@@ -3581,14 +3587,14 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .rect;
 
         let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
-        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+        let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
         let full_edge = full
             .edges
             .iter()
             .find(|edge| edge.from == "Response" && edge.to == "Client")
             .expect("fixture should contain edge Response -> Client");
-        let unified_edge = unified
+        let orthogonal_edge = orthogonal
             .edges
             .iter()
             .find(|edge| edge.from == "Response" && edge.to == "Client")
@@ -3599,25 +3605,25 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .path
             .last()
             .expect("full edge should have endpoint");
-        let unified_start = unified_edge.path[0];
-        let unified_end = *unified_edge
+        let orthogonal_start = orthogonal_edge.path[0];
+        let orthogonal_end = *orthogonal_edge
             .path
             .last()
-            .expect("unified edge should have endpoint");
+            .expect("orthogonal edge should have endpoint");
         let _full_source_face = point_face(source_rect, full_start);
         assert_eq!(
-            point_face(source_rect, unified_start),
+            point_face(source_rect, orthogonal_start),
             "right",
-            "orthogonal Response -> Client should preserve canonical right source face while matching right-clearance parity; full_path={:?}, unified_path={:?}",
+            "orthogonal Response -> Client should preserve canonical right source face while matching right-clearance parity; full_path={:?}, orthogonal_path={:?}",
             full_edge.path,
-            unified_edge.path
+            orthogonal_edge.path
         );
         assert_eq!(
-            point_face(target_rect, unified_end),
+            point_face(target_rect, orthogonal_end),
             "right",
-            "orthogonal Response -> Client should preserve canonical right target face while matching right-clearance parity; full_path={:?}, unified_path={:?}",
+            "orthogonal Response -> Client should preserve canonical right target face while matching right-clearance parity; full_path={:?}, orthogonal_path={:?}",
             full_edge.path,
-            unified_edge.path
+            orthogonal_edge.path
         );
 
         let full_right_lane_x = full_edge
@@ -3625,22 +3631,23 @@ fn lr_backward_spacing_followup_matches_text_parity_for_git_and_http() {
             .iter()
             .map(|point| point.x)
             .fold(f64::NEG_INFINITY, f64::max);
-        let unified_right_lane_x = unified_edge
+        let orthogonal_right_lane_x = orthogonal_edge
             .path
             .iter()
             .map(|point| point.x)
             .fold(f64::NEG_INFINITY, f64::max);
         assert!(
-            unified_right_lane_x + MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL >= full_right_lane_x,
-            "orthogonal Response -> Client should preserve right-side clearance close to polyline text baseline (allowed shrink <= {MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL}): full_right_lane_x={full_right_lane_x}, unified_right_lane_x={unified_right_lane_x}, full_path={:?}, unified_path={:?}",
+            orthogonal_right_lane_x + MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL
+                >= full_right_lane_x,
+            "orthogonal Response -> Client should preserve right-side clearance close to polyline text baseline (allowed shrink <= {MAX_HTTP_RIGHT_CLEARANCE_SHRINK_FROM_FULL}): full_right_lane_x={full_right_lane_x}, orthogonal_right_lane_x={orthogonal_right_lane_x}, full_path={:?}, orthogonal_path={:?}",
             full_edge.path,
-            unified_edge.path
+            orthogonal_edge.path
         );
 
         let full_text = render_text_with_engine(&input, "mermaid-layered");
-        let unified_text = render_text_with_engine(&input, "flux-layered");
+        let orthogonal_text = render_text_with_engine(&input, "flux-layered");
         assert_eq!(
-            unified_text, full_text,
+            orthogonal_text, full_text,
             "fixture {fixture} orthogonal text should match polyline text once right-side backward clearance parity is satisfied"
         );
     }

@@ -11,7 +11,7 @@ use mmdflux::registry::DiagramInstance;
 use mmdflux::render::{RenderOptions, render_svg};
 use mmdflux::{build_diagram, parse_flowchart};
 
-const UNIFIED_PARITY_FIXTURE_SUBSET: &[&str] = &[
+const ORTHOGONAL_PARITY_FIXTURE_SUBSET: &[&str] = &[
     "simple.mmd",
     "chain.mmd",
     "simple_cycle.mmd",
@@ -22,7 +22,7 @@ const UNIFIED_PARITY_FIXTURE_SUBSET: &[&str] = &[
     "multi_subgraph_direction_override.mmd",
 ];
 
-const UNIFIED_PARITY_ACCEPTED_DELTAS: &[&str] = &[
+const ORTHOGONAL_PARITY_ACCEPTED_DELTAS: &[&str] = &[
     "simple.mmd",
     "chain.mmd",
     "simple_cycle.mmd",
@@ -33,33 +33,33 @@ const UNIFIED_PARITY_ACCEPTED_DELTAS: &[&str] = &[
     "multi_subgraph_direction_override.mmd",
 ];
 
-const UNIFIED_PARITY_MUST_MATCH: &[&str] = &[];
-const UNIFIED_FEEDBACK_BASELINE_FILE: &str = "docs/unified_feedback_baseline.tsv";
-const UNIFIED_PROMOTION_RECORD_FILE: &str = "docs/UNIFIED_ROUTING_PROMOTION.md";
-const UNIFIED_FEEDBACK_BASELINE_COLUMNS: &[&str] = &[
+const ORTHOGONAL_PARITY_MUST_MATCH: &[&str] = &[];
+const ORTHOGONAL_FEEDBACK_BASELINE_FILE: &str = "docs/orthogonal_feedback_baseline.tsv";
+const ORTHOGONAL_PROMOTION_RECORD_FILE: &str = "docs/ORTHOGONAL_ROUTING_PROMOTION.md";
+const ORTHOGONAL_FEEDBACK_BASELINE_COLUMNS: &[&str] = &[
     "fixture",
     "style",
     "status",
     "diff_lines",
     "full_viewbox_width",
     "full_viewbox_height",
-    "unified_viewbox_width",
-    "unified_viewbox_height",
+    "orthogonal_viewbox_width",
+    "orthogonal_viewbox_height",
     "viewbox_width_delta",
     "viewbox_height_delta",
     "full_route_envelope_width",
     "full_route_envelope_height",
-    "unified_route_envelope_width",
-    "unified_route_envelope_height",
+    "orthogonal_route_envelope_width",
+    "orthogonal_route_envelope_height",
     "route_envelope_width_delta",
     "route_envelope_height_delta",
     "full_edge_label_count",
-    "unified_edge_label_count",
+    "orthogonal_edge_label_count",
     "edge_label_count_delta",
     "label_position_max_drift",
     "label_position_mean_drift",
 ];
-const UNIFIED_FEEDBACK_BASELINE_FIXTURES: &[&str] = &[
+const ORTHOGONAL_FEEDBACK_BASELINE_FIXTURES: &[&str] = &[
     "fan_in.mmd",
     "five_fan_in.mmd",
     "stacked_fan_in.mmd",
@@ -139,22 +139,22 @@ fn render_svg_fixture_with_engine(name: &str, engine: &str) -> String {
         .expect("Failed to render SVG fixture")
 }
 
-fn render_svg_fixture_full_vs_unified(name: &str) -> (String, String) {
+fn render_svg_fixture_full_vs_orthogonal(name: &str) -> (String, String) {
     (
         render_svg_fixture_with_engine(name, "mermaid-layered"),
         render_svg_fixture_with_engine(name, "flux-layered"),
     )
 }
 
-fn assert_unified_parity_classification_is_complete() {
-    let mut classified: Vec<&str> = UNIFIED_PARITY_ACCEPTED_DELTAS
+fn assert_orthogonal_parity_classification_is_complete() {
+    let mut classified: Vec<&str> = ORTHOGONAL_PARITY_ACCEPTED_DELTAS
         .iter()
-        .chain(UNIFIED_PARITY_MUST_MATCH.iter())
+        .chain(ORTHOGONAL_PARITY_MUST_MATCH.iter())
         .copied()
         .collect();
     classified.sort_unstable();
 
-    let mut fixture_subset = UNIFIED_PARITY_FIXTURE_SUBSET.to_vec();
+    let mut fixture_subset = ORTHOGONAL_PARITY_FIXTURE_SUBSET.to_vec();
     fixture_subset.sort_unstable();
 
     assert_eq!(
@@ -246,12 +246,12 @@ fn mmds_snapshot_path(stem: &str) -> PathBuf {
         .join(format!("{stem}.svg"))
 }
 
-fn unified_feedback_baseline_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(UNIFIED_FEEDBACK_BASELINE_FILE)
+fn orthogonal_feedback_baseline_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(ORTHOGONAL_FEEDBACK_BASELINE_FILE)
 }
 
-fn unified_promotion_record_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join(UNIFIED_PROMOTION_RECORD_FILE)
+fn orthogonal_promotion_record_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(ORTHOGONAL_PROMOTION_RECORD_FILE)
 }
 
 fn parse_tsv_record(line: &str) -> Vec<&str> {
@@ -391,26 +391,26 @@ fn svg_snapshot_orthogonal_fixture_subset() {
 
 #[test]
 fn svg_orthogonal_route_parity_fixture_subset_matches_expected_classification() {
-    assert_unified_parity_classification_is_complete();
+    assert_orthogonal_parity_classification_is_complete();
 
     let mut differing: Vec<&str> = Vec::new();
 
-    for fixture in UNIFIED_PARITY_FIXTURE_SUBSET {
-        let (legacy, unified) = render_svg_fixture_full_vs_unified(fixture);
-        if legacy != unified {
+    for fixture in ORTHOGONAL_PARITY_FIXTURE_SUBSET {
+        let (legacy, orthogonal) = render_svg_fixture_full_vs_orthogonal(fixture);
+        if legacy != orthogonal {
             differing.push(fixture);
         }
     }
 
     assert_eq!(
-        differing, UNIFIED_PARITY_ACCEPTED_DELTAS,
+        differing, ORTHOGONAL_PARITY_ACCEPTED_DELTAS,
         "accepted-delta set changed; reclassify fixture subset"
     );
 
-    for fixture in UNIFIED_PARITY_MUST_MATCH {
-        let (legacy, unified) = render_svg_fixture_full_vs_unified(fixture);
+    for fixture in ORTHOGONAL_PARITY_MUST_MATCH {
+        let (legacy, orthogonal) = render_svg_fixture_full_vs_orthogonal(fixture);
         assert_eq!(
-            unified, legacy,
+            orthogonal, legacy,
             "fixture {fixture} is classified as must-match but diverged"
         );
     }
@@ -418,7 +418,7 @@ fn svg_orthogonal_route_parity_fixture_subset_matches_expected_classification() 
 
 #[test]
 fn orthogonal_route_svg_output_is_deterministic_for_fixture_subset() {
-    for fixture in UNIFIED_PARITY_FIXTURE_SUBSET {
+    for fixture in ORTHOGONAL_PARITY_FIXTURE_SUBSET {
         let first = render_svg_fixture_with_engine(fixture, "flux-layered");
         let second = render_svg_fixture_with_engine(fixture, "flux-layered");
         assert_eq!(
@@ -444,20 +444,20 @@ fn svg_polyline_route_rollback_is_stable_across_repeated_renders() {
 fn svg_orthogonal_route_preserves_subgraph_vertical_order_on_multi_override_fixture() {
     let legacy =
         render_svg_fixture_with_engine("multi_subgraph_direction_override.mmd", "mermaid-layered");
-    let unified =
+    let orthogonal =
         render_svg_fixture_with_engine("multi_subgraph_direction_override.mmd", "flux-layered");
 
     let legacy_ys = subgraph_rect_ys(&legacy);
-    let unified_ys = subgraph_rect_ys(&unified);
+    let orthogonal_ys = subgraph_rect_ys(&orthogonal);
     assert!(
-        legacy_ys.len() >= 2 && unified_ys.len() >= 2,
+        legacy_ys.len() >= 2 && orthogonal_ys.len() >= 2,
         "expected at least two subgraph rects in fixture output"
     );
     // Top subgraph A should remain above bottom subgraph G.
     assert!(
-        unified_ys[1] > unified_ys[0],
+        orthogonal_ys[1] > orthogonal_ys[0],
         "orthogonal routing collapsed subgraph ordering: ys={:?}",
-        unified_ys
+        orthogonal_ys
     );
     // Orthogonal routing should keep the same top-to-bottom ordering as legacy.
     assert!(
@@ -468,11 +468,11 @@ fn svg_orthogonal_route_preserves_subgraph_vertical_order_on_multi_override_fixt
 }
 
 #[test]
-fn unified_feedback_baseline_contains_required_fixtures_and_metrics() {
-    let baseline_path = unified_feedback_baseline_path();
+fn orthogonal_feedback_baseline_contains_required_fixtures_and_metrics() {
+    let baseline_path = orthogonal_feedback_baseline_path();
     let raw = fs::read_to_string(&baseline_path).unwrap_or_else(|e| {
         panic!(
-            "Failed to read unified feedback baseline {}: {e}",
+            "Failed to read orthogonal feedback baseline {}: {e}",
             baseline_path.display()
         )
     });
@@ -483,7 +483,7 @@ fn unified_feedback_baseline_contains_required_fixtures_and_metrics() {
         .expect("baseline file must include a header row");
     let header_columns = parse_tsv_record(header_line);
 
-    for required in UNIFIED_FEEDBACK_BASELINE_COLUMNS {
+    for required in ORTHOGONAL_FEEDBACK_BASELINE_COLUMNS {
         assert!(
             header_columns.contains(required),
             "baseline is missing required column: {required}"
@@ -503,7 +503,7 @@ fn unified_feedback_baseline_contains_required_fixtures_and_metrics() {
     baseline_fixtures.sort_unstable();
     baseline_fixtures.dedup();
 
-    for fixture in UNIFIED_FEEDBACK_BASELINE_FIXTURES {
+    for fixture in ORTHOGONAL_FEEDBACK_BASELINE_FIXTURES {
         assert!(
             baseline_fixtures.binary_search(fixture).is_ok(),
             "baseline is missing required fixture row: {fixture}"
@@ -513,10 +513,10 @@ fn unified_feedback_baseline_contains_required_fixtures_and_metrics() {
 
 #[test]
 fn non_viewbox_metrics_include_route_envelope_and_label_drift() {
-    let baseline_path = unified_feedback_baseline_path();
+    let baseline_path = orthogonal_feedback_baseline_path();
     let raw = fs::read_to_string(&baseline_path).unwrap_or_else(|e| {
         panic!(
-            "Failed to read unified feedback baseline {}: {e}",
+            "Failed to read orthogonal feedback baseline {}: {e}",
             baseline_path.display()
         )
     });
@@ -585,7 +585,7 @@ fn non_viewbox_metrics_include_route_envelope_and_label_drift() {
 
 #[test]
 fn promotion_record_has_rollback_validation() {
-    let record_path = unified_promotion_record_path();
+    let record_path = orthogonal_promotion_record_path();
     let raw = fs::read_to_string(&record_path).unwrap_or_else(|e| {
         panic!(
             "Failed to read promotion record {}: {e}",
@@ -596,7 +596,7 @@ fn promotion_record_has_rollback_validation() {
     let required_markers = [
         "### Rollback Playbook (Task 5.1)",
         "--edge-routing full-compute",
-        "./scripts/tests/07-plan-0076-unified-routing-quality-qa.sh",
+        "./scripts/tests/07-plan-0076-orthogonal-routing-quality-qa.sh",
     ];
 
     for marker in required_markers {

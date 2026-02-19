@@ -204,7 +204,7 @@ fn class_routed_mmds_honors_edge_routing_override() {
             },
         )
         .expect("mermaid-layered mmds should render");
-    let unified = instance
+    let orthogonal = instance
         .render(
             OutputFormat::Mmds,
             &RenderConfig {
@@ -216,7 +216,7 @@ fn class_routed_mmds_honors_edge_routing_override() {
         .expect("flux-layered mmds should render");
 
     assert_ne!(
-        full, unified,
+        full, orthogonal,
         "class routed MMDS should differ between mermaid-layered and flux-layered engines"
     );
 }
@@ -237,7 +237,7 @@ fn class_routed_mmds_honors_edge_routing_override_on_cycle() {
             },
         )
         .expect("mermaid-layered mmds should render");
-    let unified = instance
+    let orthogonal = instance
         .render(
             OutputFormat::Mmds,
             &RenderConfig {
@@ -249,7 +249,7 @@ fn class_routed_mmds_honors_edge_routing_override_on_cycle() {
         .expect("flux-layered mmds should render");
 
     assert_ne!(
-        full, unified,
+        full, orthogonal,
         "class routed MMDS cycle output should differ between mermaid-layered and flux-layered"
     );
 }
@@ -269,7 +269,7 @@ fn class_svg_honors_edge_routing_override_on_cycle() {
             },
         )
         .expect("mermaid-layered svg should render");
-    let unified = instance
+    let orthogonal = instance
         .render(
             OutputFormat::Svg,
             &RenderConfig {
@@ -280,9 +280,9 @@ fn class_svg_honors_edge_routing_override_on_cycle() {
         .expect("flux-layered svg should render");
 
     assert!(full.starts_with("<svg"));
-    assert!(unified.starts_with("<svg"));
+    assert!(orthogonal.starts_with("<svg"));
     assert_ne!(
-        full, unified,
+        full, orthogonal,
         "class SVG cycle output should differ between mermaid-layered and flux-layered engines"
     );
 }

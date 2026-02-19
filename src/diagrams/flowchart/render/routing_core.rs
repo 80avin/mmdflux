@@ -868,7 +868,7 @@ fn segment_sign(delta: f64) -> i8 {
 /// from `approach` toward the node center.
 ///
 /// This is the single source of truth for endpoint geometry used by both the
-/// unified router and SVG renderer.
+/// orthogonal router and SVG renderer.
 ///
 /// Coordinate convention: `FRect` uses top-left origin `(rect.x, rect.y)`
 /// with `width`/`height` extending right and down, matching SVG's `dagre::Rect`.

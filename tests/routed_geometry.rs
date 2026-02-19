@@ -550,7 +550,7 @@ fn routed_geometry_preserves_label_positions() {
 const LABEL_REVALIDATION_MAX_DISTANCE_TO_ACTIVE_SEGMENT: f64 = 2.0;
 
 #[test]
-fn unified_labels_remain_attached_to_active_segments_labeled_edges() {
+fn orthogonal_labels_remain_attached_to_active_segments_labeled_edges() {
     let (diagram, geom) = layout_fixture_svg("labeled_edges.mmd");
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
     let failures = labeled_edge_label_drift_failures(
@@ -566,7 +566,7 @@ fn unified_labels_remain_attached_to_active_segments_labeled_edges() {
 }
 
 #[test]
-fn unified_labels_remain_attached_to_active_segments_inline_label_flowchart() {
+fn orthogonal_labels_remain_attached_to_active_segments_inline_label_flowchart() {
     let (diagram, geom) = layout_fixture_svg("inline_label_flowchart.mmd");
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
     let failures = labeled_edge_label_drift_failures(
@@ -756,7 +756,7 @@ fn routed_edges_preserve_subgraph_references() {
 // -----------------------------------------------------------------------
 
 #[test]
-fn unified_router_produces_axis_aligned_forward_paths() {
+fn orthogonal_router_produces_axis_aligned_forward_paths() {
     let (diagram, geom) = layout_test("graph TD\nA-->B\nA-->C\nB-->D\nC-->D");
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
@@ -791,20 +791,20 @@ fn orthogonal_route_preserves_core_routed_geometry_contracts() {
     for fixture in ["simple.mmd", "chain.mmd", "simple_cycle.mmd"] {
         let (diagram, geom) = layout_fixture(fixture);
         let legacy = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
-        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+        let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
         assert_eq!(
-            unified.edges.len(),
+            orthogonal.edges.len(),
             legacy.edges.len(),
             "edge count diverged for fixture {fixture}"
         );
         assert_eq!(
-            unified.self_edges.len(),
+            orthogonal.self_edges.len(),
             legacy.self_edges.len(),
             "self-edge count diverged for fixture {fixture}"
         );
 
-        for (u, l) in unified.edges.iter().zip(legacy.edges.iter()) {
+        for (u, l) in orthogonal.edges.iter().zip(legacy.edges.iter()) {
             assert_eq!(u.index, l.index, "edge index mismatch in fixture {fixture}");
             assert_eq!(u.from, l.from, "edge source mismatch in fixture {fixture}");
             assert_eq!(u.to, l.to, "edge target mismatch in fixture {fixture}");
@@ -814,7 +814,7 @@ fn orthogonal_route_preserves_core_routed_geometry_contracts() {
             );
             assert!(
                 u.path.len() >= 2,
-                "unified path too short for {} -> {} in fixture {fixture}",
+                "orthogonal path too short for {} -> {} in fixture {fixture}",
                 u.from,
                 u.to
             );
@@ -823,7 +823,7 @@ fn orthogonal_route_preserves_core_routed_geometry_contracts() {
 }
 
 #[test]
-fn unified_route_contracts_are_axis_aligned_and_non_degenerate() {
+fn orthogonal_route_contracts_are_axis_aligned_and_non_degenerate() {
     let (diagram, geom) = layout_fixture("simple_cycle.mmd");
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
@@ -858,7 +858,7 @@ fn unified_route_contracts_are_axis_aligned_and_non_degenerate() {
 }
 
 #[test]
-fn unified_route_contracts_preserve_terminal_support_segment() {
+fn orthogonal_route_contracts_preserve_terminal_support_segment() {
     let (diagram, geom) = layout_fixture("ampersand.mmd");
     assert_eq!(geom.direction, mmdflux::Direction::TopDown);
 
@@ -893,7 +893,7 @@ fn unified_route_contracts_preserve_terminal_support_segment() {
 }
 
 #[test]
-fn unified_route_contracts_are_deterministic_for_repeated_runs() {
+fn orthogonal_route_contracts_are_deterministic_for_repeated_runs() {
     let (diagram, geom) = layout_fixture("multi_subgraph_direction_override.mmd");
     let first = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
     let second = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
@@ -965,7 +965,7 @@ fn orthogonal_route_fan_in_lr_target_endpoints_stay_on_or_outside_target_border(
         let end = *edge.path.last().expect("edge should have routed points");
         assert!(
             !point_inside_rect(target_rect, end),
-            "unified routed endpoint should not be inside target rect for {} -> {}: end={:?}, target_rect={:?}, path={:?}",
+            "orthogonal routed endpoint should not be inside target rect for {} -> {}: end={:?}, target_rect={:?}, path={:?}",
             edge.from,
             edge.to,
             end,
@@ -1091,7 +1091,7 @@ fn orthogonal_route_http_request_backward_edge_preserves_client_side_face_attach
 }
 
 #[test]
-fn unified_route_contracts_keep_primary_axis_departure_stem_for_off_center_td_source_ports() {
+fn orthogonal_route_contracts_keep_primary_axis_departure_stem_for_off_center_td_source_ports() {
     let (diagram, geom) = layout_fixture("compat_kitchen_sink.mmd");
     assert_eq!(geom.direction, mmdflux::Direction::TopDown);
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
@@ -1145,7 +1145,7 @@ fn unified_route_contracts_keep_primary_axis_departure_stem_for_off_center_td_so
 }
 
 #[test]
-fn unified_route_contracts_keep_primary_stem_before_outward_td_fan_out_sweeps() {
+fn orthogonal_route_contracts_keep_primary_stem_before_outward_td_fan_out_sweeps() {
     let (diagram, geom) = layout_fixture("fan_out.mmd");
     assert_eq!(geom.direction, mmdflux::Direction::TopDown);
     let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
@@ -1197,7 +1197,7 @@ fn unified_route_contracts_keep_primary_stem_before_outward_td_fan_out_sweeps() 
 }
 
 #[test]
-fn unified_route_contracts_keep_directional_source_exits_for_selected_fixtures() {
+fn orthogonal_route_contracts_keep_directional_source_exits_for_selected_fixtures() {
     type EdgeExpectation = (&'static str, &'static str, f64);
     type FixtureExpectations = (&'static str, &'static [EdgeExpectation]);
 
@@ -1303,7 +1303,7 @@ fn unified_route_contracts_keep_directional_source_exits_for_selected_fixtures()
 }
 
 #[test]
-fn unified_route_contracts_avoid_source_turnback_spikes_for_selected_fixtures() {
+fn orthogonal_route_contracts_avoid_source_turnback_spikes_for_selected_fixtures() {
     let cases = [
         ("decision.mmd", "A", "B"),
         ("complex.mmd", "B", "D"),
@@ -1328,7 +1328,7 @@ fn unified_route_contracts_avoid_source_turnback_spikes_for_selected_fixtures() 
 }
 
 #[test]
-fn unified_route_contracts_avoid_immediate_axial_turnbacks() {
+fn orthogonal_route_contracts_avoid_immediate_axial_turnbacks() {
     let cases = [
         ("multiple_cycles.mmd", "C", "A"),
         ("git_workflow.mmd", "Remote", "Working"),
@@ -1353,7 +1353,7 @@ fn unified_route_contracts_avoid_immediate_axial_turnbacks() {
 }
 
 #[test]
-fn unified_route_contracts_preserve_backward_cycle_outer_lane_clearance() {
+fn orthogonal_route_contracts_preserve_backward_cycle_outer_lane_clearance() {
     const MIN_OUTER_LANE_CLEARANCE: f64 = 12.0;
 
     let (diagram, geom) = layout_fixture_svg("multiple_cycles.mmd");
@@ -1445,14 +1445,14 @@ fn orthogonal_route_nested_override_cross_boundary_edge_matches_lr_face_parity()
         .rect;
 
     let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
-    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+    let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
     let full_edge = full
         .edges
         .iter()
         .find(|edge| edge.from == "C" && edge.to == "A")
         .expect("fixture should contain C -> A in polyline mode");
-    let unified_edge = unified
+    let orthogonal_edge = orthogonal
         .edges
         .iter()
         .find(|edge| edge.from == "C" && edge.to == "A")
@@ -1468,12 +1468,12 @@ fn orthogonal_route_nested_override_cross_boundary_edge_matches_lr_face_parity()
         .last()
         .copied()
         .expect("polyline C -> A should have target endpoint");
-    let unified_start = unified_edge
+    let orthogonal_start = orthogonal_edge
         .path
         .first()
         .copied()
         .expect("orthogonal C -> A should have source endpoint");
-    let unified_end = unified_edge
+    let orthogonal_end = orthogonal_edge
         .path
         .last()
         .copied()
@@ -1481,8 +1481,8 @@ fn orthogonal_route_nested_override_cross_boundary_edge_matches_lr_face_parity()
 
     let full_source_face = point_on_target_face(source_rect, full_start);
     let full_target_face = point_on_target_face(target_rect, full_end);
-    let unified_source_face = point_on_target_face(source_rect, unified_start);
-    let unified_target_face = point_on_target_face(target_rect, unified_end);
+    let orthogonal_source_face = point_on_target_face(source_rect, orthogonal_start);
+    let orthogonal_target_face = point_on_target_face(target_rect, orthogonal_end);
 
     assert_eq!(
         full_source_face, "right",
@@ -1495,27 +1495,27 @@ fn orthogonal_route_nested_override_cross_boundary_edge_matches_lr_face_parity()
         full_edge.path
     );
     assert_eq!(
-        unified_source_face, full_source_face,
-        "orthogonal C -> A should match polyline source face in nested override cross-boundary routing: full={full_source_face}, unified={unified_source_face}, full_path={:?}, unified_path={:?}",
-        full_edge.path, unified_edge.path
+        orthogonal_source_face, full_source_face,
+        "orthogonal C -> A should match polyline source face in nested override cross-boundary routing: full={full_source_face}, orthogonal={orthogonal_source_face}, full_path={:?}, orthogonal_path={:?}",
+        full_edge.path, orthogonal_edge.path
     );
     assert_eq!(
-        unified_target_face, full_target_face,
-        "orthogonal C -> A should match polyline target face in nested override cross-boundary routing: full={full_target_face}, unified={unified_target_face}, full_path={:?}, unified_path={:?}",
-        full_edge.path, unified_edge.path
+        orthogonal_target_face, full_target_face,
+        "orthogonal C -> A should match polyline target face in nested override cross-boundary routing: full={full_target_face}, orthogonal={orthogonal_target_face}, full_path={:?}, orthogonal_path={:?}",
+        full_edge.path, orthogonal_edge.path
     );
 
-    let n = unified_edge.path.len();
+    let n = orthogonal_edge.path.len();
     assert!(
         n >= 2,
         "orthogonal C -> A should include at least one segment: path={:?}",
-        unified_edge.path
+        orthogonal_edge.path
     );
-    let prev = unified_edge.path[n - 2];
+    let prev = orthogonal_edge.path[n - 2];
     assert!(
-        approx_eq(prev.y, unified_end.y) && !approx_eq(prev.x, unified_end.x),
-        "orthogonal C -> A should enter A on a horizontal LR terminal segment: prev={prev:?}, end={unified_end:?}, path={:?}",
-        unified_edge.path
+        approx_eq(prev.y, orthogonal_end.y) && !approx_eq(prev.x, orthogonal_end.x),
+        "orthogonal C -> A should enter A on a horizontal LR terminal segment: prev={prev:?}, end={orthogonal_end:?}, path={:?}",
+        orthogonal_edge.path
     );
 }
 
@@ -1576,7 +1576,7 @@ fn shared_builder_keeps_alignment_tolerance_stable_for_near_aligned_points() {
 }
 
 #[test]
-fn unified_route_contracts_keep_td_source_ports_normal_and_compact() {
+fn orthogonal_route_contracts_keep_td_source_ports_normal_and_compact() {
     let cases: &[(&str, &[(&str, &str)])] = &[(
         "compat_kitchen_sink.mmd",
         &[
@@ -1661,7 +1661,7 @@ fn orthogonal_route_decision_backward_debug_to_start_supports_td_top_bottom_pari
         .rect;
 
     let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
-    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+    let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
     let full_edge = full
         .edges
@@ -1695,37 +1695,37 @@ fn orthogonal_route_decision_backward_debug_to_start_supports_td_top_bottom_pari
         full_edge.path
     );
 
-    let unified_edge = unified
+    let orthogonal_edge = orthogonal
         .edges
         .iter()
         .find(|edge| edge.from == "D" && edge.to == "A")
         .expect("fixture should contain backward edge D -> A in orthogonal mode");
     assert!(
-        unified_edge.is_backward,
+        orthogonal_edge.is_backward,
         "fixture contract invalid: D -> A should be backward in orthogonal mode"
     );
-    let unified_start = unified_edge
+    let orthogonal_start = orthogonal_edge
         .path
         .first()
         .copied()
         .expect("orthogonal backward edge should have source endpoint");
-    let unified_end = unified_edge
+    let orthogonal_end = orthogonal_edge
         .path
         .last()
         .copied()
         .expect("orthogonal backward edge should have target endpoint");
-    let unified_source_face = point_on_target_face(source_rect, unified_start);
-    let unified_target_face = point_on_target_face(target_rect, unified_end);
+    let orthogonal_source_face = point_on_target_face(source_rect, orthogonal_start);
+    let orthogonal_target_face = point_on_target_face(target_rect, orthogonal_end);
 
     assert_eq!(
-        unified_source_face, full_source_face,
-        "orthogonal D -> A should match polyline source departure face for TD top->bottom parity: full={full_source_face}, unified={unified_source_face}, full_path={:?}, unified_path={:?}",
-        full_edge.path, unified_edge.path
+        orthogonal_source_face, full_source_face,
+        "orthogonal D -> A should match polyline source departure face for TD top->bottom parity: full={full_source_face}, orthogonal={orthogonal_source_face}, full_path={:?}, orthogonal_path={:?}",
+        full_edge.path, orthogonal_edge.path
     );
     assert_eq!(
-        unified_target_face, full_target_face,
-        "orthogonal D -> A should match polyline target entry face for TD top->bottom parity: full={full_target_face}, unified={unified_target_face}, full_path={:?}, unified_path={:?}",
-        full_edge.path, unified_edge.path
+        orthogonal_target_face, full_target_face,
+        "orthogonal D -> A should match polyline target entry face for TD top->bottom parity: full={full_target_face}, orthogonal={orthogonal_target_face}, full_path={:?}, orthogonal_path={:?}",
+        full_edge.path, orthogonal_edge.path
     );
 }
 
@@ -1739,8 +1739,8 @@ fn orthogonal_route_decision_backward_debug_to_start_keeps_vertical_source_stem_
         "fixture {fixture} should be TD for source-stem normalization checks"
     );
 
-    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
-    let edge = unified
+    let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+    let edge = orthogonal
         .edges
         .iter()
         .find(|edge| edge.from == "D" && edge.to == "A")
@@ -1859,7 +1859,7 @@ fn orthogonal_route_complex_backward_more_data_to_input_supports_td_entry_parity
         .rect;
 
     let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
-    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+    let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
     let full_edge = full
         .edges
@@ -1882,29 +1882,29 @@ fn orthogonal_route_complex_backward_more_data_to_input_supports_td_entry_parity
         full_edge.path
     );
 
-    let unified_edge = unified
+    let orthogonal_edge = orthogonal
         .edges
         .iter()
         .find(|edge| edge.from == "E" && edge.to == "A")
         .expect("fixture should contain backward edge E -> A in orthogonal mode");
     assert!(
-        unified_edge.is_backward,
+        orthogonal_edge.is_backward,
         "fixture contract invalid: E -> A should be backward in orthogonal mode"
     );
-    let unified_end = unified_edge
+    let orthogonal_end = orthogonal_edge
         .path
         .last()
         .copied()
         .expect("orthogonal backward edge should have target endpoint");
-    let unified_target_face = point_on_target_face(target_rect, unified_end);
+    let orthogonal_target_face = point_on_target_face(target_rect, orthogonal_end);
 
     // Long backward edges (rank_span >= 6) use side-face channel routing in
     // orthogonal routing (R-BACK-7 Heuristic 4), so the target face is "right"
     // instead of polyline routing's "bottom".
     assert_eq!(
-        unified_target_face, "right",
-        "orthogonal E -> A should use right-side channel routing for long backward edge (R-BACK-7 H4): full={full_target_face}, unified={unified_target_face}, full_path={:?}, unified_path={:?}",
-        full_edge.path, unified_edge.path
+        orthogonal_target_face, "right",
+        "orthogonal E -> A should use right-side channel routing for long backward edge (R-BACK-7 H4): full={full_target_face}, orthogonal={orthogonal_target_face}, full_path={:?}, orthogonal_path={:?}",
+        full_edge.path, orthogonal_edge.path
     );
 }
 
@@ -1920,8 +1920,8 @@ fn orthogonal_route_complex_backward_more_data_to_input_avoids_tiny_terminal_sta
         "fixture {fixture} should be TD for terminal staircase checks"
     );
 
-    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
-    let edge = unified
+    let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+    let edge = orthogonal
         .edges
         .iter()
         .find(|edge| edge.from == "E" && edge.to == "A")
@@ -1980,7 +1980,7 @@ fn orthogonal_route_td_backward_followup_edges_match_polyline_route_entry_face_p
             .rect;
 
         let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
-        let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+        let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
         let full_edge = full
             .edges
@@ -1991,14 +1991,14 @@ fn orthogonal_route_td_backward_followup_edges_match_polyline_route_entry_face_p
                     "fixture {fixture} should contain backward edge {from} -> {to} in polyline mode"
                 )
             });
-        let unified_edge = unified
+        let orthogonal_edge = orthogonal
             .edges
             .iter()
             .find(|edge| edge.from == from && edge.to == to)
             .unwrap_or_else(|| panic!("fixture {fixture} should contain backward edge {from} -> {to} in orthogonal mode"));
 
         assert!(
-            full_edge.is_backward && unified_edge.is_backward,
+            full_edge.is_backward && orthogonal_edge.is_backward,
             "fixture {fixture} contract invalid: {from} -> {to} should be backward in both edge routings"
         );
 
@@ -2012,12 +2012,12 @@ fn orthogonal_route_td_backward_followup_edges_match_polyline_route_entry_face_p
             .last()
             .copied()
             .expect("polyline backward edge should have target endpoint");
-        let unified_start = unified_edge
+        let orthogonal_start = orthogonal_edge
             .path
             .first()
             .copied()
             .expect("orthogonal backward edge should have source endpoint");
-        let unified_end = unified_edge
+        let orthogonal_end = orthogonal_edge
             .path
             .last()
             .copied()
@@ -2025,18 +2025,18 @@ fn orthogonal_route_td_backward_followup_edges_match_polyline_route_entry_face_p
 
         let full_source_face = point_on_target_face(source_rect, full_start);
         let full_target_face = point_on_target_face(target_rect, full_end);
-        let unified_source_face = point_on_target_face(source_rect, unified_start);
-        let unified_target_face = point_on_target_face(target_rect, unified_end);
+        let orthogonal_source_face = point_on_target_face(source_rect, orthogonal_start);
+        let orthogonal_target_face = point_on_target_face(target_rect, orthogonal_end);
 
         assert_eq!(
-            unified_source_face, full_source_face,
-            "orthogonal {from}->{to} should match polyline source departure face for fixture {fixture}: full={full_source_face}, unified={unified_source_face}, full_path={:?}, unified_path={:?}",
-            full_edge.path, unified_edge.path
+            orthogonal_source_face, full_source_face,
+            "orthogonal {from}->{to} should match polyline source departure face for fixture {fixture}: full={full_source_face}, orthogonal={orthogonal_source_face}, full_path={:?}, orthogonal_path={:?}",
+            full_edge.path, orthogonal_edge.path
         );
         assert_eq!(
-            unified_target_face, full_target_face,
-            "orthogonal {from}->{to} should match polyline target entry face for fixture {fixture}: full={full_target_face}, unified={unified_target_face}, full_path={:?}, unified_path={:?}",
-            full_edge.path, unified_edge.path
+            orthogonal_target_face, full_target_face,
+            "orthogonal {from}->{to} should match polyline target entry face for fixture {fixture}: full={full_target_face}, orthogonal={orthogonal_target_face}, full_path={:?}, orthogonal_path={:?}",
+            full_edge.path, orthogonal_edge.path
         );
     }
 }
@@ -2109,72 +2109,72 @@ fn orthogonal_route_git_workflow_backward_remote_to_working_preserves_min_lr_cha
         .rect;
 
     let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
-    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+    let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
     let full_edge = full
         .edges
         .iter()
         .find(|edge| edge.from == "Remote" && edge.to == "Working")
         .expect("fixture should contain backward edge Remote -> Working in polyline mode");
-    let unified_edge = unified
+    let orthogonal_edge = orthogonal
         .edges
         .iter()
         .find(|edge| edge.from == "Remote" && edge.to == "Working")
         .expect("fixture should contain backward edge Remote -> Working in orthogonal mode");
 
     assert!(
-        full_edge.is_backward && unified_edge.is_backward,
+        full_edge.is_backward && orthogonal_edge.is_backward,
         "fixture contract invalid: Remote -> Working should be backward in both edge routings"
     );
 
-    let unified_start = unified_edge
+    let orthogonal_start = orthogonal_edge
         .path
         .first()
         .copied()
         .expect("orthogonal backward edge should have source endpoint");
-    let unified_end = unified_edge
+    let orthogonal_end = orthogonal_edge
         .path
         .last()
         .copied()
         .expect("orthogonal backward edge should have target endpoint");
 
-    let unified_source_face = point_on_target_face(source_rect, unified_start);
-    let unified_target_face = point_on_target_face(target_rect, unified_end);
+    let orthogonal_source_face = point_on_target_face(source_rect, orthogonal_start);
+    let orthogonal_target_face = point_on_target_face(target_rect, orthogonal_end);
 
     assert_eq!(
-        unified_source_face, "bottom",
-        "orthogonal Remote -> Working should preserve canonical bottom source face: start={unified_start:?}, path={:?}",
-        unified_edge.path
+        orthogonal_source_face, "bottom",
+        "orthogonal Remote -> Working should preserve canonical bottom source face: start={orthogonal_start:?}, path={:?}",
+        orthogonal_edge.path
     );
     assert_eq!(
-        unified_target_face, "bottom",
-        "orthogonal Remote -> Working should preserve canonical bottom target face: end={unified_end:?}, path={:?}",
-        unified_edge.path
+        orthogonal_target_face, "bottom",
+        "orthogonal Remote -> Working should preserve canonical bottom target face: end={orthogonal_end:?}, path={:?}",
+        orthogonal_edge.path
     );
 
     // R-BACK-8: channel lane must have minimum clearance from node envelope.
     let node_envelope_bottom =
         (source_rect.y + source_rect.height).max(target_rect.y + target_rect.height);
-    let unified_lane_y = unified_edge
+    let orthogonal_lane_y = orthogonal_edge
         .path
         .iter()
         .map(|point| point.y)
         .fold(f64::NEG_INFINITY, f64::max);
 
     assert!(
-        unified_lane_y >= node_envelope_bottom + MIN_CHANNEL_CLEARANCE - 0.001,
-        "orthogonal Remote -> Working channel lane should have >= {MIN_CHANNEL_CLEARANCE}px clearance from node envelope (R-BACK-8): node_envelope_bottom={node_envelope_bottom}, unified_lane_y={unified_lane_y}, clearance={}, path={:?}",
-        unified_lane_y - node_envelope_bottom,
-        unified_edge.path
+        orthogonal_lane_y >= node_envelope_bottom + MIN_CHANNEL_CLEARANCE - 0.001,
+        "orthogonal Remote -> Working channel lane should have >= {MIN_CHANNEL_CLEARANCE}px clearance from node envelope (R-BACK-8): node_envelope_bottom={node_envelope_bottom}, orthogonal_lane_y={orthogonal_lane_y}, clearance={}, path={:?}",
+        orthogonal_lane_y - node_envelope_bottom,
+        orthogonal_edge.path
     );
 
     let full_bends = bend_count(&full_edge.path);
-    let unified_bends = bend_count(&unified_edge.path);
+    let orthogonal_bends = bend_count(&orthogonal_edge.path);
     assert!(
-        unified_bends <= full_bends + MAX_BEND_INCREASE_FROM_FULL,
-        "orthogonal Remote -> Working should avoid extra loop compaction bends relative to polyline baseline: full_bends={full_bends}, unified_bends={unified_bends}, full_path={:?}, unified_path={:?}",
+        orthogonal_bends <= full_bends + MAX_BEND_INCREASE_FROM_FULL,
+        "orthogonal Remote -> Working should avoid extra loop compaction bends relative to polyline baseline: full_bends={full_bends}, orthogonal_bends={orthogonal_bends}, full_path={:?}, orthogonal_path={:?}",
         full_edge.path,
-        unified_edge.path
+        orthogonal_edge.path
     );
 }
 
@@ -2248,21 +2248,21 @@ fn orthogonal_route_http_request_backward_response_to_client_preserves_min_right
         .rect;
 
     let full = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
-    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+    let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
     let full_edge = full
         .edges
         .iter()
         .find(|edge| edge.from == "Response" && edge.to == "Client")
         .expect("fixture should contain backward edge Response -> Client in polyline mode");
-    let unified_edge = unified
+    let orthogonal_edge = orthogonal
         .edges
         .iter()
         .find(|edge| edge.from == "Response" && edge.to == "Client")
         .expect("fixture should contain backward edge Response -> Client in orthogonal mode");
 
     assert!(
-        full_edge.is_backward && unified_edge.is_backward,
+        full_edge.is_backward && orthogonal_edge.is_backward,
         "fixture contract invalid: Response -> Client should be backward in both edge routings"
     );
 
@@ -2276,12 +2276,12 @@ fn orthogonal_route_http_request_backward_response_to_client_preserves_min_right
         .last()
         .copied()
         .expect("polyline backward edge should have target endpoint");
-    let unified_start = unified_edge
+    let orthogonal_start = orthogonal_edge
         .path
         .first()
         .copied()
         .expect("orthogonal backward edge should have source endpoint");
-    let unified_end = unified_edge
+    let orthogonal_end = orthogonal_edge
         .path
         .last()
         .copied()
@@ -2289,18 +2289,18 @@ fn orthogonal_route_http_request_backward_response_to_client_preserves_min_right
 
     let _full_source_face = point_on_target_face(source_rect, full_start);
     let _full_target_face = point_on_target_face(target_rect, full_end);
-    let unified_source_face = point_on_target_face(source_rect, unified_start);
-    let unified_target_face = point_on_target_face(target_rect, unified_end);
+    let orthogonal_source_face = point_on_target_face(source_rect, orthogonal_start);
+    let orthogonal_target_face = point_on_target_face(target_rect, orthogonal_end);
 
     assert_eq!(
-        unified_source_face, "right",
-        "orthogonal Response -> Client should preserve canonical right source face while normalizing right-side clearance: start={unified_start:?}, path={:?}",
-        unified_edge.path
+        orthogonal_source_face, "right",
+        "orthogonal Response -> Client should preserve canonical right source face while normalizing right-side clearance: start={orthogonal_start:?}, path={:?}",
+        orthogonal_edge.path
     );
     assert_eq!(
-        unified_target_face, "right",
-        "orthogonal Response -> Client should preserve canonical right target face while normalizing right-side clearance: end={unified_end:?}, path={:?}",
-        unified_edge.path
+        orthogonal_target_face, "right",
+        "orthogonal Response -> Client should preserve canonical right target face while normalizing right-side clearance: end={orthogonal_end:?}, path={:?}",
+        orthogonal_edge.path
     );
 
     let full_right_lane_x = full_edge
@@ -2308,17 +2308,17 @@ fn orthogonal_route_http_request_backward_response_to_client_preserves_min_right
         .iter()
         .map(|point| point.x)
         .fold(f64::NEG_INFINITY, f64::max);
-    let unified_right_lane_x = unified_edge
+    let orthogonal_right_lane_x = orthogonal_edge
         .path
         .iter()
         .map(|point| point.x)
         .fold(f64::NEG_INFINITY, f64::max);
 
     assert!(
-        unified_right_lane_x + MAX_RIGHT_CLEARANCE_SHRINK_FROM_FULL >= full_right_lane_x,
-        "orthogonal Response -> Client should preserve minimum right-side backward clearance close to polyline baseline (allowed shrink <= {MAX_RIGHT_CLEARANCE_SHRINK_FROM_FULL}): full_right_lane_x={full_right_lane_x}, unified_right_lane_x={unified_right_lane_x}, full_path={:?}, unified_path={:?}",
+        orthogonal_right_lane_x + MAX_RIGHT_CLEARANCE_SHRINK_FROM_FULL >= full_right_lane_x,
+        "orthogonal Response -> Client should preserve minimum right-side backward clearance close to polyline baseline (allowed shrink <= {MAX_RIGHT_CLEARANCE_SHRINK_FROM_FULL}): full_right_lane_x={full_right_lane_x}, orthogonal_right_lane_x={orthogonal_right_lane_x}, full_path={:?}, orthogonal_path={:?}",
         full_edge.path,
-        unified_edge.path
+        orthogonal_edge.path
     );
 }
 
@@ -3911,11 +3911,11 @@ fn style_segment_monitor_reports_actionable_summary_for_routed_geometry() {
 #[test]
 fn orthogonal_route_diamond_source_endpoints_on_boundary() {
     let (diagram, geom) = layout_fixture_svg("decision.mmd");
-    let unified = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+    let orthogonal = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
 
     // B is a diamond node; B->C and B->D are forward edges from B
     for (from, to) in [("B", "C"), ("B", "D")] {
-        let edge = unified
+        let edge = orthogonal
             .edges
             .iter()
             .find(|e| e.from == from && e.to == to)

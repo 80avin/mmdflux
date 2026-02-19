@@ -14,7 +14,7 @@ use super::routing_core::{
 };
 use super::svg_metrics::SvgTextMetrics;
 use super::svg_router;
-use super::unified_router::{UnifiedRoutingOptions, route_edges_unified};
+use super::unified_router::{UnifiedRoutingOptions, route_edges_orthogonal};
 use crate::diagram::{CornerStyle, EdgeRouting, InterpolationStyle, PathDetail};
 use crate::graph::{Arrow, Diagram, Direction, Edge, Node, Shape, Stroke};
 use crate::layered::{LayoutResult, Point, Rect};
@@ -203,7 +203,7 @@ fn rerouted_edge_indexes_for_mode(
         // Pass-through paths are already positioned by the layout engine
         // and should not receive extra shape clipping.
         EdgeRouting::EngineProvided => geom.edges.iter().map(|e| e.index).collect(),
-        // Unified preview routes already encode endpoint intent and should not
+        // Orthgonal routes already encode endpoint intent and should not
         // be shape-adjusted again in SVG (all path styles).
         EdgeRouting::OrthogonalRoute => geom.edges.iter().map(|e| e.index).collect(),
         EdgeRouting::PolylineRoute => HashSet::new(),
@@ -211,7 +211,7 @@ fn rerouted_edge_indexes_for_mode(
 }
 
 fn inject_orthogonal_route_paths(diagram: &Diagram, geom: &GraphGeometry) -> GraphGeometry {
-    let routed = route_edges_unified(diagram, geom, UnifiedRoutingOptions::preview());
+    let routed = route_edges_orthogonal(diagram, geom, UnifiedRoutingOptions::preview());
     let mut updated = geom.clone();
     for edge in routed {
         if let Some(layout_edge) = updated.edges.iter_mut().find(|e| e.index == edge.index) {

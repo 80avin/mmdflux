@@ -8,7 +8,7 @@
 
 use super::geometry::*;
 use super::render::unified_router::{
-    UnifiedRoutingOptions, build_path_from_hints, route_edges_unified, snap_path_to_grid,
+    UnifiedRoutingOptions, build_path_from_hints, route_edges_orthogonal, snap_path_to_grid,
 };
 use crate::diagram::EdgeRouting;
 use crate::graph::Diagram;
@@ -24,7 +24,7 @@ pub fn route_graph_geometry(
 ) -> RoutedGraphGeometry {
     let edges: Vec<RoutedEdgeGeometry> = match edge_routing {
         EdgeRouting::OrthogonalRoute => {
-            route_edges_unified(diagram, geometry, UnifiedRoutingOptions::preview())
+            route_edges_orthogonal(diagram, geometry, UnifiedRoutingOptions::preview())
         }
         EdgeRouting::EngineProvided | EdgeRouting::PolylineRoute => geometry
             .edges
@@ -75,7 +75,7 @@ pub fn route_graph_geometry(
 
 /// Preview helper: snap a float path to a deterministic grid.
 ///
-/// Exposed for routed-geometry contract tests while unified text integration
+/// Exposed for routed-geometry contract tests while orthogonal text integration
 /// is still behind preview rollout.
 pub fn snap_path_to_grid_preview(path: &[FPoint], scale_x: f64, scale_y: f64) -> Vec<FPoint> {
     snap_path_to_grid(path, scale_x, scale_y)
@@ -247,12 +247,12 @@ mod tests {
     }
 
     #[test]
-    fn unified_router_preview_paths_are_axis_aligned() {
+    fn orthogonal_router_preview_paths_are_axis_aligned() {
         let (diagram, geom) = simple_geometry();
-        let unified = route_edges_unified(&diagram, &geom, UnifiedRoutingOptions::preview());
+        let orthogonal = route_edges_orthogonal(&diagram, &geom, UnifiedRoutingOptions::preview());
 
-        assert!(!unified.is_empty());
-        for edge in unified.iter().filter(|edge| !edge.is_backward) {
+        assert!(!orthogonal.is_empty());
+        for edge in orthogonal.iter().filter(|edge| !edge.is_backward) {
             assert!(
                 edge.path
                     .windows(2)

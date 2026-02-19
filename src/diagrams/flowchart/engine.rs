@@ -96,7 +96,7 @@ pub fn run_dagre_layout(
     Ok(geometry::from_dagre_layout(&result, diagram))
 }
 
-/// Flux-layered engine: dagre layout + unified routing natively.
+/// Flux-layered engine: Sugiyama framework layout + orthgonal routing natively.
 ///
 /// Implements `GraphEngine::solve()` with `RouteOwnership::Native` —
 /// layout and routing are performed together inside `solve()`.
