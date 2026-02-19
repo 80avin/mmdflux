@@ -821,3 +821,69 @@ fn flux_polyline_routing_matches_mermaid_layered_for_cycle() {
         "flux+polyline and mermaid+polyline should produce identical edge paths (both FullCompute)"
     );
 }
+
+// =============================================================================
+// Phase 7.5: Render-style isolation — interpolation/corner do not affect geometry
+// =============================================================================
+
+/// Helper: render simple_cycle.mmd as MMDS JSON with explicit style settings.
+fn render_cycle_mmds_with_styles(
+    routing: RoutingStyle,
+    interp: InterpolationStyle,
+    corner: CornerStyle,
+) -> String {
+    let input = std::fs::read_to_string("tests/fixtures/flowchart/simple_cycle.mmd")
+        .expect("simple_cycle.mmd should exist");
+    let mut instance = FlowchartInstance::new();
+    instance.parse(&input).expect("parse should succeed");
+    let config = RenderConfig {
+        routing_style: Some(routing),
+        interpolation_style: Some(interp),
+        corner_style: Some(corner),
+        geometry_level: mmdflux::diagram::GeometryLevel::Layout,
+        ..Default::default()
+    };
+    instance
+        .render(OutputFormat::Mmds, &config)
+        .expect("render should succeed")
+}
+
+#[test]
+fn interpolation_style_does_not_affect_mmds_layout_geometry() {
+    // Layout-level MMDS (no paths) should be identical regardless of interpolation style.
+    // Interpolation is a render-time concern — it only affects SVG curve drawing.
+    let bezier = render_cycle_mmds_with_styles(
+        RoutingStyle::Polyline,
+        InterpolationStyle::Bezier,
+        CornerStyle::Sharp,
+    );
+    let linear = render_cycle_mmds_with_styles(
+        RoutingStyle::Polyline,
+        InterpolationStyle::Linear,
+        CornerStyle::Sharp,
+    );
+    assert_eq!(
+        bezier, linear,
+        "layout-level MMDS geometry should be identical regardless of interpolation style"
+    );
+}
+
+#[test]
+fn corner_style_does_not_affect_mmds_layout_geometry() {
+    // Layout-level MMDS (no paths) should be identical regardless of corner style.
+    // Corner treatment is a render-time concern — it only affects SVG arc drawing.
+    let sharp = render_cycle_mmds_with_styles(
+        RoutingStyle::Orthogonal,
+        InterpolationStyle::Linear,
+        CornerStyle::Sharp,
+    );
+    let rounded = render_cycle_mmds_with_styles(
+        RoutingStyle::Orthogonal,
+        InterpolationStyle::Linear,
+        CornerStyle::Rounded,
+    );
+    assert_eq!(
+        sharp, rounded,
+        "layout-level MMDS geometry should be identical regardless of corner style"
+    );
+}
