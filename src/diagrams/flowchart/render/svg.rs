@@ -961,6 +961,7 @@ fn render_edges(
         let rendered_points = points_for_svg_path(
             &points,
             diagram.direction,
+            edge_routing,
             path_interp,
             path_corner,
             path_detail,
@@ -2315,6 +2316,7 @@ fn edge_marker_attrs(edge: &Edge) -> String {
 fn points_for_svg_path(
     points: &[Point],
     direction: Direction,
+    edge_routing: EdgeRouting,
     interp_style: InterpolationStyle,
     _corner_style: CornerStyle,
     path_detail: PathDetail,
@@ -2322,12 +2324,15 @@ fn points_for_svg_path(
     if points.is_empty() {
         return Vec::new();
     }
-    // Orthogonalize for linear interpolation regardless of corner style.
-    // Both rounded (arc algorithm requires axis-aligned segments) and sharp
-    // (straight L-segments must be axis-aligned to produce right angles) need this.
-    // Bezier interpolation does NOT need orthogonalization because bezier curves
-    // handle smoothness natively from sparse waypoints.
-    let needs_orthogonalization = matches!(interp_style, InterpolationStyle::Linear);
+    // Orthogonalize when both conditions hold:
+    // 1. Routing is orthogonal (UnifiedPreview) — right-angle paths are required.
+    // 2. Interpolation is linear — bezier curves handle smoothness from sparse waypoints
+    //    and do not need axis-aligned segments.
+    // Corner style (sharp vs rounded) does not affect whether orthogonalization is needed;
+    // both require axis-aligned points to produce correct 90° paths.
+    // Polyline routing (FullCompute) intentionally allows diagonal segments — skip.
+    let needs_orthogonalization = matches!(edge_routing, EdgeRouting::UnifiedPreview)
+        && matches!(interp_style, InterpolationStyle::Linear);
     let points: Vec<Point> = if needs_orthogonalization && !points_are_axis_aligned(points) {
         let start: geometry::FPoint = points[0].into();
         let end: geometry::FPoint = points.last().copied().unwrap_or(points[0]).into();
