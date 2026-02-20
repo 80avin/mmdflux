@@ -5,7 +5,7 @@
 //! we calculate where a line from an external point would intersect the node's
 //! boundary.
 //!
-//! This is a key part of the dagre/Sugiyama framework that enables edges to
+//! This is a key part of the Sugiyama framework that enables edges to
 //! fan out naturally from nodes rather than overlapping at the center.
 
 use crate::diagrams::flowchart::geometry::{FPoint, FRect};
@@ -284,8 +284,8 @@ mod tests {
             y: 5,
             width: 10,
             height: 5,
-            dagre_center_x: None,
-            dagre_center_y: None,
+            layout_center_x: None,
+            layout_center_y: None,
         }
     }
 
@@ -406,16 +406,16 @@ mod tests {
             y: 5,
             width: 10,
             height: 3,
-            dagre_center_x: None,
-            dagre_center_y: None,
+            layout_center_x: None,
+            layout_center_y: None,
         };
         let target = NodeBounds {
             x: 10,
             y: 15,
             width: 10,
             height: 3,
-            dagre_center_x: None,
-            dagre_center_y: None,
+            layout_center_x: None,
+            layout_center_y: None,
         };
 
         let (src_attach, tgt_attach) =
@@ -434,16 +434,16 @@ mod tests {
             y: 5,
             width: 10,
             height: 3,
-            dagre_center_x: None,
-            dagre_center_y: None,
+            layout_center_x: None,
+            layout_center_y: None,
         };
         let target = NodeBounds {
             x: 30,
             y: 15,
             width: 10,
             height: 3,
-            dagre_center_x: None,
-            dagre_center_y: None,
+            layout_center_x: None,
+            layout_center_y: None,
         };
         let waypoints = [(20, 10), (25, 12)];
 
@@ -551,16 +551,16 @@ mod tests {
             y: 5,
             width: 10,
             height: 5,
-            dagre_center_x: None,
-            dagre_center_y: None,
+            layout_center_x: None,
+            layout_center_y: None,
         };
         let target = NodeBounds {
             x: 10,
             y: 20,
             width: 10,
             height: 3,
-            dagre_center_x: None,
-            dagre_center_y: None,
+            layout_center_x: None,
+            layout_center_y: None,
         };
 
         let (src_attach, tgt_attach) =

@@ -8,17 +8,17 @@ use std::fs;
 use std::path::Path;
 
 use mmdflux::diagram::EdgeRouting;
-use mmdflux::diagrams::flowchart::engine::{MeasurementMode, run_dagre_layout};
+use mmdflux::diagrams::flowchart::engine::{MeasurementMode, run_layered_layout};
 use mmdflux::diagrams::flowchart::geometry::*;
 use mmdflux::diagrams::flowchart::routing::{route_graph_geometry, snap_path_to_grid_preview};
 use mmdflux::{EngineConfig, OutputFormat, RenderConfig, build_diagram, parse_flowchart};
 
-/// Parse input and produce (Diagram, GraphGeometry) via the dagre engine.
+/// Parse input and produce (Diagram, GraphGeometry) via the layout engine.
 fn layout_test(input: &str) -> (mmdflux::Diagram, GraphGeometry) {
     let fc = parse_flowchart(input).unwrap();
     let diagram = build_diagram(&fc);
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
-    let geom = run_dagre_layout(&MeasurementMode::Text, &diagram, &config).unwrap();
+    let geom = run_layered_layout(&MeasurementMode::Text, &diagram, &config).unwrap();
     (diagram, geom)
 }
 
@@ -38,7 +38,7 @@ fn layout_test_svg(input: &str) -> (mmdflux::Diagram, GraphGeometry) {
     let diagram = build_diagram(&fc);
     let mode = MeasurementMode::for_format(OutputFormat::Svg, &RenderConfig::default());
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
-    let geom = run_dagre_layout(&mode, &diagram, &config).unwrap();
+    let geom = run_layered_layout(&mode, &diagram, &config).unwrap();
     (diagram, geom)
 }
 

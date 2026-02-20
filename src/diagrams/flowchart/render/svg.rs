@@ -5,8 +5,8 @@ use std::fmt::Write;
 
 use super::super::geometry::{self, GraphGeometry};
 use super::layout::{
-    build_dagre_layout, center_override_subgraphs, compute_sublayouts, dagre_config_for_layout,
-    expand_parent_bounds_dagre, reconcile_sublayouts_dagre, resolve_sublayout_overlaps,
+    build_layered_layout, center_override_subgraphs, compute_sublayouts, expand_parent_bounds,
+    layered_config_for_layout, reconcile_sublayouts, resolve_sublayout_overlaps,
 };
 use super::orthogonal_router::{OrthogonalRoutingOptions, route_edges_orthogonal};
 use super::route_policy::effective_edge_direction;
@@ -36,9 +36,9 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
     let mut config = layout_config_for_diagram(diagram, options);
     config.ranker = options.ranker;
     if options.cluster_ranksep.is_none() {
-        // Mermaid's dagre renderer does not add extra rank separation for clusters.
+        // Mermaid's renderer does not add extra rank separation for clusters.
         // Keep the default for text output but disable it for SVG unless overridden.
-        config.dagre_cluster_rank_sep = 0.0;
+        config.cluster_rank_sep = 0.0;
     }
 
     let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::OrthogonalRoute);
@@ -57,7 +57,7 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
 
 /// Build fully post-processed SVG layout geometry.
 ///
-/// Runs the dagre layout with SVG pixel metrics, applies all subgraph
+/// Runs the layered layout with SVG pixel metrics, applies all subgraph
 /// post-processing (direction overrides, sublayout reconciliation, padding,
 /// edge rerouting), and converts to `GraphGeometry`. The result's
 /// `rerouted_edges` field carries edge indices rerouted by the subgraph
@@ -73,7 +73,7 @@ pub(crate) fn build_svg_layout(
     edge_routing: EdgeRouting,
 ) -> GraphGeometry {
     let direction = diagram.direction;
-    let mut layout = build_dagre_layout(
+    let mut layout = build_layered_layout(
         diagram,
         config,
         |node| svg_node_dimensions(metrics, node, direction),
@@ -84,10 +84,10 @@ pub(crate) fn build_svg_layout(
         },
     );
 
-    let dagre_config = dagre_config_for_layout(diagram, config);
+    let layered_config = layered_config_for_layout(diagram, config);
     let sublayouts = compute_sublayouts(
         diagram,
-        &dagre_config,
+        &layered_config,
         |node| svg_node_dimensions(metrics, node, direction),
         |edge| {
             edge.label
@@ -97,7 +97,7 @@ pub(crate) fn build_svg_layout(
     );
     let title_pad_y = metrics.font_size;
     let content_pad_y = metrics.font_size * 0.3;
-    reconcile_sublayouts_dagre(
+    reconcile_sublayouts(
         diagram,
         &mut layout,
         &sublayouts,
@@ -113,7 +113,7 @@ pub(crate) fn build_svg_layout(
     // Expand parent subgraph bounds to encompass repositioned children.
     let child_margin = metrics.node_padding_x.max(metrics.node_padding_y);
     let title_margin = metrics.font_size;
-    expand_parent_bounds_dagre(diagram, &mut layout, child_margin, title_margin);
+    expand_parent_bounds(diagram, &mut layout, child_margin, title_margin);
 
     // Push external nodes that now overlap with reconciled subgraph bounds.
     let overlap_gap = metrics.node_padding_y + metrics.font_size;
@@ -122,8 +122,8 @@ pub(crate) fn build_svg_layout(
     // Align sibling nodes with their cross-boundary edge targets on the
     // cross-axis of the parent direction.  Must run after reconciliation
     // and overlap resolution but before edge rerouting.
-    svg_router::align_cross_boundary_siblings_dagre(diagram, &mut layout);
-    expand_parent_bounds_dagre(diagram, &mut layout, child_margin, title_margin);
+    svg_router::align_cross_boundary_siblings(diagram, &mut layout);
+    expand_parent_bounds(diagram, &mut layout, child_margin, title_margin);
 
     // Reroute edges affected by direction-override subgraphs.
     // This must happen after reconciliation moves nodes but before padding,
@@ -136,7 +136,7 @@ pub(crate) fn build_svg_layout(
         diagram,
         &mut layout,
         &node_directions,
-        config.dagre_rank_sep,
+        config.rank_sep,
     );
 
     let (_stats, rerouted_edges) =
@@ -152,7 +152,7 @@ pub(crate) fn build_svg_layout(
 
     // Push external nodes away from subgraph borders so that subgraph-as-node
     // edges have visible length comparable to normal edges.
-    ensure_subgraph_edge_spacing(diagram, &mut layout, config.dagre_rank_sep);
+    ensure_subgraph_edge_spacing(diagram, &mut layout, config.rank_sep);
 
     // Reroute subgraph-as-node edges with fresh orthogonal paths computed from
     // padded subgraph bounds.  Must run after padding so endpoints land on the
@@ -162,7 +162,7 @@ pub(crate) fn build_svg_layout(
     rerouted_edges.extend(sg_node_rerouted);
 
     // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
-    let mut geom = geometry::from_dagre_layout(&layout, diagram);
+    let mut geom = geometry::from_layered_layout(&layout, diagram);
     if matches!(edge_routing, EdgeRouting::OrthogonalRoute) {
         geom = inject_orthogonal_route_paths(diagram, &geom);
         rerouted_edges.extend(geom.edges.iter().map(|e| e.index));
@@ -2736,7 +2736,7 @@ fn adjust_edge_points_for_shapes(
     // In orthogonal routing mode the router already places forward non-rect shape
     // endpoints on the actual shape boundary — these are authoritative and must
     // not be re-projected (different approach angles would shift them).
-    // In polyline routing mode dagre only clips to the bounding rect, so non-rect
+    // In polyline routing mode the layout only clips to the bounding rect, so non-rect
     // shapes always need re-projection to the actual shape boundary.
     let router_placed_source = matches!(edge_routing, EdgeRouting::OrthogonalRoute)
         && !is_self_loop
@@ -3840,9 +3840,10 @@ fn compute_self_edge_paths(
         if se.points.is_empty() {
             continue;
         }
-        let dagre_rect: Rect = pos_node.rect.into();
-        let dagre_points: Vec<Point> = se.points.iter().map(|p| (*p).into()).collect();
-        let adjusted = adjust_self_edge_points(&dagre_rect, &dagre_points, diagram.direction, pad);
+        let layout_rect: Rect = pos_node.rect.into();
+        let layout_points: Vec<Point> = se.points.iter().map(|p| (*p).into()).collect();
+        let adjusted =
+            adjust_self_edge_points(&layout_rect, &layout_points, diagram.direction, pad);
         paths.insert(se.edge_index, adjusted);
     }
 

@@ -1,6 +1,6 @@
 //! Layout computation for flowchart diagrams.
 //!
-//! Translates dagre float coordinates into ASCII character-grid positions using
+//! Translates layout float coordinates into ASCII character-grid positions using
 //! uniform scale factors, collision repair, and waypoint transformation.
 
 use std::collections::{HashMap, HashSet};
@@ -10,7 +10,7 @@ use crate::graph::{Diagram, Direction, Edge, Node, Shape, Stroke};
 #[cfg(test)]
 use crate::layered::Point;
 use crate::layered::normalize::WaypointWithRank;
-use crate::layered::{self, Direction as DagreDirection, LayoutConfig as DagreConfig, Rect};
+use crate::layered::{self, Direction as LayeredDirection, LayoutConfig as LayeredConfig, Rect};
 
 /// Bounding box for a subgraph border in draw coordinates.
 #[derive(Debug, Clone)]
@@ -49,25 +49,25 @@ pub struct GridPos {
     pub pos: usize,
 }
 
-/// Coordinate transformation context from dagre float coordinates to draw coordinates.
+/// Coordinate transformation context from layout float coordinates to draw coordinates.
 ///
 /// Encapsulates the scaling, offset, and padding parameters needed to convert
-/// dagre's floating-point layout coordinates to integer character-grid positions.
+/// the layout engine's floating-point coordinates to integer character-grid positions.
 struct CoordTransform<'a> {
     scale_x: f64,
     scale_y: f64,
-    dagre_min_x: f64,
-    dagre_min_y: f64,
+    layout_min_x: f64,
+    layout_min_y: f64,
     max_overhang_x: usize,
     max_overhang_y: usize,
     config: &'a LayoutConfig,
 }
 
 impl CoordTransform<'_> {
-    /// Convert dagre coordinates to draw coordinates.
+    /// Convert layout coordinates to draw coordinates.
     fn to_draw(&self, x: f64, y: f64) -> (usize, usize) {
-        let dx = ((x - self.dagre_min_x) * self.scale_x).round() as isize;
-        let dy = ((y - self.dagre_min_y) * self.scale_y).round() as isize;
+        let dx = ((x - self.layout_min_x) * self.scale_x).round() as isize;
+        let dy = ((y - self.layout_min_y) * self.scale_y).round() as isize;
         let draw_x = dx.max(0) as usize
             + self.max_overhang_x
             + self.config.padding
@@ -188,16 +188,16 @@ pub struct LayoutConfig {
     pub right_label_margin: usize,
     /// Ranking algorithm override.
     pub ranker: Option<crate::layered::types::Ranker>,
-    /// Dagre nodesep (node spacing).
-    pub dagre_node_sep: f64,
-    /// Dagre edgesep (edge segment spacing).
-    pub dagre_edge_sep: f64,
-    /// Dagre ranksep (rank spacing).
-    pub dagre_rank_sep: f64,
-    /// Dagre margin (applied in translateGraph).
-    pub dagre_margin: f64,
+    /// Node spacing (nodesep).
+    pub node_sep: f64,
+    /// Edge segment spacing (edgesep).
+    pub edge_sep: f64,
+    /// Rank spacing (ranksep).
+    pub rank_sep: f64,
+    /// Layout margin (applied in translateGraph).
+    pub margin: f64,
     /// Additional ranksep applied when subgraphs are present (Mermaid clusters).
-    pub dagre_cluster_rank_sep: f64,
+    pub cluster_rank_sep: f64,
 }
 
 impl Default for LayoutConfig {
@@ -209,28 +209,28 @@ impl Default for LayoutConfig {
             left_label_margin: 0,
             right_label_margin: 0,
             ranker: None,
-            dagre_node_sep: 50.0,
-            dagre_edge_sep: 20.0,
-            dagre_rank_sep: 50.0,
-            dagre_margin: 8.0,
-            dagre_cluster_rank_sep: 25.0,
+            node_sep: 50.0,
+            edge_sep: 20.0,
+            rank_sep: 50.0,
+            margin: 8.0,
+            cluster_rank_sep: 25.0,
         }
     }
 }
 
-/// Convert a graph-level Direction to a dagre Direction.
-fn to_dagre_direction(dir: Direction) -> DagreDirection {
+/// Convert a graph-level Direction to a layered Direction.
+fn to_layered_direction(dir: Direction) -> LayeredDirection {
     match dir {
-        Direction::TopDown => DagreDirection::TopBottom,
-        Direction::BottomTop => DagreDirection::BottomTop,
-        Direction::LeftRight => DagreDirection::LeftRight,
-        Direction::RightLeft => DagreDirection::RightLeft,
+        Direction::TopDown => LayeredDirection::TopBottom,
+        Direction::BottomTop => LayeredDirection::BottomTop,
+        Direction::LeftRight => LayeredDirection::LeftRight,
+        Direction::RightLeft => LayeredDirection::RightLeft,
     }
 }
 
 /// Pre-computed sub-layout result for a direction-override subgraph.
 pub(crate) struct SubLayoutResult {
-    /// The dagre LayoutResult with node positions in the sub-layout coordinate system.
+    /// The LayoutResult with node positions in the sub-layout coordinate system.
     result: layered::LayoutResult,
     /// Map from sublayout edge index to original diagram edge index.
     edge_index_map: Vec<usize>,
@@ -238,13 +238,13 @@ pub(crate) struct SubLayoutResult {
 
 /// Compute sub-layouts for subgraphs with direction overrides.
 ///
-/// For each subgraph that has a `dir` override, this creates a standalone dagre
+/// For each subgraph that has a `dir` override, this creates a standalone layered
 /// graph with just the subgraph's internal nodes and edges, and runs layout with
 /// the overridden direction. The resulting dimensions can be injected into the
 /// parent layout so the compound node is sized correctly.
 pub(crate) fn compute_sublayouts<FN, FE>(
     diagram: &Diagram,
-    parent_dagre_config: &DagreConfig,
+    parent_layered_config: &LayeredConfig,
     node_dims: FN,
     edge_label_dims: FE,
 ) -> HashMap<String, SubLayoutResult>
@@ -260,7 +260,7 @@ where
             None => continue,
         };
 
-        let dagre_direction = to_dagre_direction(sub_dir);
+        let layered_direction = to_layered_direction(sub_dir);
 
         let mut sub_graph: layered::DiGraph<(f64, f64)> = layered::DiGraph::new();
 
@@ -292,7 +292,7 @@ where
             }
         }
 
-        // Chain disconnected components with synthetic edges so dagre spreads
+        // Chain disconnected components with synthetic edges so the layout spreads
         // all nodes along the sub-layout's primary axis.  Without this, nodes
         // with no internal edges collapse into rank 0.
         //
@@ -348,9 +348,9 @@ where
         }
 
         // Use parent config but override direction
-        let sub_config = DagreConfig {
-            direction: dagre_direction,
-            ..parent_dagre_config.clone()
+        let sub_config = LayeredConfig {
+            direction: layered_direction,
+            ..parent_layered_config.clone()
         };
 
         let result =
@@ -372,7 +372,7 @@ where
 ///
 /// For each subgraph with a direction override:
 /// 1. Get the current subgraph draw bounds (from the main layout's compound pipeline)
-/// 2. Convert sub-layout dagre positions to draw coordinates using simple spacing
+/// 2. Convert sub-layout positions to draw coordinates using simple spacing
 /// 3. Center the sub-layout's draw positions within the subgraph bounds
 /// 4. Override draw_positions, node_bounds, and subgraph_bounds
 #[allow(clippy::too_many_arguments)]
@@ -413,9 +413,9 @@ fn reconcile_sublayouts_draw(
         };
 
         // Compute draw coordinates for sub-layout nodes.
-        // Each node's position in the sub-layout is in dagre float coords.
+        // Each node's position in the sub-layout is in layout float coords.
         // We convert them to character positions using a simple approach:
-        // node draw (x, y) = dagre position scaled to fit draw space.
+        // node draw (x, y) = layout position scaled to fit draw space.
         //
         // For the sub-layout, we use the node dimensions directly and add spacing.
         let sub_dir = sg.dir.unwrap_or(diagram.direction);
@@ -437,25 +437,25 @@ fn reconcile_sublayouts_draw(
             })
             .collect();
 
-        let sub_rank_sep = config.dagre_rank_sep + config.dagre_cluster_rank_sep;
+        let sub_rank_sep = config.rank_sep + config.cluster_rank_sep;
         let (sub_scale_x, sub_scale_y) = compute_ascii_scale_factors(
             &sub_node_dims,
             sub_rank_sep,
-            config.dagre_node_sep,
+            config.node_sep,
             config.v_spacing,
             config.h_spacing,
             sub_is_vertical,
             false,
         );
 
-        // Find sub-layout dagre bounding box min
-        let sub_dagre_min_x = sublayout
+        // Find sub-layout bounding box min
+        let sub_layout_min_x = sublayout
             .result
             .nodes
             .values()
             .map(|r| r.x)
             .fold(f64::INFINITY, f64::min);
-        let sub_dagre_min_y = sublayout
+        let sub_layout_min_y = sublayout
             .result
             .nodes
             .values()
@@ -469,9 +469,10 @@ fn reconcile_sublayouts_draw(
                 None => continue,
             };
 
-            let cx = ((rect.x + rect.width / 2.0 - sub_dagre_min_x) * sub_scale_x).round() as usize;
+            let cx =
+                ((rect.x + rect.width / 2.0 - sub_layout_min_x) * sub_scale_x).round() as usize;
             let cy =
-                ((rect.y + rect.height / 2.0 - sub_dagre_min_y) * sub_scale_y).round() as usize;
+                ((rect.y + rect.height / 2.0 - sub_layout_min_y) * sub_scale_y).round() as usize;
             let x = cx.saturating_sub(w / 2);
             let y = cy.saturating_sub(h / 2);
 
@@ -593,8 +594,8 @@ fn reconcile_sublayouts_draw(
                     y: final_y,
                     width: *w,
                     height: *h,
-                    dagre_center_x: Some(final_x + w / 2),
-                    dagre_center_y: Some(final_y + h / 2),
+                    layout_center_x: Some(final_x + w / 2),
+                    layout_center_y: Some(final_y + h / 2),
                 },
             );
         }
@@ -721,7 +722,7 @@ fn resolve_sibling_overlaps_draw(
                             }
                             if let Some(b) = node_bounds.get_mut(*node_id) {
                                 b.x += shift;
-                                if let Some(ref mut cx) = b.dagre_center_x {
+                                if let Some(ref mut cx) = b.layout_center_x {
                                     *cx += shift;
                                 }
                             }
@@ -755,7 +756,7 @@ fn resolve_sibling_overlaps_draw(
                             }
                             if let Some(b) = node_bounds.get_mut(*node_id) {
                                 b.y += shift;
-                                if let Some(ref mut cy) = b.dagre_center_y {
+                                if let Some(ref mut cy) = b.layout_center_y {
                                     *cy += shift;
                                 }
                             }
@@ -783,10 +784,10 @@ fn resolve_sibling_overlaps_draw(
                     if let Some(b) = node_bounds.get_mut(member_id) {
                         b.x += shift_x;
                         b.y += shift_y;
-                        if let Some(ref mut cx) = b.dagre_center_x {
+                        if let Some(ref mut cx) = b.layout_center_x {
                             *cx += shift_x;
                         }
-                        if let Some(ref mut cy) = b.dagre_center_y {
+                        if let Some(ref mut cy) = b.layout_center_y {
                             *cy += shift_y;
                         }
                     }
@@ -886,7 +887,7 @@ fn align_cross_boundary_siblings_draw(
                 }
                 if let Some(b) = node_bounds.get_mut(*node_id) {
                     b.y = new_y;
-                    b.dagre_center_y = Some(new_y + nb.height / 2);
+                    b.layout_center_y = Some(new_y + nb.height / 2);
                 }
             } else {
                 let node_cx = nb.x + nb.width / 2;
@@ -899,7 +900,7 @@ fn align_cross_boundary_siblings_draw(
                 }
                 if let Some(b) = node_bounds.get_mut(*node_id) {
                     b.x = new_x;
-                    b.dagre_center_x = Some(new_x + nb.width / 2);
+                    b.layout_center_x = Some(new_x + nb.width / 2);
                 }
             }
             affected_parents.insert(sg_id.clone());
@@ -948,34 +949,34 @@ fn align_cross_boundary_siblings_draw(
     }
 }
 
-pub(crate) fn dagre_config_for_layout(diagram: &Diagram, config: &LayoutConfig) -> DagreConfig {
-    let dagre_direction = to_dagre_direction(diagram.direction);
+pub(crate) fn layered_config_for_layout(diagram: &Diagram, config: &LayoutConfig) -> LayeredConfig {
+    let layered_direction = to_layered_direction(diagram.direction);
 
-    let node_sep = config.dagre_node_sep;
-    let edge_sep = config.dagre_edge_sep;
-    let mut rank_sep = config.dagre_rank_sep;
-    if diagram.has_subgraphs() && config.dagre_cluster_rank_sep > 0.0 {
+    let node_sep = config.node_sep;
+    let edge_sep = config.edge_sep;
+    let mut rank_sep = config.rank_sep;
+    if diagram.has_subgraphs() && config.cluster_rank_sep > 0.0 {
         // Mermaid increases ranksep for cluster graphs (ranksep + 25).
         // We apply the offset when subgraphs are present to approximate that behavior.
-        rank_sep += config.dagre_cluster_rank_sep;
+        rank_sep += config.cluster_rank_sep;
     }
 
-    DagreConfig {
-        direction: dagre_direction,
+    LayeredConfig {
+        direction: layered_direction,
         node_sep,
         edge_sep,
         rank_sep,
-        margin: config.dagre_margin,
+        margin: config.margin,
         acyclic: true,
         ranker: config.ranker.unwrap_or_default(),
     }
 }
 
-/// Reconcile direction-override sub-layouts into a dagre LayoutResult (SVG pipeline).
+/// Reconcile direction-override sub-layouts into a LayoutResult (SVG pipeline).
 ///
 /// This updates node positions, internal edge paths, label positions, and subgraph bounds
 /// for subgraphs that override direction.
-pub(crate) fn reconcile_sublayouts_dagre(
+pub(crate) fn reconcile_sublayouts(
     diagram: &Diagram,
     layout: &mut layered::LayoutResult,
     sublayouts: &HashMap<String, SubLayoutResult>,
@@ -1020,8 +1021,8 @@ pub(crate) fn reconcile_sublayouts_dagre(
         let sub_w = (max_x - min_x).max(0.0);
         let sub_h = (max_y - min_y).max(0.0);
 
-        // Use the center of dagre's internal node positions as anchor,
-        // not the oversized parent cluster bounds.  Dagre's compound node
+        // Use the center of the layout's internal node positions as anchor,
+        // not the oversized parent cluster bounds.  The compound node
         // bounds span many ranks for long cross-boundary edges, but the
         // sublayout should sit where the internal nodes were ranked.
         let sg = &diagram.subgraphs[sg_id];
@@ -1287,7 +1288,7 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut layered:
             }
         }
 
-        // Compute tight member-node bounds on the primary axis.  Dagre's
+        // Compute tight member-node bounds on the primary axis.  The layout engine's
         // compound subgraph bounds span all ranks reachable from border nodes,
         // which can be much larger than the actual member nodes.  Use member
         // bounds for the inside_primary check so external nodes at distant
@@ -1552,7 +1553,7 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut layered:
 /// subgraph bounds.
 ///
 /// After sublayout reconciliation and centering, child subgraphs may have been
-/// repositioned (e.g., an LR inner subgraph is wider than dagre predicted).
+/// repositioned (e.g., an LR inner subgraph is wider than the layout predicted).
 /// This walks subgraphs inner-first and expands each parent's bounds to be the
 /// union of its current bounds and all member content.
 ///
@@ -1562,7 +1563,7 @@ pub(crate) fn center_override_subgraphs(diagram: &Diagram, layout: &mut layered:
 ///
 /// `title_margin` adds extra top space when the parent has a visible title,
 /// so the child border doesn't overlap the parent's title text.
-pub(crate) fn expand_parent_bounds_dagre(
+pub(crate) fn expand_parent_bounds(
     diagram: &Diagram,
     layout: &mut layered::LayoutResult,
     child_margin: f64,
@@ -1629,7 +1630,7 @@ pub(crate) fn expand_parent_bounds_dagre(
 
 /// Push external nodes that overlap with reconciled subgraph bounds downward.
 ///
-/// After sublayout reconciliation, the subgraph may now occupy space where dagre
+/// After sublayout reconciliation, the subgraph may now occupy space where the layout
 /// placed external nodes.  This shifts those nodes (and everything below them)
 /// down to maintain a minimum gap.
 pub(crate) fn resolve_sublayout_overlaps(
@@ -1711,9 +1712,9 @@ pub(crate) fn resolve_sublayout_overlaps(
     }
 }
 
-fn build_dagre_layout_with_config<FN, FE>(
+fn build_layered_layout_with_config<FN, FE>(
     diagram: &Diagram,
-    dagre_config: &DagreConfig,
+    layered_config: &LayeredConfig,
     node_dims: FN,
     edge_label_dims: FE,
 ) -> layered::LayoutResult
@@ -1826,12 +1827,13 @@ where
         }
     }
 
-    let result = layered::layout_with_labels(&dgraph, dagre_config, |_, dims| *dims, &edge_labels);
+    let result =
+        layered::layout_with_labels(&dgraph, layered_config, |_, dims| *dims, &edge_labels);
 
     if std::env::var("MMDFLUX_DEBUG_NODE_POS").is_ok_and(|v| v == "1") {
         for (id, rect) in &result.nodes {
             eprintln!(
-                "[dagre_nodes] {} x={:.2} y={:.2} w={:.2} h={:.2}",
+                "[layered_nodes] {} x={:.2} y={:.2} w={:.2} h={:.2}",
                 id.0, rect.x, rect.y, rect.width, rect.height
             );
         }
@@ -1840,7 +1842,7 @@ where
     result
 }
 
-pub(crate) fn build_dagre_layout<FN, FE>(
+pub(crate) fn build_layered_layout<FN, FE>(
     diagram: &Diagram,
     config: &LayoutConfig,
     node_dims: FN,
@@ -1850,8 +1852,8 @@ where
     FN: Fn(&Node) -> (f64, f64),
     FE: Fn(&Edge) -> Option<(f64, f64)>,
 {
-    let dagre_config = dagre_config_for_layout(diagram, config);
-    build_dagre_layout_with_config(diagram, &dagre_config, node_dims, edge_label_dims)
+    let layered_config = layered_config_for_layout(diagram, config);
+    build_layered_layout_with_config(diagram, &layered_config, node_dims, edge_label_dims)
 }
 
 fn text_edge_label_dimensions(label: &str) -> (f64, f64) {
@@ -1865,23 +1867,23 @@ fn text_edge_label_dimensions(label: &str) -> (f64, f64) {
     (width as f64 + 2.0, height as f64)
 }
 
-/// Compute the layout using the dagre algorithm with direct coordinate translation.
+/// Compute the layout using the layered algorithm with direct coordinate translation.
 ///
-/// This uses uniform scale factors to translate dagre's float coordinates to ASCII
+/// This uses uniform scale factors to translate the layout's float coordinates to ASCII
 /// character cells, replacing the stagger pipeline. The 3-step process:
 /// 1. Compute per-axis scale factors
-/// 2. Apply uniform scaling + rounding to all dagre coordinates
+/// 2. Apply uniform scaling + rounding to all layout coordinates
 /// 3. Enforce minimum spacing via collision repair
 pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout {
-    // --- Phase A: Build dagre graph ---
-    let dagre_config = dagre_config_for_layout(diagram, config);
-    let dagre_direction = dagre_config.direction;
+    // --- Phase A: Build layered graph ---
+    let layered_config = layered_config_for_layout(diagram, config);
+    let layered_direction = layered_config.direction;
 
     // Pre-compute sub-layouts for subgraphs with direction overrides.
     let direction = diagram.direction;
     let sublayouts = compute_sublayouts(
         diagram,
-        &dagre_config,
+        &layered_config,
         |node| {
             let (w, h) = node_dimensions(node, direction);
             (w as f64, h as f64)
@@ -1893,9 +1895,9 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         },
     );
 
-    let mut result = build_dagre_layout_with_config(
+    let mut result = build_layered_layout_with_config(
         diagram,
-        &dagre_config,
+        &layered_config,
         |node| {
             let (w, h) = node_dimensions(node, direction);
             (w as f64, h as f64)
@@ -1910,15 +1912,15 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Shift external predecessors of direction-override subgraphs to align
     // with the subgraph center, before coordinate transformation.
     center_override_subgraphs(diagram, &mut result);
-    expand_parent_bounds_dagre(diagram, &mut result, 0.0, 0.0);
+    expand_parent_bounds(diagram, &mut result, 0.0, 0.0);
 
     // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
-    // From this point on, phases read from `geom` (and `dagre_hints` for
+    // From this point on, phases read from `geom` (and `engine_hints` for
     // rank-annotated data) instead of the raw `result`.
-    let geom = super::super::geometry::from_dagre_layout(&result, diagram);
-    let dagre_hints = match &geom.engine_hints {
-        Some(super::super::geometry::EngineHints::Dagre(h)) => h,
-        _ => unreachable!("dagre adapter always produces dagre hints"),
+    let geom = super::super::geometry::from_layered_layout(&result, diagram);
+    let engine_hints = match &geom.engine_hints {
+        Some(super::super::geometry::EngineHints::Layered(h)) => h,
+        _ => unreachable!("layered adapter always produces layered hints"),
     };
 
     // --- Phase B: Group nodes into layers ---
@@ -1984,32 +1986,32 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .map(|(id, node)| (id.clone(), node_dimensions(node, direction)))
         .collect();
 
-    // --- Phase D: Scale dagre coordinates to ASCII ---
-    // The dagre layer halves rank_sep when it doubles minlen (matching dagre.js
-    // makeSpaceForEdgeLabels), so dagre positions are already compact. No
+    // --- Phase D: Scale layout coordinates to ASCII ---
+    // The layered layout halves rank_sep when it doubles minlen (matching dagre.js
+    // makeSpaceForEdgeLabels), so layout positions are already compact. No
     // render-side scale compensation is needed: pass ranks_doubled=false so the
     // scale formula uses the original rank_sep directly.
-    // However, minlen IS still doubled, so waypoints at odd dagre ranks still
+    // However, minlen IS still doubled, so waypoints at odd layout ranks still
     // need interpolation in the layer_starts map (ranks_doubled_for_layers=true).
     let ranks_doubled_for_scale = false;
     let ranks_doubled_for_layers = true;
     let (scale_x, scale_y) = compute_ascii_scale_factors(
         &node_dims,
-        dagre_config.rank_sep,
-        dagre_config.node_sep,
+        layered_config.rank_sep,
+        layered_config.node_sep,
         config.v_spacing,
         config.h_spacing,
         is_vertical,
         ranks_doubled_for_scale,
     );
 
-    // Find dagre bounding box min
-    let mut dagre_min_x = geom
+    // Find layout bounding box min
+    let mut layout_min_x = geom
         .nodes
         .values()
         .map(|n| n.rect.x)
         .fold(f64::INFINITY, f64::min);
-    let mut dagre_min_y = geom
+    let mut layout_min_y = geom
         .nodes
         .values()
         .map(|n| n.rect.y)
@@ -2026,14 +2028,14 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             .values()
             .map(|sg| sg.rect.y)
             .fold(f64::INFINITY, f64::min);
-        dagre_min_x = dagre_min_x.min(sg_min_x);
-        dagre_min_y = dagre_min_y.min(sg_min_y);
+        layout_min_x = layout_min_x.min(sg_min_x);
+        layout_min_y = layout_min_y.min(sg_min_y);
     }
 
     if std::env::var("MMDFLUX_DEBUG_MIN_X").is_ok_and(|v| v == "1") {
         eprintln!(
-            "[min_x] dagre_min_x={:.2} dagre_min_y={:.2}",
-            dagre_min_x, dagre_min_y
+            "[min_x] layout_min_x={:.2} layout_min_y={:.2}",
+            layout_min_x, layout_min_y
         );
     }
 
@@ -2055,9 +2057,9 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
 
     for (node_id, pos_node) in &geom.nodes {
         if let Some(&(w, h)) = node_dims.get(node_id) {
-            let cx = ((pos_node.rect.x + pos_node.rect.width / 2.0 - dagre_min_x) * scale_x).round()
-                as usize;
-            let cy = ((pos_node.rect.y + pos_node.rect.height / 2.0 - dagre_min_y) * scale_y)
+            let cx = ((pos_node.rect.x + pos_node.rect.width / 2.0 - layout_min_x) * scale_x)
+                .round() as usize;
+            let cy = ((pos_node.rect.y + pos_node.rect.height / 2.0 - layout_min_y) * scale_y)
                 .round() as usize;
             if w / 2 > cx {
                 max_overhang_x = max_overhang_x.max(w / 2 - cx);
@@ -2094,8 +2096,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                 y,
                 width: rc.w,
                 height: rc.h,
-                dagre_center_x: Some(center_x + config.padding + config.left_label_margin),
-                dagre_center_y: Some(center_y + config.padding),
+                layout_center_x: Some(center_x + config.padding + config.left_label_margin),
+                layout_center_y: Some(center_y + config.padding),
             },
         );
     }
@@ -2129,10 +2131,10 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     // Update node_bounds after collision repair
     for (id, &(x, y)) in &draw_positions {
         if let Some(&(w, h)) = node_dims.get(id) {
-            // Preserve dagre center from the initial pass
+            // Preserve layout center from the initial pass
             let prev = node_bounds.get(id);
-            let dagre_center_x = prev.and_then(|b| b.dagre_center_x);
-            let dagre_center_y = prev.and_then(|b| b.dagre_center_y);
+            let layout_center_x = prev.and_then(|b| b.layout_center_x);
+            let layout_center_y = prev.and_then(|b| b.layout_center_y);
             node_bounds.insert(
                 id.clone(),
                 NodeBounds {
@@ -2140,8 +2142,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                     y,
                     width: w,
                     height: h,
-                    dagre_center_x,
-                    dagre_center_y,
+                    layout_center_x,
+                    layout_center_y,
                 },
             );
         }
@@ -2177,16 +2179,16 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         (base_width, base_height + backward_margin)
     };
 
-    // --- Phase G: Build dagre-rank → draw-coordinate mapping ---
+    // --- Phase G: Build layout-rank → draw-coordinate mapping ---
     // Use actual node_bounds to compute layer positions, ensuring waypoints are positioned
-    // relative to where nodes are actually rendered (not scaled dagre positions).
+    // relative to where nodes are actually rendered (not scaled layout positions).
     //
     // For each rank with user nodes, compute the extent (start, end) on the primary axis
     // from the actual node_bounds. For dummy ranks (no user nodes), interpolate between
     // neighboring real node ranks.
     let rank_to_actual_bounds: HashMap<i32, (usize, usize)> = {
         let mut rank_bounds: HashMap<i32, (usize, usize)> = HashMap::new();
-        for (node_id, &rank) in &dagre_hints.node_ranks {
+        for (node_id, &rank) in &engine_hints.node_ranks {
             if let Some(bounds) = node_bounds.get(node_id) {
                 let (start, end) = if is_vertical {
                     (bounds.y, bounds.y + bounds.height)
@@ -2205,10 +2207,10 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         rank_bounds
     };
 
-    // Build layer_starts as a Vec indexed by dagre rank.
+    // Build layer_starts as a Vec indexed by layout rank.
     // Real node ranks use the actual node bounds extent.
     // Missing ranks (e.g., dummy/label ranks) interpolate between the nearest neighbors.
-    let max_rank = dagre_hints
+    let max_rank = engine_hints
         .node_ranks
         .values()
         .copied()
@@ -2257,8 +2259,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
 
     // --- Phase H: Transform waypoints and labels ---
     let ctx = TransformContext {
-        dagre_min_x,
-        dagre_min_y,
+        layout_min_x,
+        layout_min_y,
         scale_x,
         scale_y,
         padding: config.padding,
@@ -2267,10 +2269,10 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         overhang_y: max_overhang_y,
     };
 
-    // Transient adapter glue: convert DagreHints back to WaypointWithRank for
+    // Transient adapter glue: convert LayeredHints back to WaypointWithRank for
     // the transform functions. This conversion will be removed when the transform
     // functions are updated to consume geometry IR types directly (Plan 0055).
-    let edge_waypoints_raw: HashMap<usize, Vec<WaypointWithRank>> = dagre_hints
+    let edge_waypoints_raw: HashMap<usize, Vec<WaypointWithRank>> = engine_hints
         .edge_waypoints
         .iter()
         .map(|(&idx, wps)| {
@@ -2285,7 +2287,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             )
         })
         .collect();
-    let label_positions_raw: HashMap<usize, WaypointWithRank> = dagre_hints
+    let label_positions_raw: HashMap<usize, WaypointWithRank> = engine_hints
         .label_positions
         .iter()
         .map(|(&idx, (fp, rank))| {
@@ -2300,13 +2302,13 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         .collect();
 
     if std::env::var("MMDFLUX_DEBUG_WAYPOINTS").is_ok_and(|v| v == "1") {
-        eprintln!("[node_ranks] {:?}", dagre_hints.node_ranks);
+        eprintln!("[node_ranks] {:?}", engine_hints.node_ranks);
         eprintln!("[rank_to_actual_bounds] {:?}", rank_to_actual_bounds);
         eprintln!("[layer_starts] {:?}", layer_starts);
         for (edge_idx, wps) in &edge_waypoints_raw {
             if let Some(edge) = diagram.edges.get(*edge_idx) {
                 eprintln!(
-                    "[raw dagre waypoints] {} -> {}: {:?}",
+                    "[raw layout waypoints] {} -> {}: {:?}",
                     edge.from, edge.to, wps
                 );
             }
@@ -2341,8 +2343,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
         height,
     );
 
-    // --- Phase I: Strip dagre waypoints from backward edges ---
-    // When ranks are doubled (labels present), backward edges get inflated dagre
+    // --- Phase I: Strip layout waypoints from backward edges ---
+    // When ranks are doubled (labels present), backward edges get inflated layout
     // waypoints from normalization dummies that create tall vertical columns.
     // Strip them so the router falls through to synthetic compact routing via
     // generate_backward_waypoints().
@@ -2382,25 +2384,25 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     let coord_transform = CoordTransform {
         scale_x,
         scale_y,
-        dagre_min_x,
-        dagre_min_y,
+        layout_min_x,
+        layout_min_y,
         max_overhang_x,
         max_overhang_y,
         config,
     };
-    // Transient adapter glue: convert GraphGeometry subgraphs back to dagre Rect map
-    // for dagre_subgraph_bounds_to_draw. Will be removed in Plan 0055.
-    let dagre_sg_bounds: HashMap<String, Rect> = geom
+    // Transient adapter glue: convert GraphGeometry subgraphs back to layered Rect map
+    // for subgraph_bounds_to_draw. Will be removed in Plan 0055.
+    let layout_sg_bounds: HashMap<String, Rect> = geom
         .subgraphs
         .iter()
         .map(|(id, sg)| (id.clone(), sg.rect.into()))
         .collect();
     let mut subgraph_bounds =
-        dagre_subgraph_bounds_to_draw(&diagram.subgraphs, &dagre_sg_bounds, &coord_transform);
+        subgraph_bounds_to_draw(&diagram.subgraphs, &layout_sg_bounds, &coord_transform);
     debug_compare_subgraph_bounds(
         &diagram.subgraphs,
         &subgraph_bounds,
-        &dagre_sg_bounds,
+        &layout_sg_bounds,
         &coord_transform,
     );
     shrink_subgraph_vertical_gaps(
@@ -2420,8 +2422,8 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
     debug_subgraph_gaps(&diagram.subgraphs, &node_bounds, &subgraph_bounds);
 
     // --- Phase L: Compute self-edge loop paths in draw coordinates ---
-    // We use node bounds directly rather than transforming dagre-space loop points,
-    // because the dagre gap (1.0) would collapse to 0 after ASCII scaling.
+    // We use node bounds directly rather than transforming layout-space loop points,
+    // because the layout gap (1.0) would collapse to 0 after ASCII scaling.
     let self_edges: Vec<SelfEdgeDrawData> = geom
         .self_edges
         .iter()
@@ -2429,11 +2431,11 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
             let bounds = node_bounds.get(&se.node_id)?;
             let loop_extent = 3; // how far the loop extends beyond the node edge
 
-            // Dagre.js places self-edge loops on the right face (TD/BT) or
+            // The layout places self-edge loops on the right face (TD/BT) or
             // bottom face (LR/RL), matching the "order" dimension where the
             // dummy node is placed after the self-edge node.
-            let points = match dagre_direction {
-                DagreDirection::TopBottom => {
+            let points = match layered_direction {
+                LayeredDirection::TopBottom => {
                     // Loop on right face: exit top-right, loop right, enter bottom-right
                     let right = bounds.x + bounds.width;
                     let loop_x = right + loop_extent;
@@ -2446,7 +2448,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                         (right, bot_y),  // enter right face at bottom
                     ]
                 }
-                DagreDirection::BottomTop => {
+                LayeredDirection::BottomTop => {
                     // Loop on right face: exit bottom-right, loop right, enter top-right
                     let right = bounds.x + bounds.width;
                     let loop_x = right + loop_extent;
@@ -2459,7 +2461,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                         (right, top_y),  // enter right face at top
                     ]
                 }
-                DagreDirection::LeftRight => {
+                LayeredDirection::LeftRight => {
                     // Loop on bottom face: exit bottom-right, loop down, enter bottom-left
                     let bot = bounds.y + bounds.height;
                     let loop_y = bot + loop_extent;
@@ -2472,7 +2474,7 @@ pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout
                         (left_x, bot),     // enter bottom face at left
                     ]
                 }
-                DagreDirection::RightLeft => {
+                LayeredDirection::RightLeft => {
                     // Loop on bottom face: exit bottom-left, loop down, enter bottom-right
                     let bot = bounds.y + bounds.height;
                     let loop_y = bot + loop_extent;
@@ -2677,10 +2679,10 @@ fn compute_grid_positions(layers: &[Vec<String>]) -> HashMap<String, GridPos> {
     positions
 }
 
-/// Compute per-axis ASCII scale factors for translating dagre float coordinates
+/// Compute per-axis ASCII scale factors for translating layout float coordinates
 /// to character grid positions.
 ///
-/// Returns `(scale_x, scale_y)` where each factor maps dagre coordinate deltas
+/// Returns `(scale_x, scale_y)` where each factor maps layout coordinate deltas
 /// to ASCII character deltas along that axis.
 ///
 /// For vertical layouts (TD/BT):
@@ -2708,7 +2710,7 @@ fn compute_ascii_scale_factors(
     let avg_h = total_h as f64 / count_f;
 
     if is_vertical {
-        // When ranks are doubled, dagre positions nodes 2× further apart.
+        // When ranks are doubled, the layout positions nodes 2× further apart.
         // To compensate exactly, we need: eff_rs = max_h + 2 * rank_sep
         // This gives scale_primary_new = scale_primary_old / 2, so that
         // (2 * rank_sep) * scale_new = rank_sep * scale_old.
@@ -2872,14 +2874,14 @@ fn build_children_map(
 ///
 /// Uses inside-out (bottom-up) computation: leaf subgraphs first, then parents
 /// expand to contain their children. This ensures proper nesting of bounds.
-fn dagre_subgraph_bounds_to_draw(
+fn subgraph_bounds_to_draw(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
-    dagre_bounds: &HashMap<String, Rect>,
+    layout_bounds: &HashMap<String, Rect>,
     transform: &CoordTransform,
 ) -> HashMap<String, SubgraphBounds> {
     let mut bounds: HashMap<String, SubgraphBounds> = HashMap::new();
 
-    for (sg_id, rect) in dagre_bounds {
+    for (sg_id, rect) in layout_bounds {
         let sg = match subgraphs.get(sg_id) {
             Some(sg) => sg,
             None => continue,
@@ -2939,7 +2941,7 @@ fn dagre_subgraph_bounds_to_draw(
 fn debug_compare_subgraph_bounds(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
     computed: &HashMap<String, SubgraphBounds>,
-    dagre_bounds: &HashMap<String, Rect>,
+    layout_bounds: &HashMap<String, Rect>,
     transform: &CoordTransform,
 ) {
     if !std::env::var("MMDFLUX_DEBUG_SUBGRAPH_BOUNDS").is_ok_and(|v| v == "1") {
@@ -2949,26 +2951,26 @@ fn debug_compare_subgraph_bounds(
     let mut ids: HashSet<String> = HashSet::new();
     ids.extend(subgraphs.keys().cloned());
     ids.extend(computed.keys().cloned());
-    ids.extend(dagre_bounds.keys().cloned());
+    ids.extend(layout_bounds.keys().cloned());
 
-    eprintln!("[subgraph_bounds] comparing computed vs dagre-derived");
+    eprintln!("[subgraph_bounds] comparing computed vs layout-derived");
     let mut ids: Vec<String> = ids.into_iter().collect();
     ids.sort();
     for id in ids {
         let computed_bounds = computed.get(&id);
-        let dagre_rect = dagre_bounds.get(&id);
-        if computed_bounds.is_none() && dagre_rect.is_none() {
+        let layout_rect = layout_bounds.get(&id);
+        if computed_bounds.is_none() && layout_rect.is_none() {
             continue;
         }
 
-        if let Some(rect) = dagre_rect {
+        if let Some(rect) = layout_rect {
             eprintln!(
                 "[subgraph_bounds] raw {} = ({:.2}, {:.2}, {:.2}, {:.2})",
                 id, rect.x, rect.y, rect.width, rect.height
             );
         }
 
-        let dagre_draw = dagre_rect.map(|rect| {
+        let layout_draw = layout_rect.map(|rect| {
             let (x0, y0) = transform.to_draw(rect.x, rect.y);
             let (x1, y1) = transform.to_draw(rect.x + rect.width, rect.y + rect.height);
             (x0, y0, x1.saturating_sub(x0), y1.saturating_sub(y0))
@@ -2977,8 +2979,8 @@ fn debug_compare_subgraph_bounds(
         let computed_tuple = computed_bounds.map(|b| (b.x, b.y, b.width, b.height));
 
         eprintln!(
-            "[subgraph_bounds] {} computed={:?} dagre={:?}",
-            id, computed_tuple, dagre_draw
+            "[subgraph_bounds] {} computed={:?} layout={:?}",
+            id, computed_tuple, layout_draw
         );
     }
 }
@@ -3563,10 +3565,10 @@ fn nudge_colliding_waypoints(
     }
 }
 
-/// Shared parameters for transforming dagre coordinates to ASCII draw coordinates.
+/// Shared parameters for transforming layout coordinates to ASCII draw coordinates.
 struct TransformContext {
-    dagre_min_x: f64,
-    dagre_min_y: f64,
+    layout_min_x: f64,
+    layout_min_y: f64,
     scale_x: f64,
     scale_y: f64,
     padding: usize,
@@ -3576,12 +3578,12 @@ struct TransformContext {
 }
 
 impl TransformContext {
-    /// Transform a dagre top-left-based Rect to draw coordinates (x, y, width, height).
+    /// Transform a layout top-left-based Rect to draw coordinates (x, y, width, height).
     #[allow(dead_code)]
     ///
     /// Transforms the top-left and bottom-right corners independently using
     /// `to_ascii()`, then computes the draw rect between them. This ensures
-    /// the transformed rect faithfully represents the dagre bounding box in
+    /// the transformed rect faithfully represents the layout bounding box in
     /// draw space.
     fn to_ascii_rect(&self, rect: &Rect) -> (usize, usize, usize, usize) {
         let (x1, y1) = self.to_ascii(rect.x, rect.y);
@@ -3593,23 +3595,23 @@ impl TransformContext {
         (draw_x, draw_y, draw_w.max(1), draw_h.max(1))
     }
 
-    /// Transform a dagre (x, y) coordinate to ASCII draw coordinates.
-    fn to_ascii(&self, dagre_x: f64, dagre_y: f64) -> (usize, usize) {
-        let x = ((dagre_x - self.dagre_min_x) * self.scale_x).round() as usize
+    /// Transform a layout (x, y) coordinate to ASCII draw coordinates.
+    fn to_ascii(&self, layout_x: f64, layout_y: f64) -> (usize, usize) {
+        let x = ((layout_x - self.layout_min_x) * self.scale_x).round() as usize
             + self.overhang_x
             + self.padding
             + self.left_label_margin;
-        let y = ((dagre_y - self.dagre_min_y) * self.scale_y).round() as usize
+        let y = ((layout_y - self.layout_min_y) * self.scale_y).round() as usize
             + self.overhang_y
             + self.padding;
         (x, y)
     }
 }
 
-/// Transform dagre waypoints to ASCII draw coordinates using uniform scale factors.
+/// Transform layout waypoints to ASCII draw coordinates using uniform scale factors.
 ///
 /// The primary axis (Y for TD/BT, X for LR/RL) uses `layer_starts` to snap to
-/// the correct rank position. The cross axis uses uniform scaling from dagre
+/// the correct rank position. The cross axis uses uniform scaling from layout
 /// coordinates, ensuring consistency with node positions.
 fn transform_waypoints_direct(
     edge_waypoints: &HashMap<usize, Vec<WaypointWithRank>>,
@@ -3646,11 +3648,11 @@ fn transform_waypoints_direct(
     converted
 }
 
-/// Transform dagre label positions to ASCII draw coordinates.
+/// Transform layout label positions to ASCII draw coordinates.
 ///
 /// The primary axis (Y for TD/BT, X for LR/RL) uses rank-based snapping via
 /// `layer_starts[rank]`, matching how `transform_waypoints_direct()` works.
-/// The cross axis uses uniform scaling from dagre coordinates.
+/// The cross axis uses uniform scaling from layout coordinates.
 fn transform_label_positions_direct(
     label_positions: &HashMap<usize, WaypointWithRank>,
     edges: &[Edge],
@@ -3867,11 +3869,11 @@ mod tests {
     }
 
     // =========================================================================
-    // Dagre Helper Tests
+    // Layered Layout Helper Tests
     // =========================================================================
 
     #[test]
-    fn build_dagre_layout_includes_label_positions() {
+    fn build_layered_layout_includes_label_positions() {
         use crate::graph::build_diagram;
         use crate::parser::parse_flowchart;
 
@@ -3879,7 +3881,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
 
-        let result = build_dagre_layout(
+        let result = build_layered_layout(
             &diagram,
             &LayoutConfig::default(),
             |node| (node.label.len() as f64 + 4.0, 3.0),
@@ -4050,8 +4052,8 @@ mod tests {
 
         let layer_starts = vec![1, 5, 9];
         let ctx = TransformContext {
-            dagre_min_x: 50.0,
-            dagre_min_y: 25.0,
+            layout_min_x: 50.0,
+            layout_min_y: 25.0,
             scale_x: 0.22,
             scale_y: 0.11,
             padding: 1,
@@ -4069,7 +4071,7 @@ mod tests {
         let wps = &result[&0];
         assert_eq!(wps.len(), 1);
         assert_eq!(wps[0].1, 5, "y should be layer_starts[1]");
-        assert_eq!(wps[0].0, 12, "x should be scaled dagre x + padding");
+        assert_eq!(wps[0].0, 12, "x should be scaled layout x + padding");
     }
 
     #[test]
@@ -4092,8 +4094,8 @@ mod tests {
 
         let layer_starts = vec![1, 8, 15];
         let ctx = TransformContext {
-            dagre_min_x: 25.0,
-            dagre_min_y: 50.0,
+            layout_min_x: 25.0,
+            layout_min_y: 50.0,
             scale_x: 0.22,
             scale_y: 0.67,
             padding: 1,
@@ -4106,7 +4108,7 @@ mod tests {
 
         let wps = &result[&0];
         assert_eq!(wps[0].0, 8, "x should be layer_starts[1]");
-        assert_eq!(wps[0].1, 35, "y should be scaled dagre y + padding");
+        assert_eq!(wps[0].1, 35, "y should be scaled layout y + padding");
     }
 
     #[test]
@@ -4129,8 +4131,8 @@ mod tests {
 
         let layer_starts = vec![1];
         let ctx = TransformContext {
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
+            layout_min_x: 0.0,
+            layout_min_y: 0.0,
             scale_x: 0.5,
             scale_y: 0.5,
             padding: 1,
@@ -4150,8 +4152,8 @@ mod tests {
         let edges: Vec<Edge> = vec![];
         let waypoints: HashMap<usize, Vec<WaypointWithRank>> = HashMap::new();
         let ctx = TransformContext {
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
+            layout_min_x: 0.0,
+            layout_min_y: 0.0,
             scale_x: 0.2,
             scale_y: 0.1,
             padding: 1,
@@ -4187,8 +4189,8 @@ mod tests {
         );
 
         let ctx = TransformContext {
-            dagre_min_x: 50.0,
-            dagre_min_y: 50.0,
+            layout_min_x: 50.0,
+            layout_min_y: 50.0,
             scale_x: 0.22,
             scale_y: 0.11,
             padding: 1,
@@ -4227,8 +4229,8 @@ mod tests {
         );
 
         let ctx = TransformContext {
-            dagre_min_x: 50.0,
-            dagre_min_y: 50.0,
+            layout_min_x: 50.0,
+            layout_min_y: 50.0,
             scale_x: 0.22,
             scale_y: 0.11,
             padding: 1,
@@ -4249,8 +4251,8 @@ mod tests {
         let edges: Vec<Edge> = vec![];
         let labels: HashMap<usize, WaypointWithRank> = HashMap::new();
         let ctx = TransformContext {
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
+            layout_min_x: 0.0,
+            layout_min_y: 0.0,
             scale_x: 0.2,
             scale_y: 0.1,
             padding: 1,
@@ -4430,8 +4432,8 @@ mod tests {
         );
 
         let ctx = TransformContext {
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
+            layout_min_x: 0.0,
+            layout_min_y: 0.0,
             scale_x: 0.2,
             scale_y: 0.1,
             padding: 1,
@@ -4572,11 +4574,11 @@ mod tests {
     }
 
     // =========================================================================
-    // Subgraph Bounds Tests (Dagre-derived bounds)
+    // Subgraph Bounds Tests (Layout-derived bounds)
     // =========================================================================
 
     #[test]
-    fn test_subgraph_bounds_no_overlap_from_separated_dagre_rects() {
+    fn test_subgraph_bounds_no_overlap_from_separated_rects() {
         use crate::graph::Subgraph;
 
         let mut subgraphs = HashMap::new();
@@ -4601,8 +4603,8 @@ mod tests {
             },
         );
 
-        let mut dagre_bounds = HashMap::new();
-        dagre_bounds.insert(
+        let mut layout_bounds = HashMap::new();
+        layout_bounds.insert(
             "sg1".to_string(),
             Rect {
                 x: 10.0,
@@ -4611,7 +4613,7 @@ mod tests {
                 height: 5.0,
             },
         );
-        dagre_bounds.insert(
+        layout_bounds.insert(
             "sg2".to_string(),
             Rect {
                 x: 40.0,
@@ -4630,14 +4632,14 @@ mod tests {
         let transform = CoordTransform {
             scale_x: 1.0,
             scale_y: 1.0,
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
+            layout_min_x: 0.0,
+            layout_min_y: 0.0,
             max_overhang_x: 0,
             max_overhang_y: 0,
             config: &config,
         };
 
-        let result = dagre_subgraph_bounds_to_draw(&subgraphs, &dagre_bounds, &transform);
+        let result = subgraph_bounds_to_draw(&subgraphs, &layout_bounds, &transform);
 
         let a = &result["sg1"];
         let b = &result["sg2"];
@@ -4660,7 +4662,7 @@ mod tests {
     }
 
     #[test]
-    fn test_dagre_subgraph_bounds_maps_rects() {
+    fn test_subgraph_bounds_maps_rects() {
         use crate::graph::Subgraph;
 
         let mut subgraphs = HashMap::new();
@@ -4675,8 +4677,8 @@ mod tests {
             },
         );
 
-        let mut dagre_bounds = HashMap::new();
-        dagre_bounds.insert(
+        let mut layout_bounds = HashMap::new();
+        layout_bounds.insert(
             "sg1".to_string(),
             Rect {
                 x: 10.0,
@@ -4695,22 +4697,22 @@ mod tests {
         let transform = CoordTransform {
             scale_x: 1.0,
             scale_y: 1.0,
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
+            layout_min_x: 0.0,
+            layout_min_y: 0.0,
             max_overhang_x: 0,
             max_overhang_y: 0,
             config: &config,
         };
 
-        let result = dagre_subgraph_bounds_to_draw(&subgraphs, &dagre_bounds, &transform);
+        let result = subgraph_bounds_to_draw(&subgraphs, &layout_bounds, &transform);
 
         let b = &result["sg1"];
         // Title "G" requires min width = len("G") + 6 = 7, which exceeds rect width 5.
         // Title-width enforcement expands by (7-5)=2 and shifts x left by 2/2=1.
         assert_eq!(b.x, 9, "x shifted left by 1 due to title-width expansion");
-        assert_eq!(b.y, 10, "y should match dagre rect y");
+        assert_eq!(b.y, 10, "y should match layout rect y");
         assert_eq!(b.width, 7, "width expanded to fit title");
-        assert_eq!(b.height, 3, "height should match dagre rect height");
+        assert_eq!(b.height, 3, "height should match layout rect height");
     }
 
     // =========================================================================
@@ -4768,11 +4770,11 @@ mod tests {
     // =========================================================================
 
     #[test]
-    fn to_ascii_rect_at_dagre_minimum() {
-        // A rect centered at the dagre minimum should produce draw coords near origin + padding
+    fn to_ascii_rect_at_layout_minimum() {
+        // A rect centered at the layout minimum should produce draw coords near origin + padding
         let ctx = TransformContext {
-            dagre_min_x: 50.0,
-            dagre_min_y: 30.0,
+            layout_min_x: 50.0,
+            layout_min_y: 30.0,
             scale_x: 0.2,
             scale_y: 0.1,
             overhang_x: 2,
@@ -4793,10 +4795,10 @@ mod tests {
 
     #[test]
     fn to_ascii_rect_offset_from_minimum() {
-        // A rect offset from dagre minimum should have proportionally offset draw coords
+        // A rect offset from layout minimum should have proportionally offset draw coords
         let ctx = TransformContext {
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
+            layout_min_x: 0.0,
+            layout_min_y: 0.0,
             scale_x: 0.2,
             scale_y: 0.1,
             overhang_x: 0,
@@ -4823,10 +4825,10 @@ mod tests {
     }
 
     #[test]
-    fn to_ascii_rect_dimensions_scale_with_dagre_size() {
+    fn to_ascii_rect_dimensions_scale_with_layout_size() {
         let ctx = TransformContext {
-            dagre_min_x: 0.0,
-            dagre_min_y: 0.0,
+            layout_min_x: 0.0,
+            layout_min_y: 0.0,
             scale_x: 0.5,
             scale_y: 0.5,
             overhang_x: 0,
@@ -5003,16 +5005,16 @@ mod tests {
     // =========================================================================
 
     /// Helper: compute a sub-layout for a direction-override subgraph.
-    /// Returns the dagre LayoutResult for just the subgraph's internal nodes/edges.
+    /// Returns the LayoutResult for just the subgraph's internal nodes/edges.
     fn run_sublayout_for_sg(diagram: &Diagram, sg_id: &str) -> layered::LayoutResult {
         let sg = &diagram.subgraphs[sg_id];
         let sub_dir = sg.dir.expect("subgraph should have direction override");
 
-        let dagre_direction = match sub_dir {
-            Direction::TopDown => DagreDirection::TopBottom,
-            Direction::BottomTop => DagreDirection::BottomTop,
-            Direction::LeftRight => DagreDirection::LeftRight,
-            Direction::RightLeft => DagreDirection::RightLeft,
+        let layered_direction = match sub_dir {
+            Direction::TopDown => LayeredDirection::TopBottom,
+            Direction::BottomTop => LayeredDirection::BottomTop,
+            Direction::LeftRight => LayeredDirection::LeftRight,
+            Direction::RightLeft => LayeredDirection::RightLeft,
         };
 
         let mut sub_graph: layered::DiGraph<(f64, f64)> = layered::DiGraph::new();
@@ -5035,9 +5037,9 @@ mod tests {
             }
         }
 
-        let sub_config = DagreConfig {
-            direction: dagre_direction,
-            ..DagreConfig::default()
+        let sub_config = LayeredConfig {
+            direction: layered_direction,
+            ..LayeredConfig::default()
         };
 
         layered::layout(&sub_graph, &sub_config, |_, dims| *dims)

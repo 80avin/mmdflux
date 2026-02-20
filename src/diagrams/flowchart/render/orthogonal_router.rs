@@ -1799,7 +1799,7 @@ fn edge_rank_span(
     geometry: &GraphGeometry,
     edge: &crate::diagrams::flowchart::geometry::LayoutEdge,
 ) -> Option<usize> {
-    let EngineHints::Dagre(hints) = geometry.engine_hints.as_ref()?;
+    let EngineHints::Layered(hints) = geometry.engine_hints.as_ref()?;
     let src_rank = *hints.node_ranks.get(&edge.from)?;
     let dst_rank = *hints.node_ranks.get(&edge.to)?;
     Some(src_rank.abs_diff(dst_rank) as usize)
@@ -2143,7 +2143,7 @@ fn ensure_backward_outer_lane_clearance(
     }
 }
 
-/// After `align_backward_outer_lane_to_hint` pulls interior points to dagre's
+/// After `align_backward_outer_lane_to_hint` pulls interior points to the layout's
 /// channel hint, the channel lane may sit too close to the node envelope.
 /// This function enforces a minimum clearance between the node faces and
 /// the backward channel lane, matching R-BACK-8/9/10.
