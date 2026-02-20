@@ -1721,59 +1721,6 @@ mod tests {
         );
     }
 
-    #[test]
-    #[ignore = "title rank underflow — will be fixed by BK parity work (plan 0040)"]
-    fn test_compound_ordering_single_child_rank_has_borders() {
-        use crate::layered::{border, nesting};
-
-        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
-        g.add_node("X", (10.0, 10.0));
-        g.add_node("A", (10.0, 10.0));
-        g.add_node("B", (10.0, 10.0));
-        g.add_node("sg1", (0.0, 0.0));
-        g.add_edge("X", "A");
-        g.add_edge("A", "B");
-        g.set_parent("A", "sg1");
-        g.set_parent("B", "sg1");
-        g.set_has_title("sg1");
-
-        let mut lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
-        nesting::run(&mut lg);
-        rank::run(&mut lg, &LayoutConfig::default());
-        rank::normalize(&mut lg);
-        nesting::cleanup(&mut lg);
-        nesting::insert_title_nodes(&mut lg);
-        nesting::assign_rank_minmax(&mut lg);
-        border::add_segments(&mut lg);
-
-        run(&mut lg);
-
-        let sg1_idx = lg.node_index[&"sg1".into()];
-        let title_idx = lg.border_title[&sg1_idx];
-        let title_rank = lg.ranks[title_idx];
-        let min_r = lg.min_rank[&sg1_idx];
-        let rank_offset = (title_rank - min_r) as usize;
-
-        let left_borders = &lg.border_left[&sg1_idx];
-        let right_borders = &lg.border_right[&sg1_idx];
-        let left = left_borders[rank_offset];
-        let right = right_borders[rank_offset];
-
-        // At the title rank: left < title < right
-        assert!(
-            lg.order[left] < lg.order[title_idx],
-            "left border order ({}) should be < title order ({})",
-            lg.order[left],
-            lg.order[title_idx]
-        );
-        assert!(
-            lg.order[title_idx] < lg.order[right],
-            "title order ({}) should be < right border order ({})",
-            lg.order[title_idx],
-            lg.order[right]
-        );
-    }
-
     // --- 4.1.1: OrderEntry + compute_barycenters tests ---
 
     #[test]

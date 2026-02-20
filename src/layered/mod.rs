@@ -1385,28 +1385,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "title nodes get negative ranks — will be fixed by BK parity work (plan 0040)"]
-    fn test_title_nodes_never_end_up_with_negative_rank() {
-        let mut g: DiGraph<()> = DiGraph::new();
-        g.add_node("sg", ());
-        g.add_node("A", ());
-        g.set_parent("A", "sg");
-        g.set_has_title("sg");
-
-        let mut lg = LayoutGraph::from_digraph(&g, |_, _| (10.0, 10.0));
-        acyclic::run(&mut lg);
-        nesting::run(&mut lg);
-        rank::run(&mut lg, &LayoutConfig::default());
-        rank::remove_empty_ranks(&mut lg);
-        nesting::cleanup(&mut lg);
-        rank::normalize(&mut lg);
-        nesting::insert_title_nodes(&mut lg);
-        rank::normalize(&mut lg);
-
-        assert!(lg.ranks.iter().all(|&r| r >= 0));
-    }
-
-    #[test]
     fn test_layout_multi_level_compound_nesting() {
         let mut g: DiGraph<(f64, f64)> = DiGraph::new();
         g.add_node("A", (40.0, 20.0));

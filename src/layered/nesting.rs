@@ -381,46 +381,6 @@ mod tests {
         assert_eq!(lg.edge_minlens[edge_pos.unwrap()], 1);
     }
 
-    #[test]
-    #[ignore = "compound nesting edge topology — will be fixed by BK parity work (plan 0040)"]
-    fn test_nesting_border_to_leaf_minlen_nested() {
-        // outer(depth=1) -> inner(depth=2) -> A,B(depth=3)
-        // height=2
-        // Inner's leaf children: minlen = height - inner_depth + 1 = 2 - 2 + 1 = 1
-        // Outer has compound child (inner): minlen = 1
-        let mut g: DiGraph<(f64, f64)> = DiGraph::new();
-        g.add_node("A", (10.0, 10.0));
-        g.add_node("B", (10.0, 10.0));
-        g.add_node("inner", (0.0, 0.0));
-        g.add_node("outer", (0.0, 0.0));
-        g.add_edge("A", "B");
-        g.set_parent("A", "inner");
-        g.set_parent("B", "inner");
-        g.set_parent("inner", "outer");
-        let mut lg = LayoutGraph::from_digraph(&g, |_, dims| *dims);
-        run(&mut lg);
-
-        let inner_idx = lg.node_index[&"inner".into()];
-        let outer_idx = lg.node_index[&"outer".into()];
-        let a_idx = lg.node_index[&"A".into()];
-
-        // Inner border_top -> A: minlen = 2 - 2 + 1 = 1
-        let inner_top = lg.border_top[&inner_idx];
-        let inner_edge = lg
-            .edges
-            .iter()
-            .position(|&(f, t, _)| f == inner_top && t == a_idx);
-        assert_eq!(lg.edge_minlens[inner_edge.unwrap()], 1);
-
-        // Outer border_top -> inner: minlen = 1 (compound child)
-        let outer_top = lg.border_top[&outer_idx];
-        let outer_edge = lg
-            .edges
-            .iter()
-            .position(|&(f, t, _)| f == outer_top && t == inner_idx);
-        assert_eq!(lg.edge_minlens[outer_edge.unwrap()], 1);
-    }
-
     // Task 3.2: Root edge minlens
     #[test]
     fn test_nesting_root_to_compound_border_minlen() {

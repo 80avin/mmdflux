@@ -12,3 +12,10 @@ fail-fast = false
 # Show everything in CI for debugging
 status-level = "pass"
 final-status-level = "all"
+
+[profile.ignored-only]
+# Run only ignored tests, and show all results for debugging
+# Run with `cargo nextest run --profile ignored-only --run-ignored only`
+fail-fast = false
+status-level = "pass"
+final-status-level = "fail"
