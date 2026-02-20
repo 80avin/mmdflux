@@ -6,7 +6,7 @@ describe("renderApp", () => {
     const root = document.createElement("div");
     renderApp(root);
 
-    expect(root.textContent).toContain("mmdflux Playground");
+    expect(root.textContent).toContain("mmdflux playground");
     expect(root.textContent).toContain("Preview");
     expect(root.textContent).toContain("Text");
   });
