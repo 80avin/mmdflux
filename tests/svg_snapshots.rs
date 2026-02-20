@@ -132,11 +132,11 @@ fn snapshot_path(stem: &str) -> PathBuf {
         .join(format!("{stem}.svg"))
 }
 
-fn orthogonal_snapshot_path(stem: &str) -> PathBuf {
+fn preset_snapshot_path(preset: &str, stem: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
         .join("svg-snapshots")
-        .join("flowchart-orthogonal")
+        .join(format!("flowchart-{preset}"))
         .join(format!("{stem}.svg"))
 }
 
@@ -165,15 +165,16 @@ fn assert_snapshot(fixture: &str) {
     assert_eq!(output, expected, "Snapshot mismatch for {fixture}");
 }
 
-fn assert_orthogonal_snapshot(fixture: &str) {
+fn assert_preset_snapshot(
+    preset: &str,
+    fixture: &str,
+    routing: RoutingStyle,
+    interp: InterpolationStyle,
+    corner: CornerStyle,
+) {
     let stem = fixture.trim_end_matches(".mmd");
-    let output = render_svg_fixture_with_curve(
-        fixture,
-        RoutingStyle::Orthogonal,
-        InterpolationStyle::Linear,
-        CornerStyle::Rounded,
-    );
-    let path = orthogonal_snapshot_path(stem);
+    let output = render_svg_fixture_with_curve(fixture, routing, interp, corner);
+    let path = preset_snapshot_path(preset, stem);
 
     if std::env::var("GENERATE_SVG_SNAPSHOTS").is_ok() {
         if let Some(parent) = path.parent() {
@@ -184,10 +185,7 @@ fn assert_orthogonal_snapshot(fixture: &str) {
 
     let expected = fs::read_to_string(&path)
         .unwrap_or_else(|_| panic!("Missing snapshot: {}", path.display()));
-    assert_eq!(
-        output, expected,
-        "Orthogonal snapshot mismatch for {fixture}"
-    );
+    assert_eq!(output, expected, "{preset} snapshot mismatch for {fixture}");
 }
 
 fn assert_mmds_snapshot(fixture: &str, snapshot_stem: &str) {
@@ -269,13 +267,54 @@ fn positioned_mmds_svg_snapshot_routed_basic() {
 }
 
 #[test]
-fn svg_snapshot_orthogonal_fixture_subset() {
-    for fixture in [
-        "simple.mmd",
-        "fan_out.mmd",
-        "subgraph_direction_cross_boundary.mmd",
-    ] {
-        assert_orthogonal_snapshot(fixture);
+fn svg_snapshot_all_fixtures_straight() {
+    for fixture in list_fixtures() {
+        assert_preset_snapshot(
+            "straight",
+            &fixture,
+            RoutingStyle::Polyline,
+            InterpolationStyle::Linear,
+            CornerStyle::Sharp,
+        );
+    }
+}
+
+#[test]
+fn svg_snapshot_all_fixtures_step() {
+    for fixture in list_fixtures() {
+        assert_preset_snapshot(
+            "step",
+            &fixture,
+            RoutingStyle::Orthogonal,
+            InterpolationStyle::Linear,
+            CornerStyle::Sharp,
+        );
+    }
+}
+
+#[test]
+fn svg_snapshot_all_fixtures_smoothstep() {
+    for fixture in list_fixtures() {
+        assert_preset_snapshot(
+            "smoothstep",
+            &fixture,
+            RoutingStyle::Orthogonal,
+            InterpolationStyle::Linear,
+            CornerStyle::Rounded,
+        );
+    }
+}
+
+#[test]
+fn svg_snapshot_all_fixtures_bezier() {
+    for fixture in list_fixtures() {
+        assert_preset_snapshot(
+            "bezier",
+            &fixture,
+            RoutingStyle::Polyline,
+            InterpolationStyle::Bezier,
+            CornerStyle::Sharp,
+        );
     }
 }
 
