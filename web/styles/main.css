@@ -187,6 +187,26 @@ body {
   cursor: pointer;
 }
 
+.repo-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.55em;
+  font-weight: 400;
+  vertical-align: middle;
+  margin-left: 0.4em;
+}
+
+.repo-link:hover {
+  text-decoration: underline;
+}
+
+.repo-link-icon {
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.15em;
+  margin-right: 0.25em;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
