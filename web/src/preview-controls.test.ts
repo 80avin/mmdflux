@@ -137,7 +137,8 @@ describe("preview controls", () => {
       createPanzoom: () => panzoom,
     });
 
-    harness.output.innerHTML = '<svg viewBox="0 0 100 80"></svg>';
+    harness.output.innerHTML =
+      '<svg viewBox="0 0 100 80"><g class="root"><rect width="100" height="80" /></g></svg>';
 
     harness.controller.onResult("text");
     expect(harness.controlsOverlayRoot.hidden).toBe(true);
@@ -151,6 +152,38 @@ describe("preview controls", () => {
       harness.controlsOverlayRoot.classList.contains("is-expanded"),
     ).toBe(false);
     expect(harness.exportToggleButton.hidden).toBe(false);
+
+    harness.controller.dispose();
+  });
+
+  it("shows grab cursor for draggable SVG and grabbing while dragging", () => {
+    const panzoom = createPanzoomMock();
+    const createPanzoom = vi.fn((_: SVGElement) => panzoom);
+    const harness = createHarness({
+      createPanzoom,
+    });
+
+    harness.output.innerHTML =
+      '<svg viewBox="0 0 100 80"><g class="root"><rect width="100" height="80" /></g></svg>';
+    harness.controller.onResult("svg");
+
+    expect(createPanzoom).toHaveBeenCalledTimes(1);
+    expect(harness.controlsOverlayRoot.hidden).toBe(false);
+
+    expect(harness.output.classList.contains("is-draggable")).toBe(true);
+    expect(harness.output.classList.contains("is-dragging")).toBe(false);
+
+    harness.output.dispatchEvent(
+      new MouseEvent("pointerdown", { bubbles: true, button: 0 }),
+    );
+    expect(harness.output.classList.contains("is-dragging")).toBe(true);
+
+    document.dispatchEvent(new Event("pointerup"));
+    expect(harness.output.classList.contains("is-dragging")).toBe(false);
+
+    harness.controller.onResult("text");
+    expect(harness.output.classList.contains("is-draggable")).toBe(false);
+    expect(harness.output.classList.contains("is-dragging")).toBe(false);
 
     harness.controller.dispose();
   });

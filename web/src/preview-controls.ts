@@ -559,6 +559,57 @@ export function createPreviewControls(
   let viewAnchor: ViewAnchor | null = null;
   let controlsExpanded = false;
   let controlsVisible = false;
+  let draggingActive = false;
+
+  const updateDragCursorState = (): void => {
+    if (!outputRoot) {
+      return;
+    }
+
+    const draggable =
+      controlsVisible &&
+      currentFormat === "svg" &&
+      Boolean(currentSvg) &&
+      Boolean(currentPanTarget) &&
+      Boolean(panzoom);
+    outputRoot.classList.toggle("is-draggable", draggable);
+    outputRoot.classList.toggle("is-dragging", draggable && draggingActive);
+  };
+
+  const resetDraggingState = (): void => {
+    draggingActive = false;
+    updateDragCursorState();
+  };
+
+  const handleOutputPointerDown = (event: PointerEvent): void => {
+    if (
+      event.button !== 0 ||
+      !controlsVisible ||
+      currentFormat !== "svg" ||
+      !currentSvg ||
+      !currentPanTarget ||
+      !panzoom
+    ) {
+      return;
+    }
+
+    draggingActive = true;
+    updateDragCursorState();
+  };
+
+  const handleDocumentPointerUp = (): void => {
+    if (!draggingActive) {
+      return;
+    }
+    resetDraggingState();
+  };
+
+  const handleWindowBlur = (): void => {
+    if (!draggingActive) {
+      return;
+    }
+    resetDraggingState();
+  };
 
   const syncAnchorFromPanzoom = (): void => {
     if (!panzoom) {
@@ -625,6 +676,7 @@ export function createPreviewControls(
     currentPanTarget = null;
     currentPanTargetBounds = null;
     currentSvg = null;
+    resetDraggingState();
     resetZoomLabel();
   };
 
@@ -667,6 +719,7 @@ export function createPreviewControls(
       options.exportMenu.hidden = true;
     }
     setControlsExpanded(false);
+    updateDragCursorState();
   };
 
   const fitToViewport = (): void => {
@@ -753,6 +806,7 @@ export function createPreviewControls(
 
     if (currentSvg === svg && currentPanTarget === panTarget && panzoom) {
       updateZoomLabel();
+      updateDragCursorState();
       return;
     }
 
@@ -777,6 +831,7 @@ export function createPreviewControls(
       passive: false,
     });
     applyViewAnchor(nextAnchor);
+    updateDragCursorState();
 
     const currentTicket = ++fitTicket;
     const deferredRepaint = (): void => {
@@ -1083,6 +1138,9 @@ export function createPreviewControls(
 
   document.addEventListener("click", handleDocumentClick);
   document.addEventListener("keydown", handleDocumentKeydown);
+  document.addEventListener("pointerup", handleDocumentPointerUp);
+  document.addEventListener("pointercancel", handleDocumentPointerUp);
+  window.addEventListener("blur", handleWindowBlur);
 
   resetZoomLabel();
   setControlsExpanded(false);
@@ -1090,7 +1148,15 @@ export function createPreviewControls(
 
   return {
     attachTo: (nextOutputRoot) => {
+      if (outputRoot && outputRoot !== nextOutputRoot) {
+        outputRoot.removeEventListener(
+          "pointerdown",
+          handleOutputPointerDown,
+          true,
+        );
+      }
       outputRoot = nextOutputRoot;
+      outputRoot.addEventListener("pointerdown", handleOutputPointerDown, true);
       refresh();
     },
     fitOnNextSvg: () => {
@@ -1106,6 +1172,14 @@ export function createPreviewControls(
     dispose: () => {
       document.removeEventListener("click", handleDocumentClick);
       document.removeEventListener("keydown", handleDocumentKeydown);
+      document.removeEventListener("pointerup", handleDocumentPointerUp);
+      document.removeEventListener("pointercancel", handleDocumentPointerUp);
+      window.removeEventListener("blur", handleWindowBlur);
+      outputRoot?.removeEventListener(
+        "pointerdown",
+        handleOutputPointerDown,
+        true,
+      );
       teardownPanzoom();
       setControlsVisibility(false);
     },
