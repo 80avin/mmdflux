@@ -445,6 +445,68 @@ function percentageLabel(scale: number): string {
   return `${Math.round(scale * 100)}%`;
 }
 
+function resolveSvgPanUnitsPerCssPixel(target: SVGElement): {
+  x: number;
+  y: number;
+} {
+  const ownerSvg = target.ownerSVGElement;
+  if (!ownerSvg) {
+    return { x: 1, y: 1 };
+  }
+
+  const svgBounds = getSvgBounds(ownerSvg);
+  const ctm =
+    typeof ownerSvg.getScreenCTM === "function"
+      ? ownerSvg.getScreenCTM()
+      : null;
+  if (ctm) {
+    const origin = new DOMPoint(svgBounds.minX, svgBounds.minY).matrixTransform(
+      ctm,
+    );
+    const xStep = new DOMPoint(svgBounds.minX + 1, svgBounds.minY).matrixTransform(
+      ctm,
+    );
+    const yStep = new DOMPoint(svgBounds.minX, svgBounds.minY + 1).matrixTransform(
+      ctm,
+    );
+    const cssPixelsPerSvgUnitX = Math.hypot(xStep.x - origin.x, xStep.y - origin.y);
+    const cssPixelsPerSvgUnitY = Math.hypot(yStep.x - origin.x, yStep.y - origin.y);
+    if (
+      Number.isFinite(cssPixelsPerSvgUnitX) &&
+      Number.isFinite(cssPixelsPerSvgUnitY) &&
+      cssPixelsPerSvgUnitX > 0 &&
+      cssPixelsPerSvgUnitY > 0
+    ) {
+      return {
+        x: 1 / cssPixelsPerSvgUnitX,
+        y: 1 / cssPixelsPerSvgUnitY,
+      };
+    }
+  }
+
+  const svgRect = ownerSvg.getBoundingClientRect();
+  if (
+    !Number.isFinite(svgRect.width) ||
+    !Number.isFinite(svgRect.height) ||
+    svgRect.width <= 0 ||
+    svgRect.height <= 0
+  ) {
+    return { x: 1, y: 1 };
+  }
+
+  if (svgBounds.width <= 0 || svgBounds.height <= 0) {
+    return { x: 1, y: 1 };
+  }
+
+  const x = svgBounds.width / svgRect.width;
+  const y = svgBounds.height / svgRect.height;
+  if (!Number.isFinite(x) || !Number.isFinite(y) || x <= 0 || y <= 0) {
+    return { x: 1, y: 1 };
+  }
+
+  return { x, y };
+}
+
 function defaultDependencies(): PreviewControlDependencies {
   return {
     createPanzoom: (target, initialState) =>
@@ -453,7 +515,17 @@ function defaultDependencies(): PreviewControlDependencies {
         maxScale: MAX_SCALE,
         minScale: MIN_SCALE,
         origin: "0 0",
-        roundPixels: true,
+        roundPixels: false,
+        setTransform: (elem, { scale, x, y, isSVG }) => {
+          let translatedX = x;
+          let translatedY = y;
+          if (isSVG && elem instanceof SVGElement) {
+            const units = resolveSvgPanUnitsPerCssPixel(elem);
+            translatedX = x * units.x;
+            translatedY = y * units.y;
+          }
+          elem.style.transform = `scale(${scale}) translate(${translatedX}px, ${translatedY}px)`;
+        },
         startScale: initialState?.scale ?? 1,
         startX: initialState?.panX ?? 0,
         startY: initialState?.panY ?? 0,
