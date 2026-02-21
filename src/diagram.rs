@@ -40,14 +40,14 @@ pub enum OutputFormat {
 /// Path routing topology for SVG edge generation.
 ///
 /// Controls how edge paths are computed between waypoints.
-/// `Direct` routing (straight line from source to target, bypassing waypoints) is
-/// recognized but not yet implemented.
 ///
 /// Engine constraints:
-/// - `flux-layered` supports both `Polyline` and `Orthogonal`.
+/// - `flux-layered` supports `Direct`, `Polyline`, and `Orthogonal`.
 /// - `mermaid-layered` supports `Polyline` only.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RoutingStyle {
+    /// Direct routing: single segment from source to target, bypassing waypoints.
+    Direct,
     /// Polyline routing: engine computes waypoints; SVG connects them with line segments.
     Polyline,
     /// Orthogonal routing: engine enforces axis-aligned path segments.
@@ -57,6 +57,7 @@ pub enum RoutingStyle {
 impl std::fmt::Display for RoutingStyle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            RoutingStyle::Direct => write!(f, "direct"),
             RoutingStyle::Polyline => write!(f, "polyline"),
             RoutingStyle::Orthogonal => write!(f, "orthogonal"),
         }
@@ -66,20 +67,15 @@ impl std::fmt::Display for RoutingStyle {
 impl RoutingStyle {
     /// Parse routing style from user-provided text.
     ///
-    /// Accepts: `polyline`, `orthogonal`.
-    /// `direct` is recognized but returns a "not yet implemented" error.
+    /// Accepts: `direct`, `polyline`, `orthogonal`.
     pub fn parse(s: &str) -> Result<Self, RenderError> {
         match normalize_enum_token(s).as_str() {
+            "direct" => Ok(RoutingStyle::Direct),
             "polyline" => Ok(RoutingStyle::Polyline),
             "orthogonal" => Ok(RoutingStyle::Orthogonal),
-            "direct" => Err(RenderError {
-                message: "\"direct\" routing is recognized but not yet implemented. \
-                          Use \"polyline\" or \"orthogonal\"."
-                    .into(),
-            }),
             _ => Err(RenderError {
                 message: format!(
-                    "unknown routing style: {s:?} (expected one of: polyline, orthogonal)"
+                    "unknown routing style: {s:?} (expected one of: direct, polyline, orthogonal)"
                 ),
             }),
         }
@@ -193,18 +189,19 @@ impl FromStr for CornerStyle {
 /// User-facing edge style preset.
 ///
 /// Expands deterministically to `(RoutingStyle, InterpolationStyle, CornerStyle)`:
-/// - `Straight` → `Polyline + Linear + Sharp`
+/// - `Straight` → `Direct + Linear + Sharp`
+/// - `Polyline` → `Polyline + Linear + Sharp`
 /// - `Step` → `Orthogonal + Linear + Sharp`
 /// - `SmoothStep` → `Orthogonal + Linear + Rounded`
 /// - `Bezier` → `Polyline + Bezier` (corner treatment ignored)
 ///
-/// `Direct` routing is recognized but deferred.
-///
 /// Precedence: explicit low-level fields > preset defaults > engine defaults.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EdgePreset {
-    /// Straight polyline with sharp corners.
+    /// Direct straight segment with sharp corners.
     Straight,
+    /// Multi-segment polyline with sharp corners.
+    Polyline,
     /// Orthogonal (right-angle) path with sharp corners.
     Step,
     /// Orthogonal path with rounded arc corners.
@@ -218,6 +215,11 @@ impl EdgePreset {
     pub fn expand(self) -> (RoutingStyle, InterpolationStyle, CornerStyle) {
         match self {
             EdgePreset::Straight => (
+                RoutingStyle::Direct,
+                InterpolationStyle::Linear,
+                CornerStyle::Sharp,
+            ),
+            EdgePreset::Polyline => (
                 RoutingStyle::Polyline,
                 InterpolationStyle::Linear,
                 CornerStyle::Sharp,
@@ -242,22 +244,22 @@ impl EdgePreset {
 
     /// Parse edge preset from user-provided text.
     ///
-    /// Accepts: `straight`, `step`, `smoothstep`, `bezier`.
-    /// `direct` is recognized but returns a "not yet implemented" error.
+    /// Accepts: `straight`, `polyline`, `step`, `smoothstep`, `bezier`.
     pub fn parse(s: &str) -> Result<Self, RenderError> {
         match normalize_enum_token(s).as_str() {
             "straight" => Ok(EdgePreset::Straight),
+            "polyline" => Ok(EdgePreset::Polyline),
             "step" => Ok(EdgePreset::Step),
             "smoothstep" | "smooth-step" => Ok(EdgePreset::SmoothStep),
             "bezier" => Ok(EdgePreset::Bezier),
             "direct" => Err(RenderError {
-                message: "\"direct\" preset is recognized but not yet implemented. \
-                          Use one of: straight, step, smoothstep, bezier."
+                message: "\"direct\" is a routing style, not an edge preset. \
+                          Use --routing-style direct or --edge-preset straight."
                     .into(),
             }),
             _ => Err(RenderError {
                 message: format!(
-                    "unknown edge preset: {s:?} (expected one of: straight, step, smoothstep, bezier)"
+                    "unknown edge preset: {s:?} (expected one of: straight, polyline, step, smoothstep, bezier)"
                 ),
             }),
         }
@@ -268,6 +270,7 @@ impl std::fmt::Display for EdgePreset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             EdgePreset::Straight => write!(f, "straight"),
+            EdgePreset::Polyline => write!(f, "polyline"),
             EdgePreset::Step => write!(f, "step"),
             EdgePreset::SmoothStep => write!(f, "smoothstep"),
             EdgePreset::Bezier => write!(f, "bezier"),
@@ -540,7 +543,11 @@ impl EngineAlgorithmId {
             (EngineId::Flux, AlgorithmId::Layered) => EngineAlgorithmCapabilities {
                 route_ownership: RouteOwnership::Native,
                 supports_subgraphs: true,
-                supported_routing_styles: &[RoutingStyle::Polyline, RoutingStyle::Orthogonal],
+                supported_routing_styles: &[
+                    RoutingStyle::Direct,
+                    RoutingStyle::Polyline,
+                    RoutingStyle::Orthogonal,
+                ],
             },
             (EngineId::Mermaid, AlgorithmId::Layered) => EngineAlgorithmCapabilities {
                 route_ownership: RouteOwnership::HintDriven,
@@ -574,6 +581,7 @@ impl EngineAlgorithmId {
     pub fn edge_routing_for_style(&self, routing_style: Option<RoutingStyle>) -> EdgeRouting {
         match self.capabilities().route_ownership {
             RouteOwnership::Native => match routing_style {
+                Some(RoutingStyle::Direct) => EdgeRouting::DirectRoute,
                 Some(RoutingStyle::Polyline) => EdgeRouting::PolylineRoute,
                 _ => EdgeRouting::OrthogonalRoute,
             },
@@ -637,6 +645,8 @@ impl From<LayoutConfig> for EngineConfig {
 /// Controls how the rendering pipeline processes edge paths after layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdgeRouting {
+    /// Engine provides node positions; emit direct source→target paths.
+    DirectRoute,
     /// Engine provides only node positions; run full edge routing.
     PolylineRoute,
     /// Engine provides routed edge paths; apply clipping and spacing only.
@@ -652,8 +662,7 @@ pub enum EdgeRouting {
 /// ## Style model vocabulary (Phase 7 taxonomy)
 ///
 /// Graph-level:
-/// - `RoutingStyle` (`Polyline`, `Orthogonal`) — path topology requested by caller.
-///   `Direct` routing (source→target straight line) is deferred and not yet supported.
+/// - `RoutingStyle` (`Direct`, `Polyline`, `Orthogonal`) — path topology requested by caller.
 ///
 /// Render-level (applied after routing, does not affect path topology):
 /// - `InterpolationStyle` (`Linear`, `Bezier`) — segment drawing treatment.
@@ -661,7 +670,8 @@ pub enum EdgeRouting {
 /// - `CornerStyle` (`Sharp`, `Rounded`) — corner arc treatment (only meaningful for `Linear`).
 ///
 /// User-facing presets (expand to routing + render defaults):
-/// - `Straight` → `Polyline + Linear + Sharp`
+/// - `Straight` → `Direct + Linear + Sharp`
+/// - `Polyline` → `Polyline + Linear + Sharp`
 /// - `Step` → `Orthogonal + Linear + Sharp`
 /// - `SmoothStep` → `Orthogonal + Linear + Rounded`
 /// - `Bezier` → `Polyline + Bezier` (corner treatment ignored)
@@ -673,8 +683,8 @@ pub struct GraphSolveRequest {
     pub output_format: OutputFormat,
     /// Geometry detail level requested by the caller.
     pub geometry_level: GeometryLevel,
-    /// Edge path detail level for routed geometry.
-    pub path_detail: PathDetail,
+    /// Edge path simplification level for routed geometry.
+    pub path_simplification: PathSimplification,
     /// Routing style requested by the caller (after preset resolution).
     ///
     /// `None` means use the engine's default routing for the selected algorithm.
@@ -693,7 +703,7 @@ impl GraphSolveRequest {
         Self {
             output_format,
             geometry_level: config.geometry_level,
-            path_detail: config.path_detail,
+            path_simplification: config.path_simplification,
             routing_style,
         }
     }
@@ -733,69 +743,75 @@ pub trait GraphEngine: Send + Sync {
     ) -> Result<GraphSolveResult, RenderError>;
 }
 
-/// Path detail level for edge waypoints in MMDS and SVG output.
+/// Post-routing path simplification level for MMDS and SVG output.
 ///
-/// Controls how many anchor points are included in edge paths.
+/// Controls how many anchor points are retained after the routing engine
+/// produces fully-routed edge geometry. Higher simplification levels
+/// reduce point counts at the cost of path fidelity.
+///
 /// Ignored for text/ASCII output.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PathDetail {
-    /// All routed waypoints (default).
+pub enum PathSimplification {
+    /// No simplification. All routed waypoints are retained.
     #[default]
-    Full,
-    /// Remove redundant points while preserving path shape.
-    Compact,
-    /// Start, midpoint, and end only (3 points).
-    Simplified,
-    /// Start and end only (2 points).
-    Endpoints,
+    None,
+    /// Lossless: remove redundant collinear and duplicate interior points.
+    /// Path shape is preserved exactly.
+    Lossless,
+    /// Lossy: reduce to start, midpoint, and end (3 points max).
+    /// Path shape may change significantly.
+    Lossy,
+    /// Minimal: start and end only (2 points).
+    /// Maximum simplification.
+    Minimal,
 }
 
-impl std::fmt::Display for PathDetail {
+impl std::fmt::Display for PathSimplification {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PathDetail::Full => write!(f, "full"),
-            PathDetail::Compact => write!(f, "compact"),
-            PathDetail::Simplified => write!(f, "simplified"),
-            PathDetail::Endpoints => write!(f, "endpoints"),
+            PathSimplification::None => write!(f, "none"),
+            PathSimplification::Lossless => write!(f, "lossless"),
+            PathSimplification::Lossy => write!(f, "lossy"),
+            PathSimplification::Minimal => write!(f, "minimal"),
         }
     }
 }
 
-impl PathDetail {
-    /// Parse path detail level from user-provided text.
+impl PathSimplification {
+    /// Parse path simplification level from user-provided text.
     pub fn parse(s: &str) -> Result<Self, RenderError> {
         match normalize_enum_token(s).as_str() {
-            "full" => Ok(PathDetail::Full),
-            "compact" => Ok(PathDetail::Compact),
-            "simplified" => Ok(PathDetail::Simplified),
-            "endpoints" => Ok(PathDetail::Endpoints),
+            "none" => Ok(PathSimplification::None),
+            "lossless" => Ok(PathSimplification::Lossless),
+            "lossy" => Ok(PathSimplification::Lossy),
+            "minimal" => Ok(PathSimplification::Minimal),
             _ => Err(RenderError {
-                message: format!("unknown path detail: {s:?}"),
+                message: format!("unknown path simplification: {s:?}"),
             }),
         }
     }
 }
 
-impl FromStr for PathDetail {
+impl FromStr for PathSimplification {
     type Err = RenderError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        PathDetail::parse(s)
+        PathSimplification::parse(s)
     }
 }
 
-impl PathDetail {
-    /// Simplify a path according to the detail level.
+impl PathSimplification {
+    /// Simplify a path according to the simplification level.
     ///
     /// Returns a new vec with the appropriate number of points:
-    /// - `Full` — all points unchanged
-    /// - `Simplified` — first, middle, last (3 points max)
-    /// - `Endpoints` — first and last only (2 points max)
+    /// - `None` — all points unchanged
+    /// - `Lossy` — first, middle, last (3 points max)
+    /// - `Minimal` — first and last only (2 points max)
     pub fn simplify<T: Clone>(&self, points: &[T]) -> Vec<T> {
         match self {
-            PathDetail::Full => points.to_vec(),
-            PathDetail::Compact => points.to_vec(),
-            PathDetail::Simplified if points.len() > 3 => {
+            PathSimplification::None => points.to_vec(),
+            PathSimplification::Lossless => points.to_vec(),
+            PathSimplification::Lossy if points.len() > 3 => {
                 let mid = points.len() / 2;
                 vec![
                     points[0].clone(),
@@ -803,7 +819,7 @@ impl PathDetail {
                     points[points.len() - 1].clone(),
                 ]
             }
-            PathDetail::Endpoints if points.len() > 2 => {
+            PathSimplification::Minimal if points.len() > 2 => {
                 vec![points[0].clone(), points[points.len() - 1].clone()]
             }
             _ => points.to_vec(),
@@ -812,7 +828,7 @@ impl PathDetail {
 
     /// Simplify path points with coordinate-aware compacting.
     ///
-    /// - `Compact` removes consecutive duplicates and strictly collinear
+    /// - `Lossless` removes consecutive duplicates and strictly collinear
     ///   interior points while preserving overall shape.
     /// - Other variants behave the same as `simplify`.
     pub fn simplify_with_coords<T: Clone>(
@@ -821,7 +837,7 @@ impl PathDetail {
         coords: impl Fn(&T) -> (f64, f64),
     ) -> Vec<T> {
         match self {
-            PathDetail::Compact => compact_points(points, coords),
+            PathSimplification::Lossless => compact_points(points, coords),
             _ => self.simplify(points),
         }
     }
@@ -964,8 +980,8 @@ pub struct RenderConfig {
     pub show_ids: bool,
     /// MMDS geometry level for JSON output.
     pub geometry_level: GeometryLevel,
-    /// Path detail level for edge waypoints (MMDS and SVG).
-    pub path_detail: PathDetail,
+    /// Path simplification level for edge waypoints (MMDS and SVG).
+    pub path_simplification: PathSimplification,
 }
 
 /// Error type for rendering failures.

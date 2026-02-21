@@ -3,7 +3,7 @@
 use mmdflux::diagram::{
     AlgorithmId, CornerStyle, EdgePreset, EngineAlgorithmCapabilities, EngineAlgorithmId,
     EngineConfig, EngineId, GeometryLevel, GraphEngine, GraphSolveRequest, InterpolationStyle,
-    OutputFormat, PathDetail, RenderConfig, RenderError, RouteOwnership, RoutingStyle,
+    OutputFormat, PathSimplification, RenderConfig, RenderError, RouteOwnership, RoutingStyle,
 };
 use mmdflux::diagrams::flowchart::FlowchartInstance;
 use mmdflux::diagrams::flowchart::engine::{FluxLayeredEngine, MermaidLayeredEngine};
@@ -304,6 +304,11 @@ fn elk_mrtree_unavailable_without_feature() {
 // =============================================================================
 
 #[test]
+fn routing_style_parses_direct() {
+    assert_eq!(RoutingStyle::parse("direct").unwrap(), RoutingStyle::Direct);
+}
+
+#[test]
 fn routing_style_parses_polyline() {
     assert_eq!(
         RoutingStyle::parse("polyline").unwrap(),
@@ -348,6 +353,7 @@ fn corner_style_parses_rounded() {
 #[test]
 fn edge_preset_parses_all_values() {
     assert_eq!(EdgePreset::parse("straight").unwrap(), EdgePreset::Straight);
+    assert_eq!(EdgePreset::parse("polyline").unwrap(), EdgePreset::Polyline);
     assert_eq!(EdgePreset::parse("step").unwrap(), EdgePreset::Step);
     assert_eq!(
         EdgePreset::parse("smoothstep").unwrap(),
@@ -359,7 +365,7 @@ fn edge_preset_parses_all_values() {
 #[test]
 fn edge_preset_expand_is_deterministic() {
     let (r, i, c) = EdgePreset::Straight.expand();
-    assert_eq!(r, RoutingStyle::Polyline);
+    assert_eq!(r, RoutingStyle::Direct);
     assert_eq!(i, InterpolationStyle::Linear);
     assert_eq!(c, CornerStyle::Sharp);
 }
@@ -373,12 +379,12 @@ fn solve_request_fields_round_trip() {
     let req = GraphSolveRequest {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Layout,
-        path_detail: PathDetail::Full,
+        path_simplification: PathSimplification::None,
         routing_style: None,
     };
     assert_eq!(req.output_format, OutputFormat::Text);
     assert_eq!(req.geometry_level, GeometryLevel::Layout);
-    assert_eq!(req.path_detail, PathDetail::Full);
+    assert_eq!(req.path_simplification, PathSimplification::None);
 }
 
 #[test]
@@ -390,6 +396,24 @@ fn solve_request_from_config_derives_fields() {
     let req = GraphSolveRequest::from_config(&config, OutputFormat::Svg);
     assert_eq!(req.output_format, OutputFormat::Svg);
     assert_eq!(req.geometry_level, GeometryLevel::Routed);
+    assert_eq!(req.path_simplification, PathSimplification::None);
+    assert_eq!(req.routing_style, None);
+}
+
+#[test]
+fn solve_request_from_config_keeps_path_simplification_independent_of_style() {
+    let config = RenderConfig {
+        geometry_level: GeometryLevel::Routed,
+        edge_preset: Some(EdgePreset::Straight),
+        routing_style: Some(RoutingStyle::Direct),
+        path_simplification: PathSimplification::Lossless,
+        ..RenderConfig::default()
+    };
+    let req = GraphSolveRequest::from_config(&config, OutputFormat::Svg);
+    assert_eq!(req.output_format, OutputFormat::Svg);
+    assert_eq!(req.geometry_level, GeometryLevel::Routed);
+    assert_eq!(req.path_simplification, PathSimplification::Lossless);
+    assert_eq!(req.routing_style, Some(RoutingStyle::Direct));
 }
 
 // =============================================================================
@@ -425,7 +449,7 @@ fn flux_layered_solve_layout_level_has_no_routed_geometry() {
     let request = GraphSolveRequest {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Layout,
-        path_detail: PathDetail::Full,
+        path_simplification: PathSimplification::None,
         routing_style: None,
     };
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
@@ -446,7 +470,7 @@ fn flux_layered_solve_routed_level_has_routed_geometry() {
     let request = GraphSolveRequest {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Routed,
-        path_detail: PathDetail::Full,
+        path_simplification: PathSimplification::None,
         routing_style: None,
     };
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
@@ -488,7 +512,7 @@ fn mermaid_layered_solve_layout_level_has_no_routed_geometry() {
     let request = GraphSolveRequest {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Layout,
-        path_detail: PathDetail::Full,
+        path_simplification: PathSimplification::None,
         routing_style: None,
     };
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
@@ -509,7 +533,7 @@ fn mermaid_layered_layout_matches_flux_layered_layout() {
     let layout_req = GraphSolveRequest {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Layout,
-        path_detail: PathDetail::Full,
+        path_simplification: PathSimplification::None,
         routing_style: None,
     };
 
@@ -541,7 +565,7 @@ fn mermaid_layered_solve_routed_level_has_routed_geometry() {
     let request = GraphSolveRequest {
         output_format: OutputFormat::Text,
         geometry_level: GeometryLevel::Routed,
-        path_detail: PathDetail::Full,
+        path_simplification: PathSimplification::None,
         routing_style: None,
     };
     let config = EngineConfig::Layered(mmdflux::layered::types::LayoutConfig::default());
@@ -626,6 +650,11 @@ fn flux_layered_capabilities_include_routing_styles() {
         .capabilities();
     assert!(
         caps.supported_routing_styles
+            .contains(&RoutingStyle::Direct),
+        "flux-layered should support Direct"
+    );
+    assert!(
+        caps.supported_routing_styles
             .contains(&RoutingStyle::Polyline),
         "flux-layered should support Polyline"
     );
@@ -649,6 +678,12 @@ fn mermaid_layered_capabilities_supports_only_polyline() {
     assert!(
         !caps
             .supported_routing_styles
+            .contains(&RoutingStyle::Direct),
+        "mermaid-layered should not support Direct"
+    );
+    assert!(
+        !caps
+            .supported_routing_styles
             .contains(&RoutingStyle::Orthogonal),
         "mermaid-layered should not support Orthogonal"
     );
@@ -665,6 +700,21 @@ fn mermaid_layered_rejects_orthogonal_routing_style() {
     .unwrap_err();
     assert!(
         err.message.contains("mermaid-layered") || err.message.contains("orthogonal"),
+        "error should name engine or routing style: {err}"
+    );
+}
+
+#[test]
+fn mermaid_layered_rejects_direct_routing_style() {
+    let err = render_with_engine_routing(
+        "graph TD\nA-->B",
+        "mermaid-layered",
+        Some(RoutingStyle::Direct),
+        None,
+    )
+    .unwrap_err();
+    assert!(
+        err.message.contains("mermaid-layered") || err.message.contains("direct"),
         "error should name engine or routing style: {err}"
     );
 }
@@ -717,17 +767,33 @@ fn mermaid_layered_accepts_bezier_preset() {
 }
 
 #[test]
-fn mermaid_layered_accepts_straight_preset() {
-    // straight expands to Polyline+Linear+Sharp — supported on mermaid-layered
+fn mermaid_layered_rejects_straight_preset() {
+    // straight expands to Direct+Linear+Sharp — unsupported on mermaid-layered
+    let err = render_with_engine_routing(
+        "graph TD\nA-->B",
+        "mermaid-layered",
+        None,
+        Some(EdgePreset::Straight),
+    )
+    .unwrap_err();
+    assert!(
+        !err.message.is_empty(),
+        "straight preset should be rejected on mermaid-layered: {err}"
+    );
+}
+
+#[test]
+fn mermaid_layered_accepts_polyline_preset() {
+    // polyline expands to Polyline+Linear+Sharp — supported on mermaid-layered
     assert!(
         render_with_engine_routing(
             "graph TD\nA-->B",
             "mermaid-layered",
             None,
-            Some(EdgePreset::Straight),
+            Some(EdgePreset::Polyline),
         )
         .is_ok(),
-        "straight preset should be accepted on mermaid-layered"
+        "polyline preset should be accepted on mermaid-layered"
     );
 }
 

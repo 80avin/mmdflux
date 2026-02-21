@@ -1,7 +1,8 @@
 //! Graph-family routing stage.
 //!
 //! Produces `RoutedGraphGeometry` (Layer 2) from `GraphGeometry` (Layer 1).
-//! Supports three modes:
+//! Supports four modes:
+//! - `DirectRoute`: Build source→target direct paths.
 //! - `PolylineRoute`: Build edge paths from layout hints + node positions.
 //! - `EngineProvided`: Use engine-provided paths directly.
 //! - `OrthogonalRoute`: Produce axis-aligned (right-angle) edge paths.
@@ -26,31 +27,36 @@ pub fn route_graph_geometry(
         EdgeRouting::OrthogonalRoute => {
             route_edges_orthogonal(diagram, geometry, OrthogonalRoutingOptions::preview())
         }
-        EdgeRouting::EngineProvided | EdgeRouting::PolylineRoute => geometry
-            .edges
-            .iter()
-            .map(|edge| {
-                let path = match edge_routing {
-                    EdgeRouting::EngineProvided => edge
-                        .layout_path_hint
-                        .clone()
-                        .unwrap_or_else(|| build_path_from_hints(edge, geometry)),
-                    EdgeRouting::PolylineRoute => build_path_from_hints(edge, geometry),
-                    EdgeRouting::OrthogonalRoute => unreachable!(),
-                };
-                let is_backward = geometry.reversed_edges.contains(&edge.index);
-                RoutedEdgeGeometry {
-                    index: edge.index,
-                    from: edge.from.clone(),
-                    to: edge.to.clone(),
-                    path,
-                    label_position: edge.label_position,
-                    is_backward,
-                    from_subgraph: edge.from_subgraph.clone(),
-                    to_subgraph: edge.to_subgraph.clone(),
-                }
-            })
-            .collect(),
+        EdgeRouting::DirectRoute | EdgeRouting::EngineProvided | EdgeRouting::PolylineRoute => {
+            geometry
+                .edges
+                .iter()
+                .map(|edge| {
+                    let path = match edge_routing {
+                        EdgeRouting::DirectRoute => {
+                            build_direct_path(edge, geometry, diagram.direction)
+                        }
+                        EdgeRouting::EngineProvided => edge
+                            .layout_path_hint
+                            .clone()
+                            .unwrap_or_else(|| build_path_from_hints(edge, geometry)),
+                        EdgeRouting::PolylineRoute => build_path_from_hints(edge, geometry),
+                        EdgeRouting::OrthogonalRoute => unreachable!(),
+                    };
+                    let is_backward = geometry.reversed_edges.contains(&edge.index);
+                    RoutedEdgeGeometry {
+                        index: edge.index,
+                        from: edge.from.clone(),
+                        to: edge.to.clone(),
+                        path,
+                        label_position: edge.label_position,
+                        is_backward,
+                        from_subgraph: edge.from_subgraph.clone(),
+                        to_subgraph: edge.to_subgraph.clone(),
+                    }
+                })
+                .collect()
+        }
     };
 
     let self_edges: Vec<RoutedSelfEdge> = geometry
@@ -70,6 +76,137 @@ pub fn route_graph_geometry(
         self_edges,
         direction: geometry.direction,
         bounds: geometry.bounds,
+    }
+}
+
+fn build_direct_path(
+    edge: &LayoutEdge,
+    geometry: &GraphGeometry,
+    direction: crate::graph::Direction,
+) -> Vec<FPoint> {
+    // Self loops already have dedicated geometry in `self_edges`.
+    // If they appear in regular edges, keep the existing hint-driven behavior.
+    if edge.from == edge.to {
+        return build_path_from_hints(edge, geometry);
+    }
+
+    let Some(from_node) = geometry.nodes.get(&edge.from) else {
+        return build_path_from_hints(edge, geometry);
+    };
+    let Some(to_node) = geometry.nodes.get(&edge.to) else {
+        return build_path_from_hints(edge, geometry);
+    };
+
+    let start = FPoint::new(from_node.rect.center_x(), from_node.rect.center_y());
+    let mut end = FPoint::new(to_node.rect.center_x(), to_node.rect.center_y());
+
+    if points_are_same(start, end) {
+        if let Some(hint) = edge.layout_path_hint.as_ref()
+            && path_has_non_degenerate_span(hint)
+        {
+            return hint.clone();
+        }
+        end = nudge_for_direction(start, direction);
+    }
+
+    if direct_segment_crosses_non_endpoint_nodes(start, end, edge, geometry) {
+        return build_path_from_hints(edge, geometry);
+    }
+
+    vec![start, end]
+}
+
+fn direct_segment_crosses_non_endpoint_nodes(
+    start: FPoint,
+    end: FPoint,
+    edge: &LayoutEdge,
+    geometry: &GraphGeometry,
+) -> bool {
+    // TODO: This is currently O(V) per direct-routed edge (overall O(E*V)).
+    // If large graphs make this hot, replace with a spatial index over node rects.
+    geometry.nodes.iter().any(|(id, node)| {
+        if id == &edge.from || id == &edge.to {
+            return false;
+        }
+        segment_crosses_rect_interior(start, end, node.rect)
+    })
+}
+
+fn segment_crosses_rect_interior(start: FPoint, end: FPoint, rect: FRect) -> bool {
+    const EPS: f64 = 1e-6;
+    let left = rect.x + EPS;
+    let right = rect.x + rect.width - EPS;
+    let top = rect.y + EPS;
+    let bottom = rect.y + rect.height - EPS;
+    if left >= right || top >= bottom {
+        return false;
+    }
+
+    let dx = end.x - start.x;
+    let dy = end.y - start.y;
+    let mut t0 = 0.0;
+    let mut t1 = 1.0;
+
+    if !clip_test(-dx, start.x - left, &mut t0, &mut t1) {
+        return false;
+    }
+    if !clip_test(dx, right - start.x, &mut t0, &mut t1) {
+        return false;
+    }
+    if !clip_test(-dy, start.y - top, &mut t0, &mut t1) {
+        return false;
+    }
+    if !clip_test(dy, bottom - start.y, &mut t0, &mut t1) {
+        return false;
+    }
+
+    t0 < t1
+}
+
+fn clip_test(p: f64, q: f64, t0: &mut f64, t1: &mut f64) -> bool {
+    const EPS: f64 = 1e-12;
+    if p.abs() <= EPS {
+        return q >= 0.0;
+    }
+
+    let r = q / p;
+    if p < 0.0 {
+        if r > *t1 {
+            return false;
+        }
+        if r > *t0 {
+            *t0 = r;
+        }
+    } else {
+        if r < *t0 {
+            return false;
+        }
+        if r < *t1 {
+            *t1 = r;
+        }
+    }
+    true
+}
+
+fn points_are_same(a: FPoint, b: FPoint) -> bool {
+    const EPS: f64 = 1e-6;
+    (a.x - b.x).abs() <= EPS && (a.y - b.y).abs() <= EPS
+}
+
+fn path_has_non_degenerate_span(path: &[FPoint]) -> bool {
+    path.windows(2)
+        .any(|segment| !points_are_same(segment[0], segment[1]))
+}
+
+fn nudge_for_direction(point: FPoint, direction: crate::graph::Direction) -> FPoint {
+    const DIRECT_STUB: f64 = 1.0;
+    match direction {
+        crate::graph::Direction::TopDown | crate::graph::Direction::BottomTop => {
+            FPoint::new(point.x, point.y + DIRECT_STUB)
+        }
+        crate::graph::Direction::LeftRight | crate::graph::Direction::RightLeft => {
+            FPoint::new(point.x + DIRECT_STUB, point.y)
+        }
     }
 }
 
@@ -244,6 +381,131 @@ mod tests {
         assert_eq!(routed.subgraphs.len(), 1);
         assert_eq!(routed.subgraphs["sg1"].title, "Group");
         assert_eq!(routed.direction, crate::graph::Direction::TopDown);
+    }
+
+    #[test]
+    fn direct_route_produces_two_point_path() {
+        let (diagram, geom) = simple_geometry();
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::DirectRoute);
+        let path = &routed.edges[0].path;
+        assert_eq!(path.len(), 2);
+        assert_eq!(path[0], FPoint::new(70.0, 35.0));
+        assert_eq!(path[1], FPoint::new(70.0, 85.0));
+    }
+
+    #[test]
+    fn direct_route_uses_hint_when_endpoints_coincide() {
+        let (diagram, mut geom) = simple_geometry();
+        geom.nodes.insert(
+            "B".into(),
+            PositionedNode {
+                id: "B".into(),
+                rect: FRect::new(50.0, 25.0, 40.0, 20.0), // same center as A
+                shape: crate::graph::Shape::Rectangle,
+                label: "B".into(),
+                parent: None,
+            },
+        );
+        geom.edges[0].layout_path_hint =
+            Some(vec![FPoint::new(60.0, 35.0), FPoint::new(80.0, 35.0)]);
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::DirectRoute);
+        assert_eq!(
+            routed.edges[0].path,
+            vec![FPoint::new(60.0, 35.0), FPoint::new(80.0, 35.0)]
+        );
+    }
+
+    #[test]
+    fn direct_route_nudges_when_endpoints_coincide_without_hint() {
+        let (diagram, mut geom) = simple_geometry();
+        geom.nodes.insert(
+            "B".into(),
+            PositionedNode {
+                id: "B".into(),
+                rect: FRect::new(50.0, 25.0, 40.0, 20.0), // same center as A
+                shape: crate::graph::Shape::Rectangle,
+                label: "B".into(),
+                parent: None,
+            },
+        );
+        geom.edges[0].layout_path_hint = None;
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::DirectRoute);
+        let path = &routed.edges[0].path;
+        assert_eq!(path.len(), 2);
+        assert_ne!(path[0], path[1]);
+    }
+
+    #[test]
+    fn direct_route_falls_back_when_straight_segment_crosses_node_interior() {
+        let mut diagram = Diagram::new(crate::graph::Direction::TopDown);
+        diagram.add_node(crate::graph::Node::new("A"));
+        diagram.add_node(crate::graph::Node::new("B"));
+        diagram.add_node(crate::graph::Node::new("C"));
+        diagram.add_edge(crate::graph::Edge::new("A", "C"));
+
+        let mut nodes = HashMap::new();
+        nodes.insert(
+            "A".into(),
+            PositionedNode {
+                id: "A".into(),
+                rect: FRect::new(0.0, 0.0, 20.0, 20.0),
+                shape: crate::graph::Shape::Rectangle,
+                label: "A".into(),
+                parent: None,
+            },
+        );
+        nodes.insert(
+            "B".into(),
+            PositionedNode {
+                id: "B".into(),
+                rect: FRect::new(60.0, 60.0, 40.0, 40.0),
+                shape: crate::graph::Shape::Rectangle,
+                label: "B".into(),
+                parent: None,
+            },
+        );
+        nodes.insert(
+            "C".into(),
+            PositionedNode {
+                id: "C".into(),
+                rect: FRect::new(120.0, 120.0, 20.0, 20.0),
+                shape: crate::graph::Shape::Rectangle,
+                label: "C".into(),
+                parent: None,
+            },
+        );
+
+        let direct_hint = vec![
+            FPoint::new(10.0, 20.0),
+            FPoint::new(170.0, 20.0),
+            FPoint::new(170.0, 120.0),
+            FPoint::new(130.0, 120.0),
+        ];
+
+        let geom = GraphGeometry {
+            nodes,
+            edges: vec![LayoutEdge {
+                index: 0,
+                from: "A".into(),
+                to: "C".into(),
+                waypoints: vec![],
+                label_position: None,
+                from_subgraph: None,
+                to_subgraph: None,
+                layout_path_hint: Some(direct_hint.clone()),
+            }],
+            subgraphs: HashMap::new(),
+            self_edges: vec![],
+            direction: crate::graph::Direction::TopDown,
+            node_directions: HashMap::new(),
+            bounds: FRect::new(0.0, 0.0, 200.0, 200.0),
+            reversed_edges: vec![],
+            engine_hints: None,
+            rerouted_edges: std::collections::HashSet::new(),
+        };
+
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::DirectRoute);
+        assert_eq!(routed.edges[0].path, direct_hint);
     }
 
     #[test]
