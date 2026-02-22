@@ -396,7 +396,7 @@ fn solve_request_from_config_derives_fields() {
     let req = GraphSolveRequest::from_config(&config, OutputFormat::Svg);
     assert_eq!(req.output_format, OutputFormat::Svg);
     assert_eq!(req.geometry_level, GeometryLevel::Routed);
-    assert_eq!(req.path_simplification, PathSimplification::None);
+    assert_eq!(req.path_simplification, PathSimplification::Lossless);
     assert_eq!(req.routing_style, None);
 }
 

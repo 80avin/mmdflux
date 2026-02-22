@@ -237,7 +237,7 @@ fn mmds_lossless_path_simplification_sits_between_none_and_lossy() {
 }
 
 #[test]
-fn routed_mmds_defaults_to_none_path_simplification() {
+fn routed_mmds_defaults_to_lossless_path_simplification() {
     let input = flowchart_fixture("multi_subgraph_direction_override.mmd");
     let render_for = |path_simplification: Option<PathSimplification>| {
         let mut instance = FlowchartInstance::new();
@@ -264,19 +264,25 @@ fn routed_mmds_defaults_to_none_path_simplification() {
     };
 
     let default = render_for(None);
+    let lossless = render_for(Some(PathSimplification::Lossless));
     let full = render_for(Some(PathSimplification::None));
     let simplified = render_for(Some(PathSimplification::Lossy));
     let default_len = edge_len(&default);
+    let lossless_len = edge_len(&lossless);
     let full_len = edge_len(&full);
     let simplified_len = edge_len(&simplified);
 
     assert_eq!(
-        default_len, full_len,
-        "default routed MMDS path detail should match full output"
+        default_len, lossless_len,
+        "default routed MMDS path detail should match lossless output"
+    );
+    assert!(
+        default_len <= full_len,
+        "lossless default should have no more points than full: default={default_len}, full={full_len}"
     );
     assert!(
         default_len >= simplified_len,
-        "default full detail should not have fewer points than simplified: default={default_len}, simplified={simplified_len}"
+        "lossless default should not have fewer points than simplified: default={default_len}, simplified={simplified_len}"
     );
     if default_len == simplified_len {
         assert!(

@@ -753,10 +753,10 @@ pub trait GraphEngine: Send + Sync {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PathSimplification {
     /// No simplification. All routed waypoints are retained.
-    #[default]
     None,
     /// Lossless: remove redundant collinear and duplicate interior points.
     /// Path shape is preserved exactly.
+    #[default]
     Lossless,
     /// Lossy: reduce to start, midpoint, and end (3 points max).
     /// Path shape may change significantly.

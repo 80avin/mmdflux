@@ -25,7 +25,7 @@ export const DEFAULT_SHARE_RENDER_SETTINGS: ShareRenderSettings = {
   layoutEngine: "auto",
   edgePreset: "auto",
   geometryLevel: "layout",
-  pathSimplification: "none",
+  pathSimplification: "lossless",
 };
 
 export interface ShareState {

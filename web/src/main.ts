@@ -1024,9 +1024,7 @@ export function renderApp(
     }
 
     if (selectedFormat === "svg" || selectedFormat === "mmds") {
-      if (renderSettings.pathSimplification !== "none") {
-        config.pathSimplification = renderSettings.pathSimplification;
-      }
+      config.pathSimplification = renderSettings.pathSimplification;
     }
 
     return JSON.stringify(config);
