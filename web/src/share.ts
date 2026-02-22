@@ -7,20 +7,25 @@ export type ShareEdgePreset =
   | "smoothstep"
   | "bezier";
 export type ShareGeometryLevel = "layout" | "routed";
-export type SharePathDetail = "full" | "compact" | "simplified" | "endpoints";
+export type SharePathSimplification =
+  | "none"
+  | "lossless"
+  | "lossy"
+  | "minimal";
+type LegacySharePathDetail = "full" | "compact" | "simplified" | "endpoints";
 
 export interface ShareRenderSettings {
   layoutEngine: ShareLayoutEngine;
   edgePreset: ShareEdgePreset;
   geometryLevel: ShareGeometryLevel;
-  pathDetail: SharePathDetail;
+  pathSimplification: SharePathSimplification;
 }
 
 export const DEFAULT_SHARE_RENDER_SETTINGS: ShareRenderSettings = {
   layoutEngine: "auto",
   edgePreset: "auto",
   geometryLevel: "layout",
-  pathDetail: "full",
+  pathSimplification: "none",
 };
 
 export interface ShareState {
@@ -68,7 +73,16 @@ function isGeometryLevel(value: string): value is ShareGeometryLevel {
   return value === "layout" || value === "routed";
 }
 
-function isPathDetail(value: string): value is SharePathDetail {
+function isPathSimplification(value: string): value is SharePathSimplification {
+  return (
+    value === "none" ||
+    value === "lossless" ||
+    value === "lossy" ||
+    value === "minimal"
+  );
+}
+
+function isLegacyPathDetail(value: string): value is LegacySharePathDetail {
   return (
     value === "full" ||
     value === "compact" ||
@@ -77,12 +91,29 @@ function isPathDetail(value: string): value is SharePathDetail {
   );
 }
 
+function pathSimplificationFromLegacyPathDetail(
+  detail: LegacySharePathDetail,
+): SharePathSimplification {
+  switch (detail) {
+    case "full":
+      return "none";
+    case "compact":
+      return "lossless";
+    case "simplified":
+      return "lossy";
+    case "endpoints":
+      return "minimal";
+  }
+}
+
 export function normalizeShareRenderSettings(
   value: unknown,
 ): ShareRenderSettings {
   const settings =
     typeof value === "object" && value !== null
-      ? (value as Partial<ShareRenderSettings>)
+      ? (value as Partial<ShareRenderSettings> & {
+          pathDetail?: string;
+        })
       : {};
 
   const layoutEngine =
@@ -99,16 +130,20 @@ export function normalizeShareRenderSettings(
     isGeometryLevel(settings.geometryLevel)
       ? settings.geometryLevel
       : DEFAULT_SHARE_RENDER_SETTINGS.geometryLevel;
-  const pathDetail =
-    typeof settings.pathDetail === "string" && isPathDetail(settings.pathDetail)
-      ? settings.pathDetail
-      : DEFAULT_SHARE_RENDER_SETTINGS.pathDetail;
+  const pathSimplification =
+    typeof settings.pathSimplification === "string" &&
+    isPathSimplification(settings.pathSimplification)
+      ? settings.pathSimplification
+      : typeof settings.pathDetail === "string" &&
+          isLegacyPathDetail(settings.pathDetail)
+        ? pathSimplificationFromLegacyPathDetail(settings.pathDetail)
+        : DEFAULT_SHARE_RENDER_SETTINGS.pathSimplification;
 
   return {
     layoutEngine,
     edgePreset,
     geometryLevel,
-    pathDetail,
+    pathSimplification,
   };
 }
 

@@ -406,14 +406,15 @@ describe("playground examples", () => {
     );
     const edgePresetSelect =
       root.querySelector<HTMLSelectElement>("[data-edge-preset]");
-    const pathDetailSelect =
-      root.querySelector<HTMLSelectElement>("[data-path-detail]");
+    const pathSimplificationSelect = root.querySelector<HTMLSelectElement>(
+      "[data-path-simplification]",
+    );
 
     if (
       !svgTab ||
       !layoutEngineSelect ||
       !edgePresetSelect ||
-      !pathDetailSelect
+      !pathSimplificationSelect
     ) {
       throw new Error("expected render setting controls");
     }
@@ -425,8 +426,8 @@ describe("playground examples", () => {
     layoutEngineSelect.dispatchEvent(new Event("change"));
     edgePresetSelect.value = "bezier";
     edgePresetSelect.dispatchEvent(new Event("change"));
-    pathDetailSelect.value = "endpoints";
-    pathDetailSelect.dispatchEvent(new Event("change"));
+    pathSimplificationSelect.value = "minimal";
+    pathSimplificationSelect.dispatchEvent(new Event("change"));
 
     vi.advanceTimersByTime(50);
     await Promise.resolve();

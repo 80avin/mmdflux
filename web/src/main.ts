@@ -27,7 +27,7 @@ import {
   normalizeShareRenderSettings,
   type ShareEdgePreset,
   type ShareLayoutEngine,
-  type SharePathDetail,
+  type SharePathSimplification,
   type ShareRenderSettings,
 } from "./share";
 import { createThemeController, type ThemePreference } from "./theme";
@@ -189,28 +189,15 @@ function isEdgePreset(value: string): value is ShareEdgePreset {
   );
 }
 
-function isPathDetail(value: string): value is SharePathDetail {
+function isPathSimplification(
+  value: string,
+): value is SharePathSimplification {
   return (
-    value === "full" ||
-    value === "compact" ||
-    value === "simplified" ||
-    value === "endpoints"
+    value === "none" ||
+    value === "lossless" ||
+    value === "lossy" ||
+    value === "minimal"
   );
-}
-
-function pathSimplificationForDetail(
-  detail: SharePathDetail,
-): "lossless" | "lossy" | "minimal" | null {
-  switch (detail) {
-    case "full":
-      return null;
-    case "compact":
-      return "lossless";
-    case "simplified":
-      return "lossy";
-    case "endpoints":
-      return "minimal";
-  }
 }
 
 function parsePersistedPlaygroundState(
@@ -636,15 +623,15 @@ export function renderApp(
             </select>
             <p class="render-help" data-help-edge-preset></p>
           </div>
-          <div class="render-setting" data-setting="pathDetail">
-            <label for="path-detail-select">Path Detail</label>
-            <select id="path-detail-select" data-path-detail>
-              <option value="full">full</option>
-              <option value="compact">compact</option>
-              <option value="simplified">simplified</option>
-              <option value="endpoints">endpoints</option>
+          <div class="render-setting" data-setting="pathSimplification">
+            <label for="path-simplification-select">Path Simplification</label>
+            <select id="path-simplification-select" data-path-simplification>
+              <option value="none">none</option>
+              <option value="lossless">lossless</option>
+              <option value="lossy">lossy</option>
+              <option value="minimal">minimal</option>
             </select>
-            <p class="render-help" data-help-path-detail></p>
+            <p class="render-help" data-help-path-simplification></p>
           </div>
         </div>
       </section>
@@ -729,14 +716,17 @@ export function renderApp(
   );
   const edgePresetSelect =
     root.querySelector<HTMLSelectElement>("[data-edge-preset]");
-  const pathDetailSelect =
-    root.querySelector<HTMLSelectElement>("[data-path-detail]");
+  const pathSimplificationSelect = root.querySelector<HTMLSelectElement>(
+    "[data-path-simplification]",
+  );
 
   const layoutHelp = root.querySelector<HTMLElement>(
     "[data-help-layout-engine]",
   );
   const edgeHelp = root.querySelector<HTMLElement>("[data-help-edge-preset]");
-  const pathHelp = root.querySelector<HTMLElement>("[data-help-path-detail]");
+  const pathHelp = root.querySelector<HTMLElement>(
+    "[data-help-path-simplification]",
+  );
 
   const layoutSetting = root.querySelector<HTMLElement>(
     '[data-setting="layoutEngine"]',
@@ -745,7 +735,7 @@ export function renderApp(
     '[data-setting="edgePreset"]',
   );
   const pathSetting = root.querySelector<HTMLElement>(
-    '[data-setting="pathDetail"]',
+    '[data-setting="pathSimplification"]',
   );
 
   const previewControlsOverlayRoot = root.querySelector<HTMLElement>(
@@ -791,7 +781,7 @@ export function renderApp(
     !snippetGrid ||
     !layoutEngineSelect ||
     !edgePresetSelect ||
-    !pathDetailSelect ||
+    !pathSimplificationSelect ||
     !layoutHelp ||
     !edgeHelp ||
     !pathHelp ||
@@ -962,8 +952,8 @@ export function renderApp(
       container: edgeSetting,
     },
     {
-      control: "pathDetail",
-      select: pathDetailSelect,
+      control: "pathSimplification",
+      select: pathSimplificationSelect,
       help: pathHelp,
       container: pathSetting,
     },
@@ -1005,7 +995,7 @@ export function renderApp(
   const applyRenderSettingsToControls = (): void => {
     layoutEngineSelect.value = renderSettings.layoutEngine;
     edgePresetSelect.value = renderSettings.edgePreset;
-    pathDetailSelect.value = renderSettings.pathDetail;
+    pathSimplificationSelect.value = renderSettings.pathSimplification;
   };
 
   const applyRenderControlState = (): void => {
@@ -1034,11 +1024,8 @@ export function renderApp(
     }
 
     if (selectedFormat === "svg" || selectedFormat === "mmds") {
-      const pathSimplification = pathSimplificationForDetail(
-        renderSettings.pathDetail,
-      );
-      if (pathSimplification) {
-        config.pathSimplification = pathSimplification;
+      if (renderSettings.pathSimplification !== "none") {
+        config.pathSimplification = renderSettings.pathSimplification;
       }
     }
 
@@ -1226,11 +1213,11 @@ export function renderApp(
     }
   });
 
-  pathDetailSelect.addEventListener("change", () => {
-    if (isPathDetail(pathDetailSelect.value)) {
+  pathSimplificationSelect.addEventListener("change", () => {
+    if (isPathSimplification(pathSimplificationSelect.value)) {
       renderSettings = {
         ...renderSettings,
-        pathDetail: pathDetailSelect.value,
+        pathSimplification: pathSimplificationSelect.value,
       };
       persistCurrentState();
       scheduleRender();

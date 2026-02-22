@@ -57,7 +57,7 @@ describe("playground state persistence", () => {
           layoutEngine: "auto",
           edgePreset: "auto",
           geometryLevel: "layout",
-          pathDetail: "full",
+          pathSimplification: "none",
         },
       }),
     });
@@ -87,7 +87,7 @@ describe("playground state persistence", () => {
         layoutEngine: "auto",
         edgePreset: "auto",
         geometryLevel: "layout",
-        pathDetail: "full",
+        pathSimplification: "none",
       },
     });
     try {
@@ -146,7 +146,7 @@ describe("playground state persistence", () => {
         layoutEngine: "auto",
         edgePreset: "auto",
         geometryLevel: "layout",
-        pathDetail: "full",
+        pathSimplification: "none",
       },
     });
     try {
@@ -184,10 +184,16 @@ describe("playground state persistence", () => {
     const layoutEngineSelect = root.querySelector<HTMLSelectElement>(
       "[data-layout-engine]",
     );
-    const pathDetailSelect =
-      root.querySelector<HTMLSelectElement>("[data-path-detail]");
+    const pathSimplificationSelect = root.querySelector<HTMLSelectElement>(
+      "[data-path-simplification]",
+    );
 
-    if (!editorInput || !mmdsTab || !layoutEngineSelect || !pathDetailSelect) {
+    if (
+      !editorInput ||
+      !mmdsTab ||
+      !layoutEngineSelect ||
+      !pathSimplificationSelect
+    ) {
       throw new Error("expected editor input, format tab, and render controls");
     }
 
@@ -196,8 +202,8 @@ describe("playground state persistence", () => {
     mmdsTab.click();
     layoutEngineSelect.value = "mermaid-layered";
     layoutEngineSelect.dispatchEvent(new Event("change"));
-    pathDetailSelect.value = "compact";
-    pathDetailSelect.dispatchEvent(new Event("change"));
+    pathSimplificationSelect.value = "lossless";
+    pathSimplificationSelect.dispatchEvent(new Event("change"));
 
     const persisted = JSON.parse(
       storage.getItem("mmdflux-playground-state") ?? "{}",
@@ -217,7 +223,7 @@ describe("playground state persistence", () => {
     expect(persisted.customInput).toBe("graph TD\nA-->Saved");
     expect(persisted.renderSettings).toMatchObject({
       layoutEngine: "mermaid-layered",
-      pathDetail: "compact",
+      pathSimplification: "lossless",
     });
   });
 
@@ -229,7 +235,7 @@ describe("playground state persistence", () => {
         layoutEngine: "auto",
         edgePreset: "auto",
         geometryLevel: "layout",
-        pathDetail: "full",
+        pathSimplification: "none",
       },
     });
     const renderClient = createFakeRenderClient();
@@ -260,7 +266,7 @@ describe("playground state persistence", () => {
     }
   });
 
-  it("maps MMDS path detail to pathSimplification config", async () => {
+  it("maps MMDS path simplification to config", async () => {
     const shareHash = encodeShareState({
       input: "graph TD\nA-->B",
       format: "mmds",
@@ -268,7 +274,7 @@ describe("playground state persistence", () => {
         layoutEngine: "auto",
         edgePreset: "auto",
         geometryLevel: "layout",
-        pathDetail: "compact",
+        pathSimplification: "lossless",
       },
     });
     const renderClient = createFakeRenderClient();
@@ -300,6 +306,50 @@ describe("playground state persistence", () => {
         pathSimplification: "lossless",
       });
       expect(config.pathDetail).toBeUndefined();
+    } finally {
+      history.replaceState(null, "", window.location.pathname);
+    }
+  });
+
+  it("maps legacy pathDetail share values to pathSimplification", async () => {
+    const legacyPayload = {
+      v: 2,
+      input: "graph TD\nA-->B",
+      format: "mmds",
+      renderSettings: {
+        layoutEngine: "auto",
+        edgePreset: "auto",
+        geometryLevel: "layout",
+        pathDetail: "compact",
+      },
+    };
+    const shareHash = btoa(JSON.stringify(legacyPayload))
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replaceAll("=", "");
+    const renderClient = createFakeRenderClient();
+
+    try {
+      history.replaceState(null, "", `#${shareHash}`);
+
+      const root = document.createElement("div");
+      renderApp(root, {
+        renderClientFactory: () => renderClient,
+        debounceMs: 0,
+        stateStorage: createMemoryStorage(),
+      });
+
+      await Promise.resolve();
+
+      expect(renderClient.render).toHaveBeenCalledTimes(1);
+      const request = renderClient.render.mock.calls[0]?.[0] as {
+        configJson?: string;
+      };
+      const config = JSON.parse(request.configJson ?? "{}") as Record<
+        string,
+        string
+      >;
+      expect(config.pathSimplification).toBe("lossless");
     } finally {
       history.replaceState(null, "", window.location.pathname);
     }

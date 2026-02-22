@@ -41,6 +41,26 @@ describe("share state", () => {
       renderSettings: DEFAULT_SHARE_RENDER_SETTINGS,
     });
   });
+
+  it("maps legacy pathDetail values to pathSimplification", () => {
+    const legacy = {
+      v: 2,
+      input: "graph TD\nA-->B",
+      format: "mmds" as const,
+      renderSettings: {
+        layoutEngine: "auto",
+        edgePreset: "auto",
+        geometryLevel: "layout",
+        pathDetail: "compact",
+      },
+    };
+    const hash = btoa(JSON.stringify(legacy))
+      .replaceAll("+", "-")
+      .replaceAll("/", "_")
+      .replaceAll("=", "");
+    const decoded = decodeShareState(hash);
+    expect(decoded?.renderSettings.pathSimplification).toBe("lossless");
+  });
 });
 
 describe("theme preference", () => {

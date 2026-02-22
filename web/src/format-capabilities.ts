@@ -3,7 +3,7 @@ export type PlaygroundFormat = "text" | "svg" | "mmds";
 export type RenderControlId =
   | "layoutEngine"
   | "edgePreset"
-  | "pathDetail";
+  | "pathSimplification";
 
 interface RenderControlCapability {
   description: string;
@@ -22,10 +22,10 @@ const CONTROL_CAPABILITIES: Record<RenderControlId, RenderControlCapability> = {
     supportedFormats: ["svg"],
     reasonWhenDisabled: "Edge preset applies to SVG output only.",
   },
-  pathDetail: {
-    description: "Control how much path waypoint detail is included.",
+  pathSimplification: {
+    description: "Control how aggressively route paths are simplified.",
     supportedFormats: ["svg", "mmds"],
-    reasonWhenDisabled: "Path detail applies to SVG and MMDS output.",
+    reasonWhenDisabled: "Path simplification applies to SVG and MMDS output.",
   },
 };
 

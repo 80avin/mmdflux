@@ -37,11 +37,14 @@ describe("format-aware controls", () => {
 
     const edgePresetSelect =
       root.querySelector<HTMLSelectElement>("[data-edge-preset]");
-    const pathDetailSelect =
-      root.querySelector<HTMLSelectElement>("[data-path-detail]");
+    const pathSimplificationSelect = root.querySelector<HTMLSelectElement>(
+      "[data-path-simplification]",
+    );
 
     const edgeHelp = root.querySelector<HTMLElement>("[data-help-edge-preset]");
-    const pathHelp = root.querySelector<HTMLElement>("[data-help-path-detail]");
+    const pathHelp = root.querySelector<HTMLElement>(
+      "[data-help-path-simplification]",
+    );
     const geometryLevelSelect = root.querySelector<HTMLSelectElement>(
       "[data-geometry-level]",
     );
@@ -51,7 +54,7 @@ describe("format-aware controls", () => {
       !svgTab ||
       !mmdsTab ||
       !edgePresetSelect ||
-      !pathDetailSelect ||
+      !pathSimplificationSelect ||
       !edgeHelp ||
       !pathHelp
     ) {
@@ -60,22 +63,22 @@ describe("format-aware controls", () => {
 
     expect(geometryLevelSelect).toBeNull();
     expect(edgePresetSelect.disabled).toBe(false);
-    expect(pathDetailSelect.disabled).toBe(false);
+    expect(pathSimplificationSelect.disabled).toBe(false);
 
     textTab.click();
     expect(edgePresetSelect.disabled).toBe(true);
-    expect(pathDetailSelect.disabled).toBe(true);
+    expect(pathSimplificationSelect.disabled).toBe(true);
     expect(edgeHelp.textContent).toContain("SVG output only");
-    expect(pathHelp.textContent).toContain("SVG and MMDS");
+    expect(pathHelp.textContent).toContain("Path simplification");
 
     mmdsTab.click();
     expect(edgePresetSelect.disabled).toBe(true);
-    expect(pathDetailSelect.disabled).toBe(false);
+    expect(pathSimplificationSelect.disabled).toBe(false);
     expect(edgeHelp.textContent).toContain("SVG output only");
 
     svgTab.click();
     expect(edgePresetSelect.disabled).toBe(false);
-    expect(pathDetailSelect.disabled).toBe(false);
+    expect(pathSimplificationSelect.disabled).toBe(false);
   });
 
   it("toggles advanced panel without scheduling a render", () => {

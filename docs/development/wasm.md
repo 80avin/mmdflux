@@ -56,7 +56,7 @@ Supported top-level keys:
 - `svgNodePaddingY`
 - `showIds`
 - `geometryLevel` (`layout`, `routed`)
-- `pathDetail` (`full`, `compact`, `simplified`, `endpoints`)
+- `pathSimplification` (`none`, `lossless`, `lossy`, `minimal`)
 - `layout` object:
   - `nodeSep`, `edgeSep`, `rankSep`, `margin`, `ranker`
 
@@ -74,7 +74,7 @@ Example:
   "edgePreset": "smoothstep",
   "edgeRadius": 6,
   "geometryLevel": "routed",
-  "pathDetail": "compact",
+  "pathSimplification": "lossless",
   "layout": {
     "nodeSep": 40,
     "rankSep": 50
