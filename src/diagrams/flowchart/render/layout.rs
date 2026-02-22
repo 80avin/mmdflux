@@ -236,6 +236,28 @@ pub(crate) struct SubLayoutResult {
     edge_index_map: Vec<usize>,
 }
 
+/// Mermaid-compatible isolation check for sublayout extraction.
+///
+/// Treat edges that target/source the subgraph endpoint (`to_subgraph` /
+/// `from_subgraph`) as cluster-endpoint links, not direction-tainting
+/// node-level cross-boundary edges.
+fn subgraph_has_tainting_cross_boundary_edges(diagram: &Diagram, sg_id: &str) -> bool {
+    let Some(sg) = diagram.subgraphs.get(sg_id) else {
+        return false;
+    };
+    let sg_nodes: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+    diagram.edges.iter().any(|edge| {
+        let from_in = sg_nodes.contains(edge.from.as_str());
+        let to_in = sg_nodes.contains(edge.to.as_str());
+        if from_in == to_in {
+            return false;
+        }
+        let via_sg_endpoint = edge.to_subgraph.as_deref() == Some(sg_id)
+            || edge.from_subgraph.as_deref() == Some(sg_id);
+        !via_sg_endpoint
+    })
+}
+
 /// Compute sub-layouts for subgraphs with direction overrides.
 ///
 /// For each subgraph that has a `dir` override, this creates a standalone layered
@@ -261,14 +283,12 @@ where
             None => continue,
         };
 
-        let layered_direction =
-            if skip_non_isolated_overrides && diagram.subgraph_has_cross_boundary_edges(sg_id) {
-                // Non-isolated subgraph in mermaid-compat mode: ignore the direction
-                // override and use the parent direction instead (matches dagre behavior).
-                parent_layered_config.direction
-            } else {
-                to_layered_direction(sub_dir)
-            };
+        if skip_non_isolated_overrides && subgraph_has_tainting_cross_boundary_edges(diagram, sg_id)
+        {
+            continue;
+        }
+
+        let layered_direction = to_layered_direction(sub_dir);
 
         let mut sub_graph: layered::DiGraph<(f64, f64)> = layered::DiGraph::new();
 
@@ -1594,15 +1614,33 @@ pub(crate) fn expand_parent_bounds(
         let Some(current) = layout.subgraph_bounds.get(*sg_id).copied() else {
             continue;
         };
-
-        let mut min_x = current.x;
-        let mut min_y = current.y;
-        let mut max_x = current.x + current.width;
-        let mut max_y = current.y + current.height;
+        let recompute_tight = child_margin > 0.0 || title_margin > 0.0;
+        let mut min_x = if recompute_tight {
+            f64::INFINITY
+        } else {
+            current.x
+        };
+        let mut min_y = if recompute_tight {
+            f64::INFINITY
+        } else {
+            current.y
+        };
+        let mut max_x = if recompute_tight {
+            f64::NEG_INFINITY
+        } else {
+            current.x + current.width
+        };
+        let mut max_y = if recompute_tight {
+            f64::NEG_INFINITY
+        } else {
+            current.y + current.height
+        };
+        let mut found_content = !recompute_tight;
 
         // Check member nodes.
         for member_id in &sg.nodes {
             if let Some(rect) = layout.nodes.get(&layered::NodeId(member_id.clone())) {
+                found_content = true;
                 min_x = min_x.min(rect.x);
                 min_y = min_y.min(rect.y);
                 max_x = max_x.max(rect.x + rect.width);
@@ -1612,14 +1650,18 @@ pub(crate) fn expand_parent_bounds(
 
         // Check child subgraph bounds (subgraphs whose parent is this subgraph).
         // Add child_margin so the parent border sits outside the child border.
-        // Add title_margin at the top when the parent has a visible title, so the
-        // child border clears the parent's title text.
+        // In expansion-only mode (text path), preserve the previous title-margin behavior.
         let has_title = !sg.title.trim().is_empty();
-        let top_margin = child_margin + if has_title { title_margin } else { 0.0 };
+        let top_margin = if recompute_tight {
+            child_margin
+        } else {
+            child_margin + if has_title { title_margin } else { 0.0 }
+        };
         for (child_sg_id, child_sg) in &diagram.subgraphs {
             if child_sg.parent.as_deref() == Some(sg_id.as_str())
                 && let Some(child_bounds) = layout.subgraph_bounds.get(child_sg_id)
             {
+                found_content = true;
                 min_x = min_x.min(child_bounds.x - child_margin);
                 min_y = min_y.min(child_bounds.y - top_margin);
                 max_x = max_x.max(child_bounds.x + child_bounds.width + child_margin);
@@ -1627,11 +1669,26 @@ pub(crate) fn expand_parent_bounds(
             }
         }
 
+        // Empty subgraph: preserve current bounds if we have nothing to recompute from.
+        if !found_content {
+            continue;
+        }
+
+        if recompute_tight && has_title {
+            min_y -= title_margin;
+        }
+
         if let Some(bounds) = layout.subgraph_bounds.get_mut(*sg_id) {
             bounds.x = min_x;
             bounds.y = min_y;
             bounds.width = max_x - min_x;
             bounds.height = max_y - min_y;
+        }
+        if let Some(node_rect) = layout.nodes.get_mut(&layered::NodeId((*sg_id).clone())) {
+            node_rect.x = min_x;
+            node_rect.y = min_y;
+            node_rect.width = max_x - min_x;
+            node_rect.height = max_y - min_y;
         }
     }
 }
@@ -1656,11 +1713,28 @@ pub(crate) fn resolve_sublayout_overlaps(
 
         let sg_bottom = sg_bounds.y + sg_bounds.height;
         let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
+        // Treat nested subgraph compound nodes as internal to this subgraph.
+        // `sg.nodes` contains leaf members, so without this descendants are
+        // misclassified as external blockers during overlap resolution.
+        let mut internal_subgraph_ids: HashSet<&str> = HashSet::new();
+        let mut stack = vec![sg_id.as_str()];
+        while let Some(parent_id) = stack.pop() {
+            for (child_id, child) in &diagram.subgraphs {
+                if child.parent.as_deref() == Some(parent_id)
+                    && internal_subgraph_ids.insert(child_id.as_str())
+                {
+                    stack.push(child_id.as_str());
+                }
+            }
+        }
 
         // Find the maximum shift needed to clear overlapping external nodes.
         let mut max_shift = 0.0f64;
         for (nid, rect) in &layout.nodes {
-            if sg_node_set.contains(nid.0.as_str()) || nid.0 == *sg_id {
+            if sg_node_set.contains(nid.0.as_str())
+                || nid.0 == *sg_id
+                || internal_subgraph_ids.contains(nid.0.as_str())
+            {
                 continue;
             }
             // Only consider nodes whose center is below the subgraph center
@@ -1682,7 +1756,10 @@ pub(crate) fn resolve_sublayout_overlaps(
         // Shift all nodes below the subgraph center.
         let sg_cy = sg_bounds.y + sg_bounds.height / 2.0;
         for (nid, rect) in layout.nodes.iter_mut() {
-            if sg_node_set.contains(nid.0.as_str()) || nid.0 == *sg_id {
+            if sg_node_set.contains(nid.0.as_str())
+                || nid.0 == *sg_id
+                || internal_subgraph_ids.contains(nid.0.as_str())
+            {
                 continue;
             }
             if rect.y + rect.height / 2.0 > sg_cy {
@@ -1723,6 +1800,9 @@ pub(crate) fn resolve_sublayout_overlaps(
             .cloned()
             .collect();
         for sibling_id in sibling_ids {
+            if internal_subgraph_ids.contains(sibling_id.as_str()) {
+                continue;
+            }
             if let Some(bounds) = layout.subgraph_bounds.get_mut(&sibling_id)
                 && bounds.y + bounds.height / 2.0 > sg_cy
             {
@@ -1808,15 +1888,34 @@ where
         }
     }
 
-    // Edges internal to a direction-override subgraph are handled by the
-    // sub-layout, not the main compound layout.  Including them here would
+    // Edges internal to a true direction-override subgraph are handled by the
+    // sub-layout, not the main compound layout. Including them here would
     // force the subgraph to span multiple ranks along the root direction,
-    // producing excessive vertical (or horizontal) spacing that persists
-    // even after reconciliation shrinks the subgraph.
+    // producing excessive spacing that persists even after reconciliation.
+    //
+    // A subgraph `dir` that equals its effective parent direction is treated as
+    // inherited direction, not an override.
     let dir_override_internal: HashSet<usize> = {
+        fn effective_parent_direction(diagram: &Diagram, sg: &crate::graph::Subgraph) -> Direction {
+            let mut current = sg.parent.as_deref();
+            while let Some(parent_id) = current {
+                let Some(parent) = diagram.subgraphs.get(parent_id) else {
+                    break;
+                };
+                if let Some(dir) = parent.dir {
+                    return dir;
+                }
+                current = parent.parent.as_deref();
+            }
+            diagram.direction
+        }
+
         let mut set = HashSet::new();
         for sg in diagram.subgraphs.values() {
-            if sg.dir.is_none() {
+            let Some(sub_dir) = sg.dir else {
+                continue;
+            };
+            if sub_dir == effective_parent_direction(diagram, sg) {
                 continue;
             }
             let members: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
@@ -5455,7 +5554,7 @@ mod tests {
     }
 
     #[test]
-    fn compute_sublayouts_uses_parent_dir_for_non_isolated_when_flag_set() {
+    fn compute_sublayouts_skips_non_isolated_when_flag_set() {
         use crate::graph::build_diagram;
         use crate::parser::parse_flowchart;
 
@@ -5484,7 +5583,7 @@ mod tests {
             b_lr.y
         );
 
-        // With flag true: sublayout uses parent direction (TD) instead of LR
+        // With flag true: non-isolated override is skipped entirely.
         let subs_true = compute_sublayouts(
             &diagram,
             &layered_config,
@@ -5493,18 +5592,8 @@ mod tests {
             true,
         );
         assert!(
-            subs_true.contains_key("sg1"),
-            "sublayout should still exist"
-        );
-        let td_result = &subs_true["sg1"];
-        let a_td = td_result.result.nodes[&layered::NodeId::from("A")];
-        let b_td = td_result.result.nodes[&layered::NodeId::from("B")];
-        // TD: A and B should be stacked (similar x, different y)
-        assert!(
-            (a_td.y - b_td.y).abs() > 1.0,
-            "TD: A.y={} B.y={} should differ",
-            a_td.y,
-            b_td.y
+            !subs_true.contains_key("sg1"),
+            "non-isolated sublayout should be skipped"
         );
     }
 }
