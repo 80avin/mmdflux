@@ -13,15 +13,13 @@ use canvas::{Cell, Connections};
 pub use chars::CharSet;
 
 use crate::diagram::{
-    AlgorithmId, CornerStyle, EdgePreset, EdgeRouting, EngineAlgorithmId, EngineId,
+    AlgorithmId, CornerStyle, EdgePreset, EdgeRouting, EngineAlgorithmId, EngineId, GraphEngine,
     InterpolationStyle, OutputFormat, PathSimplification, RenderConfig, RoutingStyle,
 };
 pub use crate::diagrams::flowchart::render::edge::{
     render_all_edges, render_all_edges_with_labels, render_edge,
 };
-pub use crate::diagrams::flowchart::render::layout::{
-    Layout, LayoutConfig, SubgraphBounds, compute_layout_direct,
-};
+pub use crate::diagrams::flowchart::render::layout::{Layout, LayoutConfig, SubgraphBounds};
 pub use crate::diagrams::flowchart::render::router::{
     Point, RoutedEdge, Segment, route_all_edges, route_edge,
 };
@@ -29,6 +27,9 @@ pub use crate::diagrams::flowchart::render::shape::{NodeBounds, node_dimensions,
 use crate::diagrams::flowchart::render::subgraph;
 pub use crate::diagrams::flowchart::render::svg::{render_svg, render_svg_from_geometry};
 use crate::diagrams::flowchart::render::svg_metrics::{DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE};
+pub use crate::diagrams::flowchart::render::text_adapter::{
+    compute_layout, geometry_to_text_layout,
+};
 use crate::graph::{Diagram, Direction};
 
 /// Engine defaults for SVG style (routing + interpolation + corner).
@@ -220,15 +221,55 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
         return render_svg(diagram, options);
     }
 
+    // Engine → text adapter → text renderer.
+    let mut config = layout_config_for_diagram(diagram, options);
+    config.ranker = options.ranker;
+
+    let engine = crate::diagrams::flowchart::engine::FluxLayeredEngine::text();
+    // Construct LayeredConfig from raw LayoutConfig values. Do NOT call
+    // layered_config_for_layout() here — the engine's internal round-trip
+    // (layout_config_from_layered → build_layered_layout → layered_config_for_layout)
+    // applies cluster_rank_sep once. Pre-applying it here would double it.
+    let engine_config = crate::diagram::EngineConfig::Layered(crate::layered::LayoutConfig {
+        direction: match diagram.direction {
+            Direction::TopDown => crate::layered::Direction::TopBottom,
+            Direction::BottomTop => crate::layered::Direction::BottomTop,
+            Direction::LeftRight => crate::layered::Direction::LeftRight,
+            Direction::RightLeft => crate::layered::Direction::RightLeft,
+        },
+        node_sep: config.node_sep,
+        edge_sep: config.edge_sep,
+        rank_sep: config.rank_sep,
+        margin: config.margin,
+        acyclic: true,
+        ranker: config.ranker.unwrap_or_default(),
+    });
+    let request = crate::diagram::GraphSolveRequest::from_config(
+        &RenderConfig::default(),
+        options.output_format,
+    );
+    let result = engine
+        .solve(diagram, &engine_config, &request)
+        .expect("engine solve failed in render()");
+
+    let layout = geometry_to_text_layout(diagram, &result.geometry, &config);
+    render_text_from_layout(diagram, &layout, options)
+}
+
+/// Render a diagram to text from a pre-computed `Layout`.
+///
+/// This is the text rendering pipeline: Layout → Canvas → String.
+/// Separated from `render()` so that callers who produce a Layout via a
+/// different path (e.g. the text adapter) can share the same rendering logic.
+pub fn render_text_from_layout(
+    diagram: &Diagram,
+    layout: &Layout,
+    options: &RenderOptions,
+) -> String {
     let charset = match options.output_format {
         OutputFormat::Ascii => CharSet::ascii(),
         _ => CharSet::unicode(),
     };
-
-    // Step 1: Compute layout with direction-aware spacing
-    let mut config = layout_config_for_diagram(diagram, options);
-    config.ranker = options.ranker;
-    let layout = compute_layout_direct(diagram, &config);
 
     // Step 2: Create canvas
     let mut canvas = Canvas::new(layout.width, layout.height);
@@ -249,7 +290,7 @@ pub fn render(diagram: &Diagram, options: &RenderOptions) -> String {
     }
 
     // Step 4: Route and render edges
-    let routed_edges = route_all_edges(&diagram.edges, &layout, diagram.direction);
+    let routed_edges = route_all_edges(&diagram.edges, layout, diagram.direction);
     render_all_edges_with_labels(
         &mut canvas,
         &routed_edges,

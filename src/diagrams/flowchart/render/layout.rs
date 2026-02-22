@@ -6,10 +6,8 @@
 use std::collections::{HashMap, HashSet};
 
 use super::shape::{NodeBounds, node_dimensions};
+use crate::diagrams::flowchart::geometry::FPoint;
 use crate::graph::{Diagram, Direction, Edge, Node, Shape, Stroke};
-#[cfg(test)]
-use crate::layered::Point;
-use crate::layered::normalize::WaypointWithRank;
 use crate::layered::{self, Direction as LayeredDirection, LayoutConfig as LayeredConfig, Rect};
 
 /// Bounding box for a subgraph border in draw coordinates.
@@ -53,19 +51,19 @@ pub struct GridPos {
 ///
 /// Encapsulates the scaling, offset, and padding parameters needed to convert
 /// the layout engine's floating-point coordinates to integer character-grid positions.
-struct CoordTransform<'a> {
-    scale_x: f64,
-    scale_y: f64,
-    layout_min_x: f64,
-    layout_min_y: f64,
-    max_overhang_x: usize,
-    max_overhang_y: usize,
-    config: &'a LayoutConfig,
+pub(crate) struct CoordTransform<'a> {
+    pub(crate) scale_x: f64,
+    pub(crate) scale_y: f64,
+    pub(crate) layout_min_x: f64,
+    pub(crate) layout_min_y: f64,
+    pub(crate) max_overhang_x: usize,
+    pub(crate) max_overhang_y: usize,
+    pub(crate) config: &'a LayoutConfig,
 }
 
 impl CoordTransform<'_> {
     /// Convert layout coordinates to draw coordinates.
-    fn to_draw(&self, x: f64, y: f64) -> (usize, usize) {
+    pub(crate) fn to_draw(&self, x: f64, y: f64) -> (usize, usize) {
         let dx = ((x - self.layout_min_x) * self.scale_x).round() as isize;
         let dy = ((y - self.layout_min_y) * self.scale_y).round() as isize;
         let draw_x = dx.max(0) as usize
@@ -404,7 +402,7 @@ where
 /// 3. Center the sub-layout's draw positions within the subgraph bounds
 /// 4. Override draw_positions, node_bounds, and subgraph_bounds
 #[allow(clippy::too_many_arguments)]
-fn reconcile_sublayouts_draw(
+pub(crate) fn reconcile_sublayouts_draw(
     diagram: &Diagram,
     config: &LayoutConfig,
     sublayouts: &HashMap<String, SubLayoutResult>,
@@ -656,7 +654,7 @@ fn reconcile_sublayouts_draw(
 /// For each direction-override parent, detect nodes that overlap with sibling
 /// child subgraph bounds and shift the subgraph (and all its contents) away
 /// to create separation.
-fn resolve_sibling_overlaps_draw(
+pub(crate) fn resolve_sibling_overlaps_draw(
     diagram: &Diagram,
     node_bounds: &mut HashMap<String, NodeBounds>,
     draw_positions: &mut HashMap<String, (usize, usize)>,
@@ -839,7 +837,7 @@ fn resolve_sibling_overlaps_draw(
 /// direction.  Without this, a node like C in an LR subgraph may stay vertically
 /// aligned with B (top of a BT child subgraph) instead of A (its actual target at
 /// the bottom), forcing the C→A edge to route diagonally through B's area.
-fn align_cross_boundary_siblings_draw(
+pub(crate) fn align_cross_boundary_siblings_draw(
     diagram: &Diagram,
     node_bounds: &mut HashMap<String, NodeBounds>,
     draw_positions: &mut HashMap<String, (usize, usize)>,
@@ -1978,7 +1976,7 @@ where
     build_layered_layout_with_config(diagram, &layered_config, node_dims, edge_label_dims)
 }
 
-fn text_edge_label_dimensions(label: &str) -> (f64, f64) {
+pub(crate) fn text_edge_label_dimensions(label: &str) -> (f64, f64) {
     let lines: Vec<&str> = label.split('\n').collect();
     let width = lines
         .iter()
@@ -1989,802 +1987,8 @@ fn text_edge_label_dimensions(label: &str) -> (f64, f64) {
     (width as f64 + 2.0, height as f64)
 }
 
-/// Compute the layout using the layered algorithm with direct coordinate translation.
-///
-/// This uses uniform scale factors to translate the layout's float coordinates to ASCII
-/// character cells, replacing the stagger pipeline. The 3-step process:
-/// 1. Compute per-axis scale factors
-/// 2. Apply uniform scaling + rounding to all layout coordinates
-/// 3. Enforce minimum spacing via collision repair
-pub fn compute_layout_direct(diagram: &Diagram, config: &LayoutConfig) -> Layout {
-    // --- Phase A: Build layered graph ---
-    let layered_config = layered_config_for_layout(diagram, config);
-    let layered_direction = layered_config.direction;
-
-    // Pre-compute sub-layouts for subgraphs with direction overrides.
-    let direction = diagram.direction;
-    let sublayouts = compute_sublayouts(
-        diagram,
-        &layered_config,
-        |node| {
-            let (w, h) = node_dimensions(node, direction);
-            (w as f64, h as f64)
-        },
-        |edge| {
-            edge.label
-                .as_ref()
-                .map(|label| text_edge_label_dimensions(label))
-        },
-        false,
-    );
-
-    let mut result = build_layered_layout_with_config(
-        diagram,
-        &layered_config,
-        |node| {
-            let (w, h) = node_dimensions(node, direction);
-            (w as f64, h as f64)
-        },
-        |edge| {
-            edge.label
-                .as_ref()
-                .map(|label| text_edge_label_dimensions(label))
-        },
-    );
-
-    // Shift external predecessors of direction-override subgraphs to align
-    // with the subgraph center, before coordinate transformation.
-    center_override_subgraphs(diagram, &mut result);
-    expand_parent_bounds(diagram, &mut result, 0.0, 0.0);
-
-    // Convert post-processed LayoutResult to engine-agnostic GraphGeometry.
-    // From this point on, phases read from `geom` (and `engine_hints` for
-    // rank-annotated data) instead of the raw `result`.
-    let geom = super::super::geometry::from_layered_layout(&result, diagram);
-    let engine_hints = match &geom.engine_hints {
-        Some(super::super::geometry::EngineHints::Layered(h)) => h,
-        _ => unreachable!("layered adapter always produces layered hints"),
-    };
-
-    // --- Phase B: Group nodes into layers ---
-    let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
-
-    // Collect subgraph IDs to exclude from layer grouping (compound nodes are not rendered as nodes)
-    let subgraph_ids: std::collections::HashSet<&str> =
-        diagram.subgraphs.keys().map(|s| s.as_str()).collect();
-
-    let mut layer_coords: Vec<(String, f64, f64)> = geom
-        .nodes
-        .iter()
-        .filter(|(id, _)| !subgraph_ids.contains(id.as_str()))
-        .map(|(id, pos_node)| {
-            let primary = if is_vertical {
-                pos_node.rect.y
-            } else {
-                pos_node.rect.x
-            };
-            let secondary = if is_vertical {
-                pos_node.rect.x
-            } else {
-                pos_node.rect.y
-            };
-            (id.clone(), primary, secondary)
-        })
-        .collect();
-    layer_coords.sort_by(|a, b| a.1.total_cmp(&b.1));
-
-    let mut layers: Vec<Vec<String>> = Vec::new();
-    let mut current_layer: Vec<String> = Vec::new();
-    let mut last_primary: Option<f64> = None;
-    for (id, primary, _) in &layer_coords {
-        if let Some(last) = last_primary
-            && (*primary - last).abs() > 25.0
-            && !current_layer.is_empty()
-        {
-            layers.push(std::mem::take(&mut current_layer));
-        }
-        current_layer.push(id.clone());
-        last_primary = Some(*primary);
-    }
-    if !current_layer.is_empty() {
-        layers.push(current_layer);
-    }
-
-    let secondary_coord = |id: &String| -> f64 {
-        geom.nodes
-            .get(id)
-            .map(|n| if is_vertical { n.rect.x } else { n.rect.y })
-            .unwrap_or(0.0)
-    };
-    for layer in &mut layers {
-        layer.sort_by(|a, b| secondary_coord(a).total_cmp(&secondary_coord(b)));
-    }
-
-    let grid_positions = compute_grid_positions(&layers);
-
-    // --- Phase C: Compute node dimensions ---
-    let node_dims: HashMap<String, (usize, usize)> = diagram
-        .nodes
-        .iter()
-        .map(|(id, node)| (id.clone(), node_dimensions(node, direction)))
-        .collect();
-
-    // --- Phase D: Scale layout coordinates to ASCII ---
-    // The layered layout halves rank_sep when it doubles minlen (matching dagre.js
-    // makeSpaceForEdgeLabels), so layout positions are already compact. No
-    // render-side scale compensation is needed: pass ranks_doubled=false so the
-    // scale formula uses the original rank_sep directly.
-    // However, minlen IS still doubled, so waypoints at odd layout ranks still
-    // need interpolation in the layer_starts map (ranks_doubled_for_layers=true).
-    let ranks_doubled_for_scale = false;
-    let ranks_doubled_for_layers = true;
-    let (scale_x, scale_y) = compute_ascii_scale_factors(
-        &node_dims,
-        layered_config.rank_sep,
-        layered_config.node_sep,
-        config.v_spacing,
-        config.h_spacing,
-        is_vertical,
-        ranks_doubled_for_scale,
-    );
-
-    // Find layout bounding box min
-    let mut layout_min_x = geom
-        .nodes
-        .values()
-        .map(|n| n.rect.x)
-        .fold(f64::INFINITY, f64::min);
-    let mut layout_min_y = geom
-        .nodes
-        .values()
-        .map(|n| n.rect.y)
-        .fold(f64::INFINITY, f64::min);
-
-    if !geom.subgraphs.is_empty() {
-        let sg_min_x = geom
-            .subgraphs
-            .values()
-            .map(|sg| sg.rect.x)
-            .fold(f64::INFINITY, f64::min);
-        let sg_min_y = geom
-            .subgraphs
-            .values()
-            .map(|sg| sg.rect.y)
-            .fold(f64::INFINITY, f64::min);
-        layout_min_x = layout_min_x.min(sg_min_x);
-        layout_min_y = layout_min_y.min(sg_min_y);
-    }
-
-    if std::env::var("MMDFLUX_DEBUG_MIN_X").is_ok_and(|v| v == "1") {
-        eprintln!(
-            "[min_x] layout_min_x={:.2} layout_min_y={:.2}",
-            layout_min_x, layout_min_y
-        );
-    }
-
-    // Scale each node's center, then compute top-left.
-    // First pass: compute raw centers and find the maximum overhang
-    // (how much a node's half-width exceeds its raw center coordinate).
-    // This prevents clipping to zero, which would destroy the relative
-    // separations computed by the layout algorithm (e.g., BK stagger).
-    //
-    // Lesson: rendering pipeline bugs can silently mask
-    // correct layout output. The original saturating_sub here clipped wide
-    // left-positioned nodes to x=0, collapsing BK-computed stagger. The fix
-    // is a uniform coordinate-space translation that preserves all relative
-    // separations. When debugging layout issues, check the rendering pipeline
-    // first — the layout algorithm may already be correct.
-    let mut raw_centers: Vec<RawCenter> = Vec::new();
-    let mut max_overhang_x: usize = 0;
-    let mut max_overhang_y: usize = 0;
-
-    for (node_id, pos_node) in &geom.nodes {
-        if let Some(&(w, h)) = node_dims.get(node_id) {
-            let cx = ((pos_node.rect.x + pos_node.rect.width / 2.0 - layout_min_x) * scale_x)
-                .round() as usize;
-            let cy = ((pos_node.rect.y + pos_node.rect.height / 2.0 - layout_min_y) * scale_y)
-                .round() as usize;
-            if w / 2 > cx {
-                max_overhang_x = max_overhang_x.max(w / 2 - cx);
-            }
-            if h / 2 > cy {
-                max_overhang_y = max_overhang_y.max(h / 2 - cy);
-            }
-            raw_centers.push(RawCenter {
-                id: node_id.clone(),
-                cx,
-                cy,
-                w,
-                h,
-            });
-        }
-    }
-
-    // Second pass: apply overhang offset and compute draw positions
-    let mut draw_positions: HashMap<String, (usize, usize)> = HashMap::new();
-    let mut node_bounds: HashMap<String, NodeBounds> = HashMap::new();
-
-    for rc in &raw_centers {
-        let center_x = rc.cx + max_overhang_x;
-        let center_y = rc.cy + max_overhang_y;
-
-        let x = center_x - rc.w / 2 + config.padding + config.left_label_margin;
-        let y = center_y - rc.h / 2 + config.padding;
-
-        draw_positions.insert(rc.id.clone(), (x, y));
-        node_bounds.insert(
-            rc.id.clone(),
-            NodeBounds {
-                x,
-                y,
-                width: rc.w,
-                height: rc.h,
-                layout_center_x: Some(center_x + config.padding + config.left_label_margin),
-                layout_center_y: Some(center_y + config.padding),
-            },
-        );
-    }
-
-    // --- Phase E: Collision repair ---
-    // Within-layer (cross-axis) repair
-    collision_repair(
-        &layers,
-        &mut draw_positions,
-        &node_dims,
-        is_vertical,
-        if is_vertical {
-            config.h_spacing
-        } else {
-            config.v_spacing
-        },
-    );
-    // Between-layer (primary-axis) repair: ensure minimum gap for edge routing
-    rank_gap_repair(
-        &layers,
-        &mut draw_positions,
-        &node_dims,
-        is_vertical,
-        if is_vertical {
-            config.v_spacing
-        } else {
-            config.h_spacing
-        },
-    );
-
-    // Update node_bounds after collision repair
-    for (id, &(x, y)) in &draw_positions {
-        if let Some(&(w, h)) = node_dims.get(id) {
-            // Preserve layout center from the initial pass
-            let prev = node_bounds.get(id);
-            let layout_center_x = prev.and_then(|b| b.layout_center_x);
-            let layout_center_y = prev.and_then(|b| b.layout_center_y);
-            node_bounds.insert(
-                id.clone(),
-                NodeBounds {
-                    x,
-                    y,
-                    width: w,
-                    height: h,
-                    layout_center_x,
-                    layout_center_y,
-                },
-            );
-        }
-    }
-
-    // --- Phase F: Compute canvas size ---
-    // Add margin for synthetic backward-edge routing around nodes
-    let has_backward_edges = !geom.reversed_edges.is_empty();
-    let backward_margin = if has_backward_edges {
-        super::router::BACKWARD_ROUTE_GAP + 2
-    } else {
-        0
-    };
-
-    let base_width = node_bounds
-        .values()
-        .map(|b| b.x + b.width)
-        .max()
-        .unwrap_or(0)
-        + config.padding
-        + config.right_label_margin;
-    let base_height = node_bounds
-        .values()
-        .map(|b| b.y + b.height)
-        .max()
-        .unwrap_or(0)
-        + config.padding;
-
-    // For TD/BT, backward edges route to the right; for LR/RL, below
-    let (width, height) = if is_vertical {
-        (base_width + backward_margin, base_height)
-    } else {
-        (base_width, base_height + backward_margin)
-    };
-
-    // --- Phase G: Build layout-rank → draw-coordinate mapping ---
-    // Use actual node_bounds to compute layer positions, ensuring waypoints are positioned
-    // relative to where nodes are actually rendered (not scaled layout positions).
-    //
-    // For each rank with user nodes, compute the extent (start, end) on the primary axis
-    // from the actual node_bounds. For dummy ranks (no user nodes), interpolate between
-    // neighboring real node ranks.
-    let rank_to_actual_bounds: HashMap<i32, (usize, usize)> = {
-        let mut rank_bounds: HashMap<i32, (usize, usize)> = HashMap::new();
-        for (node_id, &rank) in &engine_hints.node_ranks {
-            if let Some(bounds) = node_bounds.get(node_id) {
-                let (start, end) = if is_vertical {
-                    (bounds.y, bounds.y + bounds.height)
-                } else {
-                    (bounds.x, bounds.x + bounds.width)
-                };
-                rank_bounds
-                    .entry(rank)
-                    .and_modify(|(s, e)| {
-                        *s = (*s).min(start);
-                        *e = (*e).max(end);
-                    })
-                    .or_insert((start, end));
-            }
-        }
-        rank_bounds
-    };
-
-    // Build layer_starts as a Vec indexed by layout rank.
-    // Real node ranks use the actual node bounds extent.
-    // Missing ranks (e.g., dummy/label ranks) interpolate between the nearest neighbors.
-    let max_rank = engine_hints
-        .node_ranks
-        .values()
-        .copied()
-        .max()
-        .unwrap_or(0)
-        .max(0) as usize;
-
-    // Helper: find nearest lower rank that has actual bounds
-    let find_lower_bound = |rank: i32| -> Option<(i32, usize)> {
-        (0..rank)
-            .rev()
-            .find_map(|r| rank_to_actual_bounds.get(&r).map(|&(_, end)| (r, end)))
-    };
-
-    // Helper: find nearest upper rank that has actual bounds
-    let find_upper_bound = |rank: i32, max: i32| -> Option<(i32, usize)> {
-        ((rank + 1)..=max).find_map(|r| rank_to_actual_bounds.get(&r).map(|&(start, _)| (r, start)))
-    };
-
-    let layer_starts: Vec<usize> = (0..=max_rank)
-        .map(|rank| {
-            let rank_i32 = rank as i32;
-            if let Some(&(start, _end)) = rank_to_actual_bounds.get(&rank_i32) {
-                // Real node rank — use its actual draw position
-                start
-            } else {
-                // Dummy/label rank — interpolate between nearest actual bounds
-                let lower = find_lower_bound(rank_i32);
-                let upper = find_upper_bound(rank_i32, max_rank as i32);
-
-                match (lower, upper) {
-                    (Some((lower_rank, lower_end)), Some((upper_rank, upper_start))) => {
-                        // Linearly interpolate between lower_end and upper_start
-                        let rank_span = upper_rank - lower_rank;
-                        let rank_offset = rank_i32 - lower_rank;
-                        let pos_span = upper_start as i32 - lower_end as i32;
-                        (lower_end as i32 + (pos_span * rank_offset) / rank_span) as usize
-                    }
-                    (Some((_, lower_end)), None) => lower_end,
-                    (None, Some((_, upper_start))) => upper_start,
-                    (None, None) => 0,
-                }
-            }
-        })
-        .collect();
-
-    // --- Phase H: Transform waypoints and labels ---
-    let ctx = TransformContext {
-        layout_min_x,
-        layout_min_y,
-        scale_x,
-        scale_y,
-        padding: config.padding,
-        left_label_margin: config.left_label_margin,
-        overhang_x: max_overhang_x,
-        overhang_y: max_overhang_y,
-    };
-
-    // Transient adapter glue: convert LayeredHints back to WaypointWithRank for
-    // the transform functions. This conversion will be removed when the transform
-    // functions are updated to consume geometry IR types directly (Plan 0055).
-    let edge_waypoints_raw: HashMap<usize, Vec<WaypointWithRank>> = engine_hints
-        .edge_waypoints
-        .iter()
-        .map(|(&idx, wps)| {
-            (
-                idx,
-                wps.iter()
-                    .map(|(fp, rank)| WaypointWithRank {
-                        point: layered::Point { x: fp.x, y: fp.y },
-                        rank: *rank,
-                    })
-                    .collect(),
-            )
-        })
-        .collect();
-    let label_positions_raw: HashMap<usize, WaypointWithRank> = engine_hints
-        .label_positions
-        .iter()
-        .map(|(&idx, (fp, rank))| {
-            (
-                idx,
-                WaypointWithRank {
-                    point: layered::Point { x: fp.x, y: fp.y },
-                    rank: *rank,
-                },
-            )
-        })
-        .collect();
-
-    if std::env::var("MMDFLUX_DEBUG_WAYPOINTS").is_ok_and(|v| v == "1") {
-        eprintln!("[node_ranks] {:?}", engine_hints.node_ranks);
-        eprintln!("[rank_to_actual_bounds] {:?}", rank_to_actual_bounds);
-        eprintln!("[layer_starts] {:?}", layer_starts);
-        for (edge_idx, wps) in &edge_waypoints_raw {
-            if let Some(edge) = diagram.edges.get(*edge_idx) {
-                eprintln!(
-                    "[raw layout waypoints] {} -> {}: {:?}",
-                    edge.from, edge.to, wps
-                );
-            }
-        }
-    }
-
-    let edge_waypoints_converted = transform_waypoints_direct(
-        &edge_waypoints_raw,
-        &diagram.edges,
-        &ctx,
-        &layer_starts,
-        is_vertical,
-        width,
-        height,
-    );
-
-    if std::env::var("MMDFLUX_DEBUG_WAYPOINTS").is_ok_and(|v| v == "1") {
-        for (edge_idx, waypoints) in &edge_waypoints_converted {
-            if let Some(edge) = diagram.edges.get(*edge_idx) {
-                eprintln!("[waypoints] {} -> {}: {:?}", edge.from, edge.to, waypoints);
-            }
-        }
-    }
-
-    let mut edge_label_positions_converted = transform_label_positions_direct(
-        &label_positions_raw,
-        &diagram.edges,
-        &ctx,
-        &layer_starts,
-        is_vertical,
-        width,
-        height,
-    );
-
-    // --- Phase I: Strip layout waypoints from backward edges ---
-    // When ranks are doubled (labels present), backward edges get inflated layout
-    // waypoints from normalization dummies that create tall vertical columns.
-    // Strip them so the router falls through to synthetic compact routing via
-    // generate_backward_waypoints().
-    let mut edge_waypoints_final = edge_waypoints_converted;
-    const BACKWARD_WAYPOINT_STRIP_THRESHOLD: usize = 6;
-    if ranks_doubled_for_layers && is_vertical {
-        for edge in &diagram.edges {
-            if let (Some(from_b), Some(to_b)) =
-                (node_bounds.get(&edge.from), node_bounds.get(&edge.to))
-                && super::router::is_backward_edge(from_b, to_b, diagram.direction)
-                && edge_waypoints_final
-                    .get(&edge.index)
-                    .is_some_and(|wps| wps.len() >= BACKWARD_WAYPOINT_STRIP_THRESHOLD)
-            {
-                edge_waypoints_final.remove(&edge.index);
-            }
-        }
-    }
-
-    // --- Phase I.5: Nudge waypoints that collide with nodes ---
-    nudge_colliding_waypoints(
-        &mut edge_waypoints_final,
-        &node_bounds,
-        is_vertical,
-        width,
-        height,
-    );
-
-    // --- Phase J: Collect node shapes ---
-    let node_shapes: HashMap<String, Shape> = diagram
-        .nodes
-        .iter()
-        .map(|(id, node)| (id.clone(), node.shape))
-        .collect();
-
-    // --- Phase K: Convert subgraph bounds to draw coordinates ---
-    let coord_transform = CoordTransform {
-        scale_x,
-        scale_y,
-        layout_min_x,
-        layout_min_y,
-        max_overhang_x,
-        max_overhang_y,
-        config,
-    };
-    // Transient adapter glue: convert GraphGeometry subgraphs back to layered Rect map
-    // for subgraph_bounds_to_draw. Will be removed in Plan 0055.
-    let layout_sg_bounds: HashMap<String, Rect> = geom
-        .subgraphs
-        .iter()
-        .map(|(id, sg)| (id.clone(), sg.rect.into()))
-        .collect();
-    let mut subgraph_bounds =
-        subgraph_bounds_to_draw(&diagram.subgraphs, &layout_sg_bounds, &coord_transform);
-    debug_compare_subgraph_bounds(
-        &diagram.subgraphs,
-        &subgraph_bounds,
-        &layout_sg_bounds,
-        &coord_transform,
-    );
-    shrink_subgraph_vertical_gaps(
-        &diagram.subgraphs,
-        &diagram.edges,
-        &node_bounds,
-        &mut subgraph_bounds,
-        diagram.direction,
-    );
-    shrink_subgraph_horizontal_gaps(
-        &diagram.subgraphs,
-        &diagram.edges,
-        &node_bounds,
-        &mut subgraph_bounds,
-        diagram.direction,
-    );
-    debug_subgraph_gaps(&diagram.subgraphs, &node_bounds, &subgraph_bounds);
-
-    // --- Phase L: Compute self-edge loop paths in draw coordinates ---
-    // We use node bounds directly rather than transforming layout-space loop points,
-    // because the layout gap (1.0) would collapse to 0 after ASCII scaling.
-    let self_edges: Vec<SelfEdgeDrawData> = geom
-        .self_edges
-        .iter()
-        .filter_map(|se| {
-            let bounds = node_bounds.get(&se.node_id)?;
-            let loop_extent = 3; // how far the loop extends beyond the node edge
-
-            // The layout places self-edge loops on the right face (TD/BT) or
-            // bottom face (LR/RL), matching the "order" dimension where the
-            // dummy node is placed after the self-edge node.
-            let points = match layered_direction {
-                LayeredDirection::TopBottom => {
-                    // Loop on right face: exit top-right, loop right, enter bottom-right
-                    let right = bounds.x + bounds.width;
-                    let loop_x = right + loop_extent;
-                    let top_y = bounds.y;
-                    let bot_y = bounds.y + bounds.height - 1;
-                    vec![
-                        (right, top_y),  // exit right face at top
-                        (loop_x, top_y), // go right
-                        (loop_x, bot_y), // go down
-                        (right, bot_y),  // enter right face at bottom
-                    ]
-                }
-                LayeredDirection::BottomTop => {
-                    // Loop on right face: exit bottom-right, loop right, enter top-right
-                    let right = bounds.x + bounds.width;
-                    let loop_x = right + loop_extent;
-                    let top_y = bounds.y;
-                    let bot_y = bounds.y + bounds.height - 1;
-                    vec![
-                        (right, bot_y),  // exit right face at bottom
-                        (loop_x, bot_y), // go right
-                        (loop_x, top_y), // go up
-                        (right, top_y),  // enter right face at top
-                    ]
-                }
-                LayeredDirection::LeftRight => {
-                    // Loop on bottom face: exit bottom-right, loop down, enter bottom-left
-                    let bot = bounds.y + bounds.height;
-                    let loop_y = bot + loop_extent;
-                    let left_x = bounds.x;
-                    let right_x = bounds.x + bounds.width - 1;
-                    vec![
-                        (right_x, bot),    // exit bottom face at right
-                        (right_x, loop_y), // go down
-                        (left_x, loop_y),  // go left
-                        (left_x, bot),     // enter bottom face at left
-                    ]
-                }
-                LayeredDirection::RightLeft => {
-                    // Loop on bottom face: exit bottom-left, loop down, enter bottom-right
-                    let bot = bounds.y + bounds.height;
-                    let loop_y = bot + loop_extent;
-                    let left_x = bounds.x;
-                    let right_x = bounds.x + bounds.width - 1;
-                    vec![
-                        (left_x, bot),     // exit bottom face at left
-                        (left_x, loop_y),  // go down
-                        (right_x, loop_y), // go right
-                        (right_x, bot),    // enter bottom face at right
-                    ]
-                }
-            };
-
-            Some(SelfEdgeDrawData {
-                node_id: se.node_id.clone(),
-                edge_index: se.edge_index,
-                points,
-            })
-        })
-        .collect();
-
-    // Expand canvas to fit subgraph borders (which extend beyond member nodes)
-    let mut width = width;
-    let mut height = height;
-    for sb in subgraph_bounds.values() {
-        width = width.max(sb.x + sb.width + config.padding);
-        height = height.max(sb.y + sb.height + config.padding);
-    }
-
-    // Expand canvas to fit self-edge loops
-    for se in &self_edges {
-        for &(x, y) in &se.points {
-            width = width.max(x + config.padding + 1);
-            height = height.max(y + config.padding + 1);
-        }
-    }
-
-    // --- Phase M: Direction-override sub-layout reconciliation in draw coordinates ---
-    // For subgraphs with direction overrides, compute sub-layout positions in draw
-    // coordinates and override the main layout's positions.
-    if !sublayouts.is_empty() {
-        reconcile_sublayouts_draw(
-            diagram,
-            config,
-            &sublayouts,
-            &mut draw_positions,
-            &mut node_bounds,
-            &mut subgraph_bounds,
-            &mut width,
-            &mut height,
-        );
-
-        // Re-expand parent bounds after reconciliation repositioned children.
-        expand_parent_subgraph_bounds(&diagram.subgraphs, &mut subgraph_bounds);
-
-        // Push sibling nodes and child subgraphs apart when they overlap.
-        resolve_sibling_overlaps_draw(
-            diagram,
-            &mut node_bounds,
-            &mut draw_positions,
-            &mut subgraph_bounds,
-        );
-
-        // Align sibling nodes with their cross-boundary edge targets so
-        // edges don't have to route diagonally through child subgraph contents.
-        align_cross_boundary_siblings_draw(
-            diagram,
-            &mut node_bounds,
-            &mut draw_positions,
-            &mut subgraph_bounds,
-        );
-
-        // Re-expand parent bounds after alignment may have moved nodes.
-        expand_parent_subgraph_bounds(&diagram.subgraphs, &mut subgraph_bounds);
-
-        // --- Phase N: Ensure external-edge spacing for direction-override subgraphs ---
-        // Before clipping waypoints, shift direction-override subgraphs (border +
-        // member nodes) so there is room for horizontal edge routing between
-        // external predecessor/successor nodes and the subgraph border.
-        // Must run before waypoint clipping so the clip uses the shifted border.
-        ensure_external_edge_spacing(
-            diagram,
-            &mut draw_positions,
-            &mut node_bounds,
-            &mut subgraph_bounds,
-        );
-
-        // Invalidate or adjust waypoints and label positions for edges touching
-        // direction-override subgraphs. The main layout computed these for
-        // the parent direction; after reconciliation the node positions have
-        // moved, so the old waypoints are stale.
-        //
-        // - Internal edges (both endpoints inside the override) have their
-        //   waypoints removed so the router uses the subgraph's direction.
-        // - Cross-boundary edges keep waypoints but clip them to the subgraph
-        //   border so they don't run through internal nodes.
-        // - Labels for all touched edges are removed to avoid stale positions.
-        for sg in diagram.subgraphs.values() {
-            if sg.dir.is_none() {
-                continue;
-            }
-            let sg_node_set: HashSet<&str> = sg.nodes.iter().map(|s| s.as_str()).collect();
-            for edge in &diagram.edges {
-                let from_in = sg_node_set.contains(edge.from.as_str());
-                let to_in = sg_node_set.contains(edge.to.as_str());
-                if !(from_in || to_in) {
-                    continue;
-                }
-                let key = edge.index;
-                if from_in && to_in {
-                    edge_waypoints_final.remove(&key);
-                } else if let Some(bounds) = subgraph_bounds.get(&sg.id)
-                    && let Some(wps) = edge_waypoints_final.get(&key).cloned()
-                {
-                    let clipped = clip_waypoints_to_subgraph(&wps, bounds, from_in, to_in);
-                    // For incoming edges, check if the clipped waypoints
-                    // end on the wrong subgraph face. After the centering
-                    // shift, waypoints can end up on a side border when
-                    // the source is above/below (or vice versa). When the
-                    // entry face doesn't match the source position, the
-                    // waypoints are stale and should be removed.
-                    if to_in && !from_in {
-                        let stale = node_bounds.get(&edge.from).is_some_and(|src_nb| {
-                            clipped.last().is_some_and(|last| {
-                                let src_cy = src_nb.y + src_nb.height / 2;
-                                let src_cx = src_nb.x + src_nb.width / 2;
-                                let on_top = last.1 == bounds.y;
-                                let on_bottom =
-                                    last.1 == bounds.y + bounds.height.saturating_sub(1);
-                                let on_left = last.0 == bounds.x;
-                                let on_right = last.0 == bounds.x + bounds.width.saturating_sub(1);
-                                // Source above → expect top entry
-                                (src_cy < bounds.y && !on_top)
-                                // Source below → expect bottom entry
-                                || (src_cy > bounds.y + bounds.height && !on_bottom)
-                                // Source left → expect left entry
-                                || (src_cx < bounds.x && !on_left)
-                                // Source right → expect right entry
-                                || (src_cx > bounds.x + bounds.width && !on_right)
-                            })
-                        });
-                        if stale {
-                            edge_waypoints_final.remove(&key);
-                        } else {
-                            edge_waypoints_final.insert(key, clipped);
-                        }
-                    } else {
-                        edge_waypoints_final.insert(key, clipped);
-                    }
-                }
-                edge_label_positions_converted.remove(&key);
-            }
-        }
-    }
-
-    // Re-expand canvas to fit any subgraphs/nodes shifted by Phase N.
-    for sb in subgraph_bounds.values() {
-        width = width.max(sb.x + sb.width + config.padding);
-        height = height.max(sb.y + sb.height + config.padding);
-    }
-    for nb in node_bounds.values() {
-        width = width.max(nb.x + nb.width + config.padding);
-        height = height.max(nb.y + nb.height + config.padding);
-    }
-
-    let node_directions = geom.node_directions.clone();
-
-    Layout {
-        grid_positions,
-        draw_positions,
-        node_bounds,
-        width,
-        height,
-        h_spacing: config.h_spacing,
-        v_spacing: config.v_spacing,
-        edge_waypoints: edge_waypoints_final,
-        edge_label_positions: edge_label_positions_converted,
-        node_shapes,
-        subgraph_bounds,
-        self_edges,
-        node_directions,
-    }
-}
-
 /// Assign grid positions to nodes based on layers.
-fn compute_grid_positions(layers: &[Vec<String>]) -> HashMap<String, GridPos> {
+pub(crate) fn compute_grid_positions(layers: &[Vec<String>]) -> HashMap<String, GridPos> {
     let mut positions = HashMap::new();
 
     for (layer_idx, layer) in layers.iter().enumerate() {
@@ -2815,7 +2019,7 @@ fn compute_grid_positions(layers: &[Vec<String>]) -> HashMap<String, GridPos> {
 /// For horizontal layouts (LR/RL):
 ///   - scale_x (primary) = (max_w + h_spacing) / (max_w + rank_sep)
 ///   - scale_y (cross)   = (avg_h + v_spacing) / (avg_h + node_sep)
-fn compute_ascii_scale_factors(
+pub(crate) fn compute_ascii_scale_factors(
     node_dims: &HashMap<String, (usize, usize)>,
     rank_sep: f64,
     node_sep: f64,
@@ -2867,7 +2071,7 @@ fn compute_ascii_scale_factors(
 ///
 /// For vertical layouts (`is_vertical = true`), the cross-axis is X.
 /// For horizontal layouts (`is_vertical = false`), the cross-axis is Y.
-fn collision_repair(
+pub(crate) fn collision_repair(
     layers: &[Vec<String>],
     draw_positions: &mut HashMap<String, (usize, usize)>,
     node_dims: &HashMap<String, (usize, usize)>,
@@ -2913,7 +2117,7 @@ fn collision_repair(
 /// If the closest node in the next layer is too close to the farthest node
 /// in the previous layer, shift the entire next layer (and all subsequent layers)
 /// forward to maintain the minimum gap.
-fn rank_gap_repair(
+pub(crate) fn rank_gap_repair(
     layers: &[Vec<String>],
     draw_positions: &mut HashMap<String, (usize, usize)>,
     node_dims: &HashMap<String, (usize, usize)>,
@@ -2968,12 +2172,76 @@ fn rank_gap_repair(
 
 /// Intermediate result for a node's scaled center and dimensions, used between
 /// the overhang-detection pass and the draw-position pass.
-struct RawCenter {
-    id: String,
-    cx: usize,
-    cy: usize,
-    w: usize,
-    h: usize,
+pub(crate) struct RawCenter {
+    pub(crate) id: String,
+    pub(crate) cx: usize,
+    pub(crate) cy: usize,
+    pub(crate) w: usize,
+    pub(crate) h: usize,
+}
+
+/// Compute rank-to-draw-coordinate mapping for waypoint transformation.
+///
+/// For each layout rank that contains real nodes, computes the primary-axis
+/// draw-coordinate extent from `node_bounds`. For ranks without real nodes
+/// (dummy/label ranks from edge normalization), linearly interpolates between
+/// the nearest neighboring real-node ranks.
+///
+/// Returns a `Vec<usize>` indexed by rank, where `layer_starts[rank]` gives
+/// the primary-axis draw coordinate for that rank.
+pub(crate) fn compute_layer_starts(
+    node_ranks: &HashMap<String, i32>,
+    node_bounds: &HashMap<String, NodeBounds>,
+    is_vertical: bool,
+) -> Vec<usize> {
+    // Map each rank to its draw-coordinate extent (start, end) from real nodes
+    let mut rank_to_actual_bounds: HashMap<i32, (usize, usize)> = HashMap::new();
+    for (node_id, &rank) in node_ranks {
+        if let Some(bounds) = node_bounds.get(node_id.as_str()) {
+            let (start, end) = if is_vertical {
+                (bounds.y, bounds.y + bounds.height)
+            } else {
+                (bounds.x, bounds.x + bounds.width)
+            };
+            rank_to_actual_bounds
+                .entry(rank)
+                .and_modify(|(s, e)| {
+                    *s = (*s).min(start);
+                    *e = (*e).max(end);
+                })
+                .or_insert((start, end));
+        }
+    }
+
+    let max_rank = node_ranks.values().copied().max().unwrap_or(0).max(0) as usize;
+
+    (0..=max_rank)
+        .map(|rank| {
+            let rank_i32 = rank as i32;
+            if let Some(&(start, _end)) = rank_to_actual_bounds.get(&rank_i32) {
+                start
+            } else {
+                // Interpolate between nearest real-node ranks
+                let lower = (0..rank_i32)
+                    .rev()
+                    .find_map(|r| rank_to_actual_bounds.get(&r).map(|&(_, end)| (r, end)));
+                let upper = ((rank_i32 + 1)..=(max_rank as i32))
+                    .find_map(|r| rank_to_actual_bounds.get(&r).map(|&(start, _)| (r, start)));
+
+                match (lower, upper) {
+                    (Some((lower_rank, lower_end)), Some((upper_rank, upper_start))) => {
+                        let rank_span = upper_rank - lower_rank;
+                        let rank_offset = rank_i32 - lower_rank;
+                        let pos_span = upper_start as i32 - lower_end as i32;
+                        (lower_end as i32 + (pos_span * rank_offset) / rank_span) as usize
+                    }
+                    (Some((_, lower_end)), None) => lower_end,
+                    (None, Some((_, upper_start))) => upper_start,
+                    (None, None) => 0,
+                }
+            }
+        })
+        .collect()
 }
 
 /// Build a map from parent subgraph ID to list of direct child subgraph IDs.
@@ -2997,7 +2265,7 @@ fn build_children_map(
 ///
 /// Uses inside-out (bottom-up) computation: leaf subgraphs first, then parents
 /// expand to contain their children. This ensures proper nesting of bounds.
-fn subgraph_bounds_to_draw(
+pub(crate) fn subgraph_bounds_to_draw(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
     layout_bounds: &HashMap<String, Rect>,
     transform: &CoordTransform,
@@ -3061,104 +2329,7 @@ fn subgraph_bounds_to_draw(
     bounds
 }
 
-fn debug_compare_subgraph_bounds(
-    subgraphs: &HashMap<String, crate::graph::Subgraph>,
-    computed: &HashMap<String, SubgraphBounds>,
-    layout_bounds: &HashMap<String, Rect>,
-    transform: &CoordTransform,
-) {
-    if !std::env::var("MMDFLUX_DEBUG_SUBGRAPH_BOUNDS").is_ok_and(|v| v == "1") {
-        return;
-    }
-
-    let mut ids: HashSet<String> = HashSet::new();
-    ids.extend(subgraphs.keys().cloned());
-    ids.extend(computed.keys().cloned());
-    ids.extend(layout_bounds.keys().cloned());
-
-    eprintln!("[subgraph_bounds] comparing computed vs layout-derived");
-    let mut ids: Vec<String> = ids.into_iter().collect();
-    ids.sort();
-    for id in ids {
-        let computed_bounds = computed.get(&id);
-        let layout_rect = layout_bounds.get(&id);
-        if computed_bounds.is_none() && layout_rect.is_none() {
-            continue;
-        }
-
-        if let Some(rect) = layout_rect {
-            eprintln!(
-                "[subgraph_bounds] raw {} = ({:.2}, {:.2}, {:.2}, {:.2})",
-                id, rect.x, rect.y, rect.width, rect.height
-            );
-        }
-
-        let layout_draw = layout_rect.map(|rect| {
-            let (x0, y0) = transform.to_draw(rect.x, rect.y);
-            let (x1, y1) = transform.to_draw(rect.x + rect.width, rect.y + rect.height);
-            (x0, y0, x1.saturating_sub(x0), y1.saturating_sub(y0))
-        });
-
-        let computed_tuple = computed_bounds.map(|b| (b.x, b.y, b.width, b.height));
-
-        eprintln!(
-            "[subgraph_bounds] {} computed={:?} layout={:?}",
-            id, computed_tuple, layout_draw
-        );
-    }
-}
-
-fn debug_subgraph_gaps(
-    subgraphs: &HashMap<String, crate::graph::Subgraph>,
-    node_bounds: &HashMap<String, NodeBounds>,
-    subgraph_bounds: &HashMap<String, SubgraphBounds>,
-) {
-    if !std::env::var("MMDFLUX_DEBUG_SUBGRAPH_GAPS").is_ok_and(|v| v == "1") {
-        return;
-    }
-
-    eprintln!("[subgraph_gaps] top-border to content gaps");
-
-    for (sg_id, sg) in subgraphs {
-        let Some(bounds) = subgraph_bounds.get(sg_id) else {
-            continue;
-        };
-
-        let mut min_y: Option<usize> = None;
-        let mut max_y: Option<usize> = None;
-        for member in &sg.nodes {
-            if let Some(node) = node_bounds.get(member) {
-                let node_bottom = node.y.saturating_add(node.height.saturating_sub(1));
-                min_y = Some(min_y.map_or(node.y, |cur| cur.min(node.y)));
-                max_y = Some(max_y.map_or(node_bottom, |cur| cur.max(node_bottom)));
-                continue;
-            }
-            if let Some(child_bounds) = subgraph_bounds.get(member) {
-                let child_bottom = child_bounds
-                    .y
-                    .saturating_add(child_bounds.height.saturating_sub(1));
-                min_y = Some(min_y.map_or(child_bounds.y, |cur| cur.min(child_bounds.y)));
-                max_y = Some(max_y.map_or(child_bottom, |cur| cur.max(child_bottom)));
-            }
-        }
-
-        let (Some(min_y), Some(max_y)) = (min_y, max_y) else {
-            continue;
-        };
-
-        let content_top = bounds.y.saturating_add(1); // inside top border row
-        let content_bottom = bounds.y.saturating_add(bounds.height.saturating_sub(2)); // inside bottom border row
-        let top_gap = min_y.saturating_sub(content_top);
-        let bottom_gap = content_bottom.saturating_sub(max_y);
-
-        eprintln!(
-            "[subgraph_gaps] {} top={} min_y={} max_y={} top_gap={} bottom_gap={}",
-            sg_id, bounds.y, min_y, max_y, top_gap, bottom_gap
-        );
-    }
-}
-
-fn shrink_subgraph_vertical_gaps(
+pub(crate) fn shrink_subgraph_vertical_gaps(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
     edges: &[crate::graph::Edge],
     node_bounds: &HashMap<String, NodeBounds>,
@@ -3268,7 +2439,7 @@ fn shrink_subgraph_vertical_gaps(
 ///
 /// For each direction-override subgraph with external edges, this pushes the
 /// border inward so there is a 1-cell gap on the entry side.
-fn ensure_external_edge_spacing(
+pub(crate) fn ensure_external_edge_spacing(
     diagram: &Diagram,
     draw_positions: &mut HashMap<String, (usize, usize)>,
     node_bounds: &mut HashMap<String, NodeBounds>,
@@ -3380,7 +2551,7 @@ fn ensure_external_edge_spacing(
     }
 }
 
-fn shrink_subgraph_horizontal_gaps(
+pub(crate) fn shrink_subgraph_horizontal_gaps(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
     edges: &[crate::graph::Edge],
     node_bounds: &HashMap<String, NodeBounds>,
@@ -3617,7 +2788,7 @@ fn is_node_in_subgraph(
     false
 }
 
-fn expand_parent_subgraph_bounds(
+pub(crate) fn expand_parent_subgraph_bounds(
     subgraphs: &HashMap<String, crate::graph::Subgraph>,
     subgraph_bounds: &mut HashMap<String, SubgraphBounds>,
 ) {
@@ -3663,7 +2834,7 @@ fn expand_parent_subgraph_bounds(
 /// If a waypoint falls inside a node, push it just past the node's edge along the
 /// cross-axis (X for vertical layouts, Y for horizontal). The waypoint is then
 /// clamped to stay within canvas bounds.
-fn nudge_colliding_waypoints(
+pub(crate) fn nudge_colliding_waypoints(
     edge_waypoints: &mut HashMap<usize, Vec<(usize, usize)>>,
     node_bounds: &HashMap<String, NodeBounds>,
     is_vertical: bool,
@@ -3689,15 +2860,15 @@ fn nudge_colliding_waypoints(
 }
 
 /// Shared parameters for transforming layout coordinates to ASCII draw coordinates.
-struct TransformContext {
-    layout_min_x: f64,
-    layout_min_y: f64,
-    scale_x: f64,
-    scale_y: f64,
-    padding: usize,
-    left_label_margin: usize,
-    overhang_x: usize,
-    overhang_y: usize,
+pub(crate) struct TransformContext {
+    pub(crate) layout_min_x: f64,
+    pub(crate) layout_min_y: f64,
+    pub(crate) scale_x: f64,
+    pub(crate) scale_y: f64,
+    pub(crate) padding: usize,
+    pub(crate) left_label_margin: usize,
+    pub(crate) overhang_x: usize,
+    pub(crate) overhang_y: usize,
 }
 
 impl TransformContext {
@@ -3736,8 +2907,8 @@ impl TransformContext {
 /// The primary axis (Y for TD/BT, X for LR/RL) uses `layer_starts` to snap to
 /// the correct rank position. The cross axis uses uniform scaling from layout
 /// coordinates, ensuring consistency with node positions.
-fn transform_waypoints_direct(
-    edge_waypoints: &HashMap<usize, Vec<WaypointWithRank>>,
+pub(crate) fn transform_waypoints_direct(
+    edge_waypoints: &HashMap<usize, Vec<(FPoint, i32)>>,
     edges: &[Edge],
     ctx: &TransformContext,
     layer_starts: &[usize],
@@ -3751,10 +2922,10 @@ fn transform_waypoints_direct(
         if edges.get(*edge_idx).is_some() {
             let wps: Vec<(usize, usize)> = waypoints
                 .iter()
-                .map(|wp| {
-                    let rank_idx = wp.rank as usize;
+                .map(|(fp, rank)| {
+                    let rank_idx = *rank as usize;
                     let layer_pos = layer_starts.get(rank_idx).copied().unwrap_or(0);
-                    let (scaled_x, scaled_y) = ctx.to_ascii(wp.point.x, wp.point.y);
+                    let (scaled_x, scaled_y) = ctx.to_ascii(fp.x, fp.y);
 
                     if is_vertical {
                         (scaled_x.min(canvas_width.saturating_sub(1)), layer_pos)
@@ -3776,8 +2947,8 @@ fn transform_waypoints_direct(
 /// The primary axis (Y for TD/BT, X for LR/RL) uses rank-based snapping via
 /// `layer_starts[rank]`, matching how `transform_waypoints_direct()` works.
 /// The cross axis uses uniform scaling from layout coordinates.
-fn transform_label_positions_direct(
-    label_positions: &HashMap<usize, WaypointWithRank>,
+pub(crate) fn transform_label_positions_direct(
+    label_positions: &HashMap<usize, (FPoint, i32)>,
     edges: &[Edge],
     ctx: &TransformContext,
     layer_starts: &[usize],
@@ -3787,11 +2958,11 @@ fn transform_label_positions_direct(
 ) -> HashMap<usize, (usize, usize)> {
     let mut converted = HashMap::new();
 
-    for (edge_idx, wp) in label_positions {
+    for (edge_idx, (fp, rank)) in label_positions {
         if edges.get(*edge_idx).is_some() {
-            let rank_idx = wp.rank as usize;
+            let rank_idx = *rank as usize;
             let layer_pos = layer_starts.get(rank_idx).copied().unwrap_or(0);
-            let (scaled_x, scaled_y) = ctx.to_ascii(wp.point.x, wp.point.y);
+            let (scaled_x, scaled_y) = ctx.to_ascii(fp.x, fp.y);
 
             let pos = if is_vertical {
                 (scaled_x.min(canvas_width.saturating_sub(1)), layer_pos)
@@ -3872,7 +3043,7 @@ fn segment_bounds_intersection(
         .map(|(_, point)| point)
 }
 
-fn clip_waypoints_to_subgraph(
+pub(crate) fn clip_waypoints_to_subgraph(
     waypoints: &[(usize, usize)],
     bounds: &SubgraphBounds,
     clip_start: bool,
@@ -3924,6 +3095,7 @@ fn clip_waypoints_to_subgraph(
 
 #[cfg(test)]
 mod tests {
+    use super::super::text_adapter::compute_layout;
     use super::*;
 
     // =========================================================================
@@ -4165,13 +3337,7 @@ mod tests {
         ];
 
         let mut waypoints = HashMap::new();
-        waypoints.insert(
-            0usize,
-            vec![WaypointWithRank {
-                point: Point { x: 100.0, y: 75.0 },
-                rank: 1,
-            }],
-        );
+        waypoints.insert(0usize, vec![(FPoint::new(100.0, 75.0), 1)]);
 
         let layer_starts = vec![1, 5, 9];
         let ctx = TransformContext {
@@ -4207,13 +3373,7 @@ mod tests {
         ];
 
         let mut waypoints = HashMap::new();
-        waypoints.insert(
-            0usize,
-            vec![WaypointWithRank {
-                point: Point { x: 75.0, y: 100.0 },
-                rank: 1,
-            }],
-        );
+        waypoints.insert(0usize, vec![(FPoint::new(75.0, 100.0), 1)]);
 
         let layer_starts = vec![1, 8, 15];
         let ctx = TransformContext {
@@ -4244,13 +3404,7 @@ mod tests {
         ];
 
         let mut waypoints = HashMap::new();
-        waypoints.insert(
-            0usize,
-            vec![WaypointWithRank {
-                point: Point { x: 5000.0, y: 50.0 },
-                rank: 0,
-            }],
-        );
+        waypoints.insert(0usize, vec![(FPoint::new(5000.0, 50.0), 0)]);
 
         let layer_starts = vec![1];
         let ctx = TransformContext {
@@ -4273,7 +3427,7 @@ mod tests {
     #[test]
     fn waypoint_transform_empty_input() {
         let edges: Vec<Edge> = vec![];
-        let waypoints: HashMap<usize, Vec<WaypointWithRank>> = HashMap::new();
+        let waypoints: HashMap<usize, Vec<(FPoint, i32)>> = HashMap::new();
         let ctx = TransformContext {
             layout_min_x: 0.0,
             layout_min_y: 0.0,
@@ -4303,13 +3457,7 @@ mod tests {
         ];
 
         let mut labels = HashMap::new();
-        labels.insert(
-            0usize,
-            WaypointWithRank {
-                point: Point { x: 150.0, y: 100.0 },
-                rank: 1,
-            },
-        );
+        labels.insert(0usize, (FPoint::new(150.0, 100.0), 1));
 
         let ctx = TransformContext {
             layout_min_x: 50.0,
@@ -4343,13 +3491,7 @@ mod tests {
         ];
 
         let mut labels = HashMap::new();
-        labels.insert(
-            0usize,
-            WaypointWithRank {
-                point: Point { x: 150.0, y: 100.0 },
-                rank: 1,
-            },
-        );
+        labels.insert(0usize, (FPoint::new(150.0, 100.0), 1));
 
         let ctx = TransformContext {
             layout_min_x: 50.0,
@@ -4372,7 +3514,7 @@ mod tests {
     #[test]
     fn label_transform_empty_input() {
         let edges: Vec<Edge> = vec![];
-        let labels: HashMap<usize, WaypointWithRank> = HashMap::new();
+        let labels: HashMap<usize, (FPoint, i32)> = HashMap::new();
         let ctx = TransformContext {
             layout_min_x: 0.0,
             layout_min_y: 0.0,
@@ -4401,7 +3543,7 @@ mod tests {
         let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
 
         assert!(
             layout.subgraph_bounds.contains_key("sg1"),
@@ -4421,7 +3563,7 @@ mod tests {
         let input = "graph TD\nsubgraph outer[Outer]\nA[Node A]\nsubgraph inner[Inner]\nB[Node B]\nend\nend\nA --> B\n";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
         assert!(
             layout.subgraph_bounds.contains_key("outer"),
             "should have outer bounds"
@@ -4440,7 +3582,7 @@ mod tests {
         let input = "graph TD\nA --> B\n";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
 
         assert!(layout.subgraph_bounds.is_empty());
     }
@@ -4453,7 +3595,7 @@ mod tests {
         let input = "graph TD\nsubgraph sg1[Group]\nA --> B\nend\n";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
 
         let bounds = &layout.subgraph_bounds["sg1"];
         assert!(
@@ -4480,7 +3622,7 @@ mod tests {
         let diagram = build_diagram(&flowchart);
 
         // Should not panic
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
         assert!(layout.draw_positions.contains_key("A"));
         assert!(layout.draw_positions.contains_key("B"));
         assert!(layout.draw_positions.contains_key("C"));
@@ -4496,7 +3638,7 @@ mod tests {
         let diagram = build_diagram(&flowchart);
         assert!(!diagram.has_subgraphs());
 
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
         assert!(layout.draw_positions.contains_key("A"));
     }
 
@@ -4508,7 +3650,7 @@ mod tests {
         let input = "graph TD\n    A -->|yes| B";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
 
         // Label position should exist — edge A→B is at index 0
         let edge_idx = diagram
@@ -4546,13 +3688,7 @@ mod tests {
         ];
 
         let mut labels = HashMap::new();
-        labels.insert(
-            5usize,
-            WaypointWithRank {
-                point: Point { x: 100.0, y: 100.0 },
-                rank: 0,
-            },
-        );
+        labels.insert(5usize, (FPoint::new(100.0, 100.0), 0));
 
         let ctx = TransformContext {
             layout_min_x: 0.0,
@@ -4606,7 +3742,7 @@ mod tests {
         let input = "graph TD\nsubgraph outer[Outer]\nA\nsubgraph inner[Inner]\nB\nend\nend\n";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
         assert_eq!(layout.subgraph_bounds["outer"].depth, 0);
         assert_eq!(layout.subgraph_bounds["inner"].depth, 1);
     }
@@ -4619,7 +3755,7 @@ mod tests {
         let input = "graph TD\nsubgraph outer[Outer]\nA\nsubgraph inner[Inner]\nB --> C\nend\nend\nA --> B\n";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
         let outer = &layout.subgraph_bounds["outer"];
         let inner = &layout.subgraph_bounds["inner"];
         // Parent must fully contain child
@@ -4657,7 +3793,7 @@ mod tests {
         let input = "graph TD\nsubgraph outer[Outer]\nsubgraph inner[Inner]\nA --> B\nend\nend\n";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
         assert!(
             layout.subgraph_bounds.contains_key("outer"),
             "outer should have bounds"
@@ -4850,7 +3986,7 @@ mod tests {
         let input = "graph TD\nsubgraph sg1[This Is A Very Long Title]\nA --> B\nend\n";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
 
         let bounds = layout
             .subgraph_bounds
@@ -4881,7 +4017,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
 
         assert!(layout.subgraph_bounds.contains_key("sg1"));
         let bounds = &layout.subgraph_bounds["sg1"];
@@ -4998,7 +4134,7 @@ mod tests {
             A --> C\nB --> D";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
 
         let sg1 = &layout.subgraph_bounds["sg1"];
         let sg2 = &layout.subgraph_bounds["sg2"];
@@ -5033,7 +4169,7 @@ mod tests {
         let input = "graph TD\nsubgraph sg1[Group]\nA[Node1]\nB[Node2]\nend\nA --> B";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
 
         assert_subgraph_contains_members(&layout, "sg1", &["A", "B"]);
     }
@@ -5049,7 +4185,7 @@ mod tests {
             A --> C\nB --> D";
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
-        let layout = compute_layout_direct(&diagram, &LayoutConfig::default());
+        let layout = compute_layout(&diagram, &LayoutConfig::default());
 
         assert_subgraph_contains_members(&layout, "sg1", &["A", "B"]);
         assert_subgraph_contains_members(&layout, "sg2", &["C", "D"]);
@@ -5106,7 +4242,7 @@ mod tests {
 
         // Layout computation succeeds without panic
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
         assert!(!layout.node_bounds.is_empty());
     }
 
@@ -5265,7 +4401,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
 
         let a = layout.get_bounds("A").unwrap();
         let b = layout.get_bounds("B").unwrap();
@@ -5297,7 +4433,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
 
         let a = layout.get_bounds("A").unwrap();
         let b = layout.get_bounds("B").unwrap();
@@ -5343,7 +4479,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
 
         let sg = &layout.subgraph_bounds["sg1"];
         assert!(
@@ -5365,7 +4501,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
 
         let sg = &layout.subgraph_bounds["sg1"];
         assert!(
@@ -5387,7 +4523,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
 
         let sg = &layout.subgraph_bounds["sg1"];
         let title = "A Very Long Section Title";
@@ -5409,7 +4545,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
 
         assert_subgraph_contains_members(&layout, "sg1", &["A", "B", "C"]);
     }
@@ -5423,7 +4559,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
 
         // Verify no overlap between A, B, C
         let nodes = ["A", "B", "C"];
@@ -5454,7 +4590,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
 
         let sg = &layout.subgraph_bounds["sg1"];
 
@@ -5507,7 +4643,7 @@ mod tests {
         let flowchart = parse_flowchart(input).unwrap();
         let diagram = build_diagram(&flowchart);
         let config = LayoutConfig::default();
-        let layout = compute_layout_direct(&diagram, &config);
+        let layout = compute_layout(&diagram, &config);
 
         // Nodes inside the LR subgraph should have LR effective direction
         assert_eq!(
