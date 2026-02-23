@@ -37,3 +37,6 @@
   `layout.rs` to `text_layout.rs`, and added `text_` prefix to all text-only
   modules for naming symmetry with `svg_*`. Renamed `LayoutConfig` to
   `TextLayoutConfig`.
+- `mermaid-layered` engine now only supports SVG and MMDS output, matching
+  Mermaid.js which only renders to SVG ([#14](https://github.com/kevinswiber/mmdflux/pull/14)).
+  Text/ASCII output uses `flux-layered` exclusively.
