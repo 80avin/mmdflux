@@ -4,7 +4,7 @@ This file provides guidance to AI code assistants when working with code in this
 
 ## Project Overview
 
-mmdflux is a Rust CLI tool and library that parses Mermaid flowchart diagrams and renders them as text. It converts Mermaid syntax into terminal-friendly visualizations using Unicode box-drawing characters, with support for multiple layout directions (TD, BT, LR, RL), node shapes (rectangle, rounded, diamond), and edge styles (solid, dotted, thick).
+mmdflux is a Rust CLI tool and library that parses Mermaid diagrams and renders them as text (Unicode/ASCII) or SVG. Supported diagram types: flowchart, class, sequence, pie, info, packet. It converts Mermaid syntax into terminal-friendly visualizations using Unicode box-drawing characters, with support for multiple layout directions (TD, BT, LR, RL), node shapes, edge styles, subgraphs with direction overrides, and structured JSON output (MMDS format).
 
 ## Common Commands
 
@@ -30,10 +30,11 @@ echo 'graph LR\nA-->B' | cargo run
 
 ## Architecture
 
-Four-stage pipeline: **Parser → Graph → Layout → Render**
+Pipeline: **Parser → Graph → Engine → Render**
 
 ```
-Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram → Layered Layout → Router → Canvas → Text
+Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram
+  → GraphEngine::solve() → GraphGeometry → Router → Renderer (Text/SVG/MMDS)
 ```
 
 ### Module Structure
@@ -47,62 +48,79 @@ Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram → Lay
 **`src/graph/`** - Graph data structures
 
 - `diagram.rs` - `Diagram` struct (nodes HashMap, edges Vec, direction)
-- `node.rs` - `Node` with `Shape` enum (Rectangle, Round, Diamond)
+- `node.rs` - `Node` with `Shape` enum (Rectangle, Round, Diamond, etc.)
 - `edge.rs` - `Edge` with `Stroke` (Solid, Dotted, Thick) and `Arrow` (Normal, None)
 - `builder.rs` - `build_diagram()` converts AST to Diagram
 
-**`src/layered/`** - Hierarchical graph layout (Sugiyama framework, based on dagre.js)
+**`src/diagram.rs`** - Engine abstractions (`GraphEngine` trait, `EngineConfig`, `RenderConfig`, `GraphSolveRequest`/`Result`)
+
+**`src/diagrams/`** - Diagram type implementations
+
+- `flowchart/` - Flowchart: engine (`FluxLayeredEngine`, `MermaidLayeredEngine`), geometry IR, routing, render modules
+- `class/` - Class diagrams: parser, compiler to `graph::Diagram`, renders through shared engine pipeline
+- `sequence/` - Sequence diagrams: independent timeline-family pipeline (parser→compiler→model→layout→text renderer)
+- `pie.rs`, `info.rs`, `packet.rs` - Simple diagram types
+
+**`src/diagrams/flowchart/render/`** - Flowchart rendering (text + SVG)
+
+Modules are prefixed by pipeline: `text_*` for character-grid rendering, `svg*` for SVG, unprefixed for shared.
+
+- *Shared:* `layout_building.rs` (layered layout bridge), `layout_subgraph_ops.rs` (float-coord subgraph reconciliation), `orthogonal_router.rs`, `route_policy.rs`
+- *Text pipeline:* `text_types.rs` (Layout, TextLayoutConfig, SubgraphBounds, etc.), `text_layout.rs` (text-specific layout logic), `text_adapter.rs` (engine geometry → text Layout), `text_edge.rs`, `text_shape.rs`, `text_router.rs`, `text_subgraph.rs`, `text_routing_core.rs`
+- *SVG pipeline:* `svg.rs` (SVG rendering + layout), `svg_router.rs` (SVG edge routing), `svg_metrics.rs` (font metrics)
+
+**`src/layered/`** - Hierarchical graph layout (Sugiyama framework, ~95% dagre v0.8.5 parity)
 
 - `mod.rs` - `layout()` entry point, orchestrates the layout phases
 - `graph.rs` - `DiGraph` input graph, `LayoutGraph` internal representation
 - `acyclic.rs` - Cycle removal via DFS, tracks reversed edges
-- `rank.rs` - Layer assignment using longest-path algorithm
+- `rank.rs` - Layer assignment using longest-path or network simplex
 - `normalize.rs` - Long edge normalization (dummy nodes), edge label positioning
 - `order.rs` - Crossing reduction via barycenter heuristic
 - `position.rs` - Coordinate assignment using Brandes-Köpf algorithm
 - `bk.rs` - Brandes-Köpf horizontal coordinate assignment with vertical alignment
 - `types.rs` - `LayoutConfig`, `LayoutResult`, `Rect`, `Point`, `Direction`
 
-**`src/render/`** - Text rendering
+**`src/render/`** - Top-level render orchestration
 
-- `layout.rs` - `compute_layout()` bridges Diagram to layered layout, converts to draw coordinates
-- `router.rs` - `route_edge()` and `route_backward_edge()` compute paths using waypoints
-- `edge.rs` - `render_edge()` draws edges with arrows and labels
-- `shape.rs` - `render_node()` draws node shapes
+- `mod.rs` - `render()` entry point, dispatches to text or SVG pipeline; re-exports key types
 - `canvas.rs` - 2D character grid with `strip_common_leading_whitespace()`
 - `chars.rs` - `CharSet` for box-drawing characters (Unicode default, ASCII via `--ascii`)
+- `intersect.rs` - Shared node-face intersection calculations
+
+**`src/engines/`** - Engine adapters (ELK subprocess adapter behind `engine-elk` feature flag)
+
+**`src/mmds.rs`** - MMDS JSON output (structured geometry export, version 2)
 
 ### Key Data Flow
 
 1. `parse_flowchart(input)` → `Flowchart` AST
 2. `build_diagram(&flowchart)` → `Diagram` with nodes/edges
-3. `layered::layout()` → Sugiyama layout (acyclic → rank → normalize → order → position)
-4. `compute_layout(&diagram, &config)` → `Layout` with draw coordinates and waypoints
-5. `route_edge()` / `route_backward_edge()` → edge paths using waypoints
-6. `render()` → `Canvas` → String output
+3. `GraphEngine::solve()` → `GraphGeometry` (float coordinates, edge topology, subgraph bounds)
+4. Text: `geometry_to_text_layout()` → `Layout` (integer character-grid coordinates)
+5. Text: `route_all_edges()` → routed edge paths; `render_text_from_layout()` → `Canvas` → String
+6. SVG: `render_svg_from_geometry()` → SVG string
+7. MMDS: `mmds::render_json()` → structured JSON
 
 ## Testing
 
 Test fixtures are organized by diagram type:
 
-- `tests/fixtures/flowchart/*.mmd` — flowchart fixtures (70 files)
+- `tests/fixtures/flowchart/*.mmd` — flowchart fixtures
 - `tests/fixtures/class/*.mmd` — class diagram fixtures
 - `tests/fixtures/sequence/*.mmd` — sequence diagram fixtures
 
-Flowchart fixture categories:
-
-- **Basic flows**: `simple.mmd`, `chain.mmd`, `ampersand.mmd`
-- **Node shapes**: `decision.mmd`, `shapes.mmd`, `diamond_fan.mmd`
-- **Backward edges/cycles**: `simple_cycle.mmd`, `multiple_cycles.mmd`
-- **Edge variations**: `labeled_edges.mmd`, `edge_styles.mmd`, `label_spacing.mmd`
-- **Directions**: `left_right.mmd`, `right_left.mmd`, `bottom_top.mmd`
-- **Fan patterns**: `fan_in.mmd`, `fan_out.mmd`, `fan_in_lr.mmd`, `five_fan_in.mmd`, `narrow_fan_in.mmd`, `stacked_fan_in.mmd`
-- **Long edges**: `double_skip.mmd`, `skip_edge_collision.mmd`
-- **Complex examples**: `complex.mmd`, `http_request.mmd`, `ci_pipeline.mmd`, `git_workflow.mmd`
-
 Snapshots follow the same structure: `tests/snapshots/flowchart/*.txt`, `tests/svg-snapshots/flowchart/*.svg`.
 
-Integration tests in `tests/integration.rs` verify parsing, building, and rendering.
+Key test files:
+
+- `tests/integration.rs` — flowchart parsing, building, rendering
+- `tests/dagre_parity.rs` — layout comparison against dagre.js fixtures
+- `tests/compliance_class.rs` — class diagram compliance
+- `tests/compliance_sequence.rs` — sequence diagram compliance
+- `tests/mmds_json.rs` — MMDS JSON contract tests
+- `tests/svg_render.rs` — SVG rendering tests
+- `tests/cli.rs` — CLI integration tests
 
 ## Debug Infrastructure
 
