@@ -4,6 +4,7 @@ This project publishes:
 
 - Crate releases to crates.io
 - Binary release assets to GitHub Releases
+- `@mmds/wasm` npm package
 - Homebrew formula updates in `kevinswiber/homebrew-mmdflux`
 
 ## Release Checklist
@@ -11,20 +12,17 @@ This project publishes:
 1. Ensure `main` is green in CI.
 2. Bump version in `Cargo.toml`, `crates/mmdflux-wasm/Cargo.toml`, and `Cargo.lock`.
 3. Commit and push the version bump.
-4. Publish crate:
-
-```bash
-cargo publish --locked
-```
-
-5. Tag and push:
+4. Tag and push:
 
 ```bash
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-6. Confirm the GitHub `Release` workflow completes and uploads assets.
+5. Confirm the three release workflows complete:
+   - **Release** — builds binaries and publishes GitHub Release assets
+   - **Crate Release** — publishes `mmdflux` to crates.io
+   - **WASM Release** — publishes `@mmds/wasm` to npm
 
 ## GitHub Release Assets
 
