@@ -30,3 +30,10 @@
 
 - Renamed broad `dagre` terminology to `layered` across APIs, internals, and docs
   (plan-0082), including layout/routing config names and layered hint types.
+- Reorganized `src/diagrams/flowchart/render/` to clearly separate text, SVG, and
+  shared modules ([#13](https://github.com/kevinswiber/mmdflux/pull/13)):
+  extracted shared layout building (`layout_building.rs`) and subgraph ops
+  (`layout_subgraph_ops.rs`), moved text types to `text_types.rs`, renamed
+  `layout.rs` to `text_layout.rs`, and added `text_` prefix to all text-only
+  modules for naming symmetry with `svg_*`. Renamed `LayoutConfig` to
+  `TextLayoutConfig`.
