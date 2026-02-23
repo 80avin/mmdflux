@@ -11,8 +11,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::layout::{
-    CoordTransform, Layout, LayoutConfig, RawCenter, SelfEdgeDrawData, TransformContext,
+use super::text_layout::{
+    CoordTransform, Layout, RawCenter, SelfEdgeDrawData, TextLayoutConfig, TransformContext,
     align_cross_boundary_siblings_draw, clip_waypoints_to_subgraph, collision_repair,
     compute_ascii_scale_factors, compute_grid_positions, compute_layer_starts, compute_sublayouts,
     ensure_external_edge_spacing, expand_parent_subgraph_bounds, layered_config_for_layout,
@@ -21,7 +21,7 @@ use super::layout::{
     subgraph_bounds_to_draw, text_edge_label_dimensions, transform_label_positions_direct,
     transform_waypoints_direct,
 };
-use super::shape::{NodeBounds, node_dimensions};
+use super::text_shape::{NodeBounds, node_dimensions};
 use crate::diagrams::flowchart::geometry::GraphGeometry;
 use crate::graph::{Diagram, Direction, Shape};
 use crate::layered::{Direction as LayeredDirection, Rect};
@@ -29,9 +29,9 @@ use crate::layered::{Direction as LayeredDirection, Rect};
 /// Convenience: run the full engine → adapter pipeline to produce a `Layout`.
 ///
 /// This is the canonical way to compute a text layout from a `Diagram` and
-/// `LayoutConfig`. Internally runs `FluxLayeredEngine::text().solve()` then
+/// `TextLayoutConfig`. Internally runs `FluxLayeredEngine::text().solve()` then
 /// `geometry_to_text_layout()`.
-pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
+pub fn compute_layout(diagram: &Diagram, config: &TextLayoutConfig) -> Layout {
     use crate::diagram::{
         EngineConfig, GraphEngine, GraphSolveRequest, OutputFormat, RenderConfig,
     };
@@ -71,7 +71,7 @@ pub fn compute_layout(diagram: &Diagram, config: &LayoutConfig) -> Layout {
 pub fn geometry_to_text_layout(
     diagram: &Diagram,
     geometry: &GraphGeometry,
-    config: &LayoutConfig,
+    config: &TextLayoutConfig,
 ) -> Layout {
     let is_vertical = matches!(diagram.direction, Direction::TopDown | Direction::BottomTop);
     let direction = diagram.direction;
@@ -292,7 +292,7 @@ pub fn geometry_to_text_layout(
     // --- Phase F: Compute canvas size ---
     let has_backward_edges = !geometry.reversed_edges.is_empty();
     let backward_margin = if has_backward_edges {
-        super::router::BACKWARD_ROUTE_GAP + 2
+        super::text_router::BACKWARD_ROUTE_GAP + 2
     } else {
         0
     };
@@ -367,7 +367,7 @@ pub fn geometry_to_text_layout(
         for edge in &diagram.edges {
             if let (Some(from_b), Some(to_b)) =
                 (node_bounds.get(&edge.from), node_bounds.get(&edge.to))
-                && super::router::is_backward_edge(from_b, to_b, diagram.direction)
+                && super::text_router::is_backward_edge(from_b, to_b, diagram.direction)
                 && edge_waypoints
                     .get(&edge.index)
                     .is_some_and(|wps| wps.len() >= BACKWARD_WAYPOINT_STRIP_THRESHOLD)
