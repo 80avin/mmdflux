@@ -56,7 +56,7 @@ Mermaid Text → Parser (pest PEG) → AST → Graph Builder → Diagram
 
 **`src/diagrams/`** - Diagram type implementations
 
-- `flowchart/` - Flowchart: engine (`FluxLayeredEngine`, `MermaidLayeredEngine`), geometry IR, routing, render modules
+- `flowchart/` - Flowchart: engine (`FluxLayeredEngine` for all formats, `MermaidLayeredEngine` for SVG/MMDS only), geometry IR, routing, render modules
 - `class/` - Class diagrams: parser, compiler to `graph::Diagram`, renders through shared engine pipeline
 - `sequence/` - Sequence diagrams: independent timeline-family pipeline (parser→compiler→model→layout→text renderer)
 - `pie.rs`, `info.rs`, `packet.rs` - Simple diagram types
