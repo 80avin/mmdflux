@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.2.0
+
 ### Added
 
 - `mermaid-layered` engine now ignores subgraph `direction` overrides when the

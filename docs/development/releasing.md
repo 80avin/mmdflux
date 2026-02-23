@@ -10,16 +10,17 @@ This project publishes:
 ## Release Checklist
 
 1. Ensure `main` is green in CI.
-2. Bump version in `Cargo.toml`, `crates/mmdflux-wasm/Cargo.toml`, and `Cargo.lock`.
-3. Commit and push the version bump.
-4. Tag and push:
+2. Rename the `## Unreleased` section in `CHANGELOG.md` to `## vX.Y.Z` (keep an empty `## Unreleased` above it).
+3. Bump version in `Cargo.toml`, `crates/mmdflux-wasm/Cargo.toml`, and `Cargo.lock`.
+4. Commit and push the version bump and changelog.
+5. Tag and push:
 
 ```bash
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-5. Confirm the three release workflows complete:
+6. Confirm the three release workflows complete:
    - **Release** — builds binaries and publishes GitHub Release assets
    - **Crate Release** — publishes `mmdflux` to crates.io
    - **WASM Release** — publishes `@mmds/wasm` to npm
