@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## v1.3.1
+
+### Added
+
+- Added `--version` flag to the CLI.
+
 ## v1.3.0
 
 ### Breaking
