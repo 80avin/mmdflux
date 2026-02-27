@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.3.0
+
 ### Breaking
 
 - Removed edge preset token `bezier`; use `basis` (`--edge-preset basis`).
