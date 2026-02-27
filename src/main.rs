@@ -16,6 +16,7 @@ const CURVE_ARG_HELP: &str = "SVG curve style (basis, linear, linear-sharp, or l
 
 #[derive(Parser)]
 #[command(name = "mmdflux")]
+#[command(version)]
 #[command(about = "Convert Mermaid diagrams to text, SVG, or MMDS JSON")]
 struct Cli {
     /// Input file (reads from stdin if not provided)
