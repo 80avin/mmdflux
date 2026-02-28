@@ -481,6 +481,9 @@ fn build_orthogonal_path(
             finalized = normalize_orthogonal_route_contracts(&finalized, direction);
         }
     }
+    if !is_backward {
+        collapse_tiny_cross_axis_jog(&mut finalized, direction);
+    }
     if !is_backward
         && let Some(policy_face) = overflow_policy_target_face
         && policy_face != flow_target_face_for_direction(direction)
@@ -3384,10 +3387,22 @@ fn align_backward_outer_lane_to_hint(
                 return;
             }
 
+            // If the hint's outer lane x is inside either endpoint node, the
+            // hint is not meaningful for backward lane alignment — skip.
             let hint_outer = hint
                 .iter()
                 .map(|point| point.x)
                 .fold(f64::NEG_INFINITY, f64::max);
+            let mut min_outer = f64::NEG_INFINITY;
+            if let Some((src_rect, _)) =
+                endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+            {
+                min_outer = min_outer.max(src_rect.x + src_rect.width);
+            }
+            min_outer = min_outer.max(target_rect.x + target_rect.width);
+            if hint_outer < min_outer {
+                return;
+            }
             let route_outer = path
                 .iter()
                 .map(|point| point.x)
@@ -3409,10 +3424,27 @@ fn align_backward_outer_lane_to_hint(
             if !aligned {}
         }
         Direction::LeftRight | Direction::RightLeft => {
+            // The hint waypoints come from the layout engine and may pass through
+            // node centers. If the hint's outer lane y is inside either endpoint
+            // node, the hint is not meaningful for backward lane alignment — skip.
             let hint_outer = hint
                 .iter()
                 .map(|point| point.y)
                 .fold(f64::NEG_INFINITY, f64::max);
+            let mut min_outer = f64::NEG_INFINITY;
+            if let Some((src_rect, _)) =
+                endpoint_rect_and_shape(geometry, &edge.from, edge.from_subgraph.as_deref())
+            {
+                min_outer = min_outer.max(src_rect.y + src_rect.height);
+            }
+            if let Some((tgt_rect, _)) =
+                endpoint_rect_and_shape(geometry, &edge.to, edge.to_subgraph.as_deref())
+            {
+                min_outer = min_outer.max(tgt_rect.y + tgt_rect.height);
+            }
+            if hint_outer < min_outer {
+                return;
+            }
             let route_outer = path
                 .iter()
                 .map(|point| point.y)
@@ -5087,6 +5119,60 @@ fn ensure_endpoint_axis_aligned(path: &mut Vec<FPoint>, at_start: bool) {
 fn points_match(a: FPoint, b: FPoint) -> bool {
     const EPS: f64 = 0.000_001;
     (a.x - b.x).abs() <= EPS && (a.y - b.y).abs() <= EPS
+}
+
+/// Collapse tiny cross-axis jogs in forward orthogonal paths.
+///
+/// When the orthogonal path has a small gathering segment (4-point L-shape with
+/// a cross-axis step smaller than the threshold), collapse it to a straight
+/// 2-point path. This removes visually distracting micro-jogs that arise when
+/// the layout engine produces nearly-collinear waypoints for edges between
+/// adjacent nodes.
+fn collapse_tiny_cross_axis_jog(path: &mut Vec<FPoint>, direction: Direction) {
+    const EPS: f64 = 0.000_001;
+    const MAX_JOG: f64 = 8.0;
+
+    if path.len() != 4 {
+        return;
+    }
+
+    // Identify the gathering segment (cross-axis interior segment) and check
+    // whether the two bounding segments are primary-axis stems.
+    let primary_vertical = matches!(direction, Direction::TopDown | Direction::BottomTop);
+
+    let (source_stem, gather_cross, target_stem) = if primary_vertical {
+        // TD/BT: stems are vertical (same x), gathering is horizontal (same y).
+        // The jog is the cross-axis (x) extent of the horizontal gathering segment.
+        let s = (path[0].x - path[1].x).abs() <= EPS && (path[0].y - path[1].y).abs() > EPS;
+        let g = (path[1].x - path[2].x).abs();
+        let t = (path[2].x - path[3].x).abs() <= EPS && (path[2].y - path[3].y).abs() > EPS;
+        (s, g, t)
+    } else {
+        // LR/RL: stems are horizontal (same y), gathering is vertical (same x).
+        // The jog is the cross-axis (y) extent of the vertical gathering segment.
+        let s = (path[0].y - path[1].y).abs() <= EPS && (path[0].x - path[1].x).abs() > EPS;
+        let g = (path[1].y - path[2].y).abs();
+        let t = (path[2].y - path[3].y).abs() <= EPS && (path[2].x - path[3].x).abs() > EPS;
+        (s, g, t)
+    };
+
+    if source_stem && target_stem && gather_cross <= MAX_JOG {
+        // Collapse to a straight line by averaging the cross-axis coordinates
+        // of the source and target endpoints so the result is perfectly
+        // axis-aligned (no diagonal).
+        let mut start = path[0];
+        let mut end = path[3];
+        if primary_vertical {
+            let mid_x = (start.x + end.x) / 2.0;
+            start.x = mid_x;
+            end.x = mid_x;
+        } else {
+            let mid_y = (start.y + end.y) / 2.0;
+            start.y = mid_y;
+            end.y = mid_y;
+        }
+        *path = vec![start, end];
+    }
 }
 
 fn collapse_collinear_interior_points(path: &mut Vec<FPoint>) {

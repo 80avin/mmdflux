@@ -43,18 +43,30 @@ pub fn render_svg(diagram: &Diagram, options: &RenderOptions) -> String {
         config.cluster_rank_sep = 0.0;
     }
 
-    // Legacy render_svg path uses flux-layered behavior with all enhancements.
-    let flux_flags = crate::layered::LayoutConfig {
-        greedy_switch: true,
-        model_order_tiebreak: true,
-        variable_rank_spacing: true,
-        track_reversed_chains: true,
-        per_edge_label_spacing: true,
-        label_side_selection: true,
-        label_dummy_strategy: crate::layered::LabelDummyStrategy::WidestLayer,
-        ..Default::default()
-    };
-    let edge_routing = options.edge_routing.unwrap_or(EdgeRouting::OrthogonalRoute);
+    // Use the canonical flux-layered profile from the engine, ensuring parity
+    // with FluxLayeredEngine::solve() (the CLI path).
+    let edge_routing = options.edge_routing.unwrap_or({
+        // Derive from routing_style (same mapping as flux-layered engine).
+        match options.svg.routing_style {
+            crate::diagram::RoutingStyle::Direct => EdgeRouting::DirectRoute,
+            crate::diagram::RoutingStyle::Polyline => EdgeRouting::PolylineRoute,
+            crate::diagram::RoutingStyle::Orthogonal => EdgeRouting::OrthogonalRoute,
+        }
+    });
+    let input_cfg = crate::layered::LayoutConfig::default();
+    let mut flux_flags = super::super::engine::flux_layout_profile(&input_cfg, edge_routing);
+    // Apply crowding adaptation for large diagrams (same threshold as engine).
+    if diagram.nodes.len() >= 10 {
+        let mode = super::super::engine::MeasurementMode::Svg(metrics.clone());
+        if let Ok(adapted) = super::super::engine::adapt_flux_profile_for_reversed_chain_crowding(
+            &mode,
+            diagram,
+            edge_routing,
+            &flux_flags,
+        ) {
+            flux_flags = adapted;
+        }
+    }
     let geom = build_svg_layout_with_flags(
         diagram,
         &config,
@@ -3997,11 +4009,37 @@ fn apply_marker_offsets(
         } else {
             MIN_ENDPOINT_SUPPORT
         };
+        // Save original endpoints before support extension so we can detect
+        // when extension shifts the source/target off the node boundary.
+        let original_start = points[0];
+        let original_end = points[points.len() - 1];
         points = enforce_min_orthogonal_endpoint_support(
             &points,
             start_offset + min_endpoint_support,
             end_offset + min_endpoint_support,
         );
+
+        // For backward edges, enforce_min_orthogonal_endpoint_support may shift
+        // the source (or target) off the node face when extending a short terminal
+        // segment — the extension propagates through collinear points to maintain
+        // orthogonality. Re-insert the original endpoint as a connecting stem so
+        // the edge remains visually attached to the node.
+        if is_backward {
+            const DRIFT_EPS: f64 = 0.5;
+            let start_drifted = (points[0].x - original_start.x).abs() > DRIFT_EPS
+                || (points[0].y - original_start.y).abs() > DRIFT_EPS;
+            let end_drifted = {
+                let last = points.len() - 1;
+                (points[last].x - original_end.x).abs() > DRIFT_EPS
+                    || (points[last].y - original_end.y).abs() > DRIFT_EPS
+            };
+            if start_drifted {
+                points.insert(0, original_start);
+            }
+            if end_drifted {
+                points.push(original_end);
+            }
+        }
 
         // Keep a visible endpoint stem in orthogonal mode so marker pullback
         // cannot invert the terminal segment direction.
