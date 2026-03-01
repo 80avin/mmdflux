@@ -53,9 +53,19 @@ jobs:
         working-directory: web
         run: npm run build:release
 
+      - name: Determine deploy branch
+        id: branch
+        run: |
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            # v1.3.1 → v1-3-1
+            echo "name=${GITHUB_REF_NAME//\./-}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=head" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy web/dist --project-name=mmdflux-play
+          command: pages deploy web/dist --project-name=mmdflux-play --branch=${{ steps.branch.outputs.name }}
