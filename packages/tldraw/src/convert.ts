@@ -532,6 +532,18 @@ function recordSortOrder(typeName: string): number {
   }
 }
 
+/** Z-order: frames behind nodes, arrows on top. */
+function shapeZOrder(type: string): number {
+  switch (type) {
+    case "frame":
+      return 0;
+    case "arrow":
+      return 2;
+    default:
+      return 1;
+  }
+}
+
 function generateSequentialIndices(count: number): IndexKey[] {
   const indices: IndexKey[] = [];
   let prev = "a1" as IndexKey;
@@ -567,7 +579,12 @@ function assignShapeIndices(records: TLRecord[]): void {
     const bucket = byParent.get(parentId);
     if (!bucket) continue;
 
-    bucket.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    bucket.sort((a, b) => {
+      const za = shapeZOrder((a as { type: string }).type);
+      const zb = shapeZOrder((b as { type: string }).type);
+      if (za !== zb) return za - zb;
+      return String(a.id).localeCompare(String(b.id));
+    });
     const indices = generateSequentialIndices(bucket.length);
     for (let i = 0; i < bucket.length; i++) {
       (bucket[i] as { index: string }).index = indices[i];
