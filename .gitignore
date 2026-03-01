@@ -7,6 +7,7 @@ CLAUDE.local.md
 AGENTS.local.md
 
 /.codex
+/.wrangler
 /worktrees
 /scripts/tests/out
 /scripts/out
