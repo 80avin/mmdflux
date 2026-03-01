@@ -25,9 +25,9 @@ graph TD
 **SVG output** (`mmdflux --format svg --layout-engine flux-layered --curve linear-rounded ...`)
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/at-a-glance-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="docs/assets/readme/at-a-glance-light.svg">
-  <img alt="mmdflux at-a-glance SVG output" src="docs/assets/readme/at-a-glance-light.svg" width="360">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/kevinswiber/mmdflux/main/docs/assets/readme/at-a-glance-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/kevinswiber/mmdflux/main/docs/assets/readme/at-a-glance-light.svg">
+  <img alt="mmdflux at-a-glance SVG output" src="https://raw.githubusercontent.com/kevinswiber/mmdflux/main/docs/assets/readme/at-a-glance-light.svg" width="360">
 </picture>
 
 **Text output** (`mmdflux --format text ...`)
