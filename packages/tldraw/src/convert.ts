@@ -14,6 +14,8 @@ import {
   type TLRecord,
   type TLStoreSnapshot,
   toRichText,
+  type IndexKey,
+  getIndexAbove,
 } from "@tldraw/editor";
 
 export interface ConvertOptions {
@@ -530,8 +532,15 @@ function recordSortOrder(typeName: string): number {
   }
 }
 
-function deterministicIndex(position: number): string {
-  return `a${Math.max(1, position).toString(36)}`;
+function generateSequentialIndices(count: number): IndexKey[] {
+  const indices: IndexKey[] = [];
+  let prev = "a1" as IndexKey;
+  indices.push(prev);
+  for (let i = 1; i < count; i++) {
+    prev = getIndexAbove(prev);
+    indices.push(prev);
+  }
+  return indices;
 }
 
 function sortRecords(records: TLRecord[]): TLRecord[] {
@@ -559,8 +568,9 @@ function assignShapeIndices(records: TLRecord[]): void {
     if (!bucket) continue;
 
     bucket.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const indices = generateSequentialIndices(bucket.length);
     for (let i = 0; i < bucket.length; i++) {
-      (bucket[i] as { index: string }).index = deterministicIndex(i + 1);
+      (bucket[i] as { index: string }).index = indices[i];
     }
   }
 }
@@ -608,7 +618,7 @@ export function convertToTldraw(
   });
 
   const pageId = "page:page";
-  const pageIndex = deterministicIndex(1);
+  const pageIndex = "a1" as IndexKey;
 
   const pageRecord: TLRecord = {
     id: pageId,
