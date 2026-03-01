@@ -16,9 +16,9 @@ NAME="at-a-glance"
 MMDFLUX_BIN="${MMDFLUX_BIN:-}"
 
 LAYOUT_ENGINE="flux-layered"
-EDGE_PRESET="curved-step"
+EDGE_PRESET="smooth-step"
 GEOMETRY_LEVEL="routed"
-PATH_DETAIL="compact"
+PATH_SIMPLIFICATION="none"
 
 usage() {
   cat <<'EOF'
@@ -124,7 +124,7 @@ if [[ "$SOURCE" != "$MMD_OUT" ]]; then
 fi
 
 run_mmdflux --format text "$SOURCE" > "$TEXT_OUT"
-run_mmdflux --format mmds --layout-engine "$LAYOUT_ENGINE" --geometry-level "$GEOMETRY_LEVEL" --path-detail "$PATH_DETAIL" "$SOURCE" > "$MMDS_OUT"
+run_mmdflux --format mmds --layout-engine "$LAYOUT_ENGINE" --geometry-level "$GEOMETRY_LEVEL" --path-simplification "$PATH_SIMPLIFICATION" "$SOURCE" > "$MMDS_OUT"
 
 tmp_svg_raw="$(mktemp)"
 run_mmdflux --format svg --layout-engine "$LAYOUT_ENGINE" --edge-preset "$EDGE_PRESET" "$SOURCE" -o "$tmp_svg_raw"

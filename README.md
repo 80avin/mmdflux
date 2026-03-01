@@ -30,34 +30,37 @@ graph TD
   <img alt="mmdflux at-a-glance SVG output" src="docs/assets/readme/at-a-glance-light.svg" width="360">
 </picture>
 
-<details>
-<summary>Text output (<code>mmdflux --format text ...</code>)</summary>
+**Text output** (`mmdflux --format text ...`)
 
 ```text
-     ┌───────┐
-     │ Start │
-     └───────┘
-          │
-          │
-          │
-          │
-┌──────── Horizontal Section ────────┐
-│         ▼                          │
+ ┌───────┐
+ │ Start │
+ └───────┘
+     │
+     └─┐
+       │
+       │
+       │
+       │
+       │
+┌──────┼─ Horizontal Section ────────┐
+│      ▼                             │
 │ ┌────────┐  ┌────────┐  ┌────────┐ │
 │ │ Step 1 │─►│ Step 2 │─►│ Step 3 │ │
 │ └────────┘  └────────┘  └────────┘ │
-│                         ┌┘         │
-└─────────────────────────┼──────────┘
-                          │
-                          │
-                          │
-                          ▼
-                     ┌─────┐
-                     │ End │
-                     └─────┘
+│                     ┌────┘         │
+└─────────────────────┼──────────────┘
+                      │
+                      │
+                      │
+                      │
+                      │
+                      │
+                      ▼
+                 ┌─────┐
+                 │ End │
+                 └─────┘
 ```
-
-</details>
 
 **MMDS JSON output**: [`docs/assets/readme/at-a-glance.mmds.json`](docs/assets/readme/at-a-glance.mmds.json)
 
@@ -87,13 +90,13 @@ policy-driven geometry decisions that are hard to get from layout-only engines.
 
 ### Engine snapshot
 
-| Capability           | `flux-layered`                             | `mermaid-layered`                    |
-| -------------------- | ------------------------------------------ | ------------------------------------ |
-| Route ownership      | Native                                     | Hint-driven                          |
-| Routing styles       | `direct`, `orthogonal`, `polyline`         | `polyline`                           |
-| Default SVG behavior | Orthogonal topology + basis curve | Mermaid-compatible polyline defaults |
-| Subgraph support     | Yes                                        | Yes                                  |
-| Best fit             | Deterministic routed SVG/MMDS output       | Mermaid-style compatibility output   |
+| Capability           | `flux-layered`                       | `mermaid-layered`                    |
+| -------------------- | ------------------------------------ | ------------------------------------ |
+| Route ownership      | Native                               | Hint-driven                          |
+| Routing styles       | `direct`, `orthogonal`, `polyline`   | `polyline`                           |
+| Default SVG behavior | Orthogonal topology + basis curve    | Mermaid-compatible polyline defaults |
+| Subgraph support     | Yes                                  | Yes                                  |
+| Best fit             | Deterministic routed SVG/MMDS output | Mermaid-style compatibility output   |
 
 Routing semantics note:
 `--edge-preset straight` now maps to direct routing (`Direct + linear-sharp`).
