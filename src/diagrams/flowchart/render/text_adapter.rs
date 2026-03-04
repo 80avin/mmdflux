@@ -302,7 +302,23 @@ pub fn geometry_to_text_layout_with_routed(
     }
 
     // --- Phase F: Compute canvas size ---
-    let has_backward_edges = !geometry.reversed_edges.is_empty();
+    // Detect backward edges using two complementary methods:
+    // 1. Cycle-reversed edges (tracked by the acyclic/DFS step in the layered layout).
+    // 2. Position-based visual backward edges: edges that go against the layout direction
+    //    due to cross-graph rank constraints (e.g. a long cross-edge forces a node to a
+    //    higher rank, making its shorter outgoing edges appear to go "upward"). These are
+    //    not cycles so the DFS does not mark them in reversed_edges, yet the text router's
+    //    is_backward_edge() detects them by position and routes them to the right/bottom,
+    //    requiring the same extra canvas margin as cycle-reversed backward edges.
+    let has_backward_edges = !geometry.reversed_edges.is_empty() || {
+        use super::text_router::is_backward_edge as position_is_backward;
+        diagram.edges.iter().any(|edge| {
+            match (node_bounds.get(&edge.from), node_bounds.get(&edge.to)) {
+                (Some(from_b), Some(to_b)) => position_is_backward(from_b, to_b, diagram.direction),
+                _ => false,
+            }
+        })
+    };
     let backward_margin = if has_backward_edges {
         super::text_router::BACKWARD_ROUTE_GAP + 2
     } else {
