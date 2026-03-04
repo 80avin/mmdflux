@@ -1,8 +1,8 @@
 # mmdflux gallery
 
-_Generated from commit `9d931a5` — 89 fixtures_
+_Generated from commit `6a4dcda` — 106 fixtures_
 
-- [Flowchart](#flowchart) (72)
+- [Flowchart](#flowchart) (89)
 - [Class](#class) (17)
 
 # Flowchart
@@ -11,25 +11,7 @@ _Generated from commit `9d931a5` — 89 fixtures_
 
 `tests/fixtures/flowchart/ampersand.mmd`
 
-**Text**
-
-```text
-┌──────────┐    ┌──────────┐
-│ Source 1 │    │ Source 2 │
-└──────────┘    └──────────┘
-      │              │
-      └───┐     ┌────┘
-          ▼     ▼
-         ┌───────┐
-         │ Merge │
-         └───────┘
-      ┌───┘     └────┐
-      │              │
-      ▼              ▼
-┌──────────┐    ┌──────────┐
-│ Output 1 │    │ Output 2 │
-└──────────┘    └──────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/ampersand.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -50,25 +32,39 @@ graph TD
 
 </details>
 
+## backward_in_subgraph_lr
+
+`tests/fixtures/flowchart/backward_in_subgraph_lr.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/backward_in_subgraph_lr.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![backward_in_subgraph_lr svg](../tests/svg-snapshots/flowchart/backward_in_subgraph_lr.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    subgraph sg1[Group]
+        direction LR
+        A[Node] --> B[Node2]
+        B --> A
+    end
+
+```
+
+</details>
+
 ## backward_in_subgraph
 
 `tests/fixtures/flowchart/backward_in_subgraph.mmd`
 
-**Text**
-
-```text
-┌──── Group ────┐
-│   ┌──────┐    │
-│   │ Node │    │
-│   └──────┘    │
-│    │    ▲     │
-│    │    └┐    │
-│    ▼     │    │
-│   ┌───────┐   │
-│   │ Node2 │   │
-│   └───────┘   │
-└───────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/backward_in_subgraph.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -91,35 +87,43 @@ end
 
 </details>
 
+## backward_loop_lr
+
+`tests/fixtures/flowchart/backward_loop_lr.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/backward_loop_lr.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![backward_loop_lr svg](../tests/svg-snapshots/flowchart/backward_loop_lr.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+flowchart LR
+    A[Narratives] --> B[Domain Model]
+    B --> C[Server Scaffold]
+    B --> D[IA Schema]
+    D --> E[Frontend Scaffold]
+    C --> F[AI Implementation]
+    E --> F
+    F --> G[Quality Checks]
+    G -->|Fail| F
+    G -->|Pass| H[Production Code]
+
+```
+
+</details>
+
 ## bidirectional_arrows
 
 `tests/fixtures/flowchart/bidirectional_arrows.mmd`
 
-**Text**
-
-```text
-┌───┐
-│ A │
-└───┘
-  ▲
-  │
-  ▼
-┌───┐
-│ B │
-└───┘
-  ▲
-  ┆
-  ▼
-┌───┐
-│ C │
-└───┘
-  ▲
-  ┃
-  ▼
-┌───┐
-│ D │
-└───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/bidirectional_arrows.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -145,31 +149,7 @@ graph TD
 
 `tests/fixtures/flowchart/bidirectional.mmd`
 
-**Text**
-
-```text
-┌───┐
-│ A │
-└───┘
-  ▲
-  │
-  ▼
-┌───┐
-│ B │
-└───┘
-  ▲
-  ┆
-  ▼
-┌───┐
-│ C │
-└───┘
-  ▲
-  ┃
-  ▼
-┌───┐
-│ D │
-└───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/bidirectional.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -195,25 +175,7 @@ graph TD
 
 `tests/fixtures/flowchart/bottom_top.mmd`
 
-**Text**
-
-```text
-   ┌──────┐
-   │ Roof │
-   └──────┘
-       ▲
-       │
-       │
- ┌───────────┐
- │ Structure │
- └───────────┘
-       ▲
-       │
-       │
-┌────────────┐
-│ Foundation │
-└────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/bottom_top.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -238,31 +200,7 @@ graph BT
 
 `tests/fixtures/flowchart/br_line_breaks.mmd`
 
-**Text**
-
-```text
- ┌───────┐
- │ Hello │
- │ World │
- └───────┘
-     │
-     │
-     │
-     ▼
-┌────────┐
-│ Line 1 │
-│ Line 2 │
-└────────┘
-     │
-    yes
-    no
-     ▼
- ┌───────┐
- │ One   │
- │ Two   │
- │ Three │
- └───────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/br_line_breaks.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -287,31 +225,7 @@ graph TD
 
 `tests/fixtures/flowchart/chain.mmd`
 
-**Text**
-
-```text
-┌────────┐
-│ Step 1 │
-└────────┘
-     │
-     │
-     ▼
-┌────────┐
-│ Step 2 │
-└────────┘
-     │
-     │
-     ▼
-┌────────┐
-│ Step 3 │
-└────────┘
-     │
-     │
-     ▼
-┌────────┐
-│ Step 4 │
-└────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/chain.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -335,19 +249,7 @@ graph TD
 
 `tests/fixtures/flowchart/ci_pipeline.mmd`
 
-**Text**
-
-```text
-                                                                                                                                               ┌─────────────┐
-                                                                                                                          ┌──────staging─┐     │ Staging Env │
-                                                                                                                          │              └────►└─────────────┘
-┌──────────┐                 ┌───────┐                ┌───────────┐              ┌────────────┐                ┌─────────┐┘
-│ Git Push │────────────────►│ Build │───────────────►│ Run Tests │─────────────►│ Lint Check │───────────────►< Deploy? >
-└──────────┘                 └───────┘                └───────────┘              └────────────┘                └─────────┘┐
-                                                                                                                          │             ┌────►┌────────────┐
-                                                                                                                          └────production     │ Production │
-                                                                                                                                              └────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/ci_pipeline.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -376,29 +278,7 @@ graph LR
 
 `tests/fixtures/flowchart/compat_class_annotation.mmd`
 
-**Text**
-
-```text
-     ┌───────┐
-     │ Start │
-     └───────┘
-         │
-         │
-         │
-         │
-         ▼
-   ┌──────────┐
-   < Decision >
-   └──────────┘
-  ┌─┘        └──┐
-  │             │
- Yes           No
-  │             │
-  ▼             ▼
-┌───┐         ┌───┐
-│ C │         │ D │
-└───┘         └───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/compat_class_annotation.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -427,29 +307,7 @@ graph TD
 
 `tests/fixtures/flowchart/compat_directive.mmd`
 
-**Text**
-
-```text
-         ┌───────┐
-         │ Start │
-         └───────┘
-             │
-             │
-             │
-             │
-             ▼
-       ┌──────────┐
-       < Decision >
-       └──────────┘
-     ┌──┘        └───┐
-     │               │
-    Yes             No
-     │               │
-     ▼               ▼
-┌─────────┐       ┌─────┐
-│ Process │       │ End │
-└─────────┘       └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/compat_directive.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -476,25 +334,7 @@ graph TD
 
 `tests/fixtures/flowchart/compat_frontmatter.mmd`
 
-**Text**
-
-```text
-┌───┐
-│ A │
-└───┘
-  │
-  │
-  ▼
-┌───┐
-│ B │
-└───┘
-  │
-  │
-  ▼
-┌───┐
-│ C │
-└───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/compat_frontmatter.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -522,31 +362,7 @@ graph TD
 
 `tests/fixtures/flowchart/compat_hyphenated_ids.mmd`
 
-**Text**
-
-```text
-  ┌───────┐
-  │ Start │
-  └───────┘
-      │
-      │
-      ▼
-┌───────────┐
-│ Process A │
-└───────────┘
-      │
-      │
-      ▼
-  ┌───────┐
-  < Check >
-  └───────┘
-      │
-     ok
-      ▼
-  ┌──────┐
-  │ Done │
-  └──────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/compat_hyphenated_ids.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -572,25 +388,7 @@ graph TD
 
 `tests/fixtures/flowchart/compat_invisible_edge.mmd`
 
-**Text**
-
-```text
-   ┌───┐
-   │ A │
-   └───┘
-  ┌─┘ └─┐
-  │     │
-  ▼     │
-┌───┐   │
-│ B │   │
-└───┘   │
-        │
-      ┌─┘
-      ▼
-   ┌───┐
-   │ C │
-   └───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/compat_invisible_edge.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -616,37 +414,7 @@ graph TD
 
 `tests/fixtures/flowchart/compat_kitchen_sink.mmd`
 
-**Text**
-
-```text
-             ┌───────┐
-             │ Start │
-             └───────┘
-                 │
-                 │
-                 │
-                 │
-                 ▼
-          ┌─────────────┐
-          < Check Input >
-          └─────────────┘
-      ┌────┘           └────┐
-      │                     │
-    valid                invalid
-      │                     │
-      ▼                     ▼
-┌───────────┐           ┌───────┐
-│ process-A │           │ Error │
-└───────────┘           └───────┘
-      │                     │
-      │                     │
-      │                     │
-      └───────┐    ┌────────┘
-              ▼    ▼
-             ┌──────┐
-             │ Done │
-             └──────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/compat_kitchen_sink.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -682,19 +450,7 @@ graph TD
 
 `tests/fixtures/flowchart/compat_no_direction.mmd`
 
-**Text**
-
-```text
-┌───────┐
-│ Start │
-└───────┘
-    │
-    │
-    ▼
- ┌─────┐
- │ End │
- └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/compat_no_direction.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -718,13 +474,7 @@ graph
 
 `tests/fixtures/flowchart/compat_numeric_ids.mmd`
 
-**Text**
-
-```text
-┌───────┐    ┌────────┐     ┌───────┐
-│ First │───►│ Second │────►│ Third │
-└───────┘    └────────┘     └───────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/compat_numeric_ids.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -749,53 +499,7 @@ graph LR
 
 `tests/fixtures/flowchart/complex.mmd`
 
-**Text**
-
-```text
-          ┌───────┐
-          │ Input │
-          └───────┘
-      ┌────┘     ▲
-      │          └────┐
-      │               │
-      │               │
-      ▼               │
-┌──────────┐          │
-< Validate >          │
-└──────────┘          │
- └────┐   └───────────┼───────────────────────────────┐
-      │               │                               │
-    valid            yes                           invalid
-      │               │                               │
-      ▼               │                               ▼
- ┌─────────┐          │                       ╭───────────────╮
- │ Process │          │                       │ Error Handler │
- └─────────┘          │                       ╰───────────────╯
-      │               │                   ┌┄┄┄┄┘             ┗━━━━┓
-      │               │                   ┆                       ┃
-      │               │                   ┆                       ┃
-      └─┐             │                   ┆                       ┃
-        ▼          ┌──┘                   ▼                       ▼
-       ┌────────────┐               ┌───────────┐           ┌──────────────┐
-       < More Data? >               │ Log Error │           │ Notify Admin │
-       └────────────┘               └───────────┘           └──────────────┘
-              │                           │                       │
-              │                           │                       │
-              │                           │                       │
-              │                           └───────┐       ┌───────┘
-              │                                   ▼       ▼
-             no                                  ┌─────────┐
-              │                                  │ Cleanup │
-              │                                  └─────────┘
-              │                                       │
-              │                                       │
-              │                                       │
-              └───────────────────┐      ┌────────────┘
-                                  ▼      ▼
-                                 ┌────────┐
-                                 │ Output │
-                                 └────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/complex.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -829,37 +533,7 @@ graph TD
 
 `tests/fixtures/flowchart/cross_circle_arrows.mmd`
 
-**Text**
-
-```text
-┌───┐
-│ A │
-└───┘
-  │
-  │
-  x
-┌───┐
-│ B │
-└───┘
-  │
-  │
-  o
-┌───┐
-│ C │
-└───┘
-  x
-  │
-  x
-┌───┐
-│ D │
-└───┘
-  o
-  │
-  o
-┌───┐
-│ E │
-└───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/cross_circle_arrows.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -882,33 +556,45 @@ graph TD
 
 </details>
 
+## crossing_minimize
+
+`tests/fixtures/flowchart/crossing_minimize.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/crossing_minimize.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![crossing_minimize svg](../tests/svg-snapshots/flowchart/crossing_minimize.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+flowchart TB
+    A["Input"] --> B{"Validate"}
+    B -- valid --> C["Process"]
+    B -- invalid --> D("Error Handler")
+    C --> E{"More Data?"}
+    E -- yes --> A
+    D -.-> G["Log Error"]
+    D ==> H["Notify Admin"]
+    G --> I["Cleanup"]
+    H --> I
+    I --> F["Output"]
+    E -- no --> F
+
+```
+
+</details>
+
 ## decision
 
 `tests/fixtures/flowchart/decision.mmd`
 
-**Text**
-
-```text
-            ┌───────┐
-            │ Start │
-            └───────┘
-         ┌───┘     ▲
-         │         └────────┐
-         │                  │
-         │                  │
-         ▼                  │
-┌────────────────┐          │
-< Is it working? >          │
-└────────────────┘          │
- └────┐         └─┐         │
-      │           │         │
-     Yes         No         │
-      │           └───┐     │
-      ▼               ▼     │
- ┌────────┐          ┌───────┐
- │ Great! │          │ Debug │
- └────────┘          └───────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/decision.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -931,29 +617,37 @@ graph TD
 
 </details>
 
+## diamond_backward
+
+`tests/fixtures/flowchart/diamond_backward.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/diamond_backward.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![diamond_backward svg](../tests/svg-snapshots/flowchart/diamond_backward.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[Start] --> B{Check}
+    B --> C[Process]
+    C --> B
+
+```
+
+</details>
+
 ## diamond_fan
 
 `tests/fixtures/flowchart/diamond_fan.mmd`
 
-**Text**
-
-```text
-      ┌───────┐
-      │ Start │
-      └───────┘
-    ┌──┘     └──┐
-    │           │
-    ▼           ▼
-┌──────┐    ┌───────┐
-│ Left │    │ Right │
-└──────┘    └───────┘
-    │           │
-    └───┐   ┌───┘
-        ▼   ▼
-       ┌─────┐
-       │ End │
-       └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/diamond_fan.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -976,35 +670,37 @@ graph TD
 
 </details>
 
+## diamond_fan_out
+
+`tests/fixtures/flowchart/diamond_fan_out.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/diamond_fan_out.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![diamond_fan_out svg](../tests/svg-snapshots/flowchart/diamond_fan_out.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A{Decision} --> B[Left]
+    A --> C[Center]
+    A --> D[Right]
+
+```
+
+</details>
+
 ## direction_override
 
 `tests/fixtures/flowchart/direction_override.mmd`
 
-**Text**
-
-```text
-     ┌───────┐
-     │ Start │
-     └───────┘
-          │
-          │
-          │
-          │
-┌──────── Horizontal Section ────────┐
-│         ▼                          │
-│ ┌────────┐  ┌────────┐  ┌────────┐ │
-│ │ Step 1 │─►│ Step 2 │─►│ Step 3 │ │
-│ └────────┘  └────────┘  └────────┘ │
-│                         ┌┘         │
-└─────────────────────────┼──────────┘
-                          │
-                          │
-                          │
-                          ▼
-                     ┌─────┐
-                     │ End │
-                     └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/direction_override.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1033,31 +729,7 @@ graph TD
 
 `tests/fixtures/flowchart/double_skip.mmd`
 
-**Text**
-
-```text
-          ┌───────┐
-          │ Start │
-          └───────┘
-     ┌─────┘  │  │
-     │        │  └─┐
-     ▼        │    │
-┌────────┐    │    │
-│ Step 1 │    │    │
-└────────┘    │    │
-     │        │    │
-     └┐      ┌┘    │
-      ▼      ▼     │
-     ┌────────┐    │
-     │ Step 2 │    │
-     └────────┘    │
-          │        │
-          └─┐   ┌──┘
-            ▼   ▼
-           ┌─────┐
-           │ End │
-           └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/double_skip.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1085,19 +757,7 @@ graph TD
 
 `tests/fixtures/flowchart/edge_styles.mmd`
 
-**Text**
-
-```text
- ┌───────┐    ┌────────┐    ┌───────┐    ┌──────┐
- │ Solid │    │ Dotted │    │ Thick │    │ Open │
- └───────┘    └────────┘    └───────┘    └──────┘
-     │            ┆            ┃            │
-     │            ┆            ┃            │
-     ▼            ▼            ▼            │
-┌────────┐    ┌───────┐    ┌───────┐    ┌──────┐
-│ Normal │    │ Arrow │    │ Arrow │    │ Line │
-└────────┘    └───────┘    └───────┘    └──────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/edge_styles.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1124,33 +784,7 @@ graph TD
 
 `tests/fixtures/flowchart/external_node_subgraph.mmd`
 
-**Text**
-
-```text
-                         ┌───────────────┐
-                         │ Load Balancer │
-                         └───────────────┘
-                  ┌───────┘             └───────┐
-                  │                             │
-                  │                             │
-                  │                             │
-                  │                             │
-                  │                             │
-┌─────────────────┼────────── Cloud ────────────┼────────────────┐
-│     ┌─── US West┼Region ───┐      ┌─── US East┼Region ───┐     │
-│     │           ▼          │      │           ▼          │     │
-│     │    ┌────────────┐    │      │    ┌────────────┐    │     │
-│     │    │ Web Server │    │      │    │ Web Server │    │     │
-│     │    └────────────┘    │      │    └────────────┘    │     │
-│     │           │          │      │           │          │     │
-│     │           │          │      │           │          │     │
-│     │           ▼          │      │           ▼          │     │
-│     │    ┌────────────┐    │      │    ┌────────────┐    │     │
-│     │    │ App Server │    │      │    │ App Server │    │     │
-│     │    └────────────┘    │      │    └────────────┘    │     │
-│     └──────────────────────┘      └──────────────────────┘     │
-└────────────────────────────────────────────────────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/external_node_subgraph.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1179,29 +813,41 @@ graph TD
 
 </details>
 
+## fan_in_backward_channel_conflict
+
+`tests/fixtures/flowchart/fan_in_backward_channel_conflict.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/fan_in_backward_channel_conflict.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![fan_in_backward_channel_conflict svg](../tests/svg-snapshots/flowchart/fan_in_backward_channel_conflict.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    P1[Source1] --> B[Target]
+    P2[Source2] --> B
+    P3[Source3] --> B
+    P4[Source4] --> B
+    P5[Source5] --> B
+    B --> Loop[Sink]
+    Loop --> B
+
+```
+
+</details>
+
 ## fan_in_lr
 
 `tests/fixtures/flowchart/fan_in_lr.mmd`
 
-**Text**
-
-```text
-┌───────┐
-│ Src A │┌─┐
-└───────┘┘ │
-           │
-           │
-           │
-┌───────┐  └►┌────────┐
-│ Src B │───►│ Target │
-└───────┘  ┌►└────────┘
-           │
-           │
-           │
-┌───────┐┐ │
-│ Src C │└─┘
-└───────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/fan_in_lr.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1227,19 +873,7 @@ graph LR
 
 `tests/fixtures/flowchart/fan_in.mmd`
 
-**Text**
-
-```text
-┌──────────┐    ┌──────────┐    ┌──────────┐
-│ Source A │    │ Source B │    │ Source C │
-└──────────┘    └──────────┘    └──────────┘
-      │              │               │
-      └──────────┐  ┌┘  ┌────────────┘
-                 ▼  ▼   ▼
-                ┌────────┐
-                │ Target │
-                └────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/fan_in.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1265,19 +899,7 @@ graph TD
 
 `tests/fixtures/flowchart/fan_out.mmd`
 
-**Text**
-
-```text
-                ┌────────┐
-                │ Source │
-                └────────┘
-      ┌──────────┘  └┐  └────────────┐
-      │              │               │
-      ▼              ▼               ▼
-┌──────────┐    ┌──────────┐    ┌──────────┐
-│ Target A │    │ Target B │    │ Target C │
-└──────────┘    └──────────┘    └──────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/fan_out.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1299,23 +921,67 @@ graph TD
 
 </details>
 
+## five_fan_in_diamond
+
+`tests/fixtures/flowchart/five_fan_in_diamond.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/five_fan_in_diamond.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![five_fan_in_diamond svg](../tests/svg-snapshots/flowchart/five_fan_in_diamond.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[A] --> F{Target}
+    B[B] --> F
+    C[C] --> F
+    D[D] --> F
+    E[E] --> F
+
+```
+
+</details>
+
+## five_fan_in_lr
+
+`tests/fixtures/flowchart/five_fan_in_lr.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/five_fan_in_lr.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![five_fan_in_lr svg](../tests/svg-snapshots/flowchart/five_fan_in_lr.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph LR
+    A[A] --> F[Target]
+    B[B] --> F
+    C[C] --> F
+    D[D] --> F
+    E[E] --> F
+
+```
+
+</details>
+
 ## five_fan_in
 
 `tests/fixtures/flowchart/five_fan_in.mmd`
 
-**Text**
-
-```text
-┌───┐     ┌───┐     ┌───┐    ┌───┐     ┌───┐
-│ A │     │ B │     │ C │    │ D │     │ E │
-└───┘     └───┘     └───┘    └───┘     └───┘
-  │         │         │        │         │
-  └─────────┴─────┬┐ ┌┘┌─┬─────┴─────────┘
-                  ▼▼ ▼ ▼ ▼
-                 ┌────────┐
-                 │ Target │
-                 └────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/five_fan_in.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1339,20 +1005,303 @@ graph TD
 
 </details>
 
+## five_fan_out_diamond
+
+`tests/fixtures/flowchart/five_fan_out_diamond.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/five_fan_out_diamond.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![five_fan_out_diamond svg](../tests/svg-snapshots/flowchart/five_fan_out_diamond.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+      A{Source} --> B[Target A]
+      A --> C[Target B]
+      A --> D[Target C]
+      A --> E[Target D]
+      A --> F[Target E]
+```
+
+</details>
+
+## five_fan_out_lr
+
+`tests/fixtures/flowchart/five_fan_out_lr.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/five_fan_out_lr.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![five_fan_out_lr svg](../tests/svg-snapshots/flowchart/five_fan_out_lr.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph LR
+      A[Source] --> B[Target A]
+      A --> C[Target B]
+      A --> D[Target C]
+      A --> E[Target D]
+      A --> F[Target E]
+
+```
+
+</details>
+
+## five_fan_out
+
+`tests/fixtures/flowchart/five_fan_out.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/five_fan_out.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![five_fan_out svg](../tests/svg-snapshots/flowchart/five_fan_out.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+      A[Source] --> B[Target A]
+      A --> C[Target B]
+      A --> D[Target C]
+      A --> E[Target D]
+      A --> F[Target E]
+```
+
+</details>
+
+## flowchart_code_flow
+
+`tests/fixtures/flowchart/flowchart_code_flow.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/flowchart_code_flow.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![flowchart_code_flow svg](../tests/svg-snapshots/flowchart/flowchart_code_flow.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+---
+references:
+  - "File: /packages/mermaid/src/diagrams/flowchart/flowDiagram.ts"
+  - "File: /packages/mermaid/src/diagrams/flowchart/flowDb.ts"
+  - "File: /packages/mermaid/src/diagrams/flowchart/flowDetector.ts"
+  - "File: /packages/mermaid/src/diagrams/flowchart/flowDetector-v2.ts"
+  - "File: /packages/mermaid/src/diagrams/flowchart/flowRenderer-v3-unified.ts"
+  - "File: /packages/mermaid/src/diagrams/flowchart/styles.ts"
+  - "File: /packages/mermaid/src/diagrams/flowchart/types.ts"
+  - "File: /packages/mermaid/src/diagrams/flowchart/flowChartShapes.js"
+  - "File: /packages/mermaid/src/diagrams/flowchart/parser/flowParser.ts"
+  - "File: /packages/mermaid/src/diagrams/flowchart/elk/detector.ts"
+generationTime: 2025-07-23T10:31:53.266Z
+---
+flowchart TD
+    %% Entry Points and Detection
+    Input["User Input Text"] --> Detection{Detection Phase}
+    
+    Detection --> flowDetector["flowDetector.ts<br/>detector(txt, config)"]
+    Detection --> flowDetectorV2["flowDetector-v2.ts<br/>detector(txt, config)"]
+    Detection --> elkDetector["elk/detector.ts<br/>detector(txt, config)"]
+    
+    flowDetector --> |"Checks /^\s*graph/"| DetectLegacy{Legacy Flowchart?}
+    flowDetectorV2 --> |"Checks /^\s*flowchart/"| DetectNew{New Flowchart?}
+    elkDetector --> |"Checks /^\s*flowchart-elk/"| DetectElk{ELK Layout?}
+    
+    DetectLegacy --> |Yes| LoadDiagram
+    DetectNew --> |Yes| LoadDiagram
+    DetectElk --> |Yes| LoadDiagram
+    
+    %% Loading Phase
+    LoadDiagram["loader() function"] --> flowDiagram["flowDiagram.ts<br/>diagram object"]
+    
+    flowDiagram --> DiagramStructure{Diagram Components}
+    DiagramStructure --> Parser["parser: flowParser"]
+    DiagramStructure --> Database["db: new FlowDB()"]
+    DiagramStructure --> Renderer["renderer: flowRenderer-v3-unified"]
+    DiagramStructure --> Styles["styles: flowStyles"]
+    DiagramStructure --> Init["init: (cnf: MermaidConfig)"]
+    
+    %% Parser Phase
+    Parser --> flowParser["parser/flowParser.ts<br/>newParser.parse(src)"]
+    flowParser --> |"Preprocesses src"| RemoveWhitespace["Remove trailing whitespace<br/>src.replace(/}\s*\n/g, '}\n')"]
+    RemoveWhitespace --> flowJison["parser/flow.jison<br/>flowJisonParser.parse(newSrc)"]
+    
+    flowJison --> ParseGraph["Parse Graph Structure"]
+    ParseGraph --> ParseVertices["Parse Vertices"]
+    ParseGraph --> ParseEdges["Parse Edges"]
+    ParseGraph --> ParseSubgraphs["Parse Subgraphs"]
+    ParseGraph --> ParseClasses["Parse Classes"]
+    ParseGraph --> ParseStyles["Parse Styles"]
+    
+    %% Database Phase - FlowDB Class
+    Database --> FlowDBClass["flowDb.ts<br/>FlowDB class"]
+    
+    FlowDBClass --> DBInit["constructor()<br/>- Initialize counters<br/>- Bind methods<br/>- Setup toolTips<br/>- Call clear()"]
+    
+    DBInit --> DBMethods{FlowDB Methods}
+    
+    DBMethods --> addVertex["addVertex(id, textObj, type, style,<br/>classes, dir, props, metadata)"]
+    DBMethods --> addLink["addLink(_start[], _end[], linkData)"]
+    DBMethods --> addSingleLink["addSingleLink(_start, _end, type, id)"]
+    DBMethods --> setDirection["setDirection(dir)"]
+    DBMethods --> addSubGraph["addSubGraph(nodes[], id, title)"]
+    DBMethods --> addClass["addClass(id, style)"]
+    DBMethods --> setClass["setClass(ids, className)"]
+    DBMethods --> setTooltip["setTooltip(ids, tooltip)"]
+    DBMethods --> setClickEvent["setClickEvent(id, functionName, args)"]
+    DBMethods --> setClickFun["setClickFun(id, functionName, args)"]
+    
+    %% Vertex Processing
+    addVertex --> VertexProcess{Vertex Processing}
+    VertexProcess --> CreateVertex["Create FlowVertex object<br/>- id, labelType, domId<br/>- styles[], classes[]"]
+    VertexProcess --> SanitizeText["sanitizeText(textObj.text)"]
+    VertexProcess --> ParseMetadata["Parse YAML metadata<br/>yaml.load(yamlData)"]
+    VertexProcess --> SetVertexProps["Set vertex properties<br/>- shape, label, icon, form<br/>- pos, img, constraint, w, h"]
+    
+    %% Edge Processing  
+    addSingleLink --> EdgeProcess{Edge Processing}
+    EdgeProcess --> CreateEdge["Create FlowEdge object<br/>- start, end, type, text<br/>- labelType, classes[]"]
+    EdgeProcess --> ProcessLinkText["Process link text<br/>- sanitizeText()<br/>- strip quotes"]
+    EdgeProcess --> SetEdgeProps["Set edge properties<br/>- type, stroke, length"]
+    EdgeProcess --> GenerateEdgeId["Generate edge ID<br/>getEdgeId(start, end, counter)"]
+    EdgeProcess --> ValidateEdgeLimit["Validate edge limit<br/>maxEdges check"]
+    
+    %% Data Collection
+    DBMethods --> GetData["getData()"]
+    GetData --> CollectNodes["Collect nodes[] from vertices"]
+    GetData --> CollectEdges["Collect edges[] from edges"]
+    GetData --> ProcessSubGraphs["Process subgraphs<br/>- parentDB Map<br/>- subGraphDB Map"]
+    GetData --> AddNodeFromVertex["addNodeFromVertex()<br/>for each vertex"]
+    GetData --> ProcessEdgeTypes["destructEdgeType()<br/>arrowTypeStart, arrowTypeEnd"]
+    
+    %% Node Creation
+    AddNodeFromVertex --> NodeCreation{Node Creation}
+    NodeCreation --> FindExistingNode["findNode(nodes, vertex.id)"]
+    NodeCreation --> CreateBaseNode["Create base node<br/>- id, label, parentId<br/>- cssStyles, cssClasses<br/>- shape, domId, tooltip"]
+    NodeCreation --> GetCompiledStyles["getCompiledStyles(classDefs)"]
+    NodeCreation --> GetTypeFromVertex["getTypeFromVertex(vertex)"]
+    
+    %% Rendering Phase
+    Renderer --> flowRendererV3["flowRenderer-v3-unified.ts<br/>draw(text, id, version, diag)"]
+    
+    flowRendererV3 --> RenderInit["Initialize rendering<br/>- getConfig()<br/>- handle securityLevel<br/>- getDiagramElement()"]
+    
+    RenderInit --> GetLayoutData["diag.db.getData()<br/>as LayoutData"]
+    GetLayoutData --> SetupLayoutData["Setup layout data<br/>- type, layoutAlgorithm<br/>- direction, spacing<br/>- markers, diagramId"]
+    
+    SetupLayoutData --> CallRender["render(data4Layout, svg)"]
+    CallRender --> SetupViewPort["setupViewPortForSVG(svg, padding)"]
+    SetupViewPort --> ProcessLinks["Process vertex links<br/>- create anchor elements<br/>- handle click events"]
+    
+    %% Shape Rendering
+    CallRender --> ShapeSystem["flowChartShapes.js<br/>Shape Functions"]
+    
+    ShapeSystem --> ShapeFunctions{Shape Functions}
+    ShapeFunctions --> question["question(parent, bbox, node)"]
+    ShapeFunctions --> hexagon["hexagon(parent, bbox, node)"]
+    ShapeFunctions --> rect_left_inv_arrow["rect_left_inv_arrow(parent, bbox, node)"]
+    ShapeFunctions --> lean_right["lean_right(parent, bbox, node)"]
+    ShapeFunctions --> lean_left["lean_left(parent, bbox, node)"]
+    
+    ShapeFunctions --> insertPolygonShape["insertPolygonShape(parent, w, h, points)"]
+    ShapeFunctions --> intersectPolygon["intersectPolygon(node, points, point)"]
+    ShapeFunctions --> intersectRect["intersectRect(node, point)"]
+    
+    %% Styling System
+    Styles --> stylesTS["styles.ts<br/>getStyles(options)"]
+    stylesTS --> StyleOptions["FlowChartStyleOptions<br/>- arrowheadColor, border2<br/>- clusterBkg, mainBkg<br/>- fontFamily, textColor"]
+    
+    StyleOptions --> GenerateCSS["Generate CSS styles<br/>- .label, .cluster-label<br/>- .node, .edgePath<br/>- .flowchart-link, .edgeLabel"]
+    GenerateCSS --> GetIconStyles["getIconStyles()"]
+    
+    %% Type System
+    Parser --> TypeSystem["types.ts<br/>Type Definitions"]
+    TypeSystem --> FlowVertex["FlowVertex interface"]
+    TypeSystem --> FlowEdge["FlowEdge interface"]
+    TypeSystem --> FlowClass["FlowClass interface"]
+    TypeSystem --> FlowSubGraph["FlowSubGraph interface"]
+    TypeSystem --> FlowVertexTypeParam["FlowVertexTypeParam<br/>Shape types"]
+    
+    %% Utility Functions
+    DBMethods --> UtilityFunctions{Utility Functions}
+    UtilityFunctions --> lookUpDomId["lookUpDomId(id)"]
+    UtilityFunctions --> getClasses["getClasses()"]
+    UtilityFunctions --> getDirection["getDirection()"]
+    UtilityFunctions --> getVertices["getVertices()"]
+    UtilityFunctions --> getEdges["getEdges()"]
+    UtilityFunctions --> getSubGraphs["getSubGraphs()"]
+    UtilityFunctions --> clear["clear()"]
+    UtilityFunctions --> defaultConfig["defaultConfig()"]
+    
+    %% Event Handling
+    ProcessLinks --> EventHandling{Event Handling}
+    EventHandling --> setupToolTips["setupToolTips(element)"]
+    EventHandling --> bindFunctions["bindFunctions(element)"]
+    EventHandling --> runFunc["utils.runFunc(functionName, args)"]
+    
+    %% Common Database Functions
+    DBMethods --> CommonDB["commonDb.js functions"]
+    CommonDB --> setAccTitle["setAccTitle()"]
+    CommonDB --> getAccTitle["getAccTitle()"]
+    CommonDB --> setAccDescription["setAccDescription()"]
+    CommonDB --> getAccDescription["getAccDescription()"]
+    CommonDB --> setDiagramTitle["setDiagramTitle()"]
+    CommonDB --> getDiagramTitle["getDiagramTitle()"]
+    CommonDB --> commonClear["clear()"]
+    
+    %% Final Output
+    ProcessLinks --> FinalSVG["Final SVG Output"]
+    
+    %% Layout Algorithm Selection
+    SetupLayoutData --> LayoutAlgorithm{Layout Algorithm}
+    LayoutAlgorithm --> Dagre["dagre<br/>(default)"]
+    LayoutAlgorithm --> DagreWrapper["dagre-wrapper<br/>(v2 renderer)"]
+    LayoutAlgorithm --> ELK["elk<br/>(external package)"]
+    
+    %% Testing Components
+    FlowDBClass --> TestFiles["Test Files"]
+    TestFiles --> flowDbSpec["flowDb.spec.ts"]
+    TestFiles --> flowChartShapesSpec["flowChartShapes.spec.js"]
+    TestFiles --> ParserTests["parser/*.spec.js files<br/>- flow-text.spec.js<br/>- flow-edges.spec.js<br/>- flow-style.spec.js<br/>- subgraph.spec.js"]
+    
+    %% Configuration
+    Init --> ConfigSetup["Configuration Setup"]
+    ConfigSetup --> FlowchartConfig["cnf.flowchart config"]
+    ConfigSetup --> ArrowMarkers["arrowMarkerAbsolute"]
+    ConfigSetup --> LayoutConfig["layout config"]
+    ConfigSetup --> SetConfig["setConfig() calls"]
+```
+
+</details>
+
 ## git_workflow
 
 `tests/fixtures/flowchart/git_workflow.mmd`
 
-**Text**
-
-```text
-                                 ┌──────────────┐                    ┌────────────┐
-                     git add     │ Staging Area │─────git commit────►│ Local Repo │      git push
-┌─────────────┐─────────────────►└──────────────┘                    └────────────┘───────────────────►┌─────────────┐
-│ Working Dir │                                                                                        │ Remote Repo │
-└─────────────┘◄───┐                                                                                  ┌└─────────────┘
-                   └───────────────────────────────────git pull───────────────────────────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/git_workflow.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1376,50 +1325,65 @@ graph LR
 
 </details>
 
+## git_workflow_td
+
+`tests/fixtures/flowchart/git_workflow_td.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/git_workflow_td.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![git_workflow_td svg](../tests/svg-snapshots/flowchart/git_workflow_td.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    %% A typical git workflow
+    Working[Working Dir] -->|git add| Staging[Staging Area]
+    Staging -->|git commit| Local[Local Repo]
+    Local -->|git push| Remote[Remote Repo]
+    Remote -->|git pull| Working
+
+```
+
+</details>
+
+## hexagon_flow
+
+`tests/fixtures/flowchart/hexagon_flow.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/hexagon_flow.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![hexagon_flow svg](../tests/svg-snapshots/flowchart/hexagon_flow.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A{{Process}} --> B[Output]
+    C[Input] --> A
+    A --> D[Log]
+
+```
+
+</details>
+
 ## http_request
 
 `tests/fixtures/flowchart/http_request.mmd`
 
-**Text**
-
-```text
-                         ┌────────┐
-                         │ Client │◄────────┐
-                         └────────┘         │
-                     ┌────┘                 │
-                     │                      │
-               HTTP Request                 │
-                     │                      │
-                     ▼                      │
-                ┌────────┐                  │
-                │ Server │                  │
-                └────────┘                  │
-                     │                      │
-                     │                      │
-                     │                      │
-                     │                      │
-                     ▼                HTTP Response
-            ┌────────────────┐              │
-            < Authenticated? >              │
-            └────────────────┘              │
-         ┌───┘              └────┐          │
-         │                       │          │
-         │                       │          │
-        Yes                     No          │
-         │                       │          │
-         ▼                       ▼          │
-┌─────────────────┐       ┌──────────────────┐
-│ Process Request │       │ 401 Unauthorized │
-└─────────────────┘       └──────────────────┘
-         │                       │          │
-         │                       │          │
-         │                       │          │
-         └────────────────┐      └──────┐   │
-                          ▼             ▼   │
-                         ┌───────────────┐  │
-                         │ Send Response │──┘
-                         └───────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/http_request.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1449,38 +1413,7 @@ graph TD
 
 `tests/fixtures/flowchart/inline_edge_labels.mmd`
 
-**Text**
-
-```text
- ┌───────┐
- │ Start │
- └───────┘
-     │
-    yes
-     ▼
- ┌──────┐
- │ Next │
- └──────┘
-     ┆
-   retry
-     ▼
- ┌───────┐
- │ Again │
- └───────┘
-     ┃
-final step
-     ┃
-     ▼
- ┌──────┐
- │ Done │
- └──────┘
-     │
-    no
-     ▼
- ┌──────┐
- │ Stop │
- └──────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/inline_edge_labels.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1507,110 +1440,7 @@ graph TD
 
 `tests/fixtures/flowchart/inline_label_flowchart.mmd`
 
-**Text**
-
-```text
-                                                             ╭───────╮
-                                                             │ Start │
-                                                             ╰───────╯
-                                                                 │
-                                                                 │
-                                                                 │
-                                                                 │
-                                                                 ▼
-                                                        ┌────────────────┐
-                                                        │ Ingest Request │
-                                                        └────────────────┘
-                                                      ┌──┘              └───────────────────────────────────────────────────┐
-                                                      │                                                                     │
-                                                      │                                                                     │
-                                                      │                                                                     │
-                                                      ▼                                                                     ▼
-                                              ┌───────────────┐                                                       ┌───────────┐
-                                              │ Parse Payload │                                                       │ Audit Log │
-                                              └───────────────┘                                                       └───────────┘
-                                  ┌────────────┘             └──────────────────────────────────────┐                       │
-                                  │                                                                 │                       │
-                                  │                                                                 │                       │
-                                  │                                                                 │                       │
-                                  │                                                                 ▼                       │
-                                  │                                                         ┌──────────────┐                │
-                                  │                                                         │ Lookup Cache │                │
-                                  │                                                         └──────────────┘                │
-                                  │                                                  ┌───────┘           ┌┘                 │
-                                  │                                                  │                   │                  │
-                                  │                                                miss                 hit                 │
-                                  │      ┌───────────────────────────────────────────┘                   │                  │
-                                  ▼      ▼                                                               ▼                  │
-                                 ┌────────┐                                                      ┌──────────────┐           │
-                                 < Valid? >                                                      │ Serve Cached │           │
-                                 └────────┘                                                      └──────────────┘           │
-              ┌───────────────────┘      └────────────┐                                                  │                  │
-              │                                       │                                                  │                  │
-              │                                       │                                                  │                  │
-             no                                      yes                                                 │                  │
-              │                                       │                                                  │                  │
-              ▼                                       ▼                                                  │                  │
-         ┌────────┐                            ┌────────────┐                                            │                  │
-         │ Reject │                            < Route Type >                                            │                  │
-         └────────┘                            └────────────┘                                            │                  │
-       ┌┄┄┘      └────┐               ┌─────────┘          └──────┐                                      │                  │
-       ┆              │               │                           │                                      │                  │
-       ┆              │             sync                        async                                    │                  │
-       ┆              │               │                           │                                      │                  │
-       ▼              │               ▼                           ▼                                      │                  │
-┌─────────────┐       │       ┌───────────────┐            ┌─────────────┐                               │                  │
-│ Notify User │       │       │ Sync Pipeline │            │ Enqueue Job │◄━━┓                           │                  │
-└─────────────┘       │       └───────────────┘            └─────────────┘   ┃                           │                  │
-                      │               │                   ┌─┘                ┃                           │                  │
-                      │               │                   │                  ┃                           │                  │
-                      │               │                   │                  ┃                           │                  │
-                      │               │                   │                  ┃                           │                  │
-                      │               │                   ▼                  ┃                           │                  │
-                      │               │            ┌─────────────┐           ┃                           │                  │
-                      │               │            │ Worker Pool │           ┃                           │                  │
-                      │               │            └─────────────┘           ┃                           │                  │
-                      │               │                   │                  ┃                           │                  │
-                      │               │                   │                  ┃                           │                  │
-                      │               │                   │                  ┃                           │                  │
-                      │               │                   │                  ┃                           │                  │
-                      │               │                   ▼                  ┃                           │                  │
-                      │               │            ┌─────────────┐           ┃                           │                  │
-                      │               │            │ Process Job │           ┃                           │                  │
-                      │               │            └─────────────┘           ┃                           │                  │
-                      │               │             └─────┐     └────────────╋───────────┐               │                  │
-                      │               │                   │                  ┃           │               │                  │
-                      │               │                   │                  ┃         warn              │                  │
-                      │               │                   │                  ┃           │               │                  │
-                      │               │                   ▼                  ┃           ▼               │                  │
-                      │               │             ┌──────────┐             ┃   ┌──────────────┐        │                  │
-                      │               │             < Success? >             ┃   │ Page On-call │        │                  │
-                      │               │             └──────────┘             ┃   └──────────────┘        │                  │
-                      │               │              └┐       │              ┃           ┆               │                  │
-                      │               │               │       │              ┃           ┆               │                  │
-                      │               │              yes     no              ┃           ┆               │                  │
-                      │           ┌───┘          ┌────┘       └────┐         ┃           ┆               │                  │
-                      │           ▼              ▼                 ▼         ┃           ┆               │                  │
-                      │          ┌────────────────┐               ┌───────┐  ┃           ┆               │                  │
-                      │          │ Persist Result │               │ Retry │━━┛           ┆               │                  │
-                      │          └────────────────┘               └───────┘              ┆               │                  │
-                      │                   │                                              ┆               │                  │
-                      │                   │                                              ┆               │                  │
-                      │                   │                                              ┆               │                  │
-                      └───────────────────┴───────────────────────────────────────┬──┐  ┌┘ ┌───┬─────────┴──────────────────┘
-                                                                                  ▼  ▼  ▼  ▼   ▼
-                                                                                 ┌──────────────┐
-                                                                                 │ Emit Metrics │
-                                                                                 └──────────────┘
-                                                                                         │
-                                                                                         │
-                                                                                         │
-                                                                                         │
-                                                                                         ▼
-                                                                                     ╭──────╮
-                                                                                     │ Done │
-                                                                                     ╰──────╯
-```
+> Missing text snapshot: `tests/snapshots/flowchart/inline_label_flowchart.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1664,83 +1494,11 @@ flowchart TD
 
 </details>
 
-## label_spacing
-
-`tests/fixtures/flowchart/label_spacing.mmd`
-
-**Text**
-
-```text
-        ┌───┐
-        │ A │
-        └───┘
-  ┌──────┘ └──────┐
-  │               │
-valid          invalid
-  │               │
-  ▼               ▼
-┌───┐           ┌───┐
-│ B │           │ C │
-└───┘           └───┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![label_spacing svg](../tests/svg-snapshots/flowchart/label_spacing.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    %% Test case for edge label spacing with branching edges
-    %% Labels should not overlap when multiple edges branch from the same source
-    A -->|valid| B
-    A -->|invalid| C
-
-```
-
-</details>
-
 ## labeled_edges
 
 `tests/fixtures/flowchart/labeled_edges.mmd`
 
-**Text**
-
-```text
-           ┌───────┐
-           │ Begin │
-           └───────┘
-               │
-               │
-          initialize
-               │
-               ▼
-           ┌───────┐
-           │ Setup │
-           └───────┘
-        ┌───┘     ▲
-        │         └┄┄┄┄┄┄┄┄┐
-        │                  ┆
-    configure              ┆
-        │                  ┆
-        ▼                retry
-   ┌────────┐              ┆
-   < Valid? >              ┆
-   └────────┘              ┆
-    └┐     └──────┐        ┆
-     │            │        ┆
-    yes          no        ┆
-     │            └┐       ┆
-     ▼             ▼       └┄┄┄┄┐
-┌─────────┐       ┌──────────────┐
-│ Execute │       │ Handle Error │
-└─────────┘       └──────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/labeled_edges.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1764,17 +1522,38 @@ graph TD
 
 </details>
 
+## label_spacing
+
+`tests/fixtures/flowchart/label_spacing.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/label_spacing.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![label_spacing svg](../tests/svg-snapshots/flowchart/label_spacing.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    %% Test case for edge label spacing with branching edges
+    %% Labels should not overlap when multiple edges branch from the same source
+    A -->|valid| B
+    A -->|invalid| C
+
+```
+
+</details>
+
 ## left_right
 
 `tests/fixtures/flowchart/left_right.mmd`
 
-**Text**
-
-```text
-┌────────────┐      ┌──────────────┐     ┌────────────────┐
-│ User Input │─────►│ Process Data │────►│ Display Result │
-└────────────┘      └──────────────┘     └────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/left_right.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1795,33 +1574,37 @@ graph LR
 
 </details>
 
+## mixed_shape_chain
+
+`tests/fixtures/flowchart/mixed_shape_chain.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/mixed_shape_chain.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![mixed_shape_chain svg](../tests/svg-snapshots/flowchart/mixed_shape_chain.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[Start] --> B{Decision}
+    B --> C{{Hexagon}}
+    C --> D[End]
+
+```
+
+</details>
+
 ## multi_edge_labeled
 
 `tests/fixtures/flowchart/multi_edge_labeled.mmd`
 
-**Text**
-
-```text
-  ┌───┐
-  │ A │
-  └───┘
-   │ └──┐
-   │ path 2
-path 1  │
-   │ ┌──┘
-   ▼ ▼
-  ┌───┐
-  │ B │
-  └───┘
-    │
-    │
-    │
-    │
-    ▼
-  ┌───┐
-  │ C │
-  └───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/multi_edge_labeled.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1847,19 +1630,7 @@ graph TD
 
 `tests/fixtures/flowchart/multi_edge.mmd`
 
-**Text**
-
-```text
-┌───┐
-│ A │
-└───┘
- │ │
- │ │
- ▼ ▼
-┌───┐
-│ B │
-└───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/multi_edge.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1880,43 +1651,38 @@ graph TD
 
 </details>
 
+## multiple_cycles
+
+`tests/fixtures/flowchart/multiple_cycles.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/multiple_cycles.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![multiple_cycles svg](../tests/svg-snapshots/flowchart/multiple_cycles.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[Top] --> B[Middle]
+    B --> C[Bottom]
+    C --> A
+    C --> B
+
+```
+
+</details>
+
 ## multi_subgraph_direction_override
 
 `tests/fixtures/flowchart/multi_subgraph_direction_override.mmd`
 
-**Text**
-
-```text
-  ┌────────── a ──────────┐
-  │ ┌───┐  ┌───┐    ┌───┐ │
-  │ │ b │  │ u │    │ c │ │
-  │ └───┘  └───┘    └───┘ │
-  │ ┌┘        │        │  │
-  └─┼─────────┼────────┼──┘
-    │         │        │
-    │         │        │
-    │         │        │
-    │         │        │
-    ▼         │        ▼
-  ┌───┐       │      ┌───┐
-  │ b │       │      │ c │
-  └───┘       │      └───┘
-  ┌┘ └──┐     │        │
-  │     └───┐ │        │
-  ▼         ▼ ▼        ▼
-┌───┐      ┌───┐     ┌───┐
-│ d │      │ f │     │ e │
-└───┘      └───┘     └───┘
-            │ │        │
-            │ └─────┐ ┌┘
-            └─┐     │ │
-          ┌───┼─ g ─┼─┼──┐
-          │   ▼     ▼ ▼  │
-          │ ┌───┐  ┌───┐ │
-          │ │ b │  │ a │ │
-          │ └───┘  └───┘ │
-          └──────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/multi_subgraph_direction_override.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -1980,15 +1746,7 @@ class Ab,Au,Ac,Bmid,Cmid,D,E,F,Gb,Ga node
 
 `tests/fixtures/flowchart/multi_subgraph.mmd`
 
-**Text**
-
-```text
-┌─────── Frontend ───────┐            ┌─────── Backend ────────┐
-│  ┌────┐       ┌─────┐  │            │ ┌────────┐      ┌────┐ │
-│  │ UI │──────►│ API │──┼────────────┼►│ Server │─────►│ DB │ │
-│  └────┘       └─────┘  │            │ └────────┘      └────┘ │
-└────────────────────────┘            └────────────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/multi_subgraph.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2014,68 +1772,11 @@ B --> C
 
 </details>
 
-## multiple_cycles
-
-`tests/fixtures/flowchart/multiple_cycles.mmd`
-
-**Text**
-
-```text
-       ┌─────┐
-       │ Top │
-       └─────┘
-     ┌──┘   ▲
-     │      └─┐
-     ▼        │
-┌────────┐    │
-│ Middle │    │
-└────────┘    │
- └──┐   ▲     │
-   ┌┘  ┌┘     │
-   ▼  ┌┘  ┌───┘
-  ┌────────┐
-  │ Bottom │
-  └────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![multiple_cycles svg](../tests/svg-snapshots/flowchart/multiple_cycles.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A[Top] --> B[Middle]
-    B --> C[Bottom]
-    C --> A
-    C --> B
-
-```
-
-</details>
-
 ## narrow_fan_in
 
 `tests/fixtures/flowchart/narrow_fan_in.mmd`
 
-**Text**
-
-```text
-┌───┐    ┌───┐    ┌───┐
-│ A │    │ B │    │ C │
-└───┘    └───┘    └───┘
-  │        │        │
-  └───────┐│┌───────┘
-          ▼▼▼
-         ┌───┐
-         │ X │
-         └───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/narrow_fan_in.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2101,37 +1802,7 @@ graph TD
 
 `tests/fixtures/flowchart/nested_subgraph_edge.mmd`
 
-**Text**
-
-```text
-                 ┌────────┐
-                 │ Client │
-                 └────────┘
-                      │
-                      │
-                      │
-                      │
-                      │
-                      ▼
-┌────────────────── Cloud ──────────────────┐
-│    ┌──────────── US East ────────────┐    │
-│    │                                 │    │
-│    │   ┌─────────┐     ┌─────────┐   │    │
-│    │   │ Server1 │     │ Server2 │   │    │
-│    │   └─────────┘     └─────────┘   │    │
-│    └─────────────────────────────────┘    │
-└─────────────────────┼─────────────────────┘
-                      │
-                      │
-                      │
-                      │
-                      │
-                      │
-                      ▼
-               ┌────────────┐
-               │ Monitoring │
-               └────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/nested_subgraph_edge.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2158,79 +1829,11 @@ graph TD
 
 </details>
 
-## nested_subgraph_only
-
-`tests/fixtures/flowchart/nested_subgraph_only.mmd`
-
-**Text**
-
-```text
-┌───── Outer ─────┐
-│  ┌── Inner ──┐  │
-│  │   ┌───┐   │  │
-│  │   │ A │   │  │
-│  │   └───┘   │  │
-│  │     │     │  │
-│  │     │     │  │
-│  │     ▼     │  │
-│  │   ┌───┐   │  │
-│  │   │ B │   │  │
-│  │   └───┘   │  │
-│  └───────────┘  │
-└─────────────────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![nested_subgraph_only svg](../tests/svg-snapshots/flowchart/nested_subgraph_only.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-subgraph outer[Outer]
-subgraph inner[Inner]
-A --> B
-end
-end
-
-```
-
-</details>
-
 ## nested_subgraph
 
 `tests/fixtures/flowchart/nested_subgraph.mmd`
 
-**Text**
-
-```text
-┌───────── Outer ─────────┐
-│        ┌───────┐        │
-│        │ Start │        │
-│        └───────┘        │
-│            │            │
-│            │            │
-│            │            │
-│            │            │
-│    ┌──── Inner ────┐    │
-│    │       ▼       │    │
-│    │  ┌─────────┐  │    │
-│    │  │ Process │  │    │
-│    │  └─────────┘  │    │
-│    │       │       │    │
-│    │       │       │    │
-│    │       ▼       │    │
-│    │    ┌─────┐    │    │
-│    │    │ End │    │    │
-│    │    └─────┘    │    │
-│    └───────────────┘    │
-└─────────────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/nested_subgraph.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2256,21 +1859,39 @@ A --> B
 
 </details>
 
+## nested_subgraph_only
+
+`tests/fixtures/flowchart/nested_subgraph_only.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/nested_subgraph_only.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![nested_subgraph_only svg](../tests/svg-snapshots/flowchart/nested_subgraph_only.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+subgraph outer[Outer]
+subgraph inner[Inner]
+A --> B
+end
+end
+
+```
+
+</details>
+
 ## nested_with_siblings
 
 `tests/fixtures/flowchart/nested_with_siblings.mmd`
 
-**Text**
-
-```text
-┌───────────────────── Outer ──────────────────────┐
-│    ┌──── Left ────┐         ┌──── Right ─────┐   │
-│    │┌───┐    ┌───┐│         │ ┌───┐    ┌───┐ │   │
-│    ││ A │───►│ B │┼─────────┼►│ C │───►│ D │ │   │
-│    │└───┘    └───┘│         │ └───┘    └───┘ │   │
-│    └──────────────┘         └────────────────┘   │
-└──────────────────────────────────────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/nested_with_siblings.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2302,13 +1923,7 @@ B --> C
 
 `tests/fixtures/flowchart/right_left.mmd`
 
-**Text**
-
-```text
-┌───────┐     ┌─────────┐    ┌────────┐
-│ Begin │◄────│ Process │◄───│ Finish │
-└───────┘     └─────────┘    └────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/right_left.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2333,29 +1948,7 @@ graph RL
 
 `tests/fixtures/flowchart/self_loop_labeled.mmd`
 
-**Text**
-
-```text
- ┌───────┐
- │ Start │
- └───────┘
-     │
-     │
-     │
-     │
-     ▼
-┌────────┐───┐
-< Retry? > retry
-└────────┘◄──┘
-     │
-     │
-   done
-     │
-     ▼
-  ┌─────┐
-  │ End │
-  └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/self_loop_labeled.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2377,29 +1970,35 @@ graph TD
 
 </details>
 
+## self_loop
+
+`tests/fixtures/flowchart/self_loop.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/self_loop.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![self_loop svg](../tests/svg-snapshots/flowchart/self_loop.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[Process] --> A
+
+```
+
+</details>
+
 ## self_loop_with_others
 
 `tests/fixtures/flowchart/self_loop_with_others.mmd`
 
-**Text**
-
-```text
- ┌───────┐
- │ Start │
- └───────┘
-     │
-     │
-     ▼
-┌─────────┐───┐
-│ Process │   │
-└─────────┘◄──┘
-     │
-     │
-     ▼
-  ┌─────┐
-  │ End │
-  └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/self_loop_with_others.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2421,83 +2020,11 @@ graph TD
 
 </details>
 
-## self_loop
-
-`tests/fixtures/flowchart/self_loop.mmd`
-
-**Text**
-
-```text
-┌─────────┐───┐
-│ Process │   │
-└─────────┘◄──┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![self_loop svg](../tests/svg-snapshots/flowchart/self_loop.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A[Process] --> A
-
-```
-
-</details>
-
 ## shapes_basic
 
 `tests/fixtures/flowchart/shapes_basic.mmd`
 
-**Text**
-
-```text
- ┌───────────┐
- │ Rectangle │
- └───────────┘
-       │
-       │
-       ▼
-  ╭─────────╮
-  │ Rounded │
-  ╰─────────╯
-       │
-       │
-       ▼
-  ╭─────────╮
-  │ Stadium │
-  ╰─────────╯
-       │
-       │
-       ▼
-┌────────────┐
-║ Subroutine ║
-└────────────┘
-       │
-       │
-       ▼
- ┌──────────┐
- ( Cylinder )
- └──────────┘
-       │
-       │
-       ▼
- ┌──────────┐
- < Decision >
- └──────────┘
-       │
-       │
-       ▼
-  ┌─────────┐
-  < Hexagon >
-  └─────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/shapes_basic.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2528,55 +2055,7 @@ graph TD
 
 `tests/fixtures/flowchart/shapes_degenerate.mmd`
 
-**Text**
-
-```text
-┌───────┐
-│ Cloud │
-└───────┘
-    │
-    │
-    ▼
-┌──────┐
-│ Bolt │
-└──────┘
-    │
-    │
-    ▼
-┌──────┐
-│ Bang │
-└──────┘
-    │
-    │
-    ▼
-┌──────┐
-│ Icon │
-└──────┘
-    │
-    │
-    ▼
-┌──────┐
-│ Hour │
-└──────┘
-    │
-    │
-    ▼
- ┌─────┐
- │ Tri │
- └─────┘
-    │
-    │
-    ▼
-┌──────┐
-│ Flip │
-└──────┘
-    │
-    │
-    ▼
-┌───────┐
-│ Notch │
-└───────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/shapes_degenerate.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2608,37 +2087,7 @@ graph TD
 
 `tests/fixtures/flowchart/shapes_document.mmd`
 
-**Text**
-
-```text
-  ┌─────┐
-  │ Doc │
-  └~~~~~┘
-     │
-     │
-     ▼
- ┌──────┐
- │ Docs ││
- └~~~~~~┘│
-  ───│───┘
-     │
-     ▼
-┌───────╱┐
-│ TagDoc │
-└~~~~~~~~┘
-     │
-     │
-     ▼
- ┌─────╱┐
- │ Card │
- └──────┘
-     │
-     │
-     ▼
-  ┌────╱┐
-  │ Tag │
-  └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/shapes_document.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2667,11 +2116,7 @@ graph TD
 
 `tests/fixtures/flowchart/shapes_junction.mmd`
 
-**Text**
-
-```text
-●  ───► ◉  ───► ⊗
-```
+> Missing text snapshot: `tests/snapshots/flowchart/shapes_junction.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2694,62 +2139,11 @@ graph LR
 
 </details>
 
-## shapes_special
-
-`tests/fixtures/flowchart/shapes_special.mmd`
-
-**Text**
-
-```text
-┃
-┃
-┃ ─────►  Note
-┃
-```
-
-<details>
-<summary>SVG output</summary>
-
-![shapes_special svg](../tests/svg-snapshots/flowchart/shapes_special.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph LR
-    fork@{shape: fork}
-    note@{shape: text, label: "Note"}
-    fork --> note
-
-```
-
-</details>
-
 ## shapes
 
 `tests/fixtures/flowchart/shapes.mmd`
 
-**Text**
-
-```text
-┌────────────────┐
-│ Rectangle Node │
-└────────────────┘
-         │
-         │
-         ▼
- ╭──────────────╮
- │ Rounded Node │
- ╰──────────────╯
-         │
-         │
-         ▼
- ┌──────────────┐
- < Diamond Node >
- └──────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/shapes.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2772,29 +2166,37 @@ graph TD
 
 </details>
 
+## shapes_special
+
+`tests/fixtures/flowchart/shapes_special.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/shapes_special.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![shapes_special svg](../tests/svg-snapshots/flowchart/shapes_special.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph LR
+    fork@{shape: fork}
+    note@{shape: text, label: "Note"}
+    fork --> note
+
+```
+
+</details>
+
 ## simple_cycle
 
 `tests/fixtures/flowchart/simple_cycle.mmd`
 
-**Text**
-
-```text
-      ┌───────┐
-      │ Start │
-      └───────┘
-     ┌─┘     ▲
-     │       └┐
-     ▼        │
-┌─────────┐   │
-│ Process │   │
-└─────────┘   │
-     │        │
-     └──┐     │
-        ▼   ┌─┘
-       ┌─────┐
-       │ End │
-       └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/simple_cycle.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2816,33 +2218,35 @@ graph TD
 
 </details>
 
+## simple
+
+`tests/fixtures/flowchart/simple.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/simple.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![simple svg](../tests/svg-snapshots/flowchart/simple.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    A[Start] --> B[End]
+
+```
+
+</details>
+
 ## simple_subgraph
 
 `tests/fixtures/flowchart/simple_subgraph.mmd`
 
-**Text**
-
-```text
-┌── Process ───┐
-│   ┌───────┐  │
-│   │ Start │  │
-│   └───────┘  │
-│       │      │
-│       │      │
-│       ▼      │
-│  ┌────────┐  │
-│  │ Middle │  │
-│  └────────┘  │
-└───────┼──────┘
-        │
-        │
-        │
-        │
-        ▼
-     ┌─────┐
-     │ End │
-     └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/simple_subgraph.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2865,71 +2269,11 @@ B --> C[End]
 
 </details>
 
-## simple
-
-`tests/fixtures/flowchart/simple.mmd`
-
-**Text**
-
-```text
-┌───────┐
-│ Start │
-└───────┘
-    │
-    │
-    ▼
- ┌─────┐
- │ End │
- └─────┘
-```
-
-<details>
-<summary>SVG output</summary>
-
-![simple svg](../tests/svg-snapshots/flowchart/simple.svg)
-
-</details>
-
-<details>
-<summary>Mermaid source</summary>
-
-```
-graph TD
-    A[Start] --> B[End]
-
-```
-
-</details>
-
 ## skip_edge_collision
 
 `tests/fixtures/flowchart/skip_edge_collision.mmd`
 
-**Text**
-
-```text
-      ┌───────┐
-      │ Start │
-      └───────┘
-     ┌─┘     └┐
-     │        │
-     ▼        │
-┌────────┐    │
-│ Step 1 │    │
-└────────┘    │
-     │        │
-     │        │
-     ▼        │
-┌────────┐    │
-│ Step 2 │    │
-└────────┘    │
-     │        │
-     └──┐   ┌─┘
-        ▼   ▼
-       ┌─────┐
-       │ End │
-       └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/skip_edge_collision.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -2956,25 +2300,7 @@ graph TD
 
 `tests/fixtures/flowchart/stacked_fan_in.mmd`
 
-**Text**
-
-```text
-   ┌─────┐
-   │ Top │
-   └─────┘
-   ┌┘   └─┐
-   │      │
-   ▼      │
-┌─────┐   │
-│ Mid │   │
-└─────┘   │
-   │      │
-   └┐   ┌─┘
-    ▼   ▼
-   ┌─────┐
-   │ Bot │
-   └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/stacked_fan_in.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3000,37 +2326,7 @@ graph TD
 
 `tests/fixtures/flowchart/subgraph_as_node_edge.mmd`
 
-**Text**
-
-```text
-     ┌────────┐
-     │ Client │
-     └────────┘
-          │
-          │
-          │
-          ▼
-┌──── Backend ─────┐
-│                  │
-│  ┌────────────┐  │
-│  │ API Server │  │
-│  └────────────┘  │
-│         │        │
-│         │        │
-│         ▼        │
-│   ┌──────────┐   │
-│   │ Database │   │
-│   └──────────┘   │
-└─────────┼────────┘
-          │
-          │
-          │
-          │
-          ▼
-      ┌──────┐
-      │ Logs │
-      └──────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_as_node_edge.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3060,58 +2356,7 @@ graph TD
 
 `tests/fixtures/flowchart/subgraph_direction_cross_boundary.mmd`
 
-**Text**
-
-```text
-               ┌───┐
-               │ C │
-               └───┘
-                │┌┘
-       ┌────────┘│
-       │         ▼
-       │       ┌───┐
-       │       │ X │
-       │       └───┘
-       │         │
-       │         │
-       │         ▼
-       │       ┌───┐
-       │       │ Y │
-       │       └───┘
-       │         │
-       │         │
-       │         ▼
-       │       ┌───┐
-       │       │ Z │
-       │       └───┘
-       │       │
-       │ ┌─────┘
-┌─ Horizontal Section ─┐
-│      ▼ ▼             │
-│     ┌───┐─►┌───┐     │
-│     │ A │  │ B │     │
-│     └───┘  └───┘     │
-│  ┌──┬┴──────┘        │
-└──┼──┼────────────────┘
-   │  │
-   │  │
-   ▼  │
- ┌───┐│
- │ E ││
- └───┘│
-   │  │
-   │  │
-   ▼  │
- ┌───┐│
- │ F ││
- └───┘│
-   │  │
-  ┌┘┌─┘
-  ▼ ▼
- ┌───┐
- │ D │
- └───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_direction_cross_boundary.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3125,14 +2370,44 @@ graph TD
 
 ```
 graph TD
-    subgraph s1[Horizontal Section]
+    subgraph sg1[Horizontal Section]
         direction LR
         A --> B
     end
+    C --> E
+    E --> A
     C --> A
-    C --> X --> Y --> Z --> A
-    A --> E --> F --> D
+    B --> F
+    F --> D
     B --> D
+
+```
+
+</details>
+
+## subgraph_direction_isolated
+
+`tests/fixtures/flowchart/subgraph_direction_isolated.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_direction_isolated.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![subgraph_direction_isolated svg](../tests/svg-snapshots/flowchart/subgraph_direction_isolated.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    subgraph sg1[Horizontal]
+        direction LR
+        A --> B --> C
+    end
+    D --> E
 
 ```
 
@@ -3142,31 +2417,7 @@ graph TD
 
 `tests/fixtures/flowchart/subgraph_direction_lr.mmd`
 
-**Text**
-
-```text
-     ┌───────┐
-     │ Start │
-     └───────┘
-          │
-          │
-          │
-          │
-┌─────────┼Horizontal Flow ──────────┐
-│         ▼                          │
-│ ┌────────┐  ┌────────┐  ┌────────┐ │
-│ │ Step 1 │─►│ Step 2 │─►│ Step 3 │ │
-│ └────────┘  └────────┘  └────────┘ │
-│                         ┌┘         │
-└─────────────────────────┼──────────┘
-                          │
-                          │
-                          │
-                          ▼
-                     ┌─────┐
-                     │ End │
-                     └─────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_direction_lr.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3195,31 +2446,7 @@ graph TD
 
 `tests/fixtures/flowchart/subgraph_direction_mixed.mmd`
 
-**Text**
-
-```text
-┌─ Left to Right ─┐
-│  ┌───┐  ┌───┐   │
-│  │ A │─►│ B │   │
-│  └───┘  └───┘   │
-│        ┌─┘      │
-└────────┼────────┘
-         │
-         │
-         │
-         │
-┌─ Bottom┼to Top ─┐
-│        │        │
-│      ┌───┐      │
-│      │ D │      │
-│      └───┘      │
-│        ▲│       │
-│       ┌┘▼       │
-│      ┌───┐      │
-│      │ C │      │
-│      └───┘      │
-└─────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_direction_mixed.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3251,30 +2478,7 @@ graph TD
 
 `tests/fixtures/flowchart/subgraph_direction_nested_both.mmd`
 
-**Text**
-
-```text
-        ┌───┐
-        │ D │
-        └───┘
-   ┌─────┘
-   │
-   │
-   │
-┌──┼─── Outer LR ───────┐
-│  │    ┌─ Inner BT ─┐  │
-│  │    │            │  │
-│  │    │   ┌───┐    │  │
-│  │    │   │ B │    │  │
-│  │    │   └───┘    │  │
-│  │    │     ▲      │  │
-│  ▼    │     │      │  │
-│ ┌───┐ │   ┌───┐    │  │
-│ │ C │─┼──►│ A │    │  │
-│ └───┘ │   └───┘    │  │
-│       └────────────┘  │
-└───────────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_direction_nested_both.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3302,29 +2506,43 @@ graph TD
 
 </details>
 
+## subgraph_direction_nested_mixed
+
+`tests/fixtures/flowchart/subgraph_direction_nested_mixed.mmd`
+
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_direction_nested_mixed.txt`
+
+<details>
+<summary>SVG output</summary>
+
+![subgraph_direction_nested_mixed svg](../tests/svg-snapshots/flowchart/subgraph_direction_nested_mixed.svg)
+
+</details>
+
+<details>
+<summary>Mermaid source</summary>
+
+```
+graph TD
+    subgraph outer[Outer LR]
+        direction LR
+        subgraph inner[Inner BT]
+            direction BT
+            A --> B
+        end
+        C --> D
+    end
+    E --> C
+
+```
+
+</details>
+
 ## subgraph_direction_nested
 
 `tests/fixtures/flowchart/subgraph_direction_nested.mmd`
 
-**Text**
-
-```text
-┌──── Vertical Outer ─────┐
-│        ┌───┐            │
-│        │ D │            │
-│        └───┘            │
-│          │              │
-│          │              │
-│          │              │
-│          │              │
-│┌── Horizontal Inner ───┐│
-││    ▼                  ││
-││ ┌───┐  ┌───┐    ┌───┐ ││
-││ │ A │─►│ B │───►│ C │ ││
-││ └───┘  └───┘    └───┘ ││
-│└───────────────────────┘│
-└─────────────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_direction_nested.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3354,27 +2572,7 @@ graph TD
 
 `tests/fixtures/flowchart/subgraph_edges_bottom_top.mmd`
 
-**Text**
-
-```text
-┌───────── Output ──────────┐
-│   ┌────────┐    ┌─────┐   │
-│   │ Result │    │ Log │   │
-│   └────────┘    └─────┘   │
-└────────┼───────────┼──────┘
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-  ┌──────┼── Input ──┼───────┐
-  │      │           │       │
-  │  ┌──────┐    ┌────────┐  │
-  │  │ Data │    │ Config │  │
-  │  └──────┘    └────────┘  │
-  └──────────────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_edges_bottom_top.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3407,27 +2605,7 @@ B --> D
 
 `tests/fixtures/flowchart/subgraph_edges.mmd`
 
-**Text**
-
-```text
-  ┌───────── Input ──────────┐
-  │  ┌──────┐    ┌────────┐  │
-  │  │ Data │    │ Config │  │
-  │  └──────┘    └────────┘  │
-  └──────┼───────────┼───────┘
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-         │           │
-┌────────┼ Output ───┼──────┐
-│        ▼           ▼      │
-│   ┌────────┐    ┌─────┐   │
-│   │ Result │    │ Log │   │
-│   └────────┘    └─────┘   │
-└───────────────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_edges.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3460,43 +2638,7 @@ B --> D
 
 `tests/fixtures/flowchart/subgraph_multi_word_title.mmd`
 
-**Text**
-
-```text
-      ┌────────┐
-      │ Source │
-      └────────┘
-           │
-           │
-           │
-           │
-┌─ Data Processing Pipeline ─┐
-│          ▼                 │
-│     ┌─────────┐            │
-│     │ Extract │            │
-│     └─────────┘            │
-│          │                 │
-│          │                 │
-│          ▼                 │
-│    ┌───────────┐           │
-│    │ Transform │           │
-│    └───────────┘           │
-│          │                 │
-│          │                 │
-│          ▼                 │
-│      ┌──────┐              │
-│      │ Load │              │
-│      └──────┘              │
-└──────────┼─────────────────┘
-           │
-           │
-           │
-           │
-           ▼
-       ┌──────┐
-       │ Sink │
-       └──────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_multi_word_title.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3524,39 +2666,7 @@ graph TD
 
 `tests/fixtures/flowchart/subgraph_numeric_id.mmd`
 
-**Text**
-
-```text
-┌─ Phase 1 ─┐
-│    ┌───┐  │
-│    │ A │  │
-│    └───┘  │
-│      │    │
-│      │    │
-│      ▼    │
-│    ┌───┐  │
-│    │ B │  │
-│    └───┘  │
-└──────┼────┘
-       │
-       │
-       │
-       │
-       │
-       │
-┌─ Phase 2 ─┐
-│      ▼    │
-│    ┌───┐  │
-│    │ C │  │
-│    └───┘  │
-│      │    │
-│      │    │
-│      ▼    │
-│    ┌───┐  │
-│    │ D │  │
-│    └───┘  │
-└───────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_numeric_id.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3586,39 +2696,7 @@ graph TD
 
 `tests/fixtures/flowchart/subgraph_to_subgraph_edge.mmd`
 
-**Text**
-
-```text
-┌─────── Frontend ───────┐
-│   ┌────────────────┐   │
-│   │ User Interface │   │
-│   └────────────────┘   │
-│            │           │
-│            │           │
-│            ▼           │
-│    ┌───────────────┐   │
-│    │ State Manager │   │
-│    └───────────────┘   │
-└────────────┼───────────┘
-             │
-             │
-             │
-             │
-             │
-             ▼
- ┌────── Backend ───────┐
- │                      │
- │    ┌────────────┐    │
- │    │ API Server │    │
- │    └────────────┘    │
- │           │          │
- │           │          │
- │           ▼          │
- │     ┌──────────┐     │
- │     │ Database │     │
- │     └──────────┘     │
- └──────────────────────┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/subgraph_to_subgraph_edge.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3652,19 +2730,7 @@ graph TD
 
 `tests/fixtures/flowchart/very_narrow_fan_in.mmd`
 
-**Text**
-
-```text
-┌───┐    ┌───┐    ┌───┐    ┌───┐
-│ X │    │ X │    │ X │    │ X │
-└───┘    └───┘    └───┘    └───┘
-  │        │        │        │
-  └────────┴───┐┌┬──┴────────┘
-               ▼▼▼
-              ┌───┐
-              │ Y │
-              └───┘
-```
+> Missing text snapshot: `tests/snapshots/flowchart/very_narrow_fan_in.txt`
 
 <details>
 <summary>SVG output</summary>
@@ -3699,9 +2765,18 @@ graph TD
  ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐
  │ A │    │ C │    │ E │    │ G │    │ I │    │ K │    │ M │
  └───┘    └───┘    └───┘    └───┘    └───┘    └───┘    └───┘
-   │    directed     △        ◆        ◇   dependency    ┆
-association │   inheritance   │   aggregation   ┆  directed dep
-   │        ▼        │   composition   │        ┆        ▼
+   │        │        △        ◆        ◇        ┆        ┆
+   │        │        │        │        │        ┆        ┆
+   │        │        │        │        │        ┆        ┆
+   │        │        │        │        │    directed dep ┆
+   │        │        │        │        │        ┆        ┆
+   │    directed     │   composition   │   dependency    ┆
+association │   inheritance   │   aggregation   ┆        ┆
+   │        │        │        │        │        ┆        ┆
+   │        │        │        │        │        ┆        ┆
+   │        │        │        │        │        ┆        ┆
+   │        │        │        │        │        ┆        ┆
+   │        ▼        │        │        │        ┆        ▼
  ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐    ┌───┐
  │ B │    │ D │    │ F │    │ H │    │ J │    │ L │    │ N │
  └───┘    └───┘    └───┘    └───┘    └───┘    └───┘    └───┘
@@ -3748,9 +2823,9 @@ classDiagram
                          │ +mate()        │
                          └────────────────┘
                           △      △       △
-          ┌───────────────┘      └┐      └──────────────┐
-          │                       │                     │
-┌───────────────────┐             │                     │
+                  ┌───────┘      └┐      └────────┐
+                  │               │               │
+┌───────────────────┐             │               │
 │       Duck        │    ┌─────────────────┐    ┌───────────────┐
 ├───────────────────┤    │      Fish       │    │     Zebra     │
 │ +String beakColor │    ├─────────────────┤    ├───────────────┤
@@ -3807,8 +2882,11 @@ classDiagram
  ┌──────┐     ┌───────┐
  │ User │     │ Order │
  └──────┘     └───────┘
+     │            │
      │   contains │
+     │            │
    owns           │
+     │            │
      ▼            ▼
 ┌─────────┐    ┌──────┐
 │ Session │    │ Item │
@@ -3846,7 +2924,10 @@ Order "0..1" --> "*" Item:contains
 │ User │
 └──────┘
     │
+    │
+    │
   reads
+    │
     ▼
 ┌──────┐
 │ Repo │
@@ -4037,8 +3118,8 @@ B --> C
          │ Vehicle │
          └─────────┘
           △       △
-       ┌──┘       └──┐
-       │             │
+         ┌┘       └┐
+         │         │
     ┌─────┐      ┌───────┐
     │ Car │      │ Truck │
     └─────┘      └───────┘
@@ -4089,9 +3170,9 @@ classDiagram
           │ +log(message) │
           └───────────────┘
            △             △
-        ┌┄┄┘             └┄┐
-        ┆                  ┆
-        ┆                  ┆
+          ┌┘             └┐
+          ┆               ┆
+          ┆               ┆
 ┌───────────────┐    ┌────────────┐
 │ ConsoleLogger │    │ FileLogger │
 └───────────────┘    └────────────┘
@@ -4184,7 +3265,12 @@ Client --() InterfaceA
 └───────────────┘
         │
         │
+        │
+        │
      creates
+        │
+        │
+        │
         ▼
 ┌───────────────┐
 │    Session    │
@@ -4234,7 +3320,12 @@ classDiagram
       │   ┌─────────┐   │
       │   │ Painter │   │
       │   └─────────┘   │
+      │        │        │
       └────────┼────────┘
+               │
+               │
+               │
+               │
                │
                │
                │
@@ -4246,6 +3337,9 @@ classDiagram
 │        ┌──────────┐         │
 │        │ Triangle │         │
 │        └──────────┘         │
+│              │              │
+│              │              │
+│              │              │
 │              │              │
 │              │              │
 │              │              │
@@ -4300,18 +3394,26 @@ Painter --> Triangle
  └─────────┘
       ┆
 authenticates
+      ┆
+      ┆
+      ┆
       ▼
   ┌──────┐
   │ User │
   └──────┘
       │
+      │
+      │
    places
+      │
       ▼
   ┌───────┐
   │ Order │
   └───────┘
       ◆
 contains
+      │
+      │
       │
       │
  ┌─────────┐
@@ -4432,28 +3534,28 @@ B o--o C
 **Text**
 
 ```text
-┌─────────┐
-│ Class02 │       foo
-└─────────┘
-     │             o
-     │             │
-     │             │
-     │             │
-     │             │
-     │       ┌────────────┐
-     o       │  Class01   │
-             ├────────────┤
-    bar      │ int amount │
-             ├────────────┤
-             │ draw()     │
-             └────────────┘
-                   │
-                   │
-                   │
-                   │
-                   o
+               ┌─────────┐
+      foo      │ Class02 │
+               └─────────┘
+       o            │
+       │            │
+       │            │
+       │            │
+       │            │
+┌────────────┐      │
+│  Class01   │      o
+├────────────┤
+│ int amount │      bar
+├────────────┤
+│ draw()     │
+└────────────┘
+       │
+       │
+       │
+       │
+       o
 
-                  bar
+      bar
 ```
 
 <details>
@@ -4480,4 +3582,11 @@ foo ()-- Class01
 ```
 
 </details>
+
+---
+
+**Missing snapshots**
+
+- Text snapshots missing: 89
+- SVG snapshots missing: 0
 

@@ -361,11 +361,11 @@ pub(crate) fn resolve_sibling_overlaps_draw(
                         let node_cx = nb.x + nb.width / 2;
                         let sg_cx = sg_b.x + sg_b.width / 2;
                         if node_cx < sg_cx {
-                            // Node is to the left — push subgraph right.
+                            // Node is to the left ΓÇö push subgraph right.
                             let shift = node_right + 1 - sg_b.x;
                             (shift, 0)
                         } else {
-                            // Node is to the right — push subgraph left (shift node right).
+                            // Node is to the right ΓÇö push subgraph left (shift node right).
                             let shift = sg_b.x + sg_b.width + 1 - nb.x;
                             // Shift the node instead.
                             if let Some(pos) = draw_positions.get_mut(*node_id) {
@@ -461,7 +461,7 @@ pub(crate) fn resolve_sibling_overlaps_draw(
 /// nodes with their cross-boundary edge targets on the cross-axis of the parent
 /// direction.  Without this, a node like C in an LR subgraph may stay vertically
 /// aligned with B (top of a BT child subgraph) instead of A (its actual target at
-/// the bottom), forcing the C→A edge to route diagonally through B's area.
+/// the bottom), forcing the CΓåÆA edge to route diagonally through B's area.
 pub(crate) fn align_cross_boundary_siblings_draw(
     diagram: &Diagram,
     node_bounds: &mut HashMap<String, NodeBounds>,
@@ -667,7 +667,7 @@ pub(crate) fn compute_ascii_scale_factors(
     let avg_h = total_h as f64 / count_f;
 
     if is_vertical {
-        // When ranks are doubled, the layout positions nodes 2× further apart.
+        // When ranks are doubled, the layout positions nodes 2├ù further apart.
         // To compensate exactly, we need: eff_rs = max_h + 2 * rank_sep
         // This gives scale_primary_new = scale_primary_old / 2, so that
         // (2 * rank_sep) * scale_new = rank_sep * scale_old.
@@ -905,8 +905,8 @@ pub(crate) fn subgraph_bounds_to_draw(
         let mut final_width = x1.saturating_sub(x0);
         let final_height = y1.saturating_sub(y0);
 
-        // Enforce title-width minimum: ┌─ Title ─┐
-        // Overhead: 2 corners + "─ " prefix (2) + " ─" suffix (2) = 6
+        // Enforce title-width minimum: ΓöîΓöÇ Title ΓöÇΓöÉ
+        // Overhead: 2 corners + "ΓöÇ " prefix (2) + " ΓöÇ" suffix (2) = 6
         let has_visible_title = !sg.title.trim().is_empty();
         let min_title_width = if has_visible_title {
             sg.title.len() + 6
@@ -1451,7 +1451,7 @@ pub(crate) fn expand_parent_subgraph_bounds(
 
 /// Ensure each subgraph's draw-coordinate bounds contain all member nodes.
 ///
-/// After coordinate transformation (float→integer) and shrink passes, rounding
+/// After coordinate transformation (floatΓåÆinteger) and shrink passes, rounding
 /// can cause subgraph bounds to be 1-2 characters too small. This post-pass
 /// expands any deficient bounds to guarantee containment.
 pub(crate) fn ensure_subgraph_contains_members(
@@ -1523,6 +1523,35 @@ pub(crate) fn nudge_colliding_waypoints(
             }
             wp.0 = wp.0.min(canvas_width.saturating_sub(1));
             wp.1 = wp.1.min(canvas_height.saturating_sub(1));
+        }
+
+        // Segment collision pass: for each consecutive waypoint pair that would
+        // produce an H segment (TD/LR) passing through a node, hold the corridor
+        // by propagating the deflected coordinate forward.  Individual-waypoint
+        // nudging can miss this case because neither endpoint is inside the node,
+        // but the horizontal segment between them clips through it.
+        if is_vertical && waypoints.len() >= 2 {
+            for i in 0..waypoints.len() - 1 {
+                let (x1, y1) = waypoints[i];
+                let (x2, _y2) = waypoints[i + 1];
+                if x1 == x2 {
+                    continue; // already on same column, no horizontal segment
+                }
+                // Intermediate waypoints use horizontal-first routing (TD).
+                // The H segment runs at y = y1 from x_min to x_max.
+                let (x_min, x_max) = (x1.min(x2), x1.max(x2));
+                let clips = node_bounds.values().any(|b| {
+                    y1 >= b.y && y1 < b.y + b.height
+                        && x_min < b.x + b.width
+                        && x_max > b.x
+                });
+                if clips && x1 > x2 {
+                    // Going left but clipping a node: stay in the current corridor.
+                    // Set the next waypoint to the same x so the path goes straight
+                    // down and the leftward turn happens at the next opportunity.
+                    waypoints[i + 1].0 = x1;
+                }
+            }
         }
     }
 }
@@ -1756,7 +1785,7 @@ mod tests {
 
     #[test]
     fn scale_factors_lr_direction_aware() {
-        // LR: nodes widths 9,9, heights 3,3 → avg_h = 3, max_w = 9
+        // LR: nodes widths 9,9, heights 3,3 ΓåÆ avg_h = 3, max_w = 9
         // scale_x (primary) = (9 + 4) / (9 + 50) = 13/59
         // scale_y (cross)   = (3 + 3) / (3 + 6) = 6/9
         let mut dims = HashMap::new();
@@ -1981,7 +2010,7 @@ mod tests {
 
         assert!(
             result.contains_key(&0),
-            "should have waypoints for edge 0 (A→C)"
+            "should have waypoints for edge 0 (AΓåÆC)"
         );
         let wps = &result[&0];
         assert_eq!(wps.len(), 1);
@@ -2095,7 +2124,7 @@ mod tests {
             overhang_x: 0,
             overhang_y: 0,
         };
-        // layer_starts: rank 0 → y=0, rank 1 → y=8, rank 2 → y=16
+        // layer_starts: rank 0 ΓåÆ y=0, rank 1 ΓåÆ y=8, rank 2 ΓåÆ y=16
         let layer_starts = vec![0, 8, 16];
         let result =
             transform_label_positions_direct(&labels, &edges, &ctx, &layer_starts, true, 50, 20);
@@ -2278,7 +2307,7 @@ mod tests {
         let diagram = build_diagram(&flowchart);
         let layout = compute_layout(&diagram, &TextLayoutConfig::default());
 
-        // Label position should exist — edge A→B is at index 0
+        // Label position should exist ΓÇö edge AΓåÆB is at index 0
         let edge_idx = diagram
             .edges
             .iter()
@@ -2620,7 +2649,7 @@ mod tests {
             .next()
             .expect("Expected subgraph bounds");
 
-        // Border must be wide enough for: corners (2) + "─ " (2) + title + " ─" (2)
+        // Border must be wide enough for: corners (2) + "ΓöÇ " (2) + title + " ΓöÇ" (2)
         let min_width = "This Is A Very Long Title".len() + 6;
         assert!(
             bounds.width >= min_width,

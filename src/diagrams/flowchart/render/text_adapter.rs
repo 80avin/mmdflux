@@ -26,7 +26,7 @@ use crate::diagrams::flowchart::geometry::{GraphGeometry, RoutedGraphGeometry};
 use crate::graph::{Diagram, Direction, Shape};
 use crate::layered::{Direction as LayeredDirection, Rect};
 
-/// Convenience: run the full engine → adapter pipeline to produce a `Layout`.
+/// Convenience: run the full engine ΓåÆ adapter pipeline to produce a `Layout`.
 ///
 /// This is the canonical way to compute a text layout from a `Diagram` and
 /// `TextLayoutConfig`. Internally runs `FluxLayeredEngine::text().solve()` then
