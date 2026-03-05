@@ -24,9 +24,23 @@ pub fn route_graph_geometry(
     geometry: &GraphGeometry,
     edge_routing: EdgeRouting,
 ) -> RoutedGraphGeometry {
+    let port_attachments = super::render::text_routing_core::compute_port_attachments_from_geometry(
+        &diagram.edges,
+        geometry,
+        diagram.direction,
+    );
+
     let edges: Vec<RoutedEdgeGeometry> = match edge_routing {
         EdgeRouting::OrthogonalRoute => {
-            route_edges_orthogonal(diagram, geometry, OrthogonalRoutingOptions::preview())
+            let mut edges =
+                route_edges_orthogonal(diagram, geometry, OrthogonalRoutingOptions::preview());
+            for edge in &mut edges {
+                if let Some((sp, tp)) = port_attachments.get(&edge.index) {
+                    edge.source_port = sp.clone();
+                    edge.target_port = tp.clone();
+                }
+            }
+            edges
         }
         EdgeRouting::DirectRoute | EdgeRouting::EngineProvided | EdgeRouting::PolylineRoute => {
             // Pre-compute per-edge backward lane indices for staggering.
@@ -125,6 +139,12 @@ pub fn route_graph_geometry(
                         is_backward,
                         from_subgraph: edge.from_subgraph.clone(),
                         to_subgraph: edge.to_subgraph.clone(),
+                        source_port: port_attachments
+                            .get(&edge.index)
+                            .and_then(|(sp, _)| sp.clone()),
+                        target_port: port_attachments
+                            .get(&edge.index)
+                            .and_then(|(_, tp)| tp.clone()),
                     }
                 })
                 .collect()
@@ -1444,5 +1464,89 @@ mod tests {
         let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
         assert!(routed.edges[0].head_label_position.is_none());
         assert!(routed.edges[0].tail_label_position.is_none());
+    }
+
+    #[test]
+    fn route_graph_geometry_includes_ports_polyline() {
+        let (diagram, geom) = simple_geometry();
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
+        let edge = &routed.edges[0];
+        let src = edge
+            .source_port
+            .as_ref()
+            .expect("source_port should be populated");
+        let tgt = edge
+            .target_port
+            .as_ref()
+            .expect("target_port should be populated");
+        assert_eq!(src.face, PortFace::Bottom);
+        assert!((src.fraction - 0.5).abs() < 0.01);
+        assert_eq!(tgt.face, PortFace::Top);
+        assert!((tgt.fraction - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn self_edge_routed_separately_without_ports() {
+        let mut diagram = Diagram::new(crate::graph::Direction::TopDown);
+        diagram.add_node(crate::graph::Node::new("A"));
+        diagram.add_edge(crate::graph::Edge::new("A", "A"));
+
+        let mut nodes = HashMap::new();
+        nodes.insert(
+            "A".into(),
+            PositionedNode {
+                id: "A".into(),
+                rect: FRect::new(50.0, 50.0, 40.0, 20.0),
+                shape: crate::graph::Shape::Rectangle,
+                label: "A".into(),
+                parent: None,
+            },
+        );
+        let geom = GraphGeometry {
+            nodes,
+            edges: vec![],
+            subgraphs: HashMap::new(),
+            self_edges: vec![SelfEdgeGeometry {
+                node_id: "A".into(),
+                edge_index: 0,
+                points: vec![
+                    FPoint::new(70.0, 40.0),
+                    FPoint::new(80.0, 40.0),
+                    FPoint::new(80.0, 60.0),
+                    FPoint::new(70.0, 60.0),
+                ],
+            }],
+            direction: crate::graph::Direction::TopDown,
+            node_directions: {
+                let mut m = HashMap::new();
+                m.insert("A".to_string(), crate::graph::Direction::TopDown);
+                m
+            },
+            bounds: FRect::new(0.0, 0.0, 100.0, 100.0),
+            reversed_edges: vec![],
+            engine_hints: None,
+            rerouted_edges: std::collections::HashSet::new(),
+            enhanced_backward_routing: false,
+        };
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::PolylineRoute);
+        // Self-edges go to self_edges, not edges
+        assert_eq!(routed.self_edges.len(), 1);
+        assert_eq!(routed.edges.len(), 0);
+        // RoutedSelfEdge has no port fields - confirmed by the type system
+    }
+
+    #[test]
+    fn route_graph_geometry_includes_ports_orthogonal() {
+        let (diagram, geom) = simple_geometry();
+        let routed = route_graph_geometry(&diagram, &geom, EdgeRouting::OrthogonalRoute);
+        let edge = &routed.edges[0];
+        assert!(
+            edge.source_port.is_some(),
+            "source_port should be populated for orthogonal"
+        );
+        assert!(
+            edge.target_port.is_some(),
+            "target_port should be populated for orthogonal"
+        );
     }
 }

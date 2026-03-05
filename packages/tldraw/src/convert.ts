@@ -2,6 +2,7 @@ import {
   collectSubgraphDescendantNodeIds,
   edgeEndpointTargets,
   type MmdsDocument,
+  type MmdsPortFace,
   type MmdsSubgraph,
   type NormalizedMmdsNode,
   type NormalizedMmdsSubgraph,
@@ -11,16 +12,21 @@ import {
   createBindingId,
   createShapeId,
   createTLStore,
+  type IndexKey,
   type TLRecord,
   type TLStoreSnapshot,
   toRichText,
-  type IndexKey,
-  getIndexAbove,
 } from "@tldraw/editor";
+import { generateKeyBetween } from "fractional-indexing";
 
 export interface ConvertOptions {
   scale?: number;
-  /** Multiplier for spacing between nodes (positions and paths). Does not change node sizes. Default 1.2. */
+  /**
+   * Position scale multiplier for node spacing. When omitted, an adaptive
+   * ratio is computed from label growth (how much each node expands when
+   * tldraw enforces minimum label-based widths). The autoPositionScale()
+   * overlap safety net runs regardless.
+   */
   nodeSpacing?: number;
 }
 
@@ -91,6 +97,33 @@ const CHAR_WIDTH_EST = 14;
 const MIN_LABEL_PAD_X = 36;
 const MIN_LABEL_PAD_Y = 28;
 
+function tldrawEnforcedMinWidth(label: string): number {
+  return label.length * CHAR_WIDTH_EST + MIN_LABEL_PAD_X;
+}
+
+/**
+ * Compute adaptive growth ratio based on how much each node will expand
+ * when tldraw enforces minimum label-based widths.
+ *
+ * Returns the maximum growth ratio across all nodes, clamped to >= 1.0.
+ */
+function computeAdaptiveGrowthRatio(
+  nodes: readonly NormalizedMmdsNode[],
+  sizeScale: number,
+): number {
+  let maxRatio = 1.0;
+  for (const node of nodes) {
+    const label = node.label ?? node.id;
+    const tldrawMinWidth = tldrawEnforcedMinWidth(label);
+    const scaledMmdsWidth = node.size.width * sizeScale;
+    if (scaledMmdsWidth > 0) {
+      const ratio = tldrawMinWidth / scaledMmdsWidth;
+      if (ratio > maxRatio) maxRatio = ratio;
+    }
+  }
+  return maxRatio;
+}
+
 function scaleNodeRect(
   node: NormalizedMmdsNode,
   sizeScale: number,
@@ -100,7 +133,7 @@ function scaleNodeRect(
   let height = Math.max(8, node.size.height * sizeScale);
 
   // Ensure minimum size for label so text doesn't wrap to single chars per line.
-  const minW = node.label.length * CHAR_WIDTH_EST + MIN_LABEL_PAD_X;
+  const minW = tldrawEnforcedMinWidth(node.label);
   const minH = MIN_LABEL_PAD_Y;
   if (width < minW || height < minH) {
     width = Math.max(width, minW);
@@ -119,6 +152,73 @@ function scaleNodeRect(
     w: width,
     h: height,
   };
+}
+
+/**
+ * Compute the minimum positionScale so that no pair of nodes overlaps after
+ * label-based minimum sizing.  Returns a value >= `basePositionScale`.
+ *
+ * Nodes are centered at `position * positionScale` with fixed pixel sizes
+ * (potentially enlarged for labels).  We find the tightest pair and bump the
+ * scale until they no longer overlap with at least MIN_GAP between them.
+ */
+function autoPositionScale(
+  nodes: readonly NormalizedMmdsNode[],
+  direction: string | undefined,
+  sizeScale: number,
+  basePositionScale: number,
+): number {
+  if (nodes.length < 2) return basePositionScale;
+
+  const horizontal = direction === "LR" || direction === "RL";
+  const MIN_GAP = 24;
+
+  // Pre-compute fixed (scale-independent) node sizes.
+  const sizes = nodes.map((n) => {
+    let w = Math.max(n.size.width * sizeScale, tldrawEnforcedMinWidth(n.label));
+    let h = Math.max(n.size.height * sizeScale, MIN_LABEL_PAD_Y);
+    if (n.shape === "diamond") {
+      const side = Math.max(w, h);
+      w = side;
+      h = side;
+    }
+    return { w, h };
+  });
+
+  let needed = basePositionScale;
+
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i];
+      const b = nodes[j];
+
+      if (horizontal) {
+        const dx = Math.abs(a.position.x - b.position.x);
+        if (dx < 1) continue;
+        // Required scale so rects don't overlap on X.
+        const halfW = (sizes[i].w + sizes[j].w) / 2 + MIN_GAP;
+        const reqX = halfW / dx;
+        if (reqX <= needed) continue;
+        // Only matters if they actually overlap on Y at that scale.
+        const dy = Math.abs(a.position.y - b.position.y);
+        const halfH = (sizes[i].h + sizes[j].h) / 2;
+        if (dy * reqX >= halfH) continue;
+        needed = reqX;
+      } else {
+        const dy = Math.abs(a.position.y - b.position.y);
+        if (dy < 1) continue;
+        const halfH = (sizes[i].h + sizes[j].h) / 2 + MIN_GAP;
+        const reqY = halfH / dy;
+        if (reqY <= needed) continue;
+        const dx = Math.abs(a.position.x - b.position.x);
+        const halfW = (sizes[i].w + sizes[j].w) / 2;
+        if (dx * reqY >= halfW) continue;
+        needed = reqY;
+      }
+    }
+  }
+
+  return needed;
 }
 
 function unionRects(rects: Rect[]): Rect {
@@ -263,12 +363,94 @@ function signedBend(start: Point, end: Point, handle: Point): number {
 function elbowMidPoint(points: Point[]): number {
   if (points.length < 3) return 0.5;
   const start = points[0];
-  const corner = points[1];
   const end = points[points.length - 1];
+  const dxTotal = end.x - start.x;
+  const dyTotal = end.y - start.y;
+  const verticalDominant = Math.abs(dyTotal) >= Math.abs(dxTotal);
+  const tolerance = 0.001;
+
+  // For top-down / bottom-up elbows, match the routed horizontal lane when possible.
+  // This avoids placing the elbow lane on unrelated node borders.
+  if (verticalDominant && Math.abs(dyTotal) > tolerance) {
+    let widestHorizontal = -1;
+    let laneY: number | null = null;
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1];
+      const b = points[i];
+      const segDx = Math.abs(b.x - a.x);
+      const segDy = Math.abs(b.y - a.y);
+      if (segDy <= tolerance && segDx > tolerance && segDx > widestHorizontal) {
+        widestHorizontal = segDx;
+        laneY = a.y;
+      }
+    }
+    if (laneY !== null) {
+      return clamp01((laneY - start.y) / dyTotal);
+    }
+  }
+
+  const corner = points[1];
   const total = Math.abs(end.x - start.x) + Math.abs(end.y - start.y);
   if (total <= 0) return 0.5;
   const firstLeg = Math.abs(corner.x - start.x) + Math.abs(corner.y - start.y);
   return clamp01(firstLeg / total);
+}
+
+function nudgeAwayFromBorder(
+  value: number,
+  border: number,
+  clearance: number,
+): number {
+  const delta = value - border;
+  if (Math.abs(delta) >= clearance) return value;
+  return delta >= 0 ? border + clearance : border - clearance;
+}
+
+function nudgeElbowMidPointForBorderCollisions(
+  pathPoints: Point[],
+  baseMidPoint: number,
+  start: Point,
+  end: Point,
+  fromShapeId: string | undefined,
+  toShapeId: string | undefined,
+  boundsByShapeId: ReadonlyMap<string, Rect>,
+): number {
+  if (pathPoints.length < 3) return baseMidPoint;
+
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const verticalDominant = Math.abs(dy) >= Math.abs(dx);
+  if (!verticalDominant || Math.abs(dy) < 0.001) return baseMidPoint;
+
+  let widestHorizontal = -1;
+  let laneXMin = Math.min(start.x, end.x);
+  let laneXMax = Math.max(start.x, end.x);
+  for (let i = 1; i < pathPoints.length; i++) {
+    const a = pathPoints[i - 1];
+    const b = pathPoints[i];
+    const segDx = Math.abs(b.x - a.x);
+    const segDy = Math.abs(b.y - a.y);
+    if (segDy <= 0.001 && segDx > 0.001 && segDx > widestHorizontal) {
+      widestHorizontal = segDx;
+      laneXMin = Math.min(a.x, b.x);
+      laneXMax = Math.max(a.x, b.x);
+    }
+  }
+
+  const clearance = 8;
+  let laneY = start.y + dy * baseMidPoint;
+
+  for (const [shapeId, rect] of boundsByShapeId) {
+    if (shapeId === fromShapeId || shapeId === toShapeId) continue;
+    if (rect.x > laneXMax || rect.x + rect.w < laneXMin) continue;
+    laneY = nudgeAwayFromBorder(laneY, rect.y, clearance);
+    laneY = nudgeAwayFromBorder(laneY, rect.y + rect.h, clearance);
+  }
+
+  const minY = Math.min(start.y, end.y) + 6;
+  const maxY = Math.max(start.y, end.y) - 6;
+  laneY = Math.max(minY, Math.min(maxY, laneY));
+  return clamp01((laneY - start.y) / dy);
 }
 
 // Keep edge labels away from endpoints to avoid overlapping nodes.
@@ -432,6 +614,31 @@ function projectToShapeBoundary(
   return projectToEllipseBoundary(p.x, p.y);
 }
 
+/** Map port face + fraction to tldraw normalizedAnchor (0-1 rect space). */
+export function faceAndFractionToNormalizedAnchor(
+  face: MmdsPortFace,
+  fraction: number,
+  geo: "rectangle" | "ellipse" | "diamond" | "hexagon" | "trapezoid",
+): Point {
+  const f = Math.max(0, Math.min(1, fraction));
+  let anchor: Point;
+  switch (face) {
+    case "top":
+      anchor = { x: f, y: 0 };
+      break;
+    case "bottom":
+      anchor = { x: f, y: 1 };
+      break;
+    case "left":
+      anchor = { x: 0, y: f };
+      break;
+    case "right":
+      anchor = { x: 1, y: f };
+      break;
+  }
+  return projectToShapeBoundary(anchor, geo);
+}
+
 /** Anchor on the shape edge where the path enters/exits, so arrows attach at the boundary instead of the center. */
 function edgeAnchor(
   terminal: Point,
@@ -546,11 +753,10 @@ function shapeZOrder(type: string): number {
 
 function generateSequentialIndices(count: number): IndexKey[] {
   const indices: IndexKey[] = [];
-  let prev = "a1" as IndexKey;
-  indices.push(prev);
-  for (let i = 1; i < count; i++) {
-    prev = getIndexAbove(prev);
-    indices.push(prev);
+  let prev: string | null = null;
+  for (let i = 0; i < count; i++) {
+    prev = generateKeyBetween(prev, null);
+    indices.push(prev as IndexKey);
   }
   return indices;
 }
@@ -626,9 +832,15 @@ export function convertToTldraw(
   options: ConvertOptions = {},
 ): TldrawConvertResult {
   const scale = options.scale ?? 1;
-  const nodeSpacing = options.nodeSpacing ?? 1.2;
-  const positionScale = scale * nodeSpacing;
   const normalized = normalizeMmds(mmds);
+  const adaptiveRatio = computeAdaptiveGrowthRatio(normalized.nodes, scale);
+  const nodeSpacing = options.nodeSpacing ?? adaptiveRatio;
+  const positionScale = autoPositionScale(
+    normalized.nodes,
+    normalized.metadata?.direction,
+    scale,
+    scale * nodeSpacing,
+  );
 
   const store = createTLStore({
     defaultName: normalized.metadata?.diagram_type ?? "MMDS",
@@ -845,6 +1057,7 @@ export function convertToTldraw(
     if (!src || !tgt) continue;
 
     const routedPoints = toPoints(edge.path, positionScale);
+    const hasRoutedPath = routedPoints.length >= 2;
     const start =
       routedPoints.length >= 2
         ? routedPoints[0]
@@ -878,6 +1091,18 @@ export function convertToTldraw(
     );
 
     const kind = isOrthogonal(pathPoints) ? "elbow" : "arc";
+    const elbowMidPointValue =
+      kind === "elbow"
+        ? nudgeElbowMidPointForBorderCollisions(
+            pathPoints,
+            elbowMidPoint(pathPoints),
+            start,
+            end,
+            fromShapeId,
+            toShapeIdResolved,
+            absoluteBoundsByShapeId,
+          )
+        : 0.5;
 
     const handle =
       localPath.length > 2
@@ -928,7 +1153,7 @@ export function convertToTldraw(
         richText: toRichText(edge.label ?? ""),
         labelPosition: computeLabelPositionRatio(pathPoints, labelPos),
         scale: edge.label ? 1.5 : 1,
-        elbowMidPoint: kind === "elbow" ? elbowMidPoint(localPath) : 0.5,
+        elbowMidPoint: elbowMidPointValue,
       },
       meta: {},
     } as TLRecord);
@@ -936,6 +1161,16 @@ export function convertToTldraw(
     if (fromShapeId) {
       const fromRect = absoluteBoundsByShapeId.get(fromShapeId);
       const fromGeo = geoByShapeId.get(fromShapeId) ?? "rectangle";
+      const startPort = edge.source_port;
+      const startAnchor = hasRoutedPath
+        ? edgeAnchor(start, pathPoints, true, fromRect, fromGeo)
+        : startPort
+          ? faceAndFractionToNormalizedAnchor(
+              startPort.face,
+              startPort.fraction,
+              fromGeo,
+            )
+          : edgeAnchor(start, pathPoints, true, fromRect, fromGeo);
       bindingRecords.push({
         id: toBindingId("edge_start", edge.id),
         typeName: "binding",
@@ -944,13 +1179,7 @@ export function convertToTldraw(
         toId: fromShapeId,
         props: {
           terminal: "start",
-          normalizedAnchor: edgeAnchor(
-            start,
-            pathPoints,
-            true,
-            fromRect,
-            fromGeo,
-          ),
+          normalizedAnchor: startAnchor,
           isExact: false,
           isPrecise: true,
           snap: kind === "elbow" ? "edge" : "none",
@@ -962,6 +1191,16 @@ export function convertToTldraw(
     if (toShapeIdResolved) {
       const toRect = absoluteBoundsByShapeId.get(toShapeIdResolved);
       const toGeo = geoByShapeId.get(toShapeIdResolved) ?? "rectangle";
+      const endPort = edge.target_port;
+      const endAnchor = hasRoutedPath
+        ? edgeAnchor(end, pathPoints, false, toRect, toGeo)
+        : endPort
+          ? faceAndFractionToNormalizedAnchor(
+              endPort.face,
+              endPort.fraction,
+              toGeo,
+            )
+          : edgeAnchor(end, pathPoints, false, toRect, toGeo);
       bindingRecords.push({
         id: toBindingId("edge_end", edge.id),
         typeName: "binding",
@@ -970,7 +1209,7 @@ export function convertToTldraw(
         toId: toShapeIdResolved,
         props: {
           terminal: "end",
-          normalizedAnchor: edgeAnchor(end, pathPoints, false, toRect, toGeo),
+          normalizedAnchor: endAnchor,
           isExact: false,
           isPrecise: true,
           snap: kind === "elbow" ? "edge" : "none",

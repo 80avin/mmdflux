@@ -721,6 +721,27 @@ fn mmds_schema_exists_and_has_required_fields() {
 }
 
 #[test]
+fn mmds_schema_includes_port_definition() {
+    let schema = std::fs::read_to_string("docs/mmds.schema.json").unwrap();
+    let v: Value = serde_json::from_str(&schema).unwrap();
+    let defs = v["$defs"].as_object().expect("schema should have $defs");
+    let port = defs.get("Port").expect("schema should define Port");
+    let required = port["required"].as_array().unwrap();
+    let required_strs: Vec<&str> = required.iter().map(|v| v.as_str().unwrap()).collect();
+    assert!(required_strs.contains(&"face"));
+    assert!(required_strs.contains(&"fraction"));
+    assert!(required_strs.contains(&"position"));
+    assert!(required_strs.contains(&"group_size"));
+}
+
+#[test]
+fn mmds_routed_output_with_ports_validates_against_schema() {
+    let json = render_json_with_level("graph TD\nA-->B", GeometryLevel::Routed);
+    let payload: Value = serde_json::from_str(&json).unwrap();
+    assert_schema_valid(payload);
+}
+
+#[test]
 fn schema_accepts_profiles_and_namespaced_extensions() {
     let payload = mmds_fixture("profiles/profiles-svg-v1.json");
     assert_schema_valid(payload);
@@ -792,6 +813,63 @@ fn docs_reference_initial_profile_set() {
     assert!(docs.contains("mmds-core-v1"));
     assert!(docs.contains("mmdflux-svg-v1"));
     assert!(docs.contains("mmdflux-text-v1"));
+}
+
+// -----------------------------------------------------------------------
+// Contract: port metadata (routed level only)
+// -----------------------------------------------------------------------
+
+#[test]
+fn mmds_routed_includes_port_metadata() {
+    let json = render_json_with_level("graph TD\nA-->B", GeometryLevel::Routed);
+    let output: MmdsOutput = serde_json::from_str(&json).unwrap();
+    let edge = &output.edges[0];
+    assert!(
+        edge.source_port.is_some(),
+        "routed edge should have source_port"
+    );
+    assert!(
+        edge.target_port.is_some(),
+        "routed edge should have target_port"
+    );
+}
+
+#[test]
+fn mmds_routed_port_faces_correct_td() {
+    let json = render_json_with_level("graph TD\nA-->B", GeometryLevel::Routed);
+    let output: MmdsOutput = serde_json::from_str(&json).unwrap();
+    let edge = &output.edges[0];
+    let sp = edge.source_port.as_ref().unwrap();
+    let tp = edge.target_port.as_ref().unwrap();
+    assert_eq!(sp.face, "bottom", "TD source should exit bottom");
+    assert_eq!(tp.face, "top", "TD target should enter top");
+}
+
+#[test]
+fn mmds_routed_port_fractions_fan_in() {
+    let json = render_json_with_level("graph TD\nA-->C\nB-->C", GeometryLevel::Routed);
+    let output: MmdsOutput = serde_json::from_str(&json).unwrap();
+    let e0 = output.edges.iter().find(|e| e.source == "A").unwrap();
+    let e1 = output.edges.iter().find(|e| e.source == "B").unwrap();
+    let f0 = e0.target_port.as_ref().unwrap().fraction;
+    let f1 = e1.target_port.as_ref().unwrap().fraction;
+    assert!(
+        (f0 - f1).abs() > 1e-6,
+        "fan-in edges should have distinct target fractions: {f0} vs {f1}"
+    );
+}
+
+#[test]
+fn mmds_layout_excludes_port_metadata() {
+    let json = render_json("graph TD\nA-->B");
+    assert!(
+        !json.contains("source_port"),
+        "layout JSON must not contain source_port"
+    );
+    assert!(
+        !json.contains("target_port"),
+        "layout JSON must not contain target_port"
+    );
 }
 
 // --- Task 4.5: MMDS engine metadata ---

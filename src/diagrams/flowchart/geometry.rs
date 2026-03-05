@@ -412,6 +412,10 @@ pub struct RoutedEdgeGeometry {
     pub from_subgraph: Option<String>,
     /// If target is a subgraph-as-node, the subgraph ID.
     pub to_subgraph: Option<String>,
+    /// Port attachment at the source node.
+    pub source_port: Option<EdgePort>,
+    /// Port attachment at the target node.
+    pub target_port: Option<EdgePort>,
 }
 
 /// A routed self-edge loop.
@@ -420,6 +424,62 @@ pub struct RoutedSelfEdge {
     pub node_id: String,
     pub edge_index: usize,
     pub path: Vec<FPoint>,
+}
+
+// ---------------------------------------------------------------------------
+// Port attachment types
+// ---------------------------------------------------------------------------
+
+/// Which face of a node boundary an edge port attaches to.
+///
+/// Separate from `text_routing_core::Face` to avoid coupling the
+/// geometry IR to the text rendering module.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PortFace {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+impl PortFace {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Top => "top",
+            Self::Bottom => "bottom",
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+}
+
+impl std::str::FromStr for PortFace {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "top" => Ok(Self::Top),
+            "bottom" => Ok(Self::Bottom),
+            "left" => Ok(Self::Left),
+            "right" => Ok(Self::Right),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Port attachment information for one end of a routed edge.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EdgePort {
+    /// Face on the node boundary where the edge attaches.
+    pub face: PortFace,
+    /// Fractional position along the face (0.0 = start, 1.0 = end).
+    /// For top/bottom: 0.0 is left, 1.0 is right.
+    /// For left/right: 0.0 is top, 1.0 is bottom.
+    pub fraction: f64,
+    /// Computed position on the node boundary in layout coordinate space.
+    pub position: FPoint,
+    /// Number of edges attached to this face of this node.
+    pub group_size: usize,
 }
 
 // ---------------------------------------------------------------------------
@@ -773,6 +833,64 @@ mod tests {
         };
         assert!(edge.layout_path_hint.is_none());
         assert_eq!(edge.waypoints.len(), 1);
+    }
+
+    #[test]
+    fn port_face_as_str() {
+        assert_eq!(PortFace::Top.as_str(), "top");
+        assert_eq!(PortFace::Bottom.as_str(), "bottom");
+        assert_eq!(PortFace::Left.as_str(), "left");
+        assert_eq!(PortFace::Right.as_str(), "right");
+    }
+
+    #[test]
+    fn port_face_from_str() {
+        assert_eq!("top".parse::<PortFace>(), Ok(PortFace::Top));
+        assert_eq!("bottom".parse::<PortFace>(), Ok(PortFace::Bottom));
+        assert_eq!("left".parse::<PortFace>(), Ok(PortFace::Left));
+        assert_eq!("right".parse::<PortFace>(), Ok(PortFace::Right));
+        assert_eq!("invalid".parse::<PortFace>(), Err(()));
+    }
+
+    #[test]
+    fn edge_port_construction() {
+        let port = EdgePort {
+            face: PortFace::Top,
+            fraction: 0.5,
+            position: FPoint { x: 50.0, y: 10.0 },
+            group_size: 1,
+        };
+        assert_eq!(port.face, PortFace::Top);
+        assert!((port.fraction - 0.5).abs() < f64::EPSILON);
+        assert!((port.position.x - 50.0).abs() < f64::EPSILON);
+        assert_eq!(port.group_size, 1);
+    }
+
+    #[test]
+    fn routed_edge_geometry_with_ports() {
+        let port = EdgePort {
+            face: PortFace::Bottom,
+            fraction: 0.5,
+            position: FPoint { x: 50.0, y: 35.0 },
+            group_size: 1,
+        };
+        let edge = RoutedEdgeGeometry {
+            index: 0,
+            from: "A".to_string(),
+            to: "B".to_string(),
+            path: vec![],
+            label_position: None,
+            label_side: None,
+            head_label_position: None,
+            tail_label_position: None,
+            is_backward: false,
+            from_subgraph: None,
+            to_subgraph: None,
+            source_port: Some(port),
+            target_port: None,
+        };
+        assert!(edge.source_port.is_some());
+        assert!(edge.target_port.is_none());
     }
 
     #[test]
