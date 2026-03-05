@@ -1524,6 +1524,33 @@ pub(crate) fn nudge_colliding_waypoints(
             wp.0 = wp.0.min(canvas_width.saturating_sub(1));
             wp.1 = wp.1.min(canvas_height.saturating_sub(1));
         }
+
+        // Segment collision pass: for each consecutive waypoint pair that would
+        // produce an H segment (TD/LR) passing through a node, hold the corridor
+        // by propagating the deflected coordinate forward.  Individual-waypoint
+        // nudging can miss this case because neither endpoint is inside the node,
+        // but the horizontal segment between them clips through it.
+        if is_vertical && waypoints.len() >= 2 {
+            for i in 0..waypoints.len() - 1 {
+                let (x1, y1) = waypoints[i];
+                let (x2, _y2) = waypoints[i + 1];
+                if x1 == x2 {
+                    continue; // already on same column, no horizontal segment
+                }
+                // Intermediate waypoints use horizontal-first routing (TD).
+                // The H segment runs at y = y1 from x_min to x_max.
+                let (x_min, x_max) = (x1.min(x2), x1.max(x2));
+                let clips = node_bounds.values().any(|b| {
+                    y1 >= b.y && y1 < b.y + b.height && x_min < b.x + b.width && x_max > b.x
+                });
+                if clips && x1 > x2 {
+                    // Going left but clipping a node: stay in the current corridor.
+                    // Set the next waypoint to the same x so the path goes straight
+                    // down and the leftward turn happens at the next opportunity.
+                    waypoints[i + 1].0 = x1;
+                }
+            }
+        }
     }
 }
 
