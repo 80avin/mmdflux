@@ -66,6 +66,53 @@ pub fn effective_edge_direction(
     }
 }
 
+/// Resolve the direction policy for a cross-boundary edge.
+///
+/// Rules:
+/// - if endpoints are in different override subgraphs and one is ancestor of the
+///   other, use the ancestor override direction;
+/// - if endpoints are in different non-ancestor branches, use `fallback`;
+/// - if only one endpoint is in an override subgraph, use the outside node's
+///   effective direction.
+pub fn cross_boundary_edge_direction(
+    diagram: &Diagram,
+    node_directions: &HashMap<String, Direction>,
+    from_sg: Option<&String>,
+    to_sg: Option<&String>,
+    from_node: &str,
+    to_node: &str,
+    fallback: Direction,
+) -> Direction {
+    if let (Some(sg_a), Some(sg_b)) = (from_sg, to_sg) {
+        if is_ancestor_sg(diagram, sg_a, sg_b) {
+            return diagram
+                .subgraphs
+                .get(sg_a.as_str())
+                .and_then(|sg| sg.dir)
+                .unwrap_or(fallback);
+        }
+        if is_ancestor_sg(diagram, sg_b, sg_a) {
+            return diagram
+                .subgraphs
+                .get(sg_b.as_str())
+                .and_then(|sg| sg.dir)
+                .unwrap_or(fallback);
+        }
+        return fallback;
+    }
+
+    let outside_node = if from_sg.is_some() && to_sg.is_none() {
+        to_node
+    } else {
+        from_node
+    };
+
+    node_directions
+        .get(outside_node)
+        .copied()
+        .unwrap_or(fallback)
+}
+
 /// Build the override node map: node_id → subgraph_id for direction-override subgraphs.
 ///
 /// Processes subgraphs in depth order so the deepest override wins.
@@ -94,10 +141,26 @@ pub fn build_override_node_map(diagram: &Diagram) -> HashMap<String, String> {
     override_nodes
 }
 
+fn is_ancestor_sg(diagram: &Diagram, ancestor: &str, descendant: &str) -> bool {
+    let mut current = descendant;
+    while let Some(parent) = diagram
+        .subgraphs
+        .get(current)
+        .and_then(|sg| sg.parent.as_deref())
+    {
+        if parent == ancestor {
+            return true;
+        }
+        current = parent;
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{Diagram, Node};
+    use crate::graph::{Diagram, Node, build_diagram};
+    use crate::parser::parse_flowchart;
 
     #[test]
     fn build_node_directions_all_root() {
@@ -137,5 +200,47 @@ mod tests {
         diagram.add_node(Node::new("A"));
         let map = build_override_node_map(&diagram);
         assert!(map.is_empty());
+    }
+
+    #[test]
+    fn cross_boundary_direction_uses_ancestor_override() {
+        let input = "graph TD\nsubgraph outer\ndirection LR\nA\nsubgraph inner\ndirection BT\nB\nend\nA --> B\nend\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let dirs = build_node_directions(&diagram);
+        let override_nodes = build_override_node_map(&diagram);
+
+        let direction = cross_boundary_edge_direction(
+            &diagram,
+            &dirs,
+            override_nodes.get("A"),
+            override_nodes.get("B"),
+            "A",
+            "B",
+            diagram.direction,
+        );
+
+        assert_eq!(direction, Direction::LeftRight);
+    }
+
+    #[test]
+    fn cross_boundary_direction_uses_outside_node_direction() {
+        let input = "graph TD\nsubgraph sg1\ndirection LR\nA --> B\nend\nB --> C\n";
+        let flowchart = parse_flowchart(input).unwrap();
+        let diagram = build_diagram(&flowchart);
+        let dirs = build_node_directions(&diagram);
+        let override_nodes = build_override_node_map(&diagram);
+
+        let direction = cross_boundary_edge_direction(
+            &diagram,
+            &dirs,
+            override_nodes.get("B"),
+            override_nodes.get("C"),
+            "B",
+            "C",
+            diagram.direction,
+        );
+
+        assert_eq!(direction, Direction::TopDown);
     }
 }
