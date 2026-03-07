@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v1.4.0
+
 ### Fixed
 
 - Fixed MMDS node positions using top-left origin instead of center-point
